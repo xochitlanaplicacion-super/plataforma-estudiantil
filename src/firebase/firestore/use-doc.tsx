@@ -30,7 +30,6 @@ export function useDoc<T = DocumentData>(docRef: DocumentReference<T> | null) {
         setLoading(false);
       },
       (err) => {
-        console.error("Error fetching document:", err);
         setError(err);
         setLoading(false);
       }
