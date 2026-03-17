@@ -1,0 +1,87 @@
+
+{
+  "entities": {
+    "UserProfile": {
+      "title": "Perfil de Usuario",
+      "description": "Datos básicos y rol del usuario en la plataforma.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Nombre completo"
+        },
+        "email": {
+          "type": "string",
+          "format": "email",
+          "description": "Correo institucional"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["superuser", "admin", "profesor", "alumno"],
+          "description": "Nivel de acceso"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "inactive"],
+          "description": "Estado de la cuenta"
+        },
+        "expirationDate": {
+          "type": "string",
+          "format": "date",
+          "description": "Fecha de término de vigencia"
+        },
+        "levelId": { "type": "string" },
+        "careerId": { "type": "string" },
+        "gradeId": { "type": "string" },
+        "groupId": { "type": "string" }
+      },
+      "required": ["name", "email", "role", "status", "expirationDate"]
+    },
+    "Level": {
+      "title": "Nivel Educativo",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" }
+      }
+    },
+    "Career": {
+      "title": "Carrera",
+      "type": "object",
+      "properties": {
+        "levelId": { "type": "string" },
+        "name": { "type": "string" }
+      }
+    },
+    "Subject": {
+      "title": "Materia",
+      "type": "object",
+      "properties": {
+        "groupId": { "type": "string" },
+        "name": { "type": "string" },
+        "professorId": { "type": "string" }
+      }
+    }
+  },
+  "auth": {
+    "providers": ["password", "google.com"]
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "UserProfile",
+      "description": "Almacena los perfiles de todos los usuarios."
+    },
+    "/levels/{levelId}": {
+      "schema": "Level",
+      "description": "Niveles educativos (Universidad, Preparatoria)."
+    },
+    "/careers/{careerId}": {
+      "schema": "Career",
+      "description": "Carreras disponibles por nivel."
+    },
+    "/subjects/{subjectId}": {
+      "schema": "Subject",
+      "description": "Materias asignadas a grupos y profesores."
+    }
+  }
+}

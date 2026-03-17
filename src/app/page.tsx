@@ -1,30 +1,80 @@
+
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { BookOpen, GraduationCap, ShieldCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { useAuth, useFirestore } from '@/firebase';
+import { useToast } from '@/hooks/use-toast';
 
 export default function LoginPage() {
   const router = useRouter();
+  const auth = useAuth();
+  const db = useFirestore();
+  const { toast } = useToast();
+  
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!auth || !db) return;
+
     setLoading(true);
-    
-    // Simulate role-based redirection based on mock emails
-    setTimeout(() => {
-      if (email.includes('admin')) router.push('/dashboard/admin');
-      else if (email.includes('profesor')) router.push('/dashboard/profesor');
-      else if (email.includes('alumno')) router.push('/dashboard/alumno');
-      else if (email.includes('expired')) router.push('/expired');
-      else router.push('/dashboard/alumno');
-    }, 1000);
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
+      
+      if (userDoc.exists()) {
+        const userData = userDoc.data();
+        
+        // Verificar vigencia
+        const now = new Date();
+        const expirationDate = new Date(userData.expirationDate);
+        
+        if (expirationDate < now) {
+          router.push('/expired');
+          return;
+        }
+
+        // Redirección basada en rol
+        switch (userData.role) {
+          case 'superuser':
+          case 'admin':
+            router.push('/dashboard/admin');
+            break;
+          case 'profesor':
+            router.push('/dashboard/profesor');
+            break;
+          case 'alumno':
+            router.push('/dashboard/alumno');
+            break;
+          default:
+            router.push('/dashboard/alumno');
+        }
+      } else {
+        toast({
+          variant: "destructive",
+          title: "Error de perfil",
+          description: "No se encontró información de perfil para este usuario.",
+        });
+      }
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Error al iniciar sesión",
+        description: "Credenciales inválidas o problema de conexión.",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -46,7 +96,7 @@ export default function LoginPage() {
           <div className="flex gap-6 z-10">
             <div className="flex items-center gap-2">
               <ShieldCheck className="text-accent" />
-              <span className="text-sm font-medium">Seguridad</span>
+              <span className="text-sm font-medium">Seguridad Real</span>
             </div>
             <div className="flex items-center gap-2">
               <BookOpen className="text-accent" />
@@ -57,14 +107,10 @@ export default function LoginPage() {
 
         {/* Form Panel */}
         <div className="bg-white p-8 md:p-12 flex flex-col justify-center">
-          <div className="md:hidden flex justify-center mb-8">
-            <div className="h-12 w-12 bg-primary rounded-xl flex items-center justify-center font-bold text-primary-foreground text-2xl">EF</div>
-          </div>
-          
           <Card className="border-none shadow-none">
             <CardHeader className="p-0 mb-8">
               <CardTitle className="text-2xl font-headline font-bold">Bienvenido</CardTitle>
-              <CardDescription>Ingresa tus credenciales para acceder a la plataforma</CardDescription>
+              <CardDescription>Ingresa tus credenciales institucionales</CardDescription>
             </CardHeader>
             <CardContent className="p-0 space-y-4">
               <form onSubmit={handleLogin} className="space-y-4">
@@ -82,23 +128,25 @@ export default function LoginPage() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="password">Contraseña</Label>
-                    <Button variant="link" className="p-0 h-auto text-xs text-primary">¿Olvidaste tu contraseña?</Button>
                   </div>
-                  <Input id="password" type="password" required />
+                  <Input 
+                    id="password" 
+                    type="password" 
+                    required 
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                  />
                 </div>
                 <Button type="submit" className="w-full h-12 text-lg bg-primary hover:bg-primary/90" disabled={loading}>
-                  {loading ? "Cargando..." : "Iniciar Sesión"}
+                  {loading ? "Iniciando sesión..." : "Acceder"}
                 </Button>
               </form>
             </CardContent>
             <CardFooter className="p-0 mt-8 pt-8 border-t flex flex-col items-center">
-              <p className="text-sm text-muted-foreground mb-4">Credenciales sugeridas para prueba:</p>
-              <div className="flex flex-wrap gap-2 justify-center">
-                <Button variant="outline" size="sm" onClick={() => setEmail('admin@eduflow.com')} className="text-xs">Admin</Button>
-                <Button variant="outline" size="sm" onClick={() => setEmail('profesor@eduflow.com')} className="text-xs">Profesor</Button>
-                <Button variant="outline" size="sm" onClick={() => setEmail('alumno@eduflow.com')} className="text-xs">Alumno</Button>
-                <Button variant="outline" size="sm" onClick={() => setEmail('expired@eduflow.com')} className="text-xs">Expirado</Button>
-              </div>
+              <p className="text-xs text-muted-foreground text-center">
+                Plataforma protegida por Firebase Security Rules. 
+                El acceso está restringido a personal autorizado.
+              </p>
             </CardFooter>
           </Card>
         </div>
