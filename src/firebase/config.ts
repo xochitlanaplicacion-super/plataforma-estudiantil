@@ -1,5 +1,6 @@
 'use client';
 
+// Configuración de Firebase para EduFlow Platform
 export const firebaseConfig = {
   apiKey: "AIzaSy-REPLACE-WITH-ACTUAL-KEY",
   authDomain: "eduflow-platform.firebaseapp.com",
