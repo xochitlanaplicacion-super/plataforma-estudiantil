@@ -11,8 +11,36 @@ import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
-// Forzamos que la página sea dinámica para evitar errores de prerenderizado
+// Forzamos que la página sea dinámica
 export const dynamic = 'force-dynamic';
+
+type Theme = {
+  bgImage: string;
+  buttonColor: string;
+  textColor: string;
+  badgeColor: string;
+};
+
+const themes: Theme[] = [
+  {
+    bgImage: 'https://i.postimg.cc/L6Gyfvgw/FONDO_ROJO.png',
+    buttonColor: '#8B2332',
+    textColor: 'text-white',
+    badgeColor: 'bg-white/10 border-white/20'
+  },
+  {
+    bgImage: 'https://i.postimg.cc/9FsxT1wN/FONDOS_VERDE.png',
+    buttonColor: '#1A4A3F',
+    textColor: 'text-white',
+    badgeColor: 'bg-white/10 border-white/20'
+  },
+  {
+    bgImage: 'https://i.postimg.cc/m2KdMV1K/fondos_beige_jpg.jpg',
+    buttonColor: '#E8D5B7',
+    textColor: 'text-[#1A4A3F]',
+    badgeColor: 'bg-black/5 border-black/10'
+  }
+];
 
 export default function LoginPage() {
   const { toast } = useToast();
@@ -25,9 +53,13 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const [currentTheme, setCurrentTheme] = useState<Theme>(themes[0]);
 
   useEffect(() => {
     setMounted(true);
+    // Seleccionar un tema aleatorio al cargar
+    const randomTheme = themes[Math.floor(Math.random() * themes.length)];
+    setCurrentTheme(randomTheme);
   }, []);
 
   const redirectByRole = (rol: string) => {
@@ -101,17 +133,20 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] p-4 font-body overflow-hidden">
       <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 shadow-2xl rounded-2xl overflow-hidden bg-white border border-primary/10">
         
-        {/* Lado Izquierdo - Branding Simplificado */}
-        <div className="hidden md:flex flex-col justify-center items-center p-12 relative overflow-hidden bg-primary text-primary-foreground">
-          {/* El birrete (GraduationCap) como elemento central de fondo */}
-          <div className="absolute opacity-20">
-            <GraduationCap size={480} />
+        {/* Lado Izquierdo - Fondo Dinámico */}
+        <div 
+          className="hidden md:flex flex-col justify-center items-center p-12 relative overflow-hidden bg-cover bg-center transition-all duration-1000"
+          style={{ backgroundImage: `url(${currentTheme.bgImage})` }}
+        >
+          {/* Birrete centralizado */}
+          <div className="absolute opacity-20 pointer-events-none">
+            <GraduationCap size={400} className={currentTheme.textColor === 'text-white' ? 'text-white' : 'text-black'} />
           </div>
           
           <div className="mt-auto z-10 w-full">
-             <div className="flex items-center gap-3 bg-white/10 p-3 rounded-xl backdrop-blur-sm border border-white/10 w-fit">
+             <div className={`flex items-center gap-3 p-3 rounded-xl backdrop-blur-sm border w-fit ${currentTheme.badgeColor}`}>
               <ShieldCheck className="text-accent h-5 w-5" /> 
-              <span className="text-sm font-medium">plataforma de estudios</span>
+              <span className={`text-sm font-medium ${currentTheme.textColor}`}>plataforma de estudios</span>
             </div>
           </div>
         </div>
@@ -167,7 +202,8 @@ export default function LoginPage() {
               </div>
               <Button 
                 type="submit" 
-                className="w-full h-12 text-base shadow-lg bg-primary hover:bg-primary/90 font-bold transition-all mt-4" 
+                className="w-full h-12 text-base shadow-lg font-bold transition-all mt-4 border-none text-white" 
+                style={{ backgroundColor: currentTheme.buttonColor }}
                 disabled={loading}
               >
                 {loading ? (
