@@ -1,7 +1,6 @@
-
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -35,7 +34,6 @@ export default function LoginPage() {
       if (userDoc.exists()) {
         const userData = userDoc.data();
         
-        // Verificar vigencia
         const now = new Date();
         const expirationDate = new Date(userData.expirationDate);
         
@@ -44,7 +42,6 @@ export default function LoginPage() {
           return;
         }
 
-        // Redirección basada en rol
         switch (userData.role) {
           case 'superuser':
           case 'admin':
@@ -79,27 +76,27 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 font-body">
-      <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 shadow-2xl rounded-2xl overflow-hidden">
-        {/* Visual Panel */}
-        <div className="hidden md:flex flex-col justify-center p-12 bg-primary text-primary-foreground space-y-8 relative overflow-hidden">
+      <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 shadow-2xl rounded-2xl overflow-hidden min-h-[600px]">
+        {/* Visual Panel con Animación de Color */}
+        <div className="hidden md:flex flex-col justify-center p-12 animate-login-morph space-y-8 relative overflow-hidden">
           <div className="absolute top-0 right-0 p-4 opacity-10">
             <GraduationCap size={200} />
           </div>
           <div className="z-10">
-            <div className="h-12 w-12 bg-accent rounded-xl mb-6 flex items-center justify-center font-bold text-accent-foreground text-2xl">EF</div>
-            <h1 className="text-4xl font-bold font-headline mb-4">EduFlow Platform</h1>
-            <p className="text-lg opacity-90 leading-relaxed">
+            <div className="h-12 w-12 bg-accent rounded-xl mb-6 flex items-center justify-center font-bold text-accent-foreground text-2xl shadow-lg">EF</div>
+            <h1 className="text-4xl font-bold font-headline mb-4 transition-colors duration-700">EduFlow Platform</h1>
+            <p className="text-lg opacity-90 leading-relaxed transition-colors duration-700">
               Gestión académica avanzada para Universidades y Preparatorias.
               Control total, acceso seguro y aprendizaje sin límites.
             </p>
           </div>
           <div className="flex gap-6 z-10">
             <div className="flex items-center gap-2">
-              <ShieldCheck className="text-accent" />
+              <ShieldCheck className="opacity-80" />
               <span className="text-sm font-medium">Seguridad Real</span>
             </div>
             <div className="flex items-center gap-2">
-              <BookOpen className="text-accent" />
+              <BookOpen className="opacity-80" />
               <span className="text-sm font-medium">Contenido</span>
             </div>
           </div>
@@ -123,6 +120,7 @@ export default function LoginPage() {
                     required 
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    className="h-12"
                   />
                 </div>
                 <div className="space-y-2">
@@ -135,9 +133,10 @@ export default function LoginPage() {
                     required 
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    className="h-12"
                   />
                 </div>
-                <Button type="submit" className="w-full h-12 text-lg bg-primary hover:bg-primary/90" disabled={loading}>
+                <Button type="submit" className="w-full h-12 text-lg bg-primary hover:bg-primary/90 transition-all" disabled={loading}>
                   {loading ? "Iniciando sesión..." : "Acceder"}
                 </Button>
               </form>

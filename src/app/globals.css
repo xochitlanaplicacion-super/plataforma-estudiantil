@@ -65,3 +65,28 @@
     @apply bg-background text-foreground font-body;
   }
 }
+
+@keyframes login-morph {
+  0%, 100% { 
+    background-color: #1A4A3F; 
+    color: #ffffff;
+  }
+  33.33% { 
+    background-color: #E8D5B7; 
+    color: #1A4A3F; 
+  }
+  66.66% { 
+    background-color: #8B2332; 
+    color: #ffffff;
+  }
+}
+
+.animate-login-morph {
+  animation: login-morph 15s ease-in-out infinite;
+  transition: color 0.8s ease-in-out;
+}
+
+.animate-login-morph h1, 
+.animate-login-morph p {
+  color: inherit;
+}
