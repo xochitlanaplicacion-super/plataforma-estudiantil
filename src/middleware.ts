@@ -13,22 +13,22 @@ export async function middleware(req: NextRequest) {
 
   const pathname = req.nextUrl.pathname
 
-  // Rutas públicas
+  // 1. Manejo de Rutas Públicas
   const publicPaths = ['/', '/expired']
-  if (publicPaths.some(path => pathname === path)) {
-    // Si ya tiene sesión y está en /, mandarlo al dashboard
-    if (session && pathname === '/') {
-      return NextResponse.redirect(new URL('/dashboard/admin', req.url))
-    }
+  const isPublicPath = publicPaths.some(path => pathname === path)
+
+  if (isPublicPath) {
+    // Si ya hay sesión y está en el login, no redirigimos aquí para evitar bucles.
+    // Dejamos que el useEffect del login lo maneje si es necesario.
     return res
   }
 
-  // Si no hay sesión, al login
+  // 2. Si no hay sesión, al login
   if (!session) {
     return NextResponse.redirect(new URL('/', req.url))
   }
 
-  // Validación de perfil (solo para rutas protegidas)
+  // 3. Validación de perfil para rutas protegidas
   const { data: profile } = await supabase
     .from('profiles')
     .select('rol, estatus, fecha_expiracion')
@@ -37,11 +37,11 @@ export async function middleware(req: NextRequest) {
 
   // Si no hay perfil o está inactivo, cerrar sesión
   if (!profile || profile.estatus !== 'activo') {
-    return NextResponse.redirect(new URL('/?error=perfil_no_activo', req.url))
+    return NextResponse.redirect(new URL('/?error=perfil_no_valido', req.url))
   }
 
-  // Verificación de expiración
-  if (profile.fecha_expiracion) {
+  // 4. Verificación de expiración (solo si existe fecha y no es superusuario)
+  if (profile.fecha_expiracion && profile.rol !== 'superuser') {
     const hoy = new Date().toISOString().split('T')[0]
     if (profile.fecha_expiracion < hoy && pathname !== '/expired') {
       return NextResponse.redirect(new URL('/expired', req.url))

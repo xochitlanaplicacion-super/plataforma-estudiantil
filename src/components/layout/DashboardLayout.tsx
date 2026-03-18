@@ -29,7 +29,9 @@ import {
   ShieldCheck,
   School,
   CalendarCheck,
-  ClipboardList
+  ClipboardList,
+  BarChart3,
+  LifeBuoy
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { UserRole } from '@/lib/types';
@@ -52,43 +54,48 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
   const getInitials = (name: string) => 
     name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
 
+  // Estructura de 10 Módulos basada en el Plan de Desarrollo
   const menuItems = {
     superuser: [
-      { group: "Administración Global", items: [
+      { group: "1. Administración Global", items: [
         { icon: LayoutDashboard, label: 'Panel de Control', href: '/dashboard/admin' },
         { icon: Users, label: 'Gestión de Usuarios', href: '/dashboard/admin/usuarios' },
+      ]},
+      { group: "2. Estructura Académica", items: [
         { icon: School, label: 'Niveles y Carreras', href: '/dashboard/admin/estructura' },
+        { icon: Layers, label: 'Grados y Grupos', href: '/dashboard/admin/grupos' },
+        { icon: BookOpen, label: 'Materias y Plan', href: '/dashboard/admin/materias' },
       ]},
-      { group: "Académico", items: [
-        { icon: GraduationCap, label: 'Asignaciones Prof.', href: '/dashboard/admin/asignaciones' },
-        { icon: CalendarCheck, label: 'Inscripciones Alum.', href: '/dashboard/admin/inscripciones' },
-        { icon: BookOpen, label: 'Contenido Global', href: '/dashboard/admin/contenido' },
+      { group: "3. Asignaciones y Control", items: [
+        { icon: GraduationCap, label: 'Asignación Docente', href: '/dashboard/admin/asignaciones' },
+        { icon: CalendarCheck, label: 'Inscripción Alumnos', href: '/dashboard/admin/inscripciones' },
       ]},
-      { group: "Seguridad", items: [
+      { group: "4. Gestión de Contenido", items: [
+        { icon: FileText, label: 'Contenido Global', href: '/dashboard/admin/contenido' },
+      ]},
+      { group: "5. Seguridad y Reportes", items: [
         { icon: Clock, label: 'Control de Vigencias', href: '/dashboard/admin/vigencias' },
-        { icon: ShieldCheck, label: 'Auditoría de Sistema', href: '/dashboard/admin/auditoria' },
+        { icon: ShieldCheck, label: 'Auditoría', href: '/dashboard/admin/auditoria' },
+        { icon: BarChart3, label: 'Reportes', href: '/dashboard/admin/reportes' },
       ]}
     ],
     admin: [
       { group: "Gestión Local", items: [
         { icon: LayoutDashboard, label: 'Panel Admin', href: '/dashboard/admin' },
         { icon: Users, label: 'Alumnos y Matrículas', href: '/dashboard/admin/usuarios' },
-        { icon: BookOpen, label: 'Materias y Grupos', href: '/dashboard/admin/estructura' },
       ]}
     ],
     profesor: [
       { group: "Docencia", items: [
         { icon: LayoutDashboard, label: 'Mis Asignaturas', href: '/dashboard/profesor' },
         { icon: Layers, label: 'Unidades y Temas', href: '/dashboard/profesor/contenido' },
-        { icon: FileText, label: 'Recursos Didácticos', href: '/dashboard/profesor/recursos' },
-        { icon: ClipboardList, label: 'Seguimiento Alumnos', href: '/dashboard/profesor/seguimiento' },
+        { icon: ClipboardList, label: 'Seguimiento', href: '/dashboard/profesor/seguimiento' },
       ]}
     ],
     alumno: [
       { group: "Mi Estudio", items: [
         { icon: LayoutDashboard, label: 'Mi Portal', href: '/dashboard/alumno' },
         { icon: BookOpen, label: 'Mis Materias', href: '/dashboard/alumno/materias' },
-        { icon: Clock, label: 'Mi Inscripción', href: '/dashboard/alumno/perfil' },
       ]}
     ],
   };
