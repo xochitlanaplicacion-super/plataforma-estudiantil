@@ -1,3 +1,4 @@
+
 "use client";
 
 import React from 'react';
@@ -23,7 +24,8 @@ import {
   LogOut, 
   Layers,
   FileText,
-  Clock
+  Clock,
+  ShieldCheck
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { UserRole } from '@/lib/types';
@@ -39,26 +41,26 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
 
   const menuItems = {
     superuser: [
-      { icon: LayoutDashboard, label: 'Dashboard', href: '#' },
-      { icon: Users, label: 'Usuarios', href: '#' },
-      { icon: GraduationCap, label: 'Estructura Académica', href: '#' },
-      { icon: Clock, label: 'Control de Vigencias', href: '#' },
-      { icon: FileText, label: 'Auditoría', href: '#' },
+      { icon: LayoutDashboard, label: 'Dashboard Global', href: '#' },
+      { icon: Users, label: 'Gestión de Perfiles', href: '#' },
+      { icon: GraduationCap, label: 'Niveles y Carreras', href: '#' },
+      { icon: Clock, label: 'Vigencias (CURP)', href: '#' },
+      { icon: ShieldCheck, label: 'Auditoría', href: '#' },
     ],
     admin: [
-      { icon: LayoutDashboard, label: 'Admin Panel', href: '#' },
-      { icon: Users, label: 'Gestionar Alumnos', href: '#' },
-      { icon: BookOpen, label: 'Materias', href: '#' },
+      { icon: LayoutDashboard, label: 'Panel Administrativo', href: '#' },
+      { icon: Users, label: 'Alumnos y Matrículas', href: '#' },
+      { icon: BookOpen, label: 'Materias y Grupos', href: '#' },
     ],
     profesor: [
-      { icon: LayoutDashboard, label: 'Mis Grupos', href: '#' },
-      { icon: BookOpen, label: 'Mis Materias', href: '#' },
-      { icon: Layers, label: 'Contenido', href: '#' },
+      { icon: LayoutDashboard, label: 'Mis Asignaciones', href: '#' },
+      { icon: BookOpen, label: 'Contenido Académico', href: '#' },
+      { icon: Layers, label: 'Unidades y Temas', href: '#' },
     ],
     alumno: [
-      { icon: LayoutDashboard, label: 'Inicio', href: '#' },
+      { icon: LayoutDashboard, label: 'Mi Portal', href: '#' },
       { icon: BookOpen, label: 'Mis Materias', href: '#' },
-      { icon: Clock, label: 'Mi Vigencia', href: '#' },
+      { icon: Clock, label: 'Mi Inscripción', href: '#' },
     ],
   };
 

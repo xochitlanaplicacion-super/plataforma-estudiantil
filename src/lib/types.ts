@@ -1,69 +1,106 @@
+
 export type UserRole = 'superuser' | 'admin' | 'profesor' | 'alumno';
+export type UserEstatus = 'activo' | 'inactivo' | 'suspendido';
 
 export interface User {
   id: string;
-  name: string;
+  nombre: string;
+  apellidos: string;
+  curp: string;
   email: string;
-  role: UserRole;
-  status: 'active' | 'inactive';
-  expirationDate: string;
-  levelId?: string;
-  careerId?: string;
-  gradeId?: string;
-  groupId?: string;
+  telefono?: string;
+  rol: UserRole;
+  estatus: UserEstatus;
+  fecha_inicio?: string;
+  fecha_expiracion?: string;
+  matricula?: string;
+  numero_empleado?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Level {
   id: string;
-  name: string; // e.g., Universidad, Preparatoria
-  description: string;
+  nombre: string;
+  descripcion?: string;
+  activo: boolean;
+  created_at?: string;
 }
 
 export interface Career {
   id: string;
-  levelId: string;
-  name: string;
+  nivel_id: string;
+  nombre: string;
+  clave?: string;
+  activo: boolean;
+  created_at?: string;
 }
 
 export interface Grade {
   id: string;
-  careerId: string;
-  name: string;
+  carrera_id: string;
+  nombre: string;
+  orden: number;
+  activo: boolean;
+  created_at?: string;
 }
 
 export interface Group {
   id: string;
-  gradeId: string;
-  name: string;
+  grado_id: string;
+  nombre: string;
+  turno?: string;
+  activo: boolean;
+  created_at?: string;
 }
 
 export interface Subject {
   id: string;
-  groupId: string;
-  name: string;
-  professorId?: string;
+  carrera_id: string;
+  grado_id: string;
+  nombre: string;
+  clave?: string;
+  descripcion?: string;
+  activo: boolean;
+  created_at?: string;
 }
 
 export interface Unit {
   id: string;
-  subjectId: string;
-  title: string;
-  order: number;
+  materia_id: string;
+  titulo: string;
+  descripcion?: string;
+  orden: number;
+  activo: boolean;
+  created_at?: string;
 }
 
 export interface Topic {
   id: string;
-  unitId: string;
-  title: string;
-  content: string;
-  status: 'draft' | 'published';
-  isVisible: boolean;
+  unidad_id: string;
+  titulo: string;
+  contenido?: string;
+  orden: number;
+  publicado: boolean;
+  visible: boolean;
+  created_by?: string;
+  updated_by?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Resource {
   id: string;
-  topicId: string;
-  type: 'pdf' | 'video' | 'link' | 'image';
-  title: string;
-  url: string;
+  tema_id: string;
+  tipo: 'pdf' | 'word' | 'powerpoint' | 'imagen' | 'video' | 'enlace' | 'otro';
+  titulo: string;
+  descripcion?: string;
+  archivo_url?: string;
+  enlace_url?: string;
+  visible: boolean;
+  publicado: boolean;
+  fecha_publicacion?: string;
+  fecha_expiracion?: string;
+  created_by?: string;
+  created_at?: string;
 }

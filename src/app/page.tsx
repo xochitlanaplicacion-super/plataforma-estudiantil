@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState } from 'react';
@@ -11,6 +12,7 @@ import { signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { useAuth, useFirestore } from '@/firebase';
 import { useToast } from '@/hooks/use-toast';
+import { User } from '@/lib/types';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -32,17 +34,17 @@ export default function LoginPage() {
       const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
       
       if (userDoc.exists()) {
-        const userData = userDoc.data();
+        const userData = userDoc.data() as User;
         
         const now = new Date();
-        const expirationDate = new Date(userData.expirationDate);
+        const expirationDate = userData.fecha_expiracion ? new Date(userData.fecha_expiracion) : null;
         
-        if (expirationDate < now) {
+        if (expirationDate && expirationDate < now) {
           router.push('/expired');
           return;
         }
 
-        switch (userData.role) {
+        switch (userData.rol) {
           case 'superuser':
           case 'admin':
             router.push('/dashboard/admin');
@@ -77,7 +79,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 font-body">
       <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 shadow-2xl rounded-2xl overflow-hidden min-h-[600px]">
-        {/* Visual Panel con Animación de Color Lenta */}
+        {/* Visual Panel con Animación de 45s (15s por color) */}
         <div className="hidden md:flex flex-col justify-center p-12 animate-login-morph space-y-8 relative overflow-hidden transition-all duration-1000">
           <div className="absolute top-0 right-0 p-4 opacity-10">
             <GraduationCap size={200} />
@@ -97,7 +99,7 @@ export default function LoginPage() {
             </div>
             <div className="flex items-center gap-2">
               <BookOpen className="opacity-80" />
-              <span className="text-sm font-medium transition-colors duration-1000">Contenido</span>
+              <span className="text-sm font-medium transition-colors duration-1000">Contenido Académico</span>
             </div>
           </div>
         </div>
@@ -147,8 +149,8 @@ export default function LoginPage() {
             </CardContent>
             <CardFooter className="p-0 mt-8 pt-8 border-t flex flex-col items-center">
               <p className="text-xs text-muted-foreground text-center">
-                Plataforma protegida por Firebase Security Rules. 
-                El acceso está restringido a personal autorizado.
+                Plataforma sincronizada con perfiles de auditoría.
+                CURP requerida para todos los registros oficiales.
               </p>
             </CardFooter>
           </Card>

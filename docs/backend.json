@@ -3,85 +3,135 @@
   "entities": {
     "UserProfile": {
       "title": "Perfil de Usuario",
-      "description": "Datos básicos y rol del usuario en la plataforma.",
+      "description": "Información detallada del usuario sincronizada con la tabla profiles.",
       "type": "object",
       "properties": {
-        "name": {
+        "nombre": { "type": "string" },
+        "apellidos": { "type": "string" },
+        "curp": { "type": "string", "description": "Clave Única de Registro de Población" },
+        "email": { "type": "string", "format": "email" },
+        "telefono": { "type": "string" },
+        "rol": {
           "type": "string",
-          "description": "Nombre completo"
+          "enum": ["superuser", "admin", "profesor", "alumno"]
         },
-        "email": {
+        "estatus": {
           "type": "string",
-          "format": "email",
-          "description": "Correo institucional"
+          "enum": ["activo", "inactivo", "suspendido"]
         },
-        "role": {
-          "type": "string",
-          "enum": ["superuser", "admin", "profesor", "alumno"],
-          "description": "Nivel de acceso"
-        },
-        "status": {
-          "type": "string",
-          "enum": ["active", "inactive"],
-          "description": "Estado de la cuenta"
-        },
-        "expirationDate": {
-          "type": "string",
-          "format": "date",
-          "description": "Fecha de término de vigencia"
-        },
-        "levelId": { "type": "string" },
-        "careerId": { "type": "string" },
-        "gradeId": { "type": "string" },
-        "groupId": { "type": "string" }
+        "fecha_inicio": { "type": "string", "format": "date" },
+        "fecha_expiracion": { "type": "string", "format": "date" },
+        "matricula": { "type": "string" },
+        "numero_empleado": { "type": "string" }
       },
-      "required": ["name", "email", "role", "status", "expirationDate"]
+      "required": ["nombre", "apellidos", "curp", "email", "rol"]
     },
     "Level": {
       "title": "Nivel Educativo",
       "type": "object",
       "properties": {
-        "name": { "type": "string" },
-        "description": { "type": "string" }
+        "nombre": { "type": "string" },
+        "descripcion": { "type": "string" },
+        "activo": { "type": "boolean" }
       }
     },
     "Career": {
       "title": "Carrera",
       "type": "object",
       "properties": {
-        "levelId": { "type": "string" },
-        "name": { "type": "string" }
+        "nivel_id": { "type": "string" },
+        "nombre": { "type": "string" },
+        "clave": { "type": "string" },
+        "activo": { "type": "boolean" }
+      }
+    },
+    "Grade": {
+      "title": "Grado",
+      "type": "object",
+      "properties": {
+        "carrera_id": { "type": "string" },
+        "nombre": { "type": "string" },
+        "orden": { "type": "integer" },
+        "activo": { "type": "boolean" }
+      }
+    },
+    "Group": {
+      "title": "Grupo",
+      "type": "object",
+      "properties": {
+        "grado_id": { "type": "string" },
+        "nombre": { "type": "string" },
+        "turno": { "type": "string" },
+        "activo": { "type": "boolean" }
       }
     },
     "Subject": {
       "title": "Materia",
       "type": "object",
       "properties": {
-        "groupId": { "type": "string" },
-        "name": { "type": "string" },
-        "professorId": { "type": "string" }
+        "carrera_id": { "type": "string" },
+        "grado_id": { "type": "string" },
+        "nombre": { "type": "string" },
+        "clave": { "type": "string" },
+        "descripcion": { "type": "string" },
+        "activo": { "type": "boolean" }
+      }
+    },
+    "Unit": {
+      "title": "Unidad",
+      "type": "object",
+      "properties": {
+        "materia_id": { "type": "string" },
+        "titulo": { "type": "string" },
+        "descripcion": { "type": "string" },
+        "orden": { "type": "integer" },
+        "activo": { "type": "boolean" }
+      }
+    },
+    "Topic": {
+      "title": "Tema",
+      "type": "object",
+      "properties": {
+        "unidad_id": { "type": "string" },
+        "titulo": { "type": "string" },
+        "contenido": { "type": "string" },
+        "orden": { "type": "integer" },
+        "publicado": { "type": "boolean" },
+        "visible": { "type": "boolean" }
+      }
+    },
+    "Resource": {
+      "title": "Recurso",
+      "type": "object",
+      "properties": {
+        "tema_id": { "type": "string" },
+        "tipo": { "type": "string", "enum": ["pdf", "word", "powerpoint", "imagen", "video", "enlace", "otro"] },
+        "titulo": { "type": "string" },
+        "descripcion": { "type": "string" },
+        "archivo_url": { "type": "string" },
+        "enlace_url": { "type": "string" },
+        "visible": { "type": "boolean" },
+        "publicado": { "type": "boolean" },
+        "fecha_publicacion": { "type": "string", "format": "date" },
+        "fecha_expiracion": { "type": "string", "format": "date" }
       }
     }
   },
   "auth": {
-    "providers": ["password", "google.com"]
+    "providers": ["password"]
   },
   "firestore": {
     "/users/{userId}": {
       "schema": "UserProfile",
-      "description": "Almacena los perfiles de todos los usuarios."
+      "description": "Perfiles de usuario vinculados a Auth."
     },
-    "/levels/{levelId}": {
-      "schema": "Level",
-      "description": "Niveles educativos (Universidad, Preparatoria)."
-    },
-    "/careers/{careerId}": {
-      "schema": "Career",
-      "description": "Carreras disponibles por nivel."
-    },
-    "/subjects/{subjectId}": {
-      "schema": "Subject",
-      "description": "Materias asignadas a grupos y profesores."
-    }
+    "/levels/{levelId}": { "schema": "Level", "description": "Niveles educativos." },
+    "/careers/{careerId}": { "schema": "Career", "description": "Carreras por nivel." },
+    "/grades/{gradeId}": { "schema": "Grade", "description": "Grados académicos." },
+    "/groups/{groupId}": { "schema": "Group", "description": "Grupos por grado." },
+    "/subjects/{subjectId}": { "schema": "Subject", "description": "Materias del plan de estudios." },
+    "/units/{unitId}": { "schema": "Unit", "description": "Unidades de aprendizaje." },
+    "/topics/{topicId}": { "schema": "Topic", "description": "Temas de contenido." },
+    "/resources/{resourceId}": { "schema": "Resource", "description": "Recursos multimedia." }
   }
 }
