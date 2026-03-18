@@ -6,7 +6,7 @@ import Image from 'next/image';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { ShieldCheck, Loader2, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Eye, EyeOff } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
@@ -139,27 +139,18 @@ export default function LoginPage() {
         
         {/* Lado Izquierdo - Fondo Dinámico Full Screen */}
         <div 
-          className="hidden md:flex flex-col justify-end items-start p-12 lg:p-20 relative overflow-hidden bg-cover bg-center transition-all duration-1000"
+          className="hidden md:flex flex-col justify-center items-center p-12 relative overflow-hidden bg-cover bg-center transition-all duration-1000"
           style={{ backgroundImage: `url(${currentTheme.bgImage})` }}
         >
           {/* Logo Centrado - Tamaño 85% más grande */}
-          <div className="absolute inset-0 flex items-center justify-center p-6 pointer-events-none">
-            <div className="relative w-[90%] lg:w-[85%] aspect-square flex items-center justify-center">
-              <Image 
-                src="https://i.postimg.cc/Z5FQHyN4/unnamed.png"
-                alt="Logo IEEZ"
-                fill
-                className="object-contain drop-shadow-2xl"
-                priority
-              />
-            </div>
-          </div>
-
-          <div className="z-10 w-full">
-             <div className={`flex items-center gap-3 p-4 rounded-xl backdrop-blur-sm border w-fit ${currentTheme.badgeColor}`}>
-              <ShieldCheck className="text-accent h-6 w-6" /> 
-              <span className={`text-base font-medium ${currentTheme.textColor}`}>plataforma de estudios</span>
-            </div>
+          <div className="relative w-[90%] lg:w-[85%] aspect-square flex items-center justify-center">
+            <Image 
+              src="https://i.postimg.cc/Z5FQHyN4/unnamed.png"
+              alt="Logo IEEZ"
+              fill
+              className="object-contain drop-shadow-2xl"
+              priority
+            />
           </div>
         </div>
 
@@ -190,6 +181,7 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="h-14 text-lg border-muted focus:ring-primary/20 bg-gray-50/30"
+                  placeholder=""
                 />
               </div>
               <div className="space-y-3">
@@ -202,6 +194,7 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="h-14 text-lg border-muted focus:ring-primary/20 bg-gray-50/30 pr-14"
+                    placeholder=""
                   />
                   <button
                     type="button"
