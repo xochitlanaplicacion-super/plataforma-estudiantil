@@ -25,13 +25,11 @@ export default function LoginPage() {
     if (rol === 'superuser' || rol === 'admin') destination = '/dashboard/admin';
     if (rol === 'profesor') destination = '/dashboard/profesor';
     
-    // Forzamos la redirección con recarga para asegurar sincronización de cookies
     window.location.href = destination;
   }, []);
 
-  // Verificar si ya hay una sesión activa al cargar
   useEffect(() => {
-    const checkSession = async () => {
+    async function checkSession() {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session) {
@@ -47,22 +45,20 @@ export default function LoginPage() {
           }
         }
       } catch (e) {
-        console.error("Error checking session", e);
+        console.error("Error inicializando sesión", e);
       } finally {
-        setChecking(false);
+        // Damos un pequeño margen para evitar el parpadeo visual
+        setTimeout(() => setChecking(false), 500);
       }
-    };
+    }
     checkSession();
   }, [redirectUser]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    const cleanEmail = email.trim();
-    const cleanPassword = password.trim();
-
-    if (!cleanEmail || !cleanPassword) {
-      setError("Ingresa tus credenciales.");
+    if (!email.trim() || !password.trim()) {
+      setError("Por favor completa todos los campos.");
       return;
     }
 
@@ -71,19 +67,19 @@ export default function LoginPage() {
     
     try {
       const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email: cleanEmail,
-        password: cleanPassword,
+        email: email.trim(),
+        password: password.trim(),
       });
 
       if (authError) {
         setError(authError.message === "Invalid login credentials" 
-          ? "Correo o contraseña incorrectos." 
-          : authError.message);
+          ? "Credenciales incorrectas. Verifica tu correo y contraseña." 
+          : "Error al iniciar sesión: " + authError.message);
         setLoading(false);
         return;
       }
 
-      if (data.user) {
+      if (data?.user) {
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('rol, estatus')
@@ -91,26 +87,26 @@ export default function LoginPage() {
           .single();
 
         if (profileError || !profile) {
-          setError("Perfil no encontrado en la base de datos.");
+          setError("Usuario autenticado, pero no se encontró el perfil en la base de datos.");
           setLoading(false);
           return;
         }
 
         if (profile.estatus !== 'activo') {
-          setError(`Cuenta ${profile.estatus}.`);
+          setError(`Acceso denegado. Tu cuenta está ${profile.estatus}.`);
           setLoading(false);
           return;
         }
 
         toast({
           title: "Acceso concedido",
-          description: "Cargando tu panel de control...",
+          description: "Bienvenido a EduFlow. Cargando panel...",
         });
         
         redirectUser(profile.rol);
       }
     } catch (err: any) {
-      setError("Error de conexión con el servidor.");
+      setError("Error de conexión con el servidor educativo.");
       setLoading(false);
     }
   };
@@ -118,60 +114,65 @@ export default function LoginPage() {
   if (checking) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <div className="text-center space-y-4">
+          <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
+          <p className="text-sm font-medium text-muted-foreground animate-pulse">Verificando sesión activa...</p>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 font-body overflow-hidden">
-      <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 shadow-2xl rounded-2xl overflow-hidden bg-white border">
+      <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 shadow-2xl rounded-2xl overflow-hidden bg-white border border-primary/10">
         
         <div className="hidden md:flex flex-col justify-center p-12 space-y-8 relative overflow-hidden bg-primary text-primary-foreground">
           <div className="absolute top-0 right-0 p-4 opacity-10">
-            <GraduationCap size={200} />
+            <GraduationCap size={240} />
           </div>
           <div className="z-10">
-            <div className="h-12 w-12 rounded-xl mb-6 flex items-center justify-center font-bold text-2xl shadow-lg bg-white/20 border border-white/30">EF</div>
-            <h1 className="text-4xl font-bold font-headline mb-4 leading-tight">EduFlow Platform</h1>
-            <p className="text-lg opacity-90 leading-relaxed font-light">Sistema integral de gestión académica.</p>
+            <div className="h-14 w-14 rounded-2xl mb-6 flex items-center justify-center font-bold text-3xl shadow-xl bg-white/20 border border-white/30 backdrop-blur-sm">EF</div>
+            <h1 className="text-4xl font-bold font-headline mb-4 leading-tight tracking-tight">EduFlow Platform</h1>
+            <p className="text-lg opacity-90 leading-relaxed font-light">Gestión académica integral y control de contenidos para instituciones educativas.</p>
           </div>
           <div className="flex flex-col gap-4 z-10 pt-4">
-            <div className="flex items-center gap-2"><ShieldCheck className="text-accent h-5 w-5" /> <span className="text-sm font-medium">Control Administrativo Global</span></div>
-            <div className="flex items-center gap-2"><BookOpen className="text-accent h-5 w-5" /> <span className="text-sm font-medium">10 Módulos Integrados</span></div>
+            <div className="flex items-center gap-3 bg-white/5 p-2 rounded-lg"><ShieldCheck className="text-accent h-5 w-5" /> <span className="text-sm font-medium">Control de Privilegios por Rol</span></div>
+            <div className="flex items-center gap-3 bg-white/5 p-2 rounded-lg"><BookOpen className="text-accent h-5 w-5" /> <span className="text-sm font-medium">10 Módulos de Administración Académica</span></div>
           </div>
         </div>
 
-        <div className="p-8 md:p-12 flex flex-col justify-center bg-white">
-          <div className="space-y-6">
-            <div className="space-y-2">
-              <h2 className="text-3xl font-headline font-bold text-gray-800">Iniciar Sesión</h2>
-              <p className="text-muted-foreground text-sm">Accede con tu cuenta institucional</p>
+        <div className="p-8 md:p-14 flex flex-col justify-center bg-white">
+          <div className="space-y-8">
+            <div className="space-y-2 text-center md:text-left">
+              <h2 className="text-3xl font-headline font-bold text-gray-900 tracking-tight">Iniciar Sesión</h2>
+              <p className="text-muted-foreground text-sm">Ingresa tus credenciales institucionales para acceder.</p>
             </div>
 
             {error && (
-              <Alert variant="destructive" className="animate-in fade-in zoom-in duration-300">
+              <Alert variant="destructive" className="animate-in slide-in-from-top-2 duration-300">
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Error</AlertTitle>
+                <AlertTitle>Error de acceso</AlertTitle>
                 <AlertDescription className="text-xs">{error}</AlertDescription>
               </Alert>
             )}
 
-            <form onSubmit={handleLogin} className="space-y-4">
+            <form onSubmit={handleLogin} className="space-y-5">
               <div className="space-y-2">
                 <Label htmlFor="email">Correo Electrónico</Label>
                 <Input 
                   id="email" 
                   type="email" 
-                  placeholder="admin@eduflow.com" 
+                  placeholder="ejemplo@eduflow.com" 
                   required 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="h-11 border-muted"
+                  className="h-12 border-muted focus:ring-primary/20"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Contraseña</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password">Contraseña</Label>
+                </div>
                 <Input 
                   id="password" 
                   type="password" 
@@ -179,21 +180,21 @@ export default function LoginPage() {
                   required 
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-11 border-muted"
+                  className="h-12 border-muted focus:ring-primary/20"
                 />
               </div>
               <Button 
                 type="submit" 
-                className="w-full h-11 text-base shadow-lg bg-primary hover:bg-primary/90 font-bold" 
+                className="w-full h-12 text-base shadow-lg bg-primary hover:bg-primary/90 font-bold transition-all hover:scale-[1.01] active:scale-[0.99]" 
                 disabled={loading}
               >
-                {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Entrando...</> : "Entrar al Sistema"}
+                {loading ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Verificando...</> : "Entrar al Sistema"}
               </Button>
             </form>
             
-            <div className="pt-6 border-t">
-              <p className="text-[10px] text-muted-foreground text-center uppercase tracking-widest font-semibold">
-                Plataforma EduFlow - Versión 1.0.0
+            <div className="pt-8 border-t">
+              <p className="text-[10px] text-muted-foreground text-center uppercase tracking-[0.2em] font-bold">
+                EduFlow Platform v1.0 • 2024
               </p>
             </div>
           </div>
