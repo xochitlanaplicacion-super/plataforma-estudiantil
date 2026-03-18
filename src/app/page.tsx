@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { BookOpen, GraduationCap, ShieldCheck, AlertCircle } from 'lucide-react';
+import { BookOpen, GraduationCap, ShieldCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
@@ -57,24 +57,29 @@ export default function LoginPage() {
     setLoading(true);
     
     try {
+      // Intento de login con Supabase Auth
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
 
       if (error) {
+        let message = error.message;
+        if (error.message === "Invalid login credentials") {
+          message = "Correo o contraseña incorrectos. Verifica tus datos.";
+        }
+        
         toast({
           variant: "destructive",
           title: "Error de acceso",
-          description: error.message === "Invalid login credentials" 
-            ? "Correo o contraseña incorrectos. Verifica tus datos."
-            : error.message,
+          description: message,
         });
         setLoading(false);
         return;
       }
 
       if (data.user) {
+        // Si el login fue exitoso, buscamos el perfil en la tabla pública
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('rol, estatus, fecha_expiracion')
@@ -82,27 +87,30 @@ export default function LoginPage() {
           .single();
 
         if (profileError || !profile) {
+          // Si no hay perfil, cerramos la sesión por seguridad
           await supabase.auth.signOut();
           toast({
             variant: "destructive",
             title: "Perfil no encontrado",
-            description: "Tu usuario existe pero no tienes un perfil en la tabla de registros. Contacta a soporte.",
+            description: "Tu usuario existe pero no tienes un registro en la tabla de perfiles. Contacta al administrador.",
           });
           setLoading(false);
           return;
         }
 
+        // Validamos estatus
         if (profile.estatus !== 'activo') {
           await supabase.auth.signOut();
           toast({
             variant: "destructive",
             title: "Cuenta restringida",
-            description: `Tu cuenta está ${profile.estatus}.`,
+            description: `Tu cuenta se encuentra en estado: ${profile.estatus}.`,
           });
           setLoading(false);
           return;
         }
 
+        // Validamos vigencia
         if (profile.fecha_expiracion) {
           const now = new Date();
           const exp = new Date(profile.fecha_expiracion);
@@ -118,14 +126,18 @@ export default function LoginPage() {
           description: "Acceso concedido correctamente.",
         });
         
-        redirectUser(profile.rol);
+        // Pequeño delay para asegurar que el router procese el cambio
+        setTimeout(() => {
+          redirectUser(profile.rol);
+        }, 500);
       }
 
     } catch (err: any) {
+      console.error("Login unexpected error:", err);
       toast({
         variant: "destructive",
         title: "Error inesperado",
-        description: "Ocurrió un error al intentar conectar con el servicio.",
+        description: "Ocurrió un error al intentar conectar con el servidor.",
       });
     } finally {
       setLoading(false);
@@ -184,6 +196,7 @@ export default function LoginPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="h-11"
+                    autoComplete="email"
                   />
                 </div>
                 <div className="space-y-2">
@@ -195,6 +208,7 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="h-11"
+                    autoComplete="current-password"
                   />
                 </div>
                 <Button 
