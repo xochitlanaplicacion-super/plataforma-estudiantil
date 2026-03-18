@@ -170,7 +170,7 @@ export default function LoginPage() {
                 </div>
                 <Button 
                   type="submit" 
-                  className="w-full h-12 text-lg shadow-md border-none animate-login-button transition-colors duration-1000" 
+                  className="w-full h-12 text-lg shadow-md border-none animate-login-button transition-colors duration-500" 
                   disabled={loading}
                 >
                   {loading ? "Cargando..." : "Acceder"}

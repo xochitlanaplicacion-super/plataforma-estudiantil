@@ -7,47 +7,46 @@ export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
   const supabase = createMiddlewareClient({ req, res })
 
-  // Obtener la sesión correctamente usando la propiedad data
+  // Obtenemos la sesión correctamente desestructurando el objeto 'data'
   const {
     data: { session },
   } = await supabase.auth.getSession()
 
   const pathname = req.nextUrl.pathname
 
-  // Rutas públicas (la raíz '/' es el login)
+  // Rutas públicas que no requieren autenticación
   const publicPaths = ['/', '/expired']
   if (publicPaths.some(path => pathname === path)) {
     return res
   }
 
-  // Si no hay sesión y no es ruta pública → redirigir a login (/)
+  // Si no hay sesión, redirigimos al login
   if (!session) {
     return NextResponse.redirect(new URL('/', req.url))
   }
 
-  // Obtener perfil para verificar rol y estatus
+  // Obtenemos el perfil del usuario para validar permisos y vigencia
   const { data: profile } = await supabase
     .from('profiles')
     .select('rol, estatus, fecha_expiracion')
     .eq('id', session.user.id)
     .single()
 
-  // Validar estatus
+  // Validamos si la cuenta está activa
   if (profile?.estatus !== 'activo') {
     await supabase.auth.signOut()
     return NextResponse.redirect(new URL('/?inactive=true', req.url))
   }
 
-  // Validar expiración
+  // Validamos la fecha de expiración
   const hoy = new Date().toISOString().split('T')[0]
   if (profile?.fecha_expiracion && profile.fecha_expiracion < hoy) {
-    // Redirigir a página de expiración si no está ya en ella
     if (pathname !== '/expired') {
       return NextResponse.redirect(new URL('/expired', req.url))
     }
   }
 
-  // Protección por rol para las rutas de dashboard
+  // Protección de rutas por rol
   if (pathname.startsWith('/dashboard/admin') && !['superuser', 'admin'].includes(profile?.rol || '')) {
     return NextResponse.redirect(new URL('/', req.url))
   }
