@@ -7,9 +7,12 @@ export async function updateSession(request: NextRequest) {
     request,
   });
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cuuohbztrxxneozagecr.supabase.co';
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN1dW9oYnp0cnh4bmVvemFnZWNyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM3Nzk3MjUsImV4cCI6MjA4OTM1NTcyNX0.wqNj-_mQilHdBfgVIZYOkSaf7ca39i761zdpgM_ovKA';
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll() {
@@ -36,35 +39,29 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
-  // Permitir acceso a la raíz y a la página de expiración siempre
   if (pathname === '/' || pathname === '/expired') {
     return supabaseResponse;
   }
 
-  // Si no hay sesión y la ruta es protegida, al login
   if (!user) {
     const url = request.nextUrl.clone();
     url.pathname = '/';
     return NextResponse.redirect(url);
   }
 
-  // Obtener perfil para validaciones
   const { data: profile } = await supabase
     .from('profiles')
     .select('rol, estatus, fecha_expiracion')
     .eq('id', user.id)
     .single();
 
-  // Si no hay perfil o está inactivo
   if (!profile || profile.estatus !== 'activo') {
     await supabase.auth.signOut();
     const url = request.nextUrl.clone();
     url.pathname = '/';
-    url.searchParams.set('error', 'acceso_denegado');
     return NextResponse.redirect(url);
   }
 
-  // Verificación de expiración (Superusuario es inmune)
   if (profile.rol !== 'superuser' && profile.fecha_expiracion) {
     const hoy = new Date().toISOString().split('T')[0];
     if (profile.fecha_expiracion < hoy && pathname !== '/expired') {

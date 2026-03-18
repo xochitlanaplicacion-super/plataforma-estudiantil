@@ -12,6 +12,9 @@ import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
+// Forzamos que la página sea dinámica para evitar errores de prerenderizado en Vercel
+export const dynamic = 'force-dynamic';
+
 export default function LoginPage() {
   const { toast } = useToast();
   const router = useRouter();
@@ -26,7 +29,6 @@ export default function LoginPage() {
   useEffect(() => {
     setMounted(true);
     
-    // Verificar si ya hay sesión activa al cargar
     const checkSession = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
@@ -43,7 +45,7 @@ export default function LoginPage() {
     };
     
     checkSession();
-  }, []);
+  }, [supabase.auth, supabase.from]);
 
   const redirectByRole = (rol: string) => {
     let destination = '/dashboard/alumno';
@@ -114,7 +116,7 @@ export default function LoginPage() {
     }
   };
 
-  if (!mounted) return <div className="min-h-screen bg-[#f8f9fa]" />;
+  if (!mounted) return null;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] p-4 font-body overflow-hidden">
