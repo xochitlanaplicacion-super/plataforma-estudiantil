@@ -130,17 +130,17 @@ export default function LoginPage() {
   if (!mounted) return null;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] p-4 font-body overflow-hidden">
-      <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 shadow-2xl rounded-2xl overflow-hidden bg-white border border-primary/10">
+    <div className="min-h-screen w-full bg-white font-body overflow-hidden">
+      <div className="w-full min-h-screen grid grid-cols-1 md:grid-cols-2 overflow-hidden">
         
-        {/* Lado Izquierdo - Fondo Dinámico */}
+        {/* Lado Izquierdo - Fondo Dinámico Full Screen */}
         <div 
-          className="hidden md:flex flex-col justify-end items-start p-12 relative overflow-hidden bg-cover bg-center transition-all duration-1000"
+          className="hidden md:flex flex-col justify-end items-start p-12 lg:p-20 relative overflow-hidden bg-cover bg-center transition-all duration-1000"
           style={{ backgroundImage: `url(${currentTheme.bgImage})` }}
         >
           {/* Logo Centrado con fondo traslúcido ajustado al ras */}
           <div className="absolute inset-0 flex items-center justify-center p-12 pointer-events-none">
-            <div className="relative w-[75%] aspect-square flex items-center justify-center bg-white/30 backdrop-blur-md rounded-[2rem] p-4 shadow-sm border border-white/20">
+            <div className="relative w-[50%] lg:w-[40%] aspect-square flex items-center justify-center bg-white/30 backdrop-blur-md rounded-[2.5rem] p-8 shadow-sm border border-white/20">
               <div className="relative w-full h-full">
                 <Image 
                   src="https://i.postimg.cc/wjVN06TJ/Logo-UNIV-PREPA-CAP-IEEZ-01.png"
@@ -154,43 +154,43 @@ export default function LoginPage() {
           </div>
 
           <div className="z-10 w-full">
-             <div className={`flex items-center gap-3 p-3 rounded-xl backdrop-blur-sm border w-fit ${currentTheme.badgeColor}`}>
-              <ShieldCheck className="text-accent h-5 w-5" /> 
-              <span className={`text-sm font-medium ${currentTheme.textColor}`}>plataforma de estudios</span>
+             <div className={`flex items-center gap-3 p-4 rounded-xl backdrop-blur-sm border w-fit ${currentTheme.badgeColor}`}>
+              <ShieldCheck className="text-accent h-6 w-6" /> 
+              <span className={`text-base font-medium ${currentTheme.textColor}`}>plataforma de estudios</span>
             </div>
           </div>
         </div>
 
-        {/* Lado Derecho - Formulario */}
-        <div className="p-8 md:p-14 flex flex-col justify-center bg-white">
-          <div className="space-y-8">
-            <div className="space-y-2 text-center md:text-left">
-              <h2 className="text-3xl font-headline font-bold text-gray-900 tracking-tight">Iniciar Sesión</h2>
-              <p className="text-muted-foreground text-sm">Ingresa tus credenciales para acceder al sistema.</p>
+        {/* Lado Derecho - Formulario Full Screen */}
+        <div className="p-8 md:p-14 lg:p-24 flex flex-col justify-center bg-white">
+          <div className="max-w-md w-full mx-auto space-y-10">
+            <div className="space-y-3 text-center md:text-left">
+              <h2 className="text-4xl font-headline font-bold text-gray-900 tracking-tight">Iniciar Sesión</h2>
+              <p className="text-muted-foreground text-lg">Ingresa tus credenciales para acceder al sistema.</p>
             </div>
 
             {error && (
               <Alert variant="destructive" className="animate-in slide-in-from-top-2 duration-300">
-                <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Error</AlertTitle>
-                <AlertDescription className="text-xs">{error}</AlertDescription>
+                <AlertCircle className="h-5 w-5" />
+                <AlertTitle className="text-lg">Error</AlertTitle>
+                <AlertDescription className="text-sm">{error}</AlertDescription>
               </Alert>
             )}
 
-            <form onSubmit={handleLogin} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="email" className="text-gray-700">Correo Electrónico</Label>
+            <form onSubmit={handleLogin} className="space-y-8">
+              <div className="space-y-3">
+                <Label htmlFor="email" className="text-gray-700 text-base">Correo Electrónico</Label>
                 <Input 
                   id="email" 
                   type="email" 
                   required 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="h-12 border-muted focus:ring-primary/20 bg-gray-50/30"
+                  className="h-14 text-lg border-muted focus:ring-primary/20 bg-gray-50/30"
                 />
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="password" title="Contraseña" className="text-gray-700">Contraseña</Label>
+              <div className="space-y-3">
+                <Label htmlFor="password" title="Contraseña" className="text-gray-700 text-base">Contraseña</Label>
                 <div className="relative">
                   <Input 
                     id="password" 
@@ -198,26 +198,26 @@ export default function LoginPage() {
                     required 
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-12 border-muted focus:ring-primary/20 bg-gray-50/30 pr-12"
+                    className="h-14 text-lg border-muted focus:ring-primary/20 bg-gray-50/30 pr-14"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors focus:outline-none"
+                    className="absolute right-5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors focus:outline-none"
                     aria-label={showPassword ? "Ocultar contraseña" : "Ver contraseña"}
                   >
-                    {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                    {showPassword ? <EyeOff size={24} /> : <Eye size={24} />}
                   </button>
                 </div>
               </div>
               <Button 
                 type="submit" 
-                className="w-full h-12 text-base shadow-lg font-bold transition-all mt-4 border-none text-white" 
+                className="w-full h-14 text-lg shadow-lg font-bold transition-all mt-6 border-none text-white" 
                 style={{ backgroundColor: currentTheme.buttonColor }}
                 disabled={loading}
               >
                 {loading ? (
-                  <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Verificando...</>
+                  <><Loader2 className="mr-2 h-6 w-6 animate-spin" /> Verificando...</>
                 ) : (
                   "Entrar al Sistema"
                 )}
