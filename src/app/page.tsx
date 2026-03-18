@@ -9,11 +9,9 @@ import { Label } from '@/components/ui/label';
 import { ShieldCheck, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/alert-ui';
 
-// Forzamos que la página sea dinámica
-export const dynamic = 'force-dynamic';
-
+// Tipos para el tema dinámico
 type Theme = {
   bgImage: string;
   buttonColor: string;
@@ -41,6 +39,13 @@ const themes: Theme[] = [
     badgeColor: 'bg-black/5 border-black/10'
   }
 ];
+
+// Componente de alerta local para evitar errores de importación si el alias falla
+const LocalAlert = ({ children, variant = "default" }: { children: React.ReactNode, variant?: "default" | "destructive" }) => (
+  <div className={`p-4 rounded-lg border flex gap-3 ${variant === "destructive" ? "bg-destructive/10 border-destructive/20 text-destructive" : "bg-muted border-border text-foreground"}`}>
+    {children}
+  </div>
+);
 
 export default function LoginPage() {
   const { toast } = useToast();
@@ -138,18 +143,16 @@ export default function LoginPage() {
           className="hidden md:flex flex-col justify-end items-start p-12 lg:p-20 relative overflow-hidden bg-cover bg-center transition-all duration-1000"
           style={{ backgroundImage: `url(${currentTheme.bgImage})` }}
         >
-          {/* Logo Centrado con fondo traslúcido ajustado al ras */}
+          {/* Logo Centrado sin recuadro blanco */}
           <div className="absolute inset-0 flex items-center justify-center p-12 pointer-events-none">
-            <div className="relative w-[50%] lg:w-[40%] aspect-square flex items-center justify-center bg-white/30 backdrop-blur-md rounded-[2.5rem] p-8 shadow-sm border border-white/20">
-              <div className="relative w-full h-full">
-                <Image 
-                  src="https://i.postimg.cc/wjVN06TJ/Logo-UNIV-PREPA-CAP-IEEZ-01.png"
-                  alt="Logo IEEZ"
-                  fill
-                  className="object-contain drop-shadow-xl"
-                  priority
-                />
-              </div>
+            <div className="relative w-[65%] lg:w-[55%] aspect-square flex items-center justify-center">
+              <Image 
+                src="https://i.postimg.cc/Z5FQHyN4/unnamed.png"
+                alt="Logo IEEZ"
+                fill
+                className="object-contain drop-shadow-2xl"
+                priority
+              />
             </div>
           </div>
 
@@ -170,11 +173,12 @@ export default function LoginPage() {
             </div>
 
             {error && (
-              <Alert variant="destructive" className="animate-in slide-in-from-top-2 duration-300">
-                <AlertCircle className="h-5 w-5" />
-                <AlertTitle className="text-lg">Error</AlertTitle>
-                <AlertDescription className="text-sm">{error}</AlertDescription>
-              </Alert>
+              <LocalAlert variant="destructive">
+                <div className="flex flex-col">
+                  <span className="font-bold">Error</span>
+                  <span className="text-sm">{error}</span>
+                </div>
+              </LocalAlert>
             )}
 
             <form onSubmit={handleLogin} className="space-y-8">
