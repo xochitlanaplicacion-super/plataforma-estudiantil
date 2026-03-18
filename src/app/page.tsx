@@ -1,8 +1,8 @@
-
 "use client";
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -138,6 +138,19 @@ export default function LoginPage() {
           className="hidden md:flex flex-col justify-end items-start p-12 relative overflow-hidden bg-cover bg-center transition-all duration-1000"
           style={{ backgroundImage: `url(${currentTheme.bgImage})` }}
         >
+          {/* Logo Centrado - Grande (aprox 1/3 del área) */}
+          <div className="absolute inset-0 flex items-center justify-center p-12 pointer-events-none">
+            <div className="relative w-[70%] h-[70%]">
+              <Image 
+                src="https://i.postimg.cc/wjVN06TJ/Logo-UNIV-PREPA-CAP-IEEZ-01.png"
+                alt="Logo IEEZ"
+                fill
+                className="object-contain drop-shadow-2xl"
+                priority
+              />
+            </div>
+          </div>
+
           <div className="z-10 w-full">
              <div className={`flex items-center gap-3 p-3 rounded-xl backdrop-blur-sm border w-fit ${currentTheme.badgeColor}`}>
               <ShieldCheck className="text-accent h-5 w-5" /> 
