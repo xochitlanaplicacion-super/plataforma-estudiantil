@@ -16,7 +16,7 @@ export default function ExpiredPage() {
         <CardHeader className="p-0 space-y-2">
           <CardTitle className="text-2xl font-bold font-headline">Acceso Expirado</CardTitle>
           <CardDescription className="text-base">
-            Tu suscripción o periodo de acceso a la plataforma EduFlow ha terminado.
+            Tu suscripción o periodo de acceso a la plataforma del Instituto Emiliano Zapata ha terminado.
           </CardDescription>
         </CardHeader>
         <CardContent className="mt-8 p-0 space-y-6">

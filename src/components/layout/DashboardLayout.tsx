@@ -1,4 +1,3 @@
-
 "use client";
 
 import React from 'react';
@@ -107,10 +106,10 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
     <SidebarProvider>
       <Sidebar collapsible="icon" className="border-r shadow-lg">
         <SidebarHeader className="p-6 flex items-center gap-3">
-          <div className="bg-primary h-10 w-10 rounded-xl flex items-center justify-center font-bold text-primary-foreground shadow-md">EF</div>
+          <div className="bg-primary h-10 w-10 rounded-xl flex items-center justify-center font-bold text-primary-foreground shadow-md">EZ</div>
           <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-            <span className="font-bold text-lg text-sidebar-foreground">EduFlow</span>
-            <span className="text-[10px] text-muted-foreground font-semibold tracking-wider uppercase">Platform v1.0</span>
+            <span className="font-bold text-lg text-sidebar-foreground">Emiliano Zapata</span>
+            <span className="text-[10px] text-muted-foreground font-semibold tracking-wider uppercase">Plataforma Académica</span>
           </div>
         </SidebarHeader>
         <SidebarContent className="px-2">

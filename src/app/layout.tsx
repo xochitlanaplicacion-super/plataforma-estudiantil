@@ -4,8 +4,8 @@ import { FirebaseClientProvider } from '@/firebase';
 import { Toaster } from '@/components/ui/toaster';
 
 export const metadata: Metadata = {
-  title: 'EduFlow Platform | Sistema Educativo',
-  description: 'Gestión académica integral para instituciones educativas.',
+  title: 'Plataforma Emiliano Zapata | Sistema Educativo',
+  description: 'Gestión académica integral para el Instituto Educativo Emiliano Zapata.',
 };
 
 export default function RootLayout({

@@ -1,7 +1,7 @@
 
-# EduFlow Platform
+# Instituto Educativo Emiliano Zapata - Plataforma Académica
 
-Este es el repositorio de la plataforma educativa EduFlow.
+Este es el repositorio oficial de la plataforma educativa del Instituto Educativo Emiliano Zapata.
 
 ## Sincronización con GitHub
 
