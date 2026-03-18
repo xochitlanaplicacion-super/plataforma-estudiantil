@@ -1,12 +1,11 @@
-
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { BookOpen, GraduationCap, ShieldCheck } from 'lucide-react';
+import { BookOpen, GraduationCap, ShieldCheck, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
@@ -18,6 +17,40 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+
+  // Verificar si ya hay una sesión activa al cargar
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('rol')
+          .eq('id', session.user.id)
+          .single();
+        
+        if (profile) redirectUser(profile.rol);
+      }
+    };
+    checkSession();
+  }, []);
+
+  const redirectUser = (rol: string) => {
+    switch (rol) {
+      case 'superuser':
+      case 'admin':
+        router.push('/dashboard/admin');
+        break;
+      case 'profesor':
+        router.push('/dashboard/profesor');
+        break;
+      case 'alumno':
+        router.push('/dashboard/alumno');
+        break;
+      default:
+        router.push('/dashboard/alumno');
+    }
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,12 +66,14 @@ export default function LoginPage() {
         toast({
           variant: "destructive",
           title: "Error de acceso",
-          description: "Credenciales inválidas o usuario no encontrado.",
+          description: "Correo o contraseña incorrectos.",
         });
+        setLoading(false);
         return;
       }
 
       if (data.user) {
+        // Intentar obtener el perfil
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('rol, estatus, fecha_expiracion')
@@ -46,12 +81,14 @@ export default function LoginPage() {
           .single();
 
         if (profileError || !profile) {
+          console.error("Profile fetch error:", profileError);
           await supabase.auth.signOut();
           toast({
             variant: "destructive",
-            title: "Perfil no encontrado",
-            description: "Por favor contacta a administración.",
+            title: "Perfil no configurado",
+            description: "Tu usuario existe pero no tienes un perfil asociado. Contacta a soporte.",
           });
+          setLoading(false);
           return;
         }
 
@@ -59,46 +96,37 @@ export default function LoginPage() {
           await supabase.auth.signOut();
           toast({
             variant: "destructive",
-            title: "Cuenta inactiva",
-            description: "Contacta al administrador para reactivar tu acceso.",
+            title: "Cuenta restringida",
+            description: `Tu estatus actual es: ${profile.estatus}.`,
           });
+          setLoading(false);
           return;
         }
 
-        const now = new Date();
-        const expirationDate = profile.fecha_expiracion ? new Date(profile.fecha_expiracion) : null;
+        // Validar expiración si existe
+        if (profile.fecha_expiracion) {
+          const now = new Date();
+          const exp = new Date(profile.fecha_expiracion);
+          if (exp < now) {
+            await supabase.auth.signOut();
+            router.push('/expired');
+            return;
+          }
+        }
+
+        toast({
+          title: "Acceso exitoso",
+          description: "Bienvenido a la plataforma.",
+        });
         
-        if (expirationDate && expirationDate < now) {
-          await supabase.auth.signOut();
-          toast({
-            variant: "destructive",
-            title: "Acceso expirado",
-            description: `Tu vigencia finalizó el ${profile.fecha_expiracion}.`,
-          });
-          return;
-        }
-
-        switch (profile.rol) {
-          case 'superuser':
-          case 'admin':
-            router.push('/dashboard/admin');
-            break;
-          case 'profesor':
-            router.push('/dashboard/profesor');
-            break;
-          case 'alumno':
-            router.push('/dashboard/alumno');
-            break;
-          default:
-            router.push('/dashboard/alumno');
-        }
+        redirectUser(profile.rol);
       }
 
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Error inesperado",
-        description: "Intenta de nuevo o contacta a soporte técnico.",
+        title: "Error del sistema",
+        description: "No se pudo conectar con el servidor.",
       });
     } finally {
       setLoading(false);
@@ -109,7 +137,7 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4 font-body overflow-hidden">
       <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 shadow-2xl rounded-2xl overflow-hidden bg-white">
         
-        <div className="hidden md:flex flex-col justify-center p-12 space-y-8 relative overflow-hidden animate-login-morph">
+        <div className="hidden md:flex flex-col justify-center p-12 space-y-8 relative overflow-hidden bg-primary text-primary-foreground">
           <div className="absolute top-0 right-0 p-4 opacity-10">
             <GraduationCap size={200} />
           </div>
@@ -123,18 +151,18 @@ export default function LoginPage() {
             </h1>
             <p className="text-lg opacity-90 leading-relaxed">
               Sistema integral de gestión académica. 
-              Control de vigencias, contenidos dinámicos y seguimiento curricular.
+              Control de vigencias y contenidos dinámicos.
             </p>
           </div>
 
           <div className="flex gap-6 z-10">
             <div className="flex items-center gap-2">
               <ShieldCheck className="text-white/80" />
-              <span className="text-sm font-medium">Acceso Seguro</span>
+              <span className="text-sm font-medium">Seguro</span>
             </div>
             <div className="flex items-center gap-2">
               <BookOpen className="text-white/80" />
-              <span className="text-sm font-medium">Contenido Real</span>
+              <span className="text-sm font-medium">Académico</span>
             </div>
           </div>
         </div>
@@ -170,16 +198,15 @@ export default function LoginPage() {
                 </div>
                 <Button 
                   type="submit" 
-                  className="w-full h-12 text-lg shadow-md border-none animate-login-button transition-colors duration-500" 
+                  className="w-full h-12 text-lg shadow-md bg-primary hover:bg-primary/90 transition-all" 
                   disabled={loading}
                 >
-                  {loading ? "Cargando..." : "Acceder"}
+                  {loading ? "Verificando..." : "Acceder"}
                 </Button>
               </form>
             </CardContent>
             <CardFooter className="p-0 mt-8 pt-8 border-t flex flex-col items-center">
               <p className="text-xs text-muted-foreground text-center">
-                Plataforma académica protegida. 
                 El acceso está sujeto a la vigencia de su registro.
               </p>
             </CardFooter>

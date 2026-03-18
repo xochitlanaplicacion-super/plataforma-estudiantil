@@ -1,21 +1,26 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Durante el build de Vercel, estas variables pueden no estar presentes.
-// Usamos fallbacks para evitar que el proceso de compilación falle.
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder-url.supabase.co'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder-key'
-
-// Cliente público para uso en componentes de cliente (Browser)
-export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+// Variables de entorno con fallbacks para evitar errores en build
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder'
 
 /**
- * Cliente para servidor (con service role - solo backend)
- * Esta función debe llamarse únicamente en Server Actions o API Routes.
- * Permite saltar las políticas RLS para tareas administrativas.
+ * Cliente estándar para uso en componentes.
+ * Para Next.js App Router con Middleware, es preferible usar auth-helpers en los componentes.
+ */
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true
+  }
+})
+
+/**
+ * Cliente de servidor para tareas administrativas.
  */
 export const createServerClient = () => {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseAnonKey
-  
   return createClient(supabaseUrl, serviceKey, {
     auth: {
       autoRefreshToken: false,
