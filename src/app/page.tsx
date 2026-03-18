@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -17,42 +17,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [checking, setChecking] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const redirectUser = useCallback((rol: string) => {
-    let destination = '/dashboard/alumno';
-    if (rol === 'superuser' || rol === 'admin') destination = '/dashboard/admin';
-    if (rol === 'profesor') destination = '/dashboard/profesor';
-    
-    window.location.href = destination;
-  }, []);
-
-  useEffect(() => {
-    async function checkSession() {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session) {
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('rol')
-            .eq('id', session.user.id)
-            .single();
-          
-          if (profile) {
-            redirectUser(profile.rol);
-            return;
-          }
-        }
-      } catch (e) {
-        console.error("Error inicializando sesión", e);
-      } finally {
-        // Damos un pequeño margen para evitar el parpadeo visual
-        setTimeout(() => setChecking(false), 500);
-      }
-    }
-    checkSession();
-  }, [redirectUser]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -66,6 +31,7 @@ export default function LoginPage() {
     setError(null);
     
     try {
+      // Intentamos el login directo
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password: password.trim(),
@@ -74,12 +40,13 @@ export default function LoginPage() {
       if (authError) {
         setError(authError.message === "Invalid login credentials" 
           ? "Credenciales incorrectas. Verifica tu correo y contraseña." 
-          : "Error al iniciar sesión: " + authError.message);
+          : "Error de validación: " + authError.message);
         setLoading(false);
         return;
       }
 
       if (data?.user) {
+        // Obtenemos el perfil para saber a dónde redirigir
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('rol, estatus')
@@ -87,23 +54,28 @@ export default function LoginPage() {
           .single();
 
         if (profileError || !profile) {
-          setError("Usuario autenticado, pero no se encontró el perfil en la base de datos.");
+          setError("Sesión iniciada, pero no se encontró tu perfil académico.");
           setLoading(false);
           return;
         }
 
         if (profile.estatus !== 'activo') {
-          setError(`Acceso denegado. Tu cuenta está ${profile.estatus}.`);
+          setError(`Tu cuenta está ${profile.estatus}. Contacta a administración.`);
           setLoading(false);
           return;
         }
 
         toast({
-          title: "Acceso concedido",
-          description: "Bienvenido a EduFlow. Cargando panel...",
+          title: "Acceso Concedido",
+          description: "Bienvenido a EduFlow. Cargando tu panel...",
         });
         
-        redirectUser(profile.rol);
+        // Redirección forzada para limpiar estados y asegurar cookies
+        let destination = '/dashboard/alumno';
+        if (profile.rol === 'superuser' || profile.rol === 'admin') destination = '/dashboard/admin';
+        if (profile.rol === 'profesor') destination = '/dashboard/profesor';
+        
+        window.location.href = destination;
       }
     } catch (err: any) {
       setError("Error de conexión con el servidor educativo.");
@@ -111,21 +83,11 @@ export default function LoginPage() {
     }
   };
 
-  if (checking) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center space-y-4">
-          <Loader2 className="h-12 w-12 animate-spin text-primary mx-auto" />
-          <p className="text-sm font-medium text-muted-foreground animate-pulse">Verificando sesión activa...</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4 font-body overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] p-4 font-body overflow-hidden">
       <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 shadow-2xl rounded-2xl overflow-hidden bg-white border border-primary/10">
         
+        {/* Lado Izquierdo - Branding */}
         <div className="hidden md:flex flex-col justify-center p-12 space-y-8 relative overflow-hidden bg-primary text-primary-foreground">
           <div className="absolute top-0 right-0 p-4 opacity-10">
             <GraduationCap size={240} />
@@ -136,22 +98,29 @@ export default function LoginPage() {
             <p className="text-lg opacity-90 leading-relaxed font-light">Gestión académica integral y control de contenidos para instituciones educativas.</p>
           </div>
           <div className="flex flex-col gap-4 z-10 pt-4">
-            <div className="flex items-center gap-3 bg-white/5 p-2 rounded-lg"><ShieldCheck className="text-accent h-5 w-5" /> <span className="text-sm font-medium">Control de Privilegios por Rol</span></div>
-            <div className="flex items-center gap-3 bg-white/5 p-2 rounded-lg"><BookOpen className="text-accent h-5 w-5" /> <span className="text-sm font-medium">10 Módulos de Administración Académica</span></div>
+            <div className="flex items-center gap-3 bg-white/5 p-2 rounded-lg">
+              <ShieldCheck className="text-accent h-5 w-5" /> 
+              <span className="text-sm font-medium">Control de Privilegios por Rol</span>
+            </div>
+            <div className="flex items-center gap-3 bg-white/5 p-2 rounded-lg">
+              <BookOpen className="text-accent h-5 w-5" /> 
+              <span className="text-sm font-medium">Plan de Desarrollo de 10 Módulos</span>
+            </div>
           </div>
         </div>
 
+        {/* Lado Derecho - Formulario */}
         <div className="p-8 md:p-14 flex flex-col justify-center bg-white">
           <div className="space-y-8">
             <div className="space-y-2 text-center md:text-left">
               <h2 className="text-3xl font-headline font-bold text-gray-900 tracking-tight">Iniciar Sesión</h2>
-              <p className="text-muted-foreground text-sm">Ingresa tus credenciales institucionales para acceder.</p>
+              <p className="text-muted-foreground text-sm">Ingresa tus credenciales para acceder al sistema.</p>
             </div>
 
             {error && (
               <Alert variant="destructive" className="animate-in slide-in-from-top-2 duration-300">
                 <AlertCircle className="h-4 w-4" />
-                <AlertTitle>Error de acceso</AlertTitle>
+                <AlertTitle>Error</AlertTitle>
                 <AlertDescription className="text-xs">{error}</AlertDescription>
               </Alert>
             )}
@@ -185,10 +154,14 @@ export default function LoginPage() {
               </div>
               <Button 
                 type="submit" 
-                className="w-full h-12 text-base shadow-lg bg-primary hover:bg-primary/90 font-bold transition-all hover:scale-[1.01] active:scale-[0.99]" 
+                className="w-full h-12 text-base shadow-lg bg-primary hover:bg-primary/90 font-bold transition-all" 
                 disabled={loading}
               >
-                {loading ? <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Verificando...</> : "Entrar al Sistema"}
+                {loading ? (
+                  <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Verificando...</>
+                ) : (
+                  "Entrar al Sistema"
+                )}
               </Button>
             </form>
             

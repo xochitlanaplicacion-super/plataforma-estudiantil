@@ -26,12 +26,12 @@ import {
   Layers,
   FileText,
   Clock,
-  ShieldCheck,
   School,
   CalendarCheck,
   ClipboardList,
   BarChart3,
-  UserCheck
+  UserCheck,
+  ShieldAlert
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { UserRole } from '@/lib/types';
@@ -54,7 +54,7 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
   const getInitials = (name: string) => 
     name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
 
-  // Mapeo de los 10 Módulos del Plan de Desarrollo
+  // Mapeo EXACTO de los 10 Módulos del Plan de Desarrollo para Superusuario
   const menuItems = {
     superuser: [
       { group: "Módulo 1 & 2: Acceso y Usuarios", items: [
@@ -80,9 +80,10 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
       ]}
     ],
     admin: [
-      { group: "Módulo Admin", items: [
-        { icon: LayoutDashboard, label: 'Dashboard Local', href: '/dashboard/admin' },
-        { icon: Users, label: 'Usuarios del Área', href: '/dashboard/admin/usuarios' },
+      { group: "Administración Operativa", items: [
+        { icon: LayoutDashboard, label: 'Dashboard Admin', href: '/dashboard/admin' },
+        { icon: Users, label: 'Soporte Usuarios', href: '/dashboard/admin/usuarios' },
+        { icon: ClipboardList, label: 'Revisión Contenido', href: '/dashboard/admin/revision' },
       ]}
     ],
     profesor: [
@@ -96,6 +97,7 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
       { group: "Módulo 9: Mi Estudio", items: [
         { icon: LayoutDashboard, label: 'Mi Portal Educativo', href: '/dashboard/alumno' },
         { icon: BookOpen, label: 'Mis Materias', href: '/dashboard/alumno/materias' },
+        { icon: ShieldAlert, label: 'Estado de Acceso', href: '/dashboard/alumno/acceso' },
       ]}
     ],
   };
@@ -109,7 +111,7 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
           <div className="bg-primary h-10 w-10 rounded-xl flex items-center justify-center font-bold text-primary-foreground shadow-md">EF</div>
           <div className="flex flex-col group-data-[collapsible=icon]:hidden">
             <span className="font-bold text-lg text-sidebar-foreground">EduFlow</span>
-            <span className="text-[10px] text-muted-foreground font-semibold tracking-wider">PLATAFORMA EDUCATIVA</span>
+            <span className="text-[10px] text-muted-foreground font-semibold tracking-wider uppercase">Platform v1.0</span>
           </div>
         </SidebarHeader>
         <SidebarContent className="px-2">
@@ -169,12 +171,16 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
         <div className="h-full flex flex-col">
           <header className="h-16 border-b bg-white flex items-center px-8 justify-between shrink-0">
              <div className="flex items-center gap-2">
-               <span className="text-sm text-muted-foreground">Ubicación:</span>
-               <span className="text-sm font-semibold text-primary capitalize">{pathname.split('/').pop()?.replace('-', ' ')}</span>
+               <span className="text-sm text-muted-foreground">Módulo Actual:</span>
+               <span className="text-sm font-semibold text-primary capitalize">
+                 {pathname.split('/').pop()?.replace('-', ' ') || 'Inicio'}
+               </span>
              </div>
              <div className="flex items-center gap-4">
                <div className="h-8 w-px bg-border mx-2" />
-               <span className="text-xs font-bold text-muted-foreground uppercase">{new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+               <span className="text-xs font-bold text-muted-foreground uppercase">
+                 {new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}
+               </span>
              </div>
           </header>
           <main className="flex-1 overflow-auto p-6 md:p-10">
