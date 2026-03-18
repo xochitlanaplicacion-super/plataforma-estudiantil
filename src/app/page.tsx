@@ -7,13 +7,11 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { BookOpen, GraduationCap, ShieldCheck, AlertCircle } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function LoginPage() {
-  const router = useRouter();
   const { toast } = useToast();
   
   const [email, setEmail] = useState('');
@@ -22,37 +20,13 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
 
   const redirectUser = useCallback((rol: string) => {
-    switch (rol) {
-      case 'superuser':
-      case 'admin':
-        router.push('/dashboard/admin');
-        break;
-      case 'profesor':
-        router.push('/dashboard/profesor');
-        break;
-      case 'alumno':
-        router.push('/dashboard/alumno');
-        break;
-      default:
-        router.push('/dashboard/alumno');
-    }
-  }, [router]);
-
-  useEffect(() => {
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('rol')
-          .eq('id', session.user.id)
-          .single();
-        
-        if (profile) redirectUser(profile.rol);
-      }
-    };
-    checkSession();
-  }, [redirectUser]);
+    let destination = '/dashboard/alumno';
+    if (rol === 'superuser' || rol === 'admin') destination = '/dashboard/admin';
+    if (rol === 'profesor') destination = '/dashboard/profesor';
+    
+    // Usamos window.location para forzar la sincronización de cookies con el servidor
+    window.location.href = destination;
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,42 +59,31 @@ export default function LoginPage() {
       if (data.user) {
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
-          .select('rol, estatus, fecha_expiracion')
+          .select('rol, estatus')
           .eq('id', data.user.id)
           .single();
 
-        if (profileError) {
-          setError("Acceso concedido pero no se encontró tu perfil. Contacta al soporte.");
+        if (profileError || !profile) {
+          setError("Acceso correcto, pero no se encontró tu perfil en la base de datos.");
           setLoading(false);
           return;
         }
 
         if (profile.estatus !== 'activo') {
-          setError(`Tu cuenta está ${profile.estatus}. Contacta al administrador.`);
+          setError(`Tu cuenta está ${profile.estatus}.`);
           setLoading(false);
           return;
         }
 
-        if (profile.fecha_expiracion) {
-          const now = new Date();
-          const exp = new Date(profile.fecha_expiracion);
-          if (exp < now) {
-            router.push('/expired');
-            return;
-          }
-        }
-
         toast({
           title: "¡Bienvenido!",
-          description: "Iniciando sesión correctamente.",
+          description: "Iniciando sesión correctamente...",
         });
         
         redirectUser(profile.rol);
       }
-
     } catch (err: any) {
       setError("Error inesperado al conectar con el servidor.");
-    } finally {
       setLoading(false);
     }
   };
@@ -167,7 +130,7 @@ export default function LoginPage() {
             </CardHeader>
             <CardContent className="p-0 space-y-4">
               {error && (
-                <Alert variant="destructive" className="mb-6 animate-in slide-in-from-top duration-300">
+                <Alert variant="destructive" className="mb-6">
                   <AlertCircle className="h-4 w-4" />
                   <AlertTitle>Error de acceso</AlertTitle>
                   <AlertDescription className="text-xs">{error}</AlertDescription>
@@ -179,11 +142,11 @@ export default function LoginPage() {
                   <Input 
                     id="email" 
                     type="email" 
-                    placeholder="ejemplo@gmail.com" 
+                    placeholder="ieemilianozapata@gmail.com" 
                     required 
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="h-12 border-muted focus:ring-primary/20"
+                    className="h-12 border-muted"
                   />
                 </div>
                 <div className="space-y-2">
@@ -195,20 +158,20 @@ export default function LoginPage() {
                     required 
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-12 border-muted focus:ring-primary/20"
+                    className="h-12 border-muted"
                   />
                 </div>
                 <Button 
                   type="submit" 
-                  className="w-full h-12 text-base shadow-lg bg-primary hover:bg-primary/90 transition-all font-bold tracking-wide" 
+                  className="w-full h-12 text-base shadow-lg bg-primary hover:bg-primary/90 font-bold" 
                   disabled={loading}
                 >
-                  {loading ? "Validando acceso..." : "Entrar al Sistema"}
+                  {loading ? "Validando..." : "Entrar al Sistema"}
                 </Button>
               </form>
             </CardContent>
             <CardFooter className="p-0 mt-10 pt-8 border-t flex flex-col items-center">
-              <p className="text-[11px] text-muted-foreground text-center leading-tight uppercase tracking-tighter font-semibold">
+              <p className="text-[11px] text-muted-foreground text-center uppercase font-semibold">
                 Plataforma de Control Académico Integral - 2026
               </p>
             </CardFooter>

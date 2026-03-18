@@ -3,7 +3,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { 
   Sidebar, 
   SidebarContent, 
@@ -43,11 +43,10 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children, userRole, userName }: DashboardLayoutProps) {
   const pathname = usePathname();
-  const router = useRouter();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    router.push('/');
+    window.location.href = '/';
   };
 
   const getInitials = (name: string) => 
