@@ -1,12 +1,12 @@
 
 import { createClient } from '@supabase/supabase-js'
 
-// Variables de entorno con fallbacks para evitar errores en build de Vercel
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://placeholder.supabase.co'
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'placeholder'
 
 /**
  * Cliente estándar para uso en componentes.
+ * Configurado para persistir la sesión y permitir el uso en el Middleware.
  */
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {

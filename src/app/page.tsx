@@ -68,7 +68,7 @@ export default function LoginPage() {
       if (authError) {
         let message = authError.message;
         if (authError.message === "Invalid login credentials") {
-          message = "Correo o contraseña incorrectos. Verifica tus datos.";
+          message = "Credenciales incorrectas. Por favor, verifica tu correo y contraseña.";
         }
         setError(message);
         setLoading(false);
@@ -83,15 +83,13 @@ export default function LoginPage() {
           .single();
 
         if (profileError || !profile) {
-          await supabase.auth.signOut();
-          setError("Perfil no encontrado. Tu usuario existe en Auth pero no en la tabla de perfiles.");
+          setError("Perfil no encontrado. Asegúrate de que el registro en la tabla 'profiles' existe.");
           setLoading(false);
           return;
         }
 
         if (profile.estatus !== 'activo') {
-          await supabase.auth.signOut();
-          setError(`Cuenta restringida. Estado actual: ${profile.estatus}.`);
+          setError(`Tu cuenta no está activa (Estado: ${profile.estatus}). Contacta al administrador.`);
           setLoading(false);
           return;
         }
@@ -100,7 +98,6 @@ export default function LoginPage() {
           const now = new Date();
           const exp = new Date(profile.fecha_expiracion);
           if (exp < now) {
-            await supabase.auth.signOut();
             router.push('/expired');
             return;
           }
@@ -108,17 +105,15 @@ export default function LoginPage() {
 
         toast({
           title: "¡Bienvenido!",
-          description: "Acceso concedido correctamente.",
+          description: "Iniciando sesión en EduFlow...",
         });
         
-        setTimeout(() => {
-          redirectUser(profile.rol);
-        }, 300);
+        redirectUser(profile.rol);
       }
 
     } catch (err: any) {
-      console.error("Login unexpected error:", err);
-      setError("Ocurrió un error inesperado al intentar conectar con el servidor.");
+      console.error("Error inesperado:", err);
+      setError("Error de conexión con el servidor.");
     } finally {
       setLoading(false);
     }
@@ -162,13 +157,13 @@ export default function LoginPage() {
           <Card className="border-none shadow-none">
             <CardHeader className="p-0 mb-6">
               <CardTitle className="text-2xl font-headline font-bold text-gray-800">Iniciar Sesión</CardTitle>
-              <CardDescription>Usa tu cuenta institucional para continuar</CardDescription>
+              <CardDescription>Accede con tu cuenta institucional</CardDescription>
             </CardHeader>
             <CardContent className="p-0 space-y-4">
               {error && (
                 <Alert variant="destructive" className="mb-4">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Error de acceso</AlertTitle>
+                  <AlertTitle>Error</AlertTitle>
                   <AlertDescription>{error}</AlertDescription>
                 </Alert>
               )}
@@ -178,12 +173,11 @@ export default function LoginPage() {
                   <Input 
                     id="email" 
                     type="email" 
-                    placeholder="ejemplo@institucion.edu" 
+                    placeholder="instituto@gmail.com" 
                     required 
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="h-11"
-                    autoComplete="email"
                   />
                 </div>
                 <div className="space-y-2">
@@ -195,7 +189,6 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="h-11"
-                    autoComplete="current-password"
                   />
                 </div>
                 <Button 
@@ -203,13 +196,13 @@ export default function LoginPage() {
                   className="w-full h-11 text-base shadow-md bg-primary hover:bg-primary/90 transition-all font-semibold" 
                   disabled={loading}
                 >
-                  {loading ? "Validando..." : "Ingresar al Sistema"}
+                  {loading ? "Validando..." : "Entrar al Sistema"}
                 </Button>
               </form>
             </CardContent>
             <CardFooter className="p-0 mt-8 pt-8 border-t flex flex-col items-center">
               <p className="text-[11px] text-muted-foreground text-center leading-tight">
-                El acceso y la vigencia de los contenidos están sujetos al estatus administrativo de su matrícula.
+                Plataforma de Control Académico - Emiliano Zapata
               </p>
             </CardFooter>
           </Card>
