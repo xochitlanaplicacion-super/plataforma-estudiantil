@@ -2,6 +2,8 @@
 "use client";
 
 import React from 'react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { 
   Sidebar, 
   SidebarContent, 
@@ -20,15 +22,18 @@ import {
   Users, 
   BookOpen, 
   GraduationCap, 
-  Settings, 
   LogOut, 
   Layers,
   FileText,
   Clock,
-  ShieldCheck
+  ShieldCheck,
+  School,
+  CalendarCheck,
+  ClipboardList
 } from 'lucide-react';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { UserRole } from '@/lib/types';
+import { supabase } from '@/lib/supabase';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -37,72 +42,113 @@ interface DashboardLayoutProps {
 }
 
 export function DashboardLayout({ children, userRole, userName }: DashboardLayoutProps) {
-  const getInitials = (name: string) => name.split(' ').map(n => n[0]).join('').toUpperCase();
+  const pathname = usePathname();
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.push('/');
+  };
+
+  const getInitials = (name: string) => 
+    name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
 
   const menuItems = {
     superuser: [
-      { icon: LayoutDashboard, label: 'Dashboard Global', href: '#' },
-      { icon: Users, label: 'Gestión de Perfiles', href: '#' },
-      { icon: GraduationCap, label: 'Niveles y Carreras', href: '#' },
-      { icon: Clock, label: 'Vigencias (CURP)', href: '#' },
-      { icon: ShieldCheck, label: 'Auditoría', href: '#' },
+      { group: "Administración Global", items: [
+        { icon: LayoutDashboard, label: 'Panel de Control', href: '/dashboard/admin' },
+        { icon: Users, label: 'Gestión de Usuarios', href: '/dashboard/admin/usuarios' },
+        { icon: School, label: 'Niveles y Carreras', href: '/dashboard/admin/estructura' },
+      ]},
+      { group: "Académico", items: [
+        { icon: GraduationCap, label: 'Asignaciones Prof.', href: '/dashboard/admin/asignaciones' },
+        { icon: CalendarCheck, label: 'Inscripciones Alum.', href: '/dashboard/admin/inscripciones' },
+        { icon: BookOpen, label: 'Contenido Global', href: '/dashboard/admin/contenido' },
+      ]},
+      { group: "Seguridad", items: [
+        { icon: Clock, label: 'Control de Vigencias', href: '/dashboard/admin/vigencias' },
+        { icon: ShieldCheck, label: 'Auditoría de Sistema', href: '/dashboard/admin/auditoria' },
+      ]}
     ],
     admin: [
-      { icon: LayoutDashboard, label: 'Panel Administrativo', href: '#' },
-      { icon: Users, label: 'Alumnos y Matrículas', href: '#' },
-      { icon: BookOpen, label: 'Materias y Grupos', href: '#' },
+      { group: "Gestión Local", items: [
+        { icon: LayoutDashboard, label: 'Panel Admin', href: '/dashboard/admin' },
+        { icon: Users, label: 'Alumnos y Matrículas', href: '/dashboard/admin/usuarios' },
+        { icon: BookOpen, label: 'Materias y Grupos', href: '/dashboard/admin/estructura' },
+      ]}
     ],
     profesor: [
-      { icon: LayoutDashboard, label: 'Mis Asignaciones', href: '#' },
-      { icon: BookOpen, label: 'Contenido Académico', href: '#' },
-      { icon: Layers, label: 'Unidades y Temas', href: '#' },
+      { group: "Docencia", items: [
+        { icon: LayoutDashboard, label: 'Mis Asignaturas', href: '/dashboard/profesor' },
+        { icon: Layers, label: 'Unidades y Temas', href: '/dashboard/profesor/contenido' },
+        { icon: FileText, label: 'Recursos Didácticos', href: '/dashboard/profesor/recursos' },
+        { icon: ClipboardList, label: 'Seguimiento Alumnos', href: '/dashboard/profesor/seguimiento' },
+      ]}
     ],
     alumno: [
-      { icon: LayoutDashboard, label: 'Mi Portal', href: '#' },
-      { icon: BookOpen, label: 'Mis Materias', href: '#' },
-      { icon: Clock, label: 'Mi Inscripción', href: '#' },
+      { group: "Mi Estudio", items: [
+        { icon: LayoutDashboard, label: 'Mi Portal', href: '/dashboard/alumno' },
+        { icon: BookOpen, label: 'Mis Materias', href: '/dashboard/alumno/materias' },
+        { icon: Clock, label: 'Mi Inscripción', href: '/dashboard/alumno/perfil' },
+      ]}
     ],
   };
+
+  const activeMenus = menuItems[userRole] || [];
 
   return (
     <SidebarProvider>
       <Sidebar collapsible="icon" className="border-r">
         <SidebarHeader className="p-4 flex items-center gap-3">
-          <div className="bg-accent h-8 w-8 rounded flex items-center justify-center font-bold text-accent-foreground">EF</div>
+          <div className="bg-primary h-8 w-8 rounded-lg flex items-center justify-center font-bold text-primary-foreground shadow-sm">EF</div>
           <span className="font-bold text-lg text-sidebar-foreground group-data-[collapsible=icon]:hidden">EduFlow</span>
         </SidebarHeader>
         <SidebarContent>
-          <SidebarGroup>
-            <SidebarGroupLabel className="text-sidebar-foreground/50">Menu Principal</SidebarGroupLabel>
-            <SidebarMenu>
-              {menuItems[userRole].map((item) => (
-                <SidebarMenuItem key={item.label}>
-                  <SidebarMenuButton tooltip={item.label}>
-                    <item.icon className="h-4 w-4" />
-                    <span>{item.label}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroup>
+          {activeMenus.map((group, idx) => (
+            <SidebarGroup key={idx}>
+              <SidebarGroupLabel className="text-[10px] uppercase tracking-wider font-bold opacity-50 px-4 mb-2">
+                {group.group}
+              </SidebarGroupLabel>
+              <SidebarMenu>
+                {group.items.map((item) => (
+                  <SidebarMenuItem key={item.label}>
+                    <SidebarMenuButton 
+                      asChild 
+                      tooltip={item.label}
+                      isActive={pathname === item.href}
+                      className={pathname === item.href ? "bg-primary/10 text-primary font-semibold" : ""}
+                    >
+                      <Link href={item.href} className="flex items-center gap-3">
+                        <item.icon className={`h-4 w-4 ${pathname === item.href ? "text-primary" : ""}`} />
+                        <span>{item.label}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroup>
+          ))}
         </SidebarContent>
-        <SidebarFooter className="p-4">
+        <SidebarFooter className="p-4 border-t">
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton className="w-full justify-start gap-3 h-auto p-2">
-                <Avatar className="h-8 w-8">
-                  <AvatarFallback className="bg-accent text-accent-foreground text-xs">
+              <div className="flex items-center gap-3 p-2 group-data-[collapsible=icon]:hidden">
+                <Avatar className="h-9 w-9 border-2 border-primary/20">
+                  <AvatarFallback className="bg-accent text-accent-foreground font-bold text-xs">
                     {getInitials(userName)}
                   </AvatarFallback>
                 </Avatar>
-                <div className="flex flex-col text-left overflow-hidden group-data-[collapsible=icon]:hidden">
-                  <span className="text-xs font-semibold truncate">{userName}</span>
-                  <span className="text-[10px] opacity-70 uppercase">{userRole}</span>
+                <div className="flex flex-col overflow-hidden">
+                  <span className="text-xs font-bold truncate leading-none mb-1">{userName}</span>
+                  <span className="text-[10px] text-muted-foreground uppercase font-medium">{userRole}</span>
                 </div>
-              </SidebarMenuButton>
+              </div>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton className="text-destructive hover:text-destructive">
+              <SidebarMenuButton 
+                onClick={handleLogout}
+                className="text-destructive hover:text-destructive hover:bg-destructive/10 transition-colors"
+              >
                 <LogOut className="h-4 w-4" />
                 <span>Cerrar Sesión</span>
               </SidebarMenuButton>
@@ -110,8 +156,8 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
           </SidebarMenu>
         </SidebarFooter>
       </Sidebar>
-      <SidebarInset className="bg-background">
-        <main className="p-6">
+      <SidebarInset className="bg-background/50">
+        <main className="p-4 md:p-8 animate-in fade-in duration-500">
           {children}
         </main>
       </SidebarInset>

@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -21,23 +21,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('rol')
-          .eq('id', session.user.id)
-          .single();
-        
-        if (profile) redirectUser(profile.rol);
-      }
-    };
-    checkSession();
-  }, [router]);
-
-  const redirectUser = (rol: string) => {
+  const redirectUser = useCallback((rol: string) => {
     switch (rol) {
       case 'superuser':
       case 'admin':
@@ -52,7 +36,23 @@ export default function LoginPage() {
       default:
         router.push('/dashboard/alumno');
     }
-  };
+  }, [router]);
+
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('rol')
+          .eq('id', session.user.id)
+          .single();
+        
+        if (profile) redirectUser(profile.rol);
+      }
+    };
+    checkSession();
+  }, [redirectUser]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,15 +69,12 @@ export default function LoginPage() {
     setError(null);
     
     try {
-      console.log("Iniciando autenticación para:", cleanEmail);
-      
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
         password: cleanPassword,
       });
 
       if (authError) {
-        console.error("Error de Supabase Auth:", authError);
         setError(authError.message === "Invalid login credentials" 
           ? "Correo o contraseña incorrectos." 
           : authError.message);
@@ -86,8 +83,6 @@ export default function LoginPage() {
       }
 
       if (data.user) {
-        console.log("Usuario autenticado. Buscando perfil para ID:", data.user.id);
-        
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('rol, estatus, fecha_expiracion')
@@ -95,14 +90,7 @@ export default function LoginPage() {
           .single();
 
         if (profileError) {
-          console.error("Error al buscar el perfil en la tabla 'profiles':", profileError);
-          setError(`Error de perfil: ${profileError.message}. Verifica las políticas RLS en Supabase.`);
-          setLoading(false);
-          return;
-        }
-
-        if (!profile) {
-          setError("Usuario autenticado pero no se encontró registro en la tabla de perfiles.");
+          setError("Acceso concedido pero no se encontró tu perfil. Contacta al soporte.");
           setLoading(false);
           return;
         }
@@ -113,7 +101,6 @@ export default function LoginPage() {
           return;
         }
 
-        // Validación de vigencia
         if (profile.fecha_expiracion) {
           const now = new Date();
           const exp = new Date(profile.fecha_expiracion);
@@ -125,14 +112,13 @@ export default function LoginPage() {
 
         toast({
           title: "¡Bienvenido!",
-          description: "Acceso concedido correctamente.",
+          description: "Iniciando sesión correctamente.",
         });
         
         redirectUser(profile.rol);
       }
 
     } catch (err: any) {
-      console.error("Error crítico durante el login:", err);
       setError("Error inesperado al conectar con el servidor.");
     } finally {
       setLoading(false);
@@ -149,45 +135,45 @@ export default function LoginPage() {
           </div>
           
           <div className="z-10">
-            <div className="h-12 w-12 rounded-xl mb-6 flex items-center justify-center font-bold text-2xl shadow-lg bg-white/20">
+            <div className="h-12 w-12 rounded-xl mb-6 flex items-center justify-center font-bold text-2xl shadow-lg bg-white/20 border border-white/30">
               EF
             </div>
             <h1 className="text-4xl font-bold font-headline mb-4 leading-tight">
               EduFlow Platform
             </h1>
-            <p className="text-lg opacity-90 leading-relaxed">
+            <p className="text-lg opacity-90 leading-relaxed font-light">
               Sistema integral de gestión académica. 
               Control de vigencias y contenidos dinámicos.
             </p>
           </div>
 
-          <div className="flex gap-6 z-10">
+          <div className="flex gap-6 z-10 pt-4">
             <div className="flex items-center gap-2">
-              <ShieldCheck className="text-white/80" />
+              <ShieldCheck className="text-accent h-5 w-5" />
               <span className="text-sm font-medium">Acceso Seguro</span>
             </div>
             <div className="flex items-center gap-2">
-              <BookOpen className="text-white/80" />
-              <span className="text-sm font-medium">Control Académico</span>
+              <BookOpen className="text-accent h-5 w-5" />
+              <span className="text-sm font-medium">Gestión Curricular</span>
             </div>
           </div>
         </div>
 
         <div className="p-8 md:p-12 flex flex-col justify-center bg-white">
           <Card className="border-none shadow-none">
-            <CardHeader className="p-0 mb-6">
-              <CardTitle className="text-2xl font-headline font-bold text-gray-800">Iniciar Sesión</CardTitle>
-              <CardDescription>Accede con tu cuenta institucional</CardDescription>
+            <CardHeader className="p-0 mb-8">
+              <CardTitle className="text-3xl font-headline font-bold text-gray-800">Iniciar Sesión</CardTitle>
+              <CardDescription className="text-base">Accede con tu cuenta institucional de EduFlow</CardDescription>
             </CardHeader>
             <CardContent className="p-0 space-y-4">
               {error && (
-                <Alert variant="destructive" className="mb-4">
+                <Alert variant="destructive" className="mb-6 animate-in slide-in-from-top duration-300">
                   <AlertCircle className="h-4 w-4" />
-                  <AlertTitle>Error</AlertTitle>
+                  <AlertTitle>Error de acceso</AlertTitle>
                   <AlertDescription className="text-xs">{error}</AlertDescription>
                 </Alert>
               )}
-              <form onSubmit={handleLogin} className="space-y-4">
+              <form onSubmit={handleLogin} className="space-y-5">
                 <div className="space-y-2">
                   <Label htmlFor="email">Correo Electrónico</Label>
                   <Input 
@@ -197,7 +183,7 @@ export default function LoginPage() {
                     required 
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="h-11"
+                    className="h-12 border-muted focus:ring-primary/20"
                   />
                 </div>
                 <div className="space-y-2">
@@ -205,24 +191,25 @@ export default function LoginPage() {
                   <Input 
                     id="password" 
                     type="password" 
+                    placeholder="••••••••"
                     required 
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="h-11"
+                    className="h-12 border-muted focus:ring-primary/20"
                   />
                 </div>
                 <Button 
                   type="submit" 
-                  className="w-full h-11 text-base shadow-md bg-primary hover:bg-primary/90 transition-all font-semibold" 
+                  className="w-full h-12 text-base shadow-lg bg-primary hover:bg-primary/90 transition-all font-bold tracking-wide" 
                   disabled={loading}
                 >
-                  {loading ? "Validando..." : "Entrar al Sistema"}
+                  {loading ? "Validando acceso..." : "Entrar al Sistema"}
                 </Button>
               </form>
             </CardContent>
-            <CardFooter className="p-0 mt-8 pt-8 border-t flex flex-col items-center">
-              <p className="text-[11px] text-muted-foreground text-center leading-tight">
-                Plataforma de Control Académico - Emiliano Zapata
+            <CardFooter className="p-0 mt-10 pt-8 border-t flex flex-col items-center">
+              <p className="text-[11px] text-muted-foreground text-center leading-tight uppercase tracking-tighter font-semibold">
+                Plataforma de Control Académico Integral - 2026
               </p>
             </CardFooter>
           </Card>
