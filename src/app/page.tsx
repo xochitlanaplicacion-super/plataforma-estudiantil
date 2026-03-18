@@ -57,7 +57,6 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Limpieza de campos
     const cleanEmail = email.trim();
     const cleanPassword = password.trim();
 
@@ -70,7 +69,7 @@ export default function LoginPage() {
     setError(null);
     
     try {
-      console.log("Intentando login para:", cleanEmail);
+      console.log("Iniciando autenticación para:", cleanEmail);
       
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: cleanEmail,
@@ -78,37 +77,43 @@ export default function LoginPage() {
       });
 
       if (authError) {
-        console.error("Error de Auth:", authError);
-        let message = authError.message;
-        if (message === "Invalid login credentials") {
-          message = "Credenciales incorrectas. Verifica tu correo y contraseña.";
-        } else if (message === "missing email or phone") {
-          message = "Error en el envío de datos. Intenta escribir de nuevo tus credenciales.";
-        }
-        setError(message);
+        console.error("Error de Supabase Auth:", authError);
+        setError(authError.message === "Invalid login credentials" 
+          ? "Correo o contraseña incorrectos." 
+          : authError.message);
         setLoading(false);
         return;
       }
 
       if (data.user) {
+        console.log("Usuario autenticado. Buscando perfil para ID:", data.user.id);
+        
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('rol, estatus, fecha_expiracion')
           .eq('id', data.user.id)
           .single();
 
-        if (profileError || !profile) {
-          setError("Usuario autenticado pero perfil no encontrado. Contacta a soporte.");
+        if (profileError) {
+          console.error("Error al buscar el perfil en la tabla 'profiles':", profileError);
+          setError(`Error de perfil: ${profileError.message}. Verifica las políticas RLS en Supabase.`);
+          setLoading(false);
+          return;
+        }
+
+        if (!profile) {
+          setError("Usuario autenticado pero no se encontró registro en la tabla de perfiles.");
           setLoading(false);
           return;
         }
 
         if (profile.estatus !== 'activo') {
-          setError(`Cuenta inactiva (${profile.estatus}). Contacta al administrador.`);
+          setError(`Tu cuenta está ${profile.estatus}. Contacta al administrador.`);
           setLoading(false);
           return;
         }
 
+        // Validación de vigencia
         if (profile.fecha_expiracion) {
           const now = new Date();
           const exp = new Date(profile.fecha_expiracion);
@@ -127,8 +132,8 @@ export default function LoginPage() {
       }
 
     } catch (err: any) {
-      console.error("Error inesperado:", err);
-      setError("Ocurrió un error inesperado al intentar conectar.");
+      console.error("Error crítico durante el login:", err);
+      setError("Error inesperado al conectar con el servidor.");
     } finally {
       setLoading(false);
     }
@@ -179,7 +184,7 @@ export default function LoginPage() {
                 <Alert variant="destructive" className="mb-4">
                   <AlertCircle className="h-4 w-4" />
                   <AlertTitle>Error</AlertTitle>
-                  <AlertDescription>{error}</AlertDescription>
+                  <AlertDescription className="text-xs">{error}</AlertDescription>
                 </Alert>
               )}
               <form onSubmit={handleLogin} className="space-y-4">
@@ -193,7 +198,6 @@ export default function LoginPage() {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="h-11"
-                    autoComplete="email"
                   />
                 </div>
                 <div className="space-y-2">
@@ -205,7 +209,6 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="h-11"
-                    autoComplete="current-password"
                   />
                 </div>
                 <Button 
