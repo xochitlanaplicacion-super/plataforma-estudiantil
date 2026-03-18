@@ -1,3 +1,4 @@
+
 'use server'
 
 import { supabase, createServerClient } from './supabase'
@@ -49,7 +50,7 @@ export async function login(email: string, password: string) {
 // ✅ LOGOUT
 export async function logout() {
   await supabase.auth.signOut()
-  redirect('/login')
+  redirect('/')
 }
 
 // ✅ CREAR USUARIO (Solo para superuser desde el panel)
@@ -95,7 +96,8 @@ export async function crearUsuario({
     return { success: false, error: authError.message }
   }
 
-  // Actualizar perfil con datos adicionales
+  // El perfil se crea automáticamente por el trigger de la base de datos,
+  // pero actualizamos los campos adicionales que no se manejan en el trigger si es necesario.
   const { error: updateError } = await supabaseAdmin
     .from('profiles')
     .update({

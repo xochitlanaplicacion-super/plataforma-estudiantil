@@ -7,7 +7,7 @@ export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
   const supabase = createMiddlewareClient({ req, res })
 
-  // Obtener la sesión correctamente desestructurando la propiedad 'data'
+  // Obtener la sesión correctamente usando la propiedad data
   const {
     data: { session },
   } = await supabase.auth.getSession()

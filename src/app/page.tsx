@@ -27,13 +27,12 @@ export default function LoginPage() {
   const [themeIndex, setThemeIndex] = useState(0);
 
   useEffect(() => {
+    // Cambio de tema cada 15 segundos para que coincida con la animación CSS (45s total / 3 temas)
     const interval = setInterval(() => {
       setThemeIndex((prev) => (prev + 1) % themes.length);
     }, 15000);
     return () => clearInterval(interval);
   }, []);
-
-  const currentTheme = themes[themeIndex];
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -125,25 +124,20 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4 font-body overflow-hidden">
       <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 shadow-2xl rounded-2xl overflow-hidden bg-white">
         
-        <div 
-          className="hidden md:flex flex-col justify-center p-12 space-y-8 relative overflow-hidden transition-all duration-[2000ms] ease-in-out"
-          style={{ backgroundColor: currentTheme.bg, color: currentTheme.text }}
-        >
+        {/* Panel Animado con CSS para máxima fluidez */}
+        <div className="hidden md:flex flex-col justify-center p-12 space-y-8 relative overflow-hidden animate-login-morph">
           <div className="absolute top-0 right-0 p-4 opacity-10">
             <GraduationCap size={200} />
           </div>
           
           <div className="z-10">
-            <div 
-              className="h-12 w-12 rounded-xl mb-6 flex items-center justify-center font-bold text-2xl shadow-lg transition-all duration-[2000ms] ease-in-out"
-              style={{ backgroundColor: currentTheme.accent, color: currentTheme.bg }}
-            >
+            <div className="h-12 w-12 rounded-xl mb-6 flex items-center justify-center font-bold text-2xl shadow-lg bg-white/20">
               EF
             </div>
-            <h1 className="text-4xl font-bold font-headline mb-4 transition-colors duration-[2000ms] ease-in-out">
+            <h1 className="text-4xl font-bold font-headline mb-4">
               EduFlow Platform
             </h1>
-            <p className="text-lg opacity-90 leading-relaxed transition-colors duration-[2000ms] ease-in-out">
+            <p className="text-lg opacity-90 leading-relaxed">
               Sistema integral de gestión académica. 
               Control de vigencias, contenidos dinámicos y seguimiento curricular.
             </p>
@@ -151,11 +145,11 @@ export default function LoginPage() {
 
           <div className="flex gap-6 z-10">
             <div className="flex items-center gap-2">
-              <ShieldCheck className="transition-colors duration-[2000ms]" style={{ color: currentTheme.accent }} />
+              <ShieldCheck className="text-white/80" />
               <span className="text-sm font-medium">Acceso Seguro</span>
             </div>
             <div className="flex items-center gap-2">
-              <BookOpen className="transition-colors duration-[2000ms]" style={{ color: currentTheme.accent }} />
+              <BookOpen className="text-white/80" />
               <span className="text-sm font-medium">Contenido Real</span>
             </div>
           </div>
@@ -164,7 +158,7 @@ export default function LoginPage() {
         <div className="p-8 md:p-12 flex flex-col justify-center bg-white">
           <Card className="border-none shadow-none">
             <CardHeader className="p-0 mb-8">
-              <CardTitle className="text-2xl font-headline font-bold">Bienvenido</CardTitle>
+              <CardTitle className="text-2xl font-headline font-bold text-gray-800">Bienvenido</CardTitle>
               <CardDescription>Ingresa tus credenciales institucionales</CardDescription>
             </CardHeader>
             <CardContent className="p-0 space-y-4">
@@ -190,11 +184,11 @@ export default function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                   />
                 </div>
+                {/* Botón sincronizado con la misma animación de color */}
                 <Button 
                   type="submit" 
-                  className="w-full h-12 text-lg shadow-md border-none transition-all duration-[2000ms] ease-in-out" 
+                  className="w-full h-12 text-lg shadow-md border-none animate-login-button" 
                   disabled={loading}
-                  style={{ backgroundColor: currentTheme.bg, color: currentTheme.text }}
                 >
                   {loading ? "Cargando..." : "Acceder"}
                 </Button>
