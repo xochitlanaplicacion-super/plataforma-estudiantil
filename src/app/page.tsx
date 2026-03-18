@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { GraduationCap, ShieldCheck, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
+import { ShieldCheck, AlertCircle, Loader2, Eye, EyeOff } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -135,15 +135,10 @@ export default function LoginPage() {
         
         {/* Lado Izquierdo - Fondo Dinámico */}
         <div 
-          className="hidden md:flex flex-col justify-center items-center p-12 relative overflow-hidden bg-cover bg-center transition-all duration-1000"
+          className="hidden md:flex flex-col justify-end items-start p-12 relative overflow-hidden bg-cover bg-center transition-all duration-1000"
           style={{ backgroundImage: `url(${currentTheme.bgImage})` }}
         >
-          {/* Birrete centralizado */}
-          <div className="absolute opacity-20 pointer-events-none">
-            <GraduationCap size={400} className={currentTheme.textColor === 'text-white' ? 'text-white' : 'text-black'} />
-          </div>
-          
-          <div className="mt-auto z-10 w-full">
+          <div className="z-10 w-full">
              <div className={`flex items-center gap-3 p-3 rounded-xl backdrop-blur-sm border w-fit ${currentTheme.badgeColor}`}>
               <ShieldCheck className="text-accent h-5 w-5" /> 
               <span className={`text-sm font-medium ${currentTheme.textColor}`}>plataforma de estudios</span>
