@@ -13,5 +13,5 @@ npm run sync:force
 
 Este comando realiza lo siguiente:
 1. Agrega todos los archivos (`git add .`)
-2. Crea un commit con un mensaje estándar (`git commit`)
-3. Realiza un push forzado a la rama principal (`git push origin main --force`)
+2. Intenta crear un commit. Si no hay cambios nuevos, simplemente avanza.
+3. Realiza un push forzado a la rama principal (`git push origin main --force`) enviando todos los commits pendientes.

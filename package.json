@@ -11,7 +11,7 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "sync:force": "git add . && git commit -m 'Update from Firebase Studio' && git push origin main --force"
+    "sync:force": "git add . && (git commit -m 'Update from Firebase Studio' || echo 'No changes to commit') && git push origin main --force"
   },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.28.0",
