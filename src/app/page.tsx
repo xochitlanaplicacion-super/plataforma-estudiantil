@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -11,12 +11,6 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 
-const themes = [
-  { name: 'teal', bg: '#1A4A3F', text: '#ffffff', accent: '#E8D5B7' },
-  { name: 'beige', bg: '#E8D5B7', text: '#34261A', accent: '#8B2332' },
-  { name: 'vino', bg: '#8B2332', text: '#ffffff', accent: '#E8D5B7' }
-];
-
 export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
@@ -24,15 +18,6 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [themeIndex, setThemeIndex] = useState(0);
-
-  useEffect(() => {
-    // Cambio de tema cada 15 segundos para que coincida con la animación CSS (45s total / 3 temas)
-    const interval = setInterval(() => {
-      setThemeIndex((prev) => (prev + 1) % themes.length);
-    }, 15000);
-    return () => clearInterval(interval);
-  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,7 +94,7 @@ export default function LoginPage() {
         }
       }
 
-    } catch (error: any) {
+    } catch (err: any) {
       toast({
         variant: "destructive",
         title: "Error inesperado",
@@ -124,7 +109,6 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4 font-body overflow-hidden">
       <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 shadow-2xl rounded-2xl overflow-hidden bg-white">
         
-        {/* Panel Animado con CSS para máxima fluidez */}
         <div className="hidden md:flex flex-col justify-center p-12 space-y-8 relative overflow-hidden animate-login-morph">
           <div className="absolute top-0 right-0 p-4 opacity-10">
             <GraduationCap size={200} />
@@ -184,10 +168,9 @@ export default function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                   />
                 </div>
-                {/* Botón sincronizado con la misma animación de color */}
                 <Button 
                   type="submit" 
-                  className="w-full h-12 text-lg shadow-md border-none animate-login-button" 
+                  className="w-full h-12 text-lg shadow-md border-none animate-login-button transition-colors duration-1000" 
                   disabled={loading}
                 >
                   {loading ? "Cargando..." : "Acceder"}
