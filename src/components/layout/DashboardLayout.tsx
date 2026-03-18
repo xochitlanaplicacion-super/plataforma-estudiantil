@@ -3,7 +3,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { 
   Sidebar, 
   SidebarContent, 
@@ -28,14 +28,13 @@ import {
   Clock,
   School,
   CalendarCheck,
-  ClipboardList,
-  BarChart3,
   UserCheck,
+  BarChart3,
   ShieldAlert
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { UserRole } from '@/lib/types';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/client';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -45,16 +44,18 @@ interface DashboardLayoutProps {
 
 export function DashboardLayout({ children, userRole, userName }: DashboardLayoutProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const supabase = createClient();
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
-    window.location.href = '/';
+    router.push('/');
+    router.refresh();
   };
 
   const getInitials = (name: string) => 
     name.split(' ').map(n => n[0]).join('').toUpperCase().substring(0, 2);
 
-  // Mapeo EXACTO de los 10 Módulos del Plan de Desarrollo para Superusuario
   const menuItems = {
     superuser: [
       { group: "Módulo 1 & 2: Acceso y Usuarios", items: [
@@ -83,14 +84,12 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
       { group: "Administración Operativa", items: [
         { icon: LayoutDashboard, label: 'Dashboard Admin', href: '/dashboard/admin' },
         { icon: Users, label: 'Soporte Usuarios', href: '/dashboard/admin/usuarios' },
-        { icon: ClipboardList, label: 'Revisión Contenido', href: '/dashboard/admin/revision' },
       ]}
     ],
     profesor: [
       { group: "Módulo 8: Docencia", items: [
         { icon: LayoutDashboard, label: 'Mis Asignaturas', href: '/dashboard/profesor' },
         { icon: Layers, label: 'Unidades y Temas', href: '/dashboard/profesor/contenido' },
-        { icon: ClipboardList, label: 'Seguimiento Académico', href: '/dashboard/profesor/seguimiento' },
       ]}
     ],
     alumno: [

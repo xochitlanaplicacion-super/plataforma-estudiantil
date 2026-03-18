@@ -2,17 +2,20 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { BookOpen, GraduationCap, ShieldCheck, AlertCircle, Loader2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function LoginPage() {
   const { toast } = useToast();
+  const router = useRouter();
+  const supabase = createClient();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -20,10 +23,36 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
 
-  // Aseguramos que el componente esté montado para evitar errores de hidratación
   useEffect(() => {
     setMounted(true);
+    
+    // Verificar si ya hay sesión activa al cargar
+    const checkSession = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('rol')
+          .eq('id', user.id)
+          .single();
+        
+        if (profile) {
+          redirectByRole(profile.rol);
+        }
+      }
+    };
+    
+    checkSession();
   }, []);
+
+  const redirectByRole = (rol: string) => {
+    let destination = '/dashboard/alumno';
+    if (rol === 'superuser' || rol === 'admin') destination = '/dashboard/admin';
+    if (rol === 'profesor') destination = '/dashboard/profesor';
+    
+    router.push(destination);
+    router.refresh();
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,9 +72,11 @@ export default function LoginPage() {
       });
 
       if (authError) {
-        setError(authError.message === "Invalid login credentials" 
-          ? "Credenciales incorrectas. Verifica tu correo y contraseña." 
-          : "Error de validación: " + authError.message);
+        setError(
+          authError.message === "Invalid login credentials" 
+            ? "Credenciales incorrectas. Verifica tu correo y contraseña." 
+            : "Error de validación: " + authError.message
+        );
         setLoading(false);
         return;
       }
@@ -58,13 +89,14 @@ export default function LoginPage() {
           .single();
 
         if (profileError || !profile) {
-          setError("Sesión iniciada, pero no se encontró tu perfil académico.");
+          setError("Acceso autenticado, pero no se encontró tu perfil académico.");
           setLoading(false);
           return;
         }
 
         if (profile.estatus !== 'activo') {
           setError(`Tu cuenta está ${profile.estatus}. Contacta a administración.`);
+          await supabase.auth.signOut();
           setLoading(false);
           return;
         }
@@ -74,11 +106,7 @@ export default function LoginPage() {
           description: "Bienvenido a EduFlow. Cargando tu panel...",
         });
         
-        let destination = '/dashboard/alumno';
-        if (profile.rol === 'superuser' || profile.rol === 'admin') destination = '/dashboard/admin';
-        if (profile.rol === 'profesor') destination = '/dashboard/profesor';
-        
-        window.location.href = destination;
+        redirectByRole(profile.rol);
       }
     } catch (err: any) {
       setError("Error de conexión con el servidor educativo.");
@@ -86,7 +114,7 @@ export default function LoginPage() {
     }
   };
 
-  if (!mounted) return null;
+  if (!mounted) return <div className="min-h-screen bg-[#f8f9fa]" />;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] p-4 font-body overflow-hidden">
@@ -144,9 +172,7 @@ export default function LoginPage() {
                 />
               </div>
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="password">Contraseña</Label>
-                </div>
+                <Label htmlFor="password">Contraseña</Label>
                 <Input 
                   id="password" 
                   type="password" 
