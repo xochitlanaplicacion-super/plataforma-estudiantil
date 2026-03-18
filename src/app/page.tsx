@@ -6,10 +6,11 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { BookOpen, GraduationCap, ShieldCheck } from 'lucide-react';
+import { BookOpen, GraduationCap, ShieldCheck, AlertCircle } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,6 +19,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const checkSession = async () => {
@@ -55,31 +57,25 @@ export default function LoginPage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null);
     
     try {
-      // Intento de login con Supabase Auth
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const { data, error: authError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password: password.trim(),
       });
 
-      if (error) {
-        let message = error.message;
-        if (error.message === "Invalid login credentials") {
+      if (authError) {
+        let message = authError.message;
+        if (authError.message === "Invalid login credentials") {
           message = "Correo o contraseña incorrectos. Verifica tus datos.";
         }
-        
-        toast({
-          variant: "destructive",
-          title: "Error de acceso",
-          description: message,
-        });
+        setError(message);
         setLoading(false);
         return;
       }
 
       if (data.user) {
-        // Si el login fue exitoso, buscamos el perfil en la tabla pública
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('rol, estatus, fecha_expiracion')
@@ -87,30 +83,19 @@ export default function LoginPage() {
           .single();
 
         if (profileError || !profile) {
-          // Si no hay perfil, cerramos la sesión por seguridad
           await supabase.auth.signOut();
-          toast({
-            variant: "destructive",
-            title: "Perfil no encontrado",
-            description: "Tu usuario existe pero no tienes un registro en la tabla de perfiles. Contacta al administrador.",
-          });
+          setError("Perfil no encontrado. Tu usuario existe en Auth pero no en la tabla de perfiles.");
           setLoading(false);
           return;
         }
 
-        // Validamos estatus
         if (profile.estatus !== 'activo') {
           await supabase.auth.signOut();
-          toast({
-            variant: "destructive",
-            title: "Cuenta restringida",
-            description: `Tu cuenta se encuentra en estado: ${profile.estatus}.`,
-          });
+          setError(`Cuenta restringida. Estado actual: ${profile.estatus}.`);
           setLoading(false);
           return;
         }
 
-        // Validamos vigencia
         if (profile.fecha_expiracion) {
           const now = new Date();
           const exp = new Date(profile.fecha_expiracion);
@@ -126,19 +111,14 @@ export default function LoginPage() {
           description: "Acceso concedido correctamente.",
         });
         
-        // Pequeño delay para asegurar que el router procese el cambio
         setTimeout(() => {
           redirectUser(profile.rol);
-        }, 500);
+        }, 300);
       }
 
     } catch (err: any) {
       console.error("Login unexpected error:", err);
-      toast({
-        variant: "destructive",
-        title: "Error inesperado",
-        description: "Ocurrió un error al intentar conectar con el servidor.",
-      });
+      setError("Ocurrió un error inesperado al intentar conectar con el servidor.");
     } finally {
       setLoading(false);
     }
@@ -180,11 +160,18 @@ export default function LoginPage() {
 
         <div className="p-8 md:p-12 flex flex-col justify-center bg-white">
           <Card className="border-none shadow-none">
-            <CardHeader className="p-0 mb-8">
+            <CardHeader className="p-0 mb-6">
               <CardTitle className="text-2xl font-headline font-bold text-gray-800">Iniciar Sesión</CardTitle>
               <CardDescription>Usa tu cuenta institucional para continuar</CardDescription>
             </CardHeader>
             <CardContent className="p-0 space-y-4">
+              {error && (
+                <Alert variant="destructive" className="mb-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertTitle>Error de acceso</AlertTitle>
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">Correo Electrónico</Label>
