@@ -140,7 +140,7 @@ export default function LoginPage() {
         >
           {/* Logo Centrado con fondo traslúcido ajustado al ras */}
           <div className="absolute inset-0 flex items-center justify-center p-12 pointer-events-none">
-            <div className="relative w-[70%] aspect-square flex items-center justify-center bg-white/30 backdrop-blur-md rounded-[2rem] p-4 shadow-sm border border-white/20">
+            <div className="relative w-[75%] aspect-square flex items-center justify-center bg-white/30 backdrop-blur-md rounded-[2rem] p-4 shadow-sm border border-white/20">
               <div className="relative w-full h-full">
                 <Image 
                   src="https://i.postimg.cc/wjVN06TJ/Logo-UNIV-PREPA-CAP-IEEZ-01.png"
