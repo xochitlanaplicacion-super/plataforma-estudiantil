@@ -56,19 +56,34 @@ export default function LoginPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Limpieza de campos
+    const cleanEmail = email.trim();
+    const cleanPassword = password.trim();
+
+    if (!cleanEmail || !cleanPassword) {
+      setError("Por favor, ingresa tu correo y contraseña.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     
     try {
+      console.log("Intentando login para:", cleanEmail);
+      
       const { data, error: authError } = await supabase.auth.signInWithPassword({
-        email: email.trim(),
-        password: password.trim(),
+        email: cleanEmail,
+        password: cleanPassword,
       });
 
       if (authError) {
+        console.error("Error de Auth:", authError);
         let message = authError.message;
-        if (authError.message === "Invalid login credentials") {
-          message = "Credenciales incorrectas. Por favor, verifica tu correo y contraseña.";
+        if (message === "Invalid login credentials") {
+          message = "Credenciales incorrectas. Verifica tu correo y contraseña.";
+        } else if (message === "missing email or phone") {
+          message = "Error en el envío de datos. Intenta escribir de nuevo tus credenciales.";
         }
         setError(message);
         setLoading(false);
@@ -83,13 +98,13 @@ export default function LoginPage() {
           .single();
 
         if (profileError || !profile) {
-          setError("Perfil no encontrado. Asegúrate de que el registro en la tabla 'profiles' existe.");
+          setError("Usuario autenticado pero perfil no encontrado. Contacta a soporte.");
           setLoading(false);
           return;
         }
 
         if (profile.estatus !== 'activo') {
-          setError(`Tu cuenta no está activa (Estado: ${profile.estatus}). Contacta al administrador.`);
+          setError(`Cuenta inactiva (${profile.estatus}). Contacta al administrador.`);
           setLoading(false);
           return;
         }
@@ -105,7 +120,7 @@ export default function LoginPage() {
 
         toast({
           title: "¡Bienvenido!",
-          description: "Iniciando sesión en EduFlow...",
+          description: "Acceso concedido correctamente.",
         });
         
         redirectUser(profile.rol);
@@ -113,7 +128,7 @@ export default function LoginPage() {
 
     } catch (err: any) {
       console.error("Error inesperado:", err);
-      setError("Error de conexión con el servidor.");
+      setError("Ocurrió un error inesperado al intentar conectar.");
     } finally {
       setLoading(false);
     }
@@ -173,11 +188,12 @@ export default function LoginPage() {
                   <Input 
                     id="email" 
                     type="email" 
-                    placeholder="instituto@gmail.com" 
+                    placeholder="ejemplo@gmail.com" 
                     required 
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="h-11"
+                    autoComplete="email"
                   />
                 </div>
                 <div className="space-y-2">
@@ -189,6 +205,7 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="h-11"
+                    autoComplete="current-password"
                   />
                 </div>
                 <Button 
