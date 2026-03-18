@@ -1,14 +1,15 @@
--- Código Maestro SQL para crear el primer Superusuario
--- Instrucciones: Pega y ejecuta esto en el SQL Editor de Supabase
--- Se ha cambiado el delimitador del bloque DO a $creator$ para evitar conflictos con el símbolo '$' en la contraseña.
+-- =================================================================================
+-- SCRIPT MAESTRO: CREACIÓN DEL SUPERUSUARIO INICIAL
+-- Instrucciones: Pega y ejecuta este código en el SQL Editor de Supabase.
+-- =================================================================================
 
-DO $creator$
+DO $_$
 DECLARE
   -- Generamos un UUID único para este usuario
   new_user_id UUID := uuid_generate_v4();
-  -- Datos del usuario
+  -- Datos de acceso
   v_email TEXT := 'ieemilianozapata@gmail.com';
-  -- La contraseña contiene símbolos '$' que antes causaban conflicto con el delimitador '$$'
+  -- La contraseña con $$$ no causará error gracias al delimitador $_$
   v_pass TEXT := 'INSTITUTOEDUCATIVOEMILIANOZAPATA$$$';
 BEGIN
   -- 1. Insertar en auth.users (Motor de Autenticación)
@@ -37,7 +38,7 @@ BEGIN
     jsonb_build_object(
       'nombre', 'ieemilianozapata',
       'apellidos', 'emiliano zapata',
-      'curp', 'ZAPA010101HDFRR01', -- CURP inventada
+      'curp', 'ZAPA010101HDFRR01',
       'rol', 'superuser'
     ),
     now(),
@@ -50,11 +51,13 @@ BEGIN
   );
 
   -- 2. Insertar en auth.identities (Vínculo para permitir el login)
+  -- Se incluye 'provider_id' que es obligatorio en versiones recientes
   INSERT INTO auth.identities (
     id,
     user_id,
     identity_data,
     provider,
+    provider_id,
     last_sign_in_at,
     created_at,
     updated_at
@@ -63,10 +66,11 @@ BEGIN
     new_user_id,
     format('{"sub":"%s","email":"%s"}', new_user_id::text, v_email)::jsonb,
     'email',
+    new_user_id::text, -- El provider_id para email suele ser el mismo UUID del usuario
     now(),
     now(),
     now()
   );
 
-  -- El trigger 'on_auth_user_created' se encargará de crear el registro en 'public.profiles' automáticamente.
-END $creator$;
+  -- El trigger 'on_auth_user_created' se encargará de crear la fila en la tabla profiles automáticamente.
+END $_$;
