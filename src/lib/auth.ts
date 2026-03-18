@@ -15,7 +15,7 @@ export async function login(email: string, password: string) {
   }
 
   // Obtener perfil del usuario
-  const {  profile, error: profileError } = await supabase
+  const { data: profile, error: profileError } = await supabase
     .from('profiles')
     .select('rol, estatus, fecha_expiracion, nombre, apellidos')
     .eq('id', data.user.id)
@@ -77,7 +77,7 @@ export async function crearUsuario({
   // Usar cliente de servidor con service role
   const supabaseAdmin = createServerClient()
 
-  const {  authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+  const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
@@ -124,7 +124,7 @@ export async function getCurrentUser() {
   
   if (!session) return null
 
-  const {  profile } = await supabase
+  const { data: profile } = await supabase
     .from('profiles')
     .select('*')
     .eq('id', session.user.id)

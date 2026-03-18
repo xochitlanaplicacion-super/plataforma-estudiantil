@@ -1,3 +1,4 @@
+
 import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
@@ -6,26 +7,26 @@ export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
   const supabase = createMiddlewareClient({ req, res })
 
+  // Corregido: Desestructuración correcta de data: { session }
   const {
-     { session },
+    data: { session },
   } = await supabase.auth.getSession()
 
-  // Rutas públicas
-  const publicPaths = ['/login', '/recuperar-password']
-  if (publicPaths.some(path => req.nextUrl.pathname.startsWith(path))) {
-    if (session) {
-      return NextResponse.redirect(new URL('/', req.url))
-    }
+  const pathname = req.nextUrl.pathname
+
+  // Rutas públicas (la raíz '/' es el login)
+  const publicPaths = ['/', '/expired']
+  if (publicPaths.some(path => pathname === path)) {
     return res
   }
 
-  // Si no hay sesión y la ruta es protegida → redirigir a login
+  // Si no hay sesión y no es ruta pública → redirigir a login (/)
   if (!session) {
-    return NextResponse.redirect(new URL('/login', req.url))
+    return NextResponse.redirect(new URL('/', req.url))
   }
 
-  // Obtener perfil para verificar rol
-  const {  profile } = await supabase
+  // Obtener perfil para verificar rol y estatus
+  const { data: profile } = await supabase
     .from('profiles')
     .select('rol, estatus, fecha_expiracion')
     .eq('id', session.user.id)
@@ -34,33 +35,29 @@ export async function middleware(req: NextRequest) {
   // Validar estatus
   if (profile?.estatus !== 'activo') {
     await supabase.auth.signOut()
-    return NextResponse.redirect(new URL('/login?inactive=true', req.url))
+    return NextResponse.redirect(new URL('/?inactive=true', req.url))
   }
 
   // Validar expiración
   const hoy = new Date().toISOString().split('T')[0]
   if (profile?.fecha_expiracion && profile.fecha_expiracion < hoy) {
-    await supabase.auth.signOut()
-    return NextResponse.redirect(new URL('/login?expired=true', req.url))
+    // Redirigir a página de expiración si no está ya en ella
+    if (pathname !== '/expired') {
+      return NextResponse.redirect(new URL('/expired', req.url))
+    }
   }
 
-  // Protección por rol
-  const pathname = req.nextUrl.pathname
-
-  if (pathname.startsWith('/superadmin') && profile?.rol !== 'superuser') {
-    return NextResponse.redirect(new URL('/unauthorized', req.url))
+  // Protección por rol para las rutas de dashboard
+  if (pathname.startsWith('/dashboard/admin') && !['superuser', 'admin'].includes(profile?.rol || '')) {
+    return NextResponse.redirect(new URL('/', req.url))
   }
 
-  if (pathname.startsWith('/admin') && !['superuser', 'admin'].includes(profile?.rol || '')) {
-    return NextResponse.redirect(new URL('/unauthorized', req.url))
+  if (pathname.startsWith('/dashboard/profesor') && !['superuser', 'admin', 'profesor'].includes(profile?.rol || '')) {
+    return NextResponse.redirect(new URL('/', req.url))
   }
 
-  if (pathname.startsWith('/profesor') && !['superuser', 'admin', 'profesor'].includes(profile?.rol || '')) {
-    return NextResponse.redirect(new URL('/unauthorized', req.url))
-  }
-
-  if (pathname.startsWith('/alumno') && profile?.rol !== 'alumno') {
-    return NextResponse.redirect(new URL('/unauthorized', req.url))
+  if (pathname.startsWith('/dashboard/alumno') && profile?.rol !== 'alumno') {
+    return NextResponse.redirect(new URL('/', req.url))
   }
 
   return res
@@ -68,11 +65,8 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    '/superadmin/:path*',
-    '/admin/:path*',
-    '/profesor/:path*',
-    '/alumno/:path*',
-    '/login',
-    '/recuperar-password',
+    '/dashboard/:path*',
+    '/',
+    '/expired',
   ],
 }
