@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -10,7 +11,6 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useToast } from '@/hooks/use-toast';
 
-// Orden: Verde -> Crema -> Rojo
 const themes = [
   { name: 'teal', bg: '#1A4A3F', text: '#ffffff', accent: '#E8D5B7' },
   { name: 'beige', bg: '#E8D5B7', text: '#34261A', accent: '#8B2332' },
@@ -26,7 +26,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [themeIndex, setThemeIndex] = useState(0);
 
-  // Cambio de tema cada 15 segundos (45 segundos total para el ciclo)
   useEffect(() => {
     const interval = setInterval(() => {
       setThemeIndex((prev) => (prev + 1) % themes.length);
@@ -58,7 +57,7 @@ export default function LoginPage() {
       if (data.user) {
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
-          .select('rol, estatus, fecha_expiracion, nombre, apellidos, curp')
+          .select('rol, estatus, fecha_expiracion')
           .eq('id', data.user.id)
           .single();
 
@@ -90,15 +89,13 @@ export default function LoginPage() {
           toast({
             variant: "destructive",
             title: "Acceso expirado",
-            description: `Tu vigencia finalizó el ${profile.fecha_expiracion}. Contacta a administración.`,
+            description: `Tu vigencia finalizó el ${profile.fecha_expiracion}.`,
           });
           return;
         }
 
         switch (profile.rol) {
           case 'superuser':
-            router.push('/dashboard/admin');
-            break;
           case 'admin':
             router.push('/dashboard/admin');
             break;
@@ -114,7 +111,6 @@ export default function LoginPage() {
       }
 
     } catch (error: any) {
-      console.error('Login error:', error);
       toast({
         variant: "destructive",
         title: "Error inesperado",
