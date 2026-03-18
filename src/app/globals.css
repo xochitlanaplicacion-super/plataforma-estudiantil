@@ -85,12 +85,12 @@
 }
 
 .animate-login-morph {
-  animation: login-morph 24s ease-in-out infinite;
+  animation: login-morph 15s ease-in-out infinite;
   transition: color 1.2s ease-in-out;
 }
 
 .animate-login-button {
-  animation: login-morph 24s ease-in-out infinite;
+  animation: login-morph 15s ease-in-out infinite;
   border: none !important;
   transition: all 1.2s ease-in-out;
 }
