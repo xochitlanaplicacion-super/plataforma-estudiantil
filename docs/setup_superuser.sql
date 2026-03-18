@@ -1,76 +1,41 @@
--- =================================================================================
--- SCRIPT MAESTRO: CREACIÓN DEL SUPERUSUARIO INICIAL
--- Instrucciones: Pega y ejecuta este código en el SQL Editor de Supabase.
--- =================================================================================
+-- Script Maestro para crear el Superusuario (Versión Robusta)
+-- Ejecuta este código completo en el SQL Editor de Supabase
 
-DO $_$
+DO $BOOTSTRAP$
 DECLARE
-  -- Generamos un UUID único para este usuario
-  new_user_id UUID := uuid_generate_v4();
-  -- Datos de acceso
+  -- Generamos un UUID único
+  uid UUID := uuid_generate_v4();
   v_email TEXT := 'ieemilianozapata@gmail.com';
-  -- La contraseña con $$$ no causará error gracias al delimitador $_$
+  -- Tu contraseña con $$$ al final
   v_pass TEXT := 'INSTITUTOEDUCATIVOEMILIANOZAPATA$$$';
 BEGIN
-  -- 1. Insertar en auth.users (Motor de Autenticación)
+  -- 1. Insertar en el motor de autenticación
   INSERT INTO auth.users (
-    id,
-    instance_id,
-    email,
-    encrypted_password,
-    email_confirmed_at,
-    raw_app_meta_data,
-    raw_user_meta_data,
-    created_at,
-    updated_at,
-    role,
-    confirmation_token,
-    email_change,
-    email_change_token_new,
-    recovery_token
+    id, instance_id, email, encrypted_password, email_confirmed_at, 
+    role, raw_app_meta_data, raw_user_meta_data, created_at, updated_at,
+    confirmation_token, recovery_token, email_change_token_new, email_change
   ) VALUES (
-    new_user_id,
-    '00000000-0000-0000-0000-000000000000',
-    v_email,
-    extensions.crypt(v_pass, extensions.gen_salt('bf')),
-    now(),
-    '{"provider":"email","providers":["email"]}',
+    uid, '00000000-0000-0000-0000-000000000000', v_email, 
+    extensions.crypt(v_pass, extensions.gen_salt('bf')), 
+    now(), 'authenticated', '{"provider":"email","providers":["email"]}',
     jsonb_build_object(
       'nombre', 'ieemilianozapata',
       'apellidos', 'emiliano zapata',
       'curp', 'ZAPA010101HDFRR01',
       'rol', 'superuser'
     ),
-    now(),
-    now(),
-    'authenticated',
-    '',
-    '',
-    '',
-    ''
+    now(), now(), '', '', '', ''
   );
 
-  -- 2. Insertar en auth.identities (Vínculo para permitir el login)
-  -- Se incluye 'provider_id' que es obligatorio en versiones recientes
+  -- 2. Insertar la identidad (Necesario para que el login funcione)
   INSERT INTO auth.identities (
-    id,
-    user_id,
-    identity_data,
-    provider,
-    provider_id,
-    last_sign_in_at,
-    created_at,
-    updated_at
+    id, user_id, identity_data, provider, provider_id, 
+    last_sign_in_at, created_at, updated_at
   ) VALUES (
-    new_user_id,
-    new_user_id,
-    format('{"sub":"%s","email":"%s"}', new_user_id::text, v_email)::jsonb,
-    'email',
-    new_user_id::text, -- El provider_id para email suele ser el mismo UUID del usuario
-    now(),
-    now(),
-    now()
+    uid, uid, 
+    format('{"sub":"%s","email":"%s"}', uid::text, v_email)::jsonb, 
+    'email', v_email, now(), now(), now()
   );
 
-  -- El trigger 'on_auth_user_created' se encargará de crear la fila en la tabla profiles automáticamente.
-END $_$;
+  -- El trigger 'on_auth_user_created' se encargará de crear el perfil en 'public.profiles'
+END $BOOTSTRAP$;
