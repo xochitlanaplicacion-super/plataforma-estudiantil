@@ -77,15 +77,15 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 font-body">
       <div className="max-w-4xl w-full grid grid-cols-1 md:grid-cols-2 shadow-2xl rounded-2xl overflow-hidden min-h-[600px]">
-        {/* Visual Panel con Animación de Color */}
-        <div className="hidden md:flex flex-col justify-center p-12 animate-login-morph space-y-8 relative overflow-hidden">
+        {/* Visual Panel con Animación de Color Lenta */}
+        <div className="hidden md:flex flex-col justify-center p-12 animate-login-morph space-y-8 relative overflow-hidden transition-all duration-1000">
           <div className="absolute top-0 right-0 p-4 opacity-10">
             <GraduationCap size={200} />
           </div>
           <div className="z-10">
             <div className="h-12 w-12 bg-accent rounded-xl mb-6 flex items-center justify-center font-bold text-accent-foreground text-2xl shadow-lg">EF</div>
-            <h1 className="text-4xl font-bold font-headline mb-4 transition-colors duration-700">EduFlow Platform</h1>
-            <p className="text-lg opacity-90 leading-relaxed transition-colors duration-700">
+            <h1 className="text-4xl font-bold font-headline mb-4 transition-colors duration-1000">EduFlow Platform</h1>
+            <p className="text-lg opacity-90 leading-relaxed transition-colors duration-1000">
               Gestión académica avanzada para Universidades y Preparatorias.
               Control total, acceso seguro y aprendizaje sin límites.
             </p>
@@ -93,11 +93,11 @@ export default function LoginPage() {
           <div className="flex gap-6 z-10">
             <div className="flex items-center gap-2">
               <ShieldCheck className="opacity-80" />
-              <span className="text-sm font-medium">Seguridad Real</span>
+              <span className="text-sm font-medium transition-colors duration-1000">Seguridad Real</span>
             </div>
             <div className="flex items-center gap-2">
               <BookOpen className="opacity-80" />
-              <span className="text-sm font-medium">Contenido</span>
+              <span className="text-sm font-medium transition-colors duration-1000">Contenido</span>
             </div>
           </div>
         </div>
@@ -136,7 +136,11 @@ export default function LoginPage() {
                     className="h-12"
                   />
                 </div>
-                <Button type="submit" className="w-full h-12 text-lg bg-primary hover:bg-primary/90 transition-all" disabled={loading}>
+                <Button 
+                  type="submit" 
+                  className="w-full h-12 text-lg animate-login-button shadow-md hover:opacity-90 transition-opacity" 
+                  disabled={loading}
+                >
                   {loading ? "Iniciando sesión..." : "Acceder"}
                 </Button>
               </form>

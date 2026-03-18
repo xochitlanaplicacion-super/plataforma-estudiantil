@@ -70,23 +70,33 @@
   0%, 100% { 
     background-color: #1A4A3F; 
     color: #ffffff;
+    border-color: #1A4A3F;
   }
   33.33% { 
     background-color: #E8D5B7; 
     color: #1A4A3F; 
+    border-color: #E8D5B7;
   }
   66.66% { 
     background-color: #8B2332; 
     color: #ffffff;
+    border-color: #8B2332;
   }
 }
 
 .animate-login-morph {
-  animation: login-morph 15s ease-in-out infinite;
-  transition: color 0.8s ease-in-out;
+  animation: login-morph 24s ease-in-out infinite;
+  transition: color 1.2s ease-in-out;
+}
+
+.animate-login-button {
+  animation: login-morph 24s ease-in-out infinite;
+  border: none !important;
+  transition: all 1.2s ease-in-out;
 }
 
 .animate-login-morph h1, 
-.animate-login-morph p {
+.animate-login-morph p,
+.animate-login-morph span {
   color: inherit;
 }
