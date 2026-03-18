@@ -1,7 +1,6 @@
-
 'use server'
 
-import { supabase, createServerClient } from './supabase'
+import { supabase } from './supabase'
 import { redirect } from 'next/navigation'
 
 export async function login(email: string, password: string) {
@@ -49,7 +48,8 @@ export async function logout() {
 }
 
 export async function getCurrentUser() {
-  const { data: { session } } = await supabase.auth.getSession()
+  const { data: sessionData } = await supabase.auth.getSession()
+  const session = sessionData?.session
   
   if (!session) return null
 

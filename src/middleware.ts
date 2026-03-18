@@ -1,4 +1,3 @@
-
 import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
@@ -7,7 +6,7 @@ export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
   const supabase = createMiddlewareClient({ req, res })
 
-  // Obtenemos la sesión correctamente desestructurando el objeto 'data'
+  // Obtenemos la sesión correctamente usando la sintaxis de desestructuración válida
   const {
     data: { session },
   } = await supabase.auth.getSession()
