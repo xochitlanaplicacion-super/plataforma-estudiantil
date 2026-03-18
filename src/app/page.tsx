@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -18,7 +19,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Verificar si ya hay una sesión activa al cargar
   useEffect(() => {
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
@@ -33,7 +33,7 @@ export default function LoginPage() {
       }
     };
     checkSession();
-  }, []);
+  }, [router]);
 
   const redirectUser = (rol: string) => {
     switch (rol) {
@@ -66,14 +66,15 @@ export default function LoginPage() {
         toast({
           variant: "destructive",
           title: "Error de acceso",
-          description: "Correo o contraseña incorrectos.",
+          description: error.message === "Invalid login credentials" 
+            ? "Correo o contraseña incorrectos. Verifica tus datos."
+            : error.message,
         });
         setLoading(false);
         return;
       }
 
       if (data.user) {
-        // Intentar obtener el perfil
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('rol, estatus, fecha_expiracion')
@@ -81,12 +82,11 @@ export default function LoginPage() {
           .single();
 
         if (profileError || !profile) {
-          console.error("Profile fetch error:", profileError);
           await supabase.auth.signOut();
           toast({
             variant: "destructive",
-            title: "Perfil no configurado",
-            description: "Tu usuario existe pero no tienes un perfil asociado. Contacta a soporte.",
+            title: "Perfil no encontrado",
+            description: "Tu usuario existe pero no tienes un perfil en la tabla de registros. Contacta a soporte.",
           });
           setLoading(false);
           return;
@@ -97,13 +97,12 @@ export default function LoginPage() {
           toast({
             variant: "destructive",
             title: "Cuenta restringida",
-            description: `Tu estatus actual es: ${profile.estatus}.`,
+            description: `Tu cuenta está ${profile.estatus}.`,
           });
           setLoading(false);
           return;
         }
 
-        // Validar expiración si existe
         if (profile.fecha_expiracion) {
           const now = new Date();
           const exp = new Date(profile.fecha_expiracion);
@@ -115,8 +114,8 @@ export default function LoginPage() {
         }
 
         toast({
-          title: "Acceso exitoso",
-          description: "Bienvenido a la plataforma.",
+          title: "¡Bienvenido!",
+          description: "Acceso concedido correctamente.",
         });
         
         redirectUser(profile.rol);
@@ -125,8 +124,8 @@ export default function LoginPage() {
     } catch (err: any) {
       toast({
         variant: "destructive",
-        title: "Error del sistema",
-        description: "No se pudo conectar con el servidor.",
+        title: "Error inesperado",
+        description: "Ocurrió un error al intentar conectar con el servicio.",
       });
     } finally {
       setLoading(false);
@@ -146,7 +145,7 @@ export default function LoginPage() {
             <div className="h-12 w-12 rounded-xl mb-6 flex items-center justify-center font-bold text-2xl shadow-lg bg-white/20">
               EF
             </div>
-            <h1 className="text-4xl font-bold font-headline mb-4">
+            <h1 className="text-4xl font-bold font-headline mb-4 leading-tight">
               EduFlow Platform
             </h1>
             <p className="text-lg opacity-90 leading-relaxed">
@@ -158,11 +157,11 @@ export default function LoginPage() {
           <div className="flex gap-6 z-10">
             <div className="flex items-center gap-2">
               <ShieldCheck className="text-white/80" />
-              <span className="text-sm font-medium">Seguro</span>
+              <span className="text-sm font-medium">Acceso Seguro</span>
             </div>
             <div className="flex items-center gap-2">
               <BookOpen className="text-white/80" />
-              <span className="text-sm font-medium">Académico</span>
+              <span className="text-sm font-medium">Control Académico</span>
             </div>
           </div>
         </div>
@@ -170,20 +169,21 @@ export default function LoginPage() {
         <div className="p-8 md:p-12 flex flex-col justify-center bg-white">
           <Card className="border-none shadow-none">
             <CardHeader className="p-0 mb-8">
-              <CardTitle className="text-2xl font-headline font-bold text-gray-800">Bienvenido</CardTitle>
-              <CardDescription>Ingresa tus credenciales institucionales</CardDescription>
+              <CardTitle className="text-2xl font-headline font-bold text-gray-800">Iniciar Sesión</CardTitle>
+              <CardDescription>Usa tu cuenta institucional para continuar</CardDescription>
             </CardHeader>
             <CardContent className="p-0 space-y-4">
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Correo Institucional</Label>
+                  <Label htmlFor="email">Correo Electrónico</Label>
                   <Input 
                     id="email" 
                     type="email" 
-                    placeholder="usuario@institucion.edu" 
+                    placeholder="ejemplo@institucion.edu" 
                     required 
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    className="h-11"
                   />
                 </div>
                 <div className="space-y-2">
@@ -194,20 +194,21 @@ export default function LoginPage() {
                     required 
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    className="h-11"
                   />
                 </div>
                 <Button 
                   type="submit" 
-                  className="w-full h-12 text-lg shadow-md bg-primary hover:bg-primary/90 transition-all" 
+                  className="w-full h-11 text-base shadow-md bg-primary hover:bg-primary/90 transition-all font-semibold" 
                   disabled={loading}
                 >
-                  {loading ? "Verificando..." : "Acceder"}
+                  {loading ? "Validando..." : "Ingresar al Sistema"}
                 </Button>
               </form>
             </CardContent>
             <CardFooter className="p-0 mt-8 pt-8 border-t flex flex-col items-center">
-              <p className="text-xs text-muted-foreground text-center">
-                El acceso está sujeto a la vigencia de su registro.
+              <p className="text-[11px] text-muted-foreground text-center leading-tight">
+                El acceso y la vigencia de los contenidos están sujetos al estatus administrativo de su matrícula.
               </p>
             </CardFooter>
           </Card>
