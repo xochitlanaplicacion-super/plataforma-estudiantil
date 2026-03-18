@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -18,6 +18,12 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mounted, setMounted] = useState(false);
+
+  // Aseguramos que el componente esté montado para evitar errores de hidratación
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,7 +37,6 @@ export default function LoginPage() {
     setError(null);
     
     try {
-      // Intentamos el login directo
       const { data, error: authError } = await supabase.auth.signInWithPassword({
         email: email.trim(),
         password: password.trim(),
@@ -46,7 +51,6 @@ export default function LoginPage() {
       }
 
       if (data?.user) {
-        // Obtenemos el perfil para saber a dónde redirigir
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('rol, estatus')
@@ -70,7 +74,6 @@ export default function LoginPage() {
           description: "Bienvenido a EduFlow. Cargando tu panel...",
         });
         
-        // Redirección forzada para limpiar estados y asegurar cookies
         let destination = '/dashboard/alumno';
         if (profile.rol === 'superuser' || profile.rol === 'admin') destination = '/dashboard/admin';
         if (profile.rol === 'profesor') destination = '/dashboard/profesor';
@@ -82,6 +85,8 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  if (!mounted) return null;
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#f8f9fa] p-4 font-body overflow-hidden">
