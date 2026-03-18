@@ -138,16 +138,18 @@ export default function LoginPage() {
           className="hidden md:flex flex-col justify-end items-start p-12 relative overflow-hidden bg-cover bg-center transition-all duration-1000"
           style={{ backgroundImage: `url(${currentTheme.bgImage})` }}
         >
-          {/* Logo Centrado - Grande (aprox 1/3 del área) */}
+          {/* Logo Centrado con fondo traslúcido para legibilidad */}
           <div className="absolute inset-0 flex items-center justify-center p-12 pointer-events-none">
-            <div className="relative w-[70%] h-[70%]">
-              <Image 
-                src="https://i.postimg.cc/wjVN06TJ/Logo-UNIV-PREPA-CAP-IEEZ-01.png"
-                alt="Logo IEEZ"
-                fill
-                className="object-contain drop-shadow-2xl"
-                priority
-              />
+            <div className="relative w-[75%] h-[75%] flex items-center justify-center bg-white/40 backdrop-blur-md rounded-[2.5rem] p-8 shadow-sm">
+              <div className="relative w-full h-full">
+                <Image 
+                  src="https://i.postimg.cc/wjVN06TJ/Logo-UNIV-PREPA-CAP-IEEZ-01.png"
+                  alt="Logo IEEZ"
+                  fill
+                  className="object-contain drop-shadow-xl"
+                  priority
+                />
+              </div>
             </div>
           </div>
 
