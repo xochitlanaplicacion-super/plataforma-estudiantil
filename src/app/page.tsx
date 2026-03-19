@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -39,6 +38,8 @@ const themes: Theme[] = [
   }
 ];
 
+const LOGO_URL = 'https://i.postimg.cc/Z5FQHyN4/unnamed.png';
+
 // Componente de alerta local
 const LocalAlert = ({ children, variant = "default" }: { children: React.ReactNode, variant?: "default" | "destructive" }) => (
   <div className={`p-4 rounded-lg border flex gap-3 ${variant === "destructive" ? "bg-destructive/10 border-destructive/20 text-destructive" : "bg-muted border-border text-foreground"}`}>
@@ -58,12 +59,15 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const [currentTheme, setCurrentTheme] = useState<Theme>(themes[0]);
+  const [bgLoaded, setBgLoaded] = useState(false);
+  const [logoLoaded, setLogoLoaded] = useState(false);
 
   useEffect(() => {
     setMounted(true);
     // Seleccionar un tema aleatorio al cargar
     const randomTheme = themes[Math.floor(Math.random() * themes.length)];
     setCurrentTheme(randomTheme);
+    setBgLoaded(false);
   }, []);
 
   const redirectByRole = (rol: string) => {
@@ -138,33 +142,68 @@ export default function LoginPage() {
       <div className="w-full min-h-screen grid grid-cols-1 md:grid-cols-2 overflow-hidden">
         
         {/* Lado Izquierdo - Fondo Dinámico Full Screen */}
-        <div className="hidden md:flex relative overflow-hidden bg-white">
-          <Image 
+        <div className="hidden md:flex relative overflow-hidden bg-gray-100">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img 
             src={currentTheme.bgImage}
             alt="Fondo Institucional"
-            fill
-            className="object-cover transition-opacity duration-1000"
-            priority
-            key={currentTheme.bgImage}
-            unoptimized
+            className={`
+              absolute inset-0 w-full h-full object-cover
+              transition-opacity duration-1000
+              ${bgLoaded ? 'opacity-100' : 'opacity-0'}
+            `}
+            onLoad={() => setBgLoaded(true)}
+            onError={(e) => {
+              console.error('Error cargando fondo:', currentTheme.bgImage);
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+            }}
           />
+          
+          {/* Fallback mientras carga */}
+          {!bgLoaded && (
+            <div 
+              className="absolute inset-0 animate-pulse"
+              style={{ backgroundColor: currentTheme.buttonColor }}
+            />
+          )}
+
           {/* Logo Centrado - Tamaño 85% del área lateral */}
           <div className="relative z-10 w-full h-full flex items-center justify-center p-12">
             <div className="relative w-[90%] lg:w-[85%] aspect-square flex items-center justify-center">
-              <Image 
-                src="https://i.postimg.cc/Z5FQHyN4/unnamed.png"
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img 
+                src={LOGO_URL}
                 alt="Logo Emiliano Zapata"
-                fill
-                className="object-contain drop-shadow-2xl"
-                priority
-                unoptimized
+                className={`
+                  w-full h-full object-contain drop-shadow-2xl
+                  transition-all duration-700
+                  ${logoLoaded ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}
+                `}
+                onLoad={() => setLogoLoaded(true)}
               />
+              
+              {!logoLoaded && (
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <div className="text-white/50 text-6xl font-bold animate-pulse">EZ</div>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
         {/* Lado Derecho - Formulario Full Screen */}
         <div className="p-8 md:p-14 lg:p-24 flex flex-col justify-center bg-white">
+          {/* Logo móvil */}
+          <div className="md:hidden flex justify-center mb-8">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img 
+              src={LOGO_URL}
+              alt="Logo"
+              className="w-24 h-24 object-contain"
+            />
+          </div>
+
           <div className="max-w-md w-full mx-auto space-y-10">
             <div className="space-y-3 text-center md:text-left">
               <h2 className="text-4xl font-headline font-bold text-gray-900 tracking-tight">Iniciar Sesión</h2>
