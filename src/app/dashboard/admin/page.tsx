@@ -22,7 +22,7 @@ export default function AdminDashboard() {
       <div className="space-y-8">
         <div>
           <h2 className="text-3xl font-bold font-headline tracking-tight">Panel Administrativo</h2>
-          <p className="text-muted-foreground">Control global de la plataforma EduFlow.</p>
+          <p className="text-muted-foreground">Control global de la plataforma Emiliano Zapata.</p>
         </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -63,21 +63,21 @@ export default function AdminDashboard() {
                 <TableBody>
                   {mockUsers.map((user) => (
                     <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.name}</TableCell>
-                      <TableCell className="capitalize">{user.role}</TableCell>
+                      <TableCell className="font-medium">{user.nombre} {user.apellidos}</TableCell>
+                      <TableCell className="capitalize">{user.rol}</TableCell>
                       <TableCell>
-                        <Badge variant={user.status === 'active' ? 'default' : 'secondary'}>
-                          {user.status === 'active' ? 'Activo' : 'Inactivo'}
+                        <Badge variant={user.estatus === 'activo' ? 'default' : 'secondary'}>
+                          {user.estatus === 'activo' ? 'Activo' : 'Inactivo'}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-sm">
-                        {new Date(user.expirationDate) < new Date() ? (
+                        {user.fecha_expiracion && new Date(user.fecha_expiracion) < new Date() ? (
                           <span className="text-destructive font-semibold flex items-center gap-1">
                             <AlertCircle className="h-3 w-3" />
                             Expirado
                           </span>
                         ) : (
-                          user.expirationDate
+                          user.fecha_expiracion || 'N/A'
                         )}
                       </TableCell>
                     </TableRow>

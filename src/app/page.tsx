@@ -138,19 +138,26 @@ export default function LoginPage() {
       <div className="w-full min-h-screen grid grid-cols-1 md:grid-cols-2 overflow-hidden">
         
         {/* Lado Izquierdo - Fondo Dinámico Full Screen */}
-        <div 
-          className="hidden md:flex flex-col justify-center items-center p-12 relative overflow-hidden bg-cover bg-center transition-all duration-1000"
-          style={{ backgroundImage: `url(${currentTheme.bgImage})` }}
-        >
-          {/* Logo Centrado - Tamaño 85% más grande */}
-          <div className="relative w-[90%] lg:w-[85%] aspect-square flex items-center justify-center">
-            <Image 
-              src="https://i.postimg.cc/Z5FQHyN4/unnamed.png"
-              alt="Logo IEEZ"
-              fill
-              className="object-contain drop-shadow-2xl"
-              priority
-            />
+        <div className="hidden md:flex relative overflow-hidden bg-white">
+          <Image 
+            src={currentTheme.bgImage}
+            alt="Fondo Institucional"
+            fill
+            className="object-cover transition-opacity duration-1000"
+            priority
+            key={currentTheme.bgImage}
+          />
+          {/* Logo Centrado - Tamaño 85% del área lateral */}
+          <div className="relative z-10 w-full h-full flex items-center justify-center p-12">
+            <div className="relative w-[90%] lg:w-[85%] aspect-square flex items-center justify-center">
+              <Image 
+                src="https://i.postimg.cc/Z5FQHyN4/unnamed.png"
+                alt="Logo Emiliano Zapata"
+                fill
+                className="object-contain drop-shadow-2xl"
+                priority
+              />
+            </div>
           </div>
         </div>
 
