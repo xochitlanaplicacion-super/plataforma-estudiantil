@@ -1,6 +1,6 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { 
@@ -34,6 +34,7 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { UserRole } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
+import { cn } from '@/lib/utils';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -45,6 +46,14 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
+  const [theme, setTheme] = useState<string | null>(null);
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('ez-theme');
+    if (savedTheme) {
+      setTheme(savedTheme);
+    }
+  }, []);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -103,7 +112,7 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
   const activeMenus = menuItems[userRole] || [];
 
   return (
-    <SidebarProvider>
+    <SidebarProvider className={cn(theme === 'vino' && 'theme-vino', theme === 'verde' && 'theme-verde', theme === 'beige' && 'theme-beige')}>
       <Sidebar collapsible="icon" className="border-r shadow-lg">
         <SidebarHeader className="p-6 flex items-center gap-3">
           <div className="bg-primary h-10 w-10 rounded-xl flex items-center justify-center font-bold text-primary-foreground shadow-md">EZ</div>

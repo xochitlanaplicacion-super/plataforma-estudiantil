@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
 type Theme = {
+  id: string;
   bgImage: string;
   buttonColor: string;
   textColor: string;
@@ -17,16 +18,19 @@ type Theme = {
 
 const themes: Theme[] = [
   {
+    id: 'vino',
     bgImage: '/images/FONDO_ROJO.png',
     buttonColor: '#8B2332',
     textColor: 'text-white'
   },
   {
+    id: 'verde',
     bgImage: '/images/FONDOS_VERDE.png',
     buttonColor: '#1A4A3F',
     textColor: 'text-white'
   },
   {
+    id: 'beige',
     bgImage: '/images/fondos_beige.jpg',
     buttonColor: '#E8D5B7',
     textColor: 'text-[#1A4A3F]'
@@ -60,6 +64,7 @@ export default function LoginPage() {
     setMounted(true);
     const randomTheme = themes[Math.floor(Math.random() * themes.length)];
     setCurrentTheme(randomTheme);
+    localStorage.setItem('ez-theme', randomTheme.id);
     setBgLoaded(false);
   }, []);
 
