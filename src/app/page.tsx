@@ -13,31 +13,27 @@ type Theme = {
   bgImage: string;
   buttonColor: string;
   textColor: string;
-  badgeColor: string;
 };
 
 const themes: Theme[] = [
   {
-    bgImage: 'https://i.postimg.cc/L6Gyfvgw/FONDO-ROJO.png',
+    bgImage: '/images/FONDO_ROJO.png',
     buttonColor: '#8B2332',
-    textColor: 'text-white',
-    badgeColor: 'bg-white/10 border-white/20'
+    textColor: 'text-white'
   },
   {
-    bgImage: 'https://i.postimg.cc/9FsxT1wN/FONDOS-VERDE.png',
+    bgImage: '/images/FONDOS_VERDE.png',
     buttonColor: '#1A4A3F',
-    textColor: 'text-white',
-    badgeColor: 'bg-white/10 border-white/20'
+    textColor: 'text-white'
   },
   {
-    bgImage: 'https://i.postimg.cc/m2KdMV1K/fondos_beige_jpg.jpg',
+    bgImage: '/images/fondos_beige.jpg',
     buttonColor: '#E8D5B7',
-    textColor: 'text-[#1A4A3F]',
-    badgeColor: 'bg-black/5 border-black/10'
+    textColor: 'text-[#1A4A3F]'
   }
 ];
 
-const LOGO_URL = 'https://i.postimg.cc/Z5FQHyN4/unnamed.png';
+const LOGO_URL = '/images/logo_zapata.png';
 
 const LocalAlert = ({ children, variant = "default" }: { children: React.ReactNode, variant?: "default" | "destructive" }) => (
   <div className={`p-4 rounded-lg border flex gap-3 ${variant === "destructive" ? "bg-destructive/10 border-destructive/20 text-destructive" : "bg-muted border-border text-foreground"}`}>
@@ -142,7 +138,6 @@ export default function LoginPage() {
           <img 
             src={currentTheme.bgImage}
             alt="Fondo Institucional"
-            referrerPolicy="no-referrer"
             className={`
               absolute inset-0 w-full h-full object-cover
               transition-opacity duration-1000
@@ -168,7 +163,6 @@ export default function LoginPage() {
               <img 
                 src={LOGO_URL}
                 alt="Logo Emiliano Zapata"
-                referrerPolicy="no-referrer"
                 className={`
                   w-full h-full object-contain drop-shadow-2xl
                   transition-all duration-700
@@ -191,7 +185,6 @@ export default function LoginPage() {
             <img 
               src={LOGO_URL}
               alt="Logo"
-              referrerPolicy="no-referrer"
               className="w-24 h-24 object-contain"
             />
           </div>
