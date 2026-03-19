@@ -146,6 +146,7 @@ export default function LoginPage() {
             className="object-cover transition-opacity duration-1000"
             priority
             key={currentTheme.bgImage}
+            unoptimized
           />
           {/* Logo Centrado - Tamaño 85% del área lateral */}
           <div className="relative z-10 w-full h-full flex items-center justify-center p-12">
@@ -156,6 +157,7 @@ export default function LoginPage() {
                 fill
                 className="object-contain drop-shadow-2xl"
                 priority
+                unoptimized
               />
             </div>
           </div>
