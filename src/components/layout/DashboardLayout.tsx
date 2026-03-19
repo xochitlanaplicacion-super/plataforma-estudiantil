@@ -115,7 +115,9 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
     <SidebarProvider className={cn(theme === 'vino' && 'theme-vino', theme === 'verde' && 'theme-verde', theme === 'beige' && 'theme-beige')}>
       <Sidebar collapsible="icon" className="border-r shadow-lg">
         <SidebarHeader className="p-6 flex items-center gap-3">
-          <div className="bg-primary h-10 w-10 rounded-xl flex items-center justify-center font-bold text-primary-foreground shadow-md">EZ</div>
+          <div className="h-12 w-12 flex-shrink-0 flex items-center justify-center">
+            <img src="/images/logo_zapata.png" alt="Logo Emiliano Zapata" className="h-full w-full object-contain drop-shadow-sm" />
+          </div>
           <div className="flex flex-col group-data-[collapsible=icon]:hidden">
             <span className="font-bold text-lg text-sidebar-foreground">Emiliano Zapata</span>
             <span className="text-[10px] text-muted-foreground font-semibold tracking-wider uppercase">Plataforma Académica</span>
