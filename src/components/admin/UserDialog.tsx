@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -11,7 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { User } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, AlertCircle, RefreshCw, Key } from 'lucide-react';
+import { Loader2, AlertCircle, RefreshCw, Key, Eye, EyeOff } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { createUserWithProfile, updateUserProfile } from '@/lib/actions/users';
 import { createClient } from '@/lib/supabase/client';
@@ -46,6 +47,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
   const [loading, setLoading] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userSchema),
@@ -66,7 +68,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
   });
 
   const generatePassword = useCallback(() => {
-    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+";
+    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
     let retVal = "";
     for (let i = 0, n = charset.length; i < 10; ++i) {
       retVal += charset.charAt(Math.floor(Math.random() * n));
@@ -88,7 +90,6 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
       else if (nivel === 'bachillerato') suffix = "BAC";
       else if (nivel === 'capacitacion') suffix = "CAP";
 
-      // Consultar la base de datos para obtener la última matrícula de este nivel
       const { data: profiles } = await supabase
         .from('profiles')
         .select('matricula')
@@ -99,8 +100,6 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
       let nextNumber = 1;
       if (profiles && profiles.length > 0) {
         const lastMat = profiles[0].matricula;
-        // Extraer el número secuencial (asumiendo formato IEZPTAMM YY [000000] SUF)
-        // El secuencial son 6 dígitos antes del sufijo
         const match = lastMat.match(/IEZPTA\d{4}(\d{6})/);
         if (match) {
           nextNumber = parseInt(match[1]) + 1;
@@ -132,7 +131,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
           matricula: user.matricula || '',
           numero_empleado: user.numero_empleado || '',
           fecha_expiracion: user.fecha_expiracion || '',
-          password: '',
+          password: user.password_plain || '',
         });
       } else {
         form.reset({
@@ -188,7 +187,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
           <DialogTitle>{user ? 'Editar Perfil Académico' : 'Registrar Nuevo Perfil Efectivo'}</DialogTitle>
           <DialogDescription>
             {user 
-              ? 'Modifica los datos del usuario. Los cambios se sincronizarán inmediatamente.' 
+              ? 'Modifica los datos del usuario. La contraseña es visible para fines administrativos.' 
               : 'Completa los campos para generar el acceso y la matrícula oficial.'}
           </DialogDescription>
         </DialogHeader>
@@ -249,33 +248,43 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                 )}
               />
               
-              {!user && (
-                <FormField
-                  control={form.control}
-                  name="password"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="flex justify-between items-center">
-                        Contraseña de Acceso
-                        <Button 
-                          type="button" 
-                          variant="ghost" 
-                          size="sm" 
-                          className="h-6 text-[10px] gap-1"
-                          onClick={generatePassword}
-                        >
-                          <RefreshCw size={10} /> Regenerar
-                        </Button>
-                      </FormLabel>
-                      <div className="relative">
-                        <FormControl><Input {...field} placeholder="Contraseña sugerida" /></FormControl>
-                        <Key className="absolute right-3 top-2.5 text-muted-foreground opacity-20" size={16} />
-                      </div>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="flex justify-between items-center">
+                      Contraseña de Acceso
+                      <Button 
+                        type="button" 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-6 text-[10px] gap-1"
+                        onClick={generatePassword}
+                      >
+                        <RefreshCw size={10} /> {user ? 'Nueva' : 'Regenerar'}
+                      </Button>
+                    </FormLabel>
+                    <div className="relative">
+                      <FormControl>
+                        <Input 
+                          {...field} 
+                          type={showPassword ? "text" : "password"}
+                          placeholder="Contraseña del usuario" 
+                        />
+                      </FormControl>
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-2.5 text-muted-foreground hover:text-primary transition-colors"
+                      >
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
               <FormField
                 control={form.control}
@@ -388,7 +397,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                       render={({ field }) => (
                         <FormItem>
                           <FormLabel className="flex justify-between">
-                            Matrícula Sugerida
+                            Matrícula {user ? 'Actual' : 'Sugerida'}
                             {isGenerating && <Loader2 size={12} className="animate-spin" />}
                           </FormLabel>
                           <FormControl><Input placeholder="IEZPTA..." {...field} /></FormControl>

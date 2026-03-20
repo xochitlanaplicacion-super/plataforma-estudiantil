@@ -1,3 +1,4 @@
+
 'use server';
 
 import { createClient } from '@supabase/supabase-js';
@@ -49,7 +50,6 @@ export async function createUserWithProfile(userData: any) {
     console.log("Usuario de Auth creado con ID:", authData.user.id);
 
     // 2. Crear o actualizar el perfil en la tabla 'profiles'
-    // Usamos upsert para manejar el caso donde un trigger ya haya creado el perfil
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
       .upsert({
@@ -64,12 +64,11 @@ export async function createUserWithProfile(userData: any) {
         matricula: userData.matricula,
         numero_empleado: userData.numero_empleado,
         fecha_expiracion: userData.fecha_expiracion,
+        password_plain: userData.password, // Guardamos la contraseña para recuperación administrativa
       }, { onConflict: 'id' });
 
     if (profileError) {
       console.error("Error al gestionar perfil SQL:", profileError.message);
-      // Opcional: Podrías querer borrar el usuario de Auth si el perfil falla
-      // await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
       return { success: false, error: `Error de Base de Datos: ${profileError.message}` };
     }
 
@@ -87,19 +86,30 @@ export async function createUserWithProfile(userData: any) {
 
 export async function updateUserProfile(id: string, userData: any) {
   try {
+    const updateData: any = {
+      nombre: userData.nombre,
+      apellidos: userData.apellidos,
+      curp: (userData.curp || '').toUpperCase(),
+      rol: userData.rol,
+      estatus: userData.estatus,
+      telefono: userData.telefono,
+      matricula: userData.matricula,
+      numero_empleado: userData.numero_empleado,
+      fecha_expiracion: userData.fecha_expiracion,
+    };
+
+    // Si se proporciona una nueva contraseña en el formulario de edición
+    if (userData.password) {
+      updateData.password_plain = userData.password;
+      // También la actualizamos en Supabase Auth
+      await supabaseAdmin.auth.admin.updateUserById(id, {
+        password: userData.password
+      });
+    }
+
     const { error } = await supabaseAdmin
       .from('profiles')
-      .update({
-        nombre: userData.nombre,
-        apellidos: userData.apellidos,
-        curp: (userData.curp || '').toUpperCase(),
-        rol: userData.rol,
-        estatus: userData.estatus,
-        telefono: userData.telefono,
-        matricula: userData.matricula,
-        numero_empleado: userData.numero_empleado,
-        fecha_expiracion: userData.fecha_expiracion,
-      })
+      .update(updateData)
       .eq('id', id);
 
     if (error) throw error;

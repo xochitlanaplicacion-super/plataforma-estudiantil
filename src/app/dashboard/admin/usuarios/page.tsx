@@ -1,8 +1,9 @@
+
 "use client";
 
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, UserPlus, Search, Filter, Loader2, Edit, Trash2 } from 'lucide-react';
+import { Users, UserPlus, Search, Filter, Loader2, Edit, Trash2, Key } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -11,6 +12,7 @@ import { createClient } from '@/lib/supabase/client';
 import { User } from '@/lib/types';
 import { UserDialog } from '@/components/admin/UserDialog';
 import { useToast } from '@/hooks/use-toast';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export default function UsuariosManagement() {
   const { toast } = useToast();
@@ -49,7 +51,7 @@ export default function UsuariosManagement() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('¿Estás seguro de que deseas eliminar este perfil?')) {
+    if (confirm('¿Estás seguro de que deseas eliminar este perfil? Esto no borrará el acceso de autenticación por seguridad, contacta a TI.')) {
       const { error } = await supabase.from('profiles').delete().eq('id', id);
       if (error) {
         toast({ variant: 'destructive', title: 'Error', description: 'No se pudo eliminar el usuario.' });
@@ -63,7 +65,8 @@ export default function UsuariosManagement() {
   const filteredUsers = users.filter(user => 
     `${user.nombre} ${user.apellidos}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
     user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.curp?.toLowerCase().includes(searchTerm.toLowerCase())
+    user.curp?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    user.matricula?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -84,7 +87,7 @@ export default function UsuariosManagement() {
             <div className="relative flex-1 w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
               <Input 
-                placeholder="Buscar por nombre, correo o CURP..." 
+                placeholder="Buscar por nombre, correo, matrícula o CURP..." 
                 className="pl-10 h-11 border-muted"
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -110,9 +113,9 @@ export default function UsuariosManagement() {
                 <TableHeader className="bg-muted/30">
                   <TableRow>
                     <TableHead className="font-bold">Nombre Completo</TableHead>
-                    <TableHead className="font-bold">Rol</TableHead>
+                    <TableHead className="font-bold">Rol/Matrícula</TableHead>
+                    <TableHead className="font-bold">Contraseña</TableHead>
                     <TableHead className="font-bold">Estado</TableHead>
-                    <TableHead className="font-bold">CURP</TableHead>
                     <TableHead className="text-right font-bold">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -126,9 +129,29 @@ export default function UsuariosManagement() {
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline" className="capitalize text-[10px] font-bold">
-                          {user.rol}
-                        </Badge>
+                        <div className="flex flex-col gap-1">
+                          <Badge variant="outline" className="capitalize text-[9px] font-bold w-fit">
+                            {user.rol}
+                          </Badge>
+                          <span className="text-[10px] font-mono text-muted-foreground">{user.matricula || user.numero_empleado || 'S/N'}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <div className="flex items-center gap-1 cursor-help">
+                                <Key size={12} className="text-primary/50" />
+                                <span className="text-[11px] font-mono blur-[3px] hover:blur-none transition-all duration-300">
+                                  {user.password_plain || '********'}
+                                </span>
+                              </div>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p className="text-xs">Contraseña de recuperación (Pasa el mouse para ver)</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       </TableCell>
                       <TableCell>
                         <Badge 
@@ -137,9 +160,6 @@ export default function UsuariosManagement() {
                         >
                           {user.estatus}
                         </Badge>
-                      </TableCell>
-                      <TableCell className="font-mono text-[10px] text-muted-foreground tracking-tighter">
-                        {user.curp}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-2">

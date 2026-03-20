@@ -15,6 +15,7 @@ export interface User {
   fecha_expiracion?: string;
   matricula?: string;
   numero_empleado?: string;
+  password_plain?: string;
   created_at?: string;
   updated_at?: string;
 }
