@@ -28,7 +28,6 @@ export async function createUserWithProfile(userData: any) {
     }
 
     // 1. Crear el usuario en Supabase Auth
-    // Usamos una contraseña por defecto: Zapata2025!
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: userData.email,
       password: userData.password || 'Zapata2025!',
@@ -49,10 +48,11 @@ export async function createUserWithProfile(userData: any) {
 
     console.log("Usuario de Auth creado con ID:", authData.user.id);
 
-    // 2. Crear el perfil en la tabla 'profiles'
+    // 2. Crear o actualizar el perfil en la tabla 'profiles'
+    // Usamos UPSERT por si existe un TRIGGER que ya creó el perfil básico
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
-      .insert([{
+      .upsert({
         id: authData.user.id,
         nombre: userData.nombre,
         apellidos: userData.apellidos,
@@ -64,16 +64,17 @@ export async function createUserWithProfile(userData: any) {
         matricula: userData.matricula,
         numero_empleado: userData.numero_empleado,
         fecha_expiracion: userData.fecha_expiracion,
-      }]);
+      }, { onConflict: 'id' });
 
     if (profileError) {
-      console.error("Error al crear perfil SQL:", profileError.message);
-      // Revertimos la creación del usuario si falla el perfil
+      console.error("Error al gestionar perfil SQL:", profileError.message);
+      // Solo borramos el usuario si realmente no pudimos ni insertar ni actualizar
+      // pero si el error fue duplicidad y usamos upsert, no debería llegar aquí.
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
       return { success: false, error: `Error de Base de Datos: ${profileError.message}` };
     }
 
-    console.log("Perfil académico creado exitosamente.");
+    console.log("Perfil académico gestionado exitosamente.");
     revalidatePath('/dashboard/admin/usuarios');
     revalidatePath('/dashboard/admin');
     
