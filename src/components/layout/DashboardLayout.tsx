@@ -49,12 +49,21 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
   const router = useRouter();
   const supabase = createClient();
   const [theme, setTheme] = useState<string | null>(null);
+  const [formattedDate, setFormattedDate] = useState<string>('');
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('ez-theme');
     if (savedTheme) {
       setTheme(savedTheme);
     }
+    
+    // Generar la fecha solo en el cliente para evitar errores de hidratación
+    const dateStr = new Date().toLocaleDateString('es-MX', { 
+      weekday: 'long', 
+      day: 'numeric', 
+      month: 'long' 
+    });
+    setFormattedDate(dateStr);
   }, []);
 
   const handleLogout = async () => {
@@ -173,7 +182,7 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
              
              <div className="flex items-center gap-6">
                <span className="text-xs font-bold text-muted-foreground uppercase hidden md:inline-block">
-                 {new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}
+                 {formattedDate}
                </span>
                
                <div className="h-8 w-px bg-border hidden md:block" />
