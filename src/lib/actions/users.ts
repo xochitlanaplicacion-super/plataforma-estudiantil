@@ -45,7 +45,6 @@ export async function createUserWithProfile(userData: any) {
 
     if (authError) {
       console.error("Error en Supabase Auth:", authError.message);
-      // Si el error es "Database error", suele ser el TRIGGER el que falló
       return { success: false, error: `Error de Autenticación: ${authError.message}` };
     }
 
@@ -55,8 +54,13 @@ export async function createUserWithProfile(userData: any) {
 
     console.log("Usuario de Auth creado con ID:", authData.user.id);
 
-    // 2. Crear o actualizar el perfil en la tabla 'profiles' con campos adicionales
-    // Usamos UPSERT porque el Trigger ya pudo haber creado una versión básica del perfil
+    // 2. Manejo de campos de fecha (convertir cadena vacía a null)
+    const fechaExpiracion = userData.fecha_expiracion && userData.fecha_expiracion.trim() !== "" 
+      ? userData.fecha_expiracion 
+      : null;
+
+    // 3. Crear o actualizar el perfil en la tabla 'profiles'
+    // Usamos UPSERT porque el Trigger 'handle_new_user' ya creó una versión básica
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
       .upsert({
@@ -70,14 +74,13 @@ export async function createUserWithProfile(userData: any) {
         telefono: userData.telefono,
         matricula: userData.matricula,
         numero_empleado: userData.numero_empleado,
-        fecha_expiracion: userData.fecha_expiracion,
-        password_plain: userData.password, // Asegúrate de haber ejecutado: ALTER TABLE profiles ADD COLUMN password_plain VARCHAR(100);
+        fecha_expiracion: fechaExpiracion,
+        password_plain: userData.password,
       }, { onConflict: 'id' });
 
     if (profileError) {
       console.error("Error al gestionar perfil SQL:", profileError.message);
-      // Si falla el perfil, eliminamos el usuario de auth para no dejar datos huérfanos
-      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      // Opcional: No borramos el auth por si el error es solo de sintaxis recuperable
       return { success: false, error: `Error de Base de Datos: ${profileError.message}. Verifica que la columna password_plain exista.` };
     }
 
@@ -95,6 +98,10 @@ export async function createUserWithProfile(userData: any) {
 
 export async function updateUserProfile(id: string, userData: any) {
   try {
+    const fechaExpiracion = userData.fecha_expiracion && userData.fecha_expiracion.trim() !== "" 
+      ? userData.fecha_expiracion 
+      : null;
+
     const updateData: any = {
       nombre: userData.nombre,
       apellidos: userData.apellidos,
@@ -104,7 +111,7 @@ export async function updateUserProfile(id: string, userData: any) {
       telefono: userData.telefono,
       matricula: userData.matricula,
       numero_empleado: userData.numero_empleado,
-      fecha_expiracion: userData.fecha_expiracion,
+      fecha_expiracion: fechaExpiracion,
     };
 
     if (userData.password) {
