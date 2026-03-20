@@ -27,23 +27,38 @@ const emptyToNull = (val: any) => {
 
 export async function createUserWithProfile(userData: any) {
   try {
-    console.log("Iniciando creación de usuario para:", userData.email);
-
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      console.error("ERROR: Falta SUPABASE_SERVICE_ROLE_KEY");
-      return { success: false, error: "Error de configuración: Falta la llave de servicio en el servidor." };
+      return { success: false, error: "Error de configuración: Falta la llave de servicio." };
     }
 
-    // 1. Crear el usuario en Supabase Auth
-    // Pasamos toda la metadata para que el Trigger handle_new_user tenga datos
+    const email = userData.email.toLowerCase().trim();
+    const curp = (userData.curp || '').toUpperCase().trim();
+
+    // 1. VERIFICACIÓN PREVIA DE DUPLICADOS (Evita errores genéricos de Supabase Auth)
+    const { data: existingUser, error: checkError } = await supabaseAdmin
+      .from('profiles')
+      .select('email, curp')
+      .or(`email.eq.${email},curp.eq.${curp}`)
+      .maybeSingle();
+
+    if (existingUser) {
+      if (existingUser.email === email) {
+        return { success: false, error: "Este correo electrónico ya está registrado en el sistema." };
+      }
+      if (existingUser.curp === curp) {
+        return { success: false, error: "La CURP ingresada ya existe en los registros académicos." };
+      }
+    }
+
+    // 2. Crear el usuario en Supabase Auth
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: userData.email.toLowerCase().trim(),
-      password: userData.password || 'Zapata2025!',
+      email: email,
+      password: userData.password,
       email_confirm: true,
       user_metadata: { 
         nombre: userData.nombre,
         apellidos: userData.apellidos,
-        curp: (userData.curp || '').toUpperCase().trim(),
+        curp: curp,
         rol: userData.rol,
         matricula: emptyToNull(userData.matricula),
         numero_empleado: emptyToNull(userData.numero_empleado)
@@ -51,75 +66,61 @@ export async function createUserWithProfile(userData: any) {
     });
 
     if (authError) {
-      console.error("Error en Supabase Auth:", authError.message);
+      // Si el error es de Auth específicamente (ej. correo duplicado que se nos pasó en la verificación)
       if (authError.message.includes("already registered")) {
-        return { success: false, error: "Este correo electrónico ya está registrado en el sistema." };
+        return { success: false, error: "Este correo electrónico ya está registrado en el acceso." };
       }
-      return { success: false, error: `Error de Autenticación: ${authError.message}` };
+      return { success: false, error: authError.message };
     }
 
     if (!authData.user) {
       return { success: false, error: "No se pudo generar el usuario de acceso." };
     }
 
-    // 2. Preparar datos para el perfil (Upsert para manejar el trigger)
+    // 3. Llenar el perfil (Usamos upsert porque el trigger handle_new_user ya creó una base)
     const profileData = {
       id: authData.user.id,
       nombre: userData.nombre,
       apellidos: userData.apellidos,
-      email: userData.email.toLowerCase().trim(),
-      curp: (userData.curp || '').toUpperCase().trim(),
+      email: email,
+      curp: curp,
       rol: userData.rol,
       estatus: userData.estatus,
       telefono: emptyToNull(userData.telefono),
       matricula: emptyToNull(userData.matricula),
       numero_empleado: emptyToNull(userData.numero_empleado),
       fecha_expiracion: emptyToNull(userData.fecha_expiracion),
-      password_plain: userData.password,
+      password_plain: userData.password, // Columna de respaldo para administración
     };
 
-    // 3. Actualizar el perfil (el trigger ya debió crear uno básico)
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
       .upsert(profileData, { onConflict: 'id' });
 
     if (profileError) {
-      console.error("Error al gestionar perfil SQL:", profileError);
-      
-      // Manejo específico de duplicados en SQL (Código 23505)
-      if (profileError.code === '23505') {
-        // Borramos el usuario de Auth si falló el perfil por duplicidad para permitir re-intento
-        await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
-        
-        if (profileError.message.includes('curp')) {
-          return { success: false, error: "La CURP ingresada ya existe en los registros." };
-        }
-        if (profileError.message.includes('email')) {
-          return { success: false, error: "El correo electrónico ya existe en los registros." };
-        }
-      }
-
-      return { success: false, error: `Error de Base de Datos: ${profileError.message}.` };
+      // Limpiamos el usuario de Auth si falló la creación del perfil final
+      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      return { success: false, error: `Error en Base de Datos: ${profileError.message}` };
     }
 
-    console.log("Perfil académico gestionado exitosamente.");
     revalidatePath('/dashboard/admin/usuarios');
     revalidatePath('/dashboard/admin');
     
     return { success: true };
 
   } catch (error: any) {
-    console.error("Error inesperado en el servidor:", error);
     return { success: false, error: error.message || "Error interno del servidor." };
   }
 }
 
 export async function updateUserProfile(id: string, userData: any) {
   try {
+    const curp = (userData.curp || '').toUpperCase().trim();
+    
     const updateData: any = {
       nombre: userData.nombre,
       apellidos: userData.apellidos,
-      curp: (userData.curp || '').toUpperCase().trim(),
+      curp: curp,
       rol: userData.rol,
       estatus: userData.estatus,
       telefono: emptyToNull(userData.telefono),
@@ -129,6 +130,7 @@ export async function updateUserProfile(id: string, userData: any) {
       password_plain: emptyToNull(userData.password),
     };
 
+    // Actualizar contraseña en Auth si se cambió
     if (userData.password) {
       await supabaseAdmin.auth.admin.updateUserById(id, {
         password: userData.password
@@ -142,8 +144,7 @@ export async function updateUserProfile(id: string, userData: any) {
 
     if (error) {
       if (error.code === '23505') {
-        if (error.message.includes('curp')) return { success: false, error: "La CURP ya pertenece a otro usuario." };
-        if (error.message.includes('email')) return { success: false, error: "El correo ya pertenece a otro usuario." };
+        return { success: false, error: "La CURP ya pertenece a otro usuario registrado." };
       }
       throw error;
     }

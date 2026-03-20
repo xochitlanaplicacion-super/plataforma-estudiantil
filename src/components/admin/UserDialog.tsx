@@ -68,7 +68,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
   });
 
   const generatePassword = useCallback(() => {
-    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*";
+    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&*";
     let retVal = "";
     for (let i = 0, n = charset.length; i < 10; ++i) {
       retVal += charset.charAt(Math.floor(Math.random() * n));
@@ -100,7 +100,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
       let nextNumber = 1;
       if (profiles && profiles.length > 0) {
         const lastMat = profiles[0].matricula;
-        // Buscamos los 6 dígitos secuenciales
+        // Buscamos los 6 dígitos secuenciales (patrón: IEZPTA MM YY 000000 SUF)
         const match = lastMat.match(/IEZPTA\d{4}(\d{6})/);
         if (match) {
           nextNumber = parseInt(match[1]) + 1;
@@ -197,7 +197,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
           <Alert variant="destructive" className="mb-4">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>Error en la operación</AlertTitle>
-            <AlertDescription className="text-xs">{dbError}</AlertDescription>
+            <AlertDescription className="text-xs font-semibold">{dbError}</AlertDescription>
           </Alert>
         )}
 
@@ -243,7 +243,14 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>CURP *</FormLabel>
-                    <FormControl><Input className="uppercase font-mono" {...field} placeholder="18 CARACTERES" /></FormControl>
+                    <FormControl>
+                      <Input 
+                        className="uppercase font-mono" 
+                        {...field} 
+                        placeholder="18 CARACTERES" 
+                        onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                      />
+                    </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
