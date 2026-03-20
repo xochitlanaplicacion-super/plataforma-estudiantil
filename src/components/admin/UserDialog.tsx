@@ -100,7 +100,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
       if (profiles && profiles.length > 0) {
         const lastMat = profiles[0].matricula;
         // Extraer el número secuencial (asumiendo formato IEZPTAMM YY [000000] SUF)
-        // IEZPTA (6) + MM (2) + YY (2) = 10 caracteres antes del secuencial
+        // El secuencial son 6 dígitos antes del sufijo
         const match = lastMat.match(/IEZPTA\d{4}(\d{6})/);
         if (match) {
           nextNumber = parseInt(match[1]) + 1;
@@ -274,7 +274,8 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                       <FormMessage />
                     </FormItem>
                   )}
-                )}
+                />
+              )}
 
               <FormField
                 control={form.control}

@@ -49,6 +49,7 @@ export async function createUserWithProfile(userData: any) {
     console.log("Usuario de Auth creado con ID:", authData.user.id);
 
     // 2. Crear o actualizar el perfil en la tabla 'profiles'
+    // Usamos upsert para manejar el caso donde un trigger ya haya creado el perfil
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
       .upsert({
@@ -67,7 +68,8 @@ export async function createUserWithProfile(userData: any) {
 
     if (profileError) {
       console.error("Error al gestionar perfil SQL:", profileError.message);
-      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      // Opcional: Podrías querer borrar el usuario de Auth si el perfil falla
+      // await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
       return { success: false, error: `Error de Base de Datos: ${profileError.message}` };
     }
 
