@@ -32,6 +32,8 @@ import {
   ShieldAlert
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
 import { UserRole } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
@@ -153,47 +155,52 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
             </SidebarGroup>
           ))}
         </SidebarContent>
-        <SidebarFooter className="p-4 border-t bg-muted/30">
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <div className="flex items-center gap-3 p-3 bg-white rounded-xl shadow-sm border group-data-[collapsible=icon]:hidden mb-4">
-                <Avatar className="h-10 w-10 border-2 border-primary/10 shadow-sm">
-                  <AvatarFallback className="bg-accent text-accent-foreground font-bold text-sm">
-                    {getInitials(userName)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex flex-col overflow-hidden">
-                  <span className="text-sm font-bold truncate leading-none mb-1 text-gray-800">{userName}</span>
-                  <span className="text-[10px] text-primary/70 uppercase font-black tracking-tighter">{userRole}</span>
-                </div>
-              </div>
-            </SidebarMenuItem>
-            <SidebarMenuItem>
-              <SidebarMenuButton 
-                onClick={handleLogout}
-                className="text-destructive hover:text-destructive hover:bg-destructive/5 transition-all font-semibold rounded-lg"
-              >
-                <LogOut className="h-5 w-5" />
-                <span>Cerrar Sesión</span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
+        <SidebarFooter className="p-4 bg-muted/30">
+          <div className="flex justify-center group-data-[collapsible=icon]:hidden">
+             <span className="text-[9px] text-muted-foreground font-bold uppercase opacity-50">EZ Plataforma v1.0</span>
+          </div>
         </SidebarFooter>
       </Sidebar>
       <SidebarInset className="bg-slate-50/50">
         <div className="h-full flex flex-col">
-          <header className="h-16 border-b bg-white flex items-center px-8 justify-between shrink-0">
+          <header className="h-16 border-b bg-white flex items-center px-8 justify-between shrink-0 shadow-sm z-10">
              <div className="flex items-center gap-2">
                <span className="text-sm text-muted-foreground">Módulo Actual:</span>
                <span className="text-sm font-semibold text-primary capitalize">
                  {pathname.split('/').pop()?.replace('-', ' ') || 'Inicio'}
                </span>
              </div>
-             <div className="flex items-center gap-4">
-               <div className="h-8 w-px bg-border mx-2" />
-               <span className="text-xs font-bold text-muted-foreground uppercase">
+             
+             <div className="flex items-center gap-6">
+               <span className="text-xs font-bold text-muted-foreground uppercase hidden md:inline-block">
                  {new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' })}
                </span>
+               
+               <div className="h-8 w-px bg-border hidden md:block" />
+               
+               <div className="flex items-center gap-4 bg-muted/30 p-1 rounded-full border border-border/50">
+                <div className="flex items-center gap-2 pl-2">
+                  <Avatar className="h-8 w-8 border-2 border-white shadow-sm shrink-0">
+                    <AvatarFallback className="bg-primary text-primary-foreground font-bold text-[10px]">
+                      {getInitials(userName)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex flex-col pr-2">
+                    <span className="text-[11px] font-bold text-gray-900 leading-tight truncate max-w-[150px]">{userName}</span>
+                    <span className="text-[9px] text-primary/80 uppercase font-bold tracking-tight">{userRole}</span>
+                  </div>
+                </div>
+                <Separator orientation="vertical" className="h-6" />
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  onClick={handleLogout}
+                  className="h-8 w-8 rounded-full text-muted-foreground hover:text-destructive hover:bg-destructive/10 shrink-0"
+                  title="Cerrar Sesión"
+                >
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              </div>
              </div>
           </header>
           <main className="flex-1 overflow-auto p-6 md:p-10">
