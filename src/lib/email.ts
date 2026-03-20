@@ -38,7 +38,8 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
     };
 
     const rolLabel = rolTexto[data.rol] || data.rol;
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://institutoeducativoemilianozapata.vercel.app/';
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://institutoeducativoemilianozapata.vercel.app';
+    const logoUrl = `${appUrl}/images/logo_zapata.png`;
 
     // Información de identificación según rol
     let identificacionHTML = '';
@@ -83,22 +84,23 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
         <!-- HEADER -->
         <div style="background: linear-gradient(135deg, #8B2332, #6B1A27);
                     padding: 40px 30px; text-align: center;">
-          <h1 style="color: #ffffff; margin: 0; font-size: 28px;
-                      font-weight: bold; letter-spacing: 1px;">
-            🏫 Escuela Emiliano Zapata
+          <img src="${logoUrl}" alt="Logo Zapata" style="height: 80px; width: auto; margin-bottom: 15px; filter: drop-shadow(0px 4px 6px rgba(0,0,0,0.2));">
+          <h1 style="color: #ffffff; margin: 0; font-size: 24px;
+                      font-weight: bold; letter-spacing: 0.5px; text-transform: uppercase;">
+            Instituto Educativo Emiliano Zapata
           </h1>
-          <p style="color: #f0d0d5; margin: 10px 0 0; font-size: 14px;">
+          <p style="color: #f0d0d5; margin: 5px 0 0; font-size: 14px;">
             Sistema de Gestión Académica
           </p>
         </div>
 
         <!-- BIENVENIDA -->
         <div style="padding: 40px 30px 20px; text-align: center;">
-          <div style="width: 80px; height: 80px;
+          <div style="width: 70px; height: 70px;
                       background: linear-gradient(135deg, #4CAF50, #45a049);
                       border-radius: 50%; margin: 0 auto 20px;
-                      line-height: 80px; text-align: center;">
-            <span style="font-size: 36px; color: white;">✓</span>
+                      line-height: 70px; text-align: center; color: white; font-size: 32px; font-weight: bold;">
+            ✓
           </div>
           <h2 style="color: #333; margin: 0 0 10px; font-size: 24px;">
             ¡Bienvenido(a), ${data.nombre}!
@@ -106,17 +108,17 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
           <p style="color: #666; font-size: 16px; line-height: 1.6; margin: 0;">
             Tu cuenta ha sido creada exitosamente como
             <strong>${rolLabel}</strong>.
-            <br>A continuación encontrarás tus datos de acceso.
+            <br>A continuación encontrarás tus datos de acceso oficiales.
           </p>
         </div>
 
         <!-- DATOS DE ACCESO -->
         <div style="margin: 20px 30px; background-color: #f8f9fa;
                     border-radius: 12px; border: 1px solid #e9ecef;
-                    overflow: hidden;">
+                    overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
           <div style="background-color: #8B2332; padding: 15px 20px;">
-            <h3 style="color: #ffffff; margin: 0; font-size: 16px;">
-              🔐 Datos de Acceso al Sistema
+            <h3 style="color: #ffffff; margin: 0; font-size: 16px; text-align: center;">
+              🔐 Credenciales de Acceso
             </h3>
           </div>
           <table style="width: 100%; border-collapse: collapse;">
@@ -171,9 +173,10 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
           <a href="${appUrl}"
              style="display: inline-block;
                     background: linear-gradient(135deg, #8B2332, #6B1A27);
-                    color: #ffffff; padding: 16px 50px; border-radius: 8px;
-                    text-decoration: none; font-size: 16px; font-weight: bold;">
-            Iniciar Sesión →
+                    color: #ffffff; padding: 18px 50px; border-radius: 10px;
+                    text-decoration: none; font-size: 16px; font-weight: bold;
+                    box-shadow: 0 4px 15px rgba(139, 35, 50, 0.3);">
+            Entrar al Sistema →
           </a>
         </div>
 
@@ -182,9 +185,7 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
                     background-color: #fff3cd; border-radius: 8px;
                     border-left: 4px solid #ffc107;">
           <p style="margin: 0; color: #856404; font-size: 14px; line-height: 1.5;">
-            ⚠️ <strong>Importante:</strong> Te recomendamos cambiar tu
-            contraseña después de tu primer inicio de sesión.
-            No compartas estos datos con terceros.
+            ⚠️ <strong>Importante:</strong> Guarda bien esta contraseña. No compartas estos datos con terceros.
           </p>
         </div>
 
@@ -195,7 +196,7 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
             Este es un correo automático del Sistema de Gestión Académica.
             <br>No es necesario responder a este mensaje.
             <br><br>
-            <strong>Escuela Emiliano Zapata</strong> © ${new Date().getFullYear()}
+            <strong>Instituto Educativo Emiliano Zapata</strong> © ${new Date().getFullYear()}
           </p>
         </div>
 
@@ -205,9 +206,9 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
 
     // ENVIAR EL CORREO
     const info = await transporter.sendMail({
-      from: `"🏫 Escuela Emiliano Zapata" <${user}>`,
+      from: `"🏫 Instituto Educativo Emiliano Zapata" <${user}>`,
       to: data.to,
-      subject: '🏫 Bienvenido(a) al Sistema Académico - Escuela Emiliano Zapata',
+      subject: '🏫 Bienvenido(a) al Sistema Académico - Instituto Educativo Emiliano Zapata',
       html: htmlContent,
     });
 
