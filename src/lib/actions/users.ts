@@ -9,7 +9,7 @@ import { revalidatePath } from 'next/cache';
  */
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cuuohbztrxxneozagecr.supabase.co',
-  process.env.SUPABASE_SERVICE_ROLE_KEY || '', // Esta llave NUNCA debe exponerse en el cliente
+  process.env.SUPABASE_SERVICE_ROLE_KEY || '', 
   {
     auth: {
       autoRefreshToken: false,
@@ -20,15 +20,18 @@ const supabaseAdmin = createClient(
 
 export async function createUserWithProfile(userData: any) {
   try {
+    console.log("Iniciando creación de usuario para:", userData.email);
+
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error("Falta SUPABASE_SERVICE_ROLE_KEY en el servidor.");
+      console.error("ERROR: Falta SUPABASE_SERVICE_ROLE_KEY");
+      return { success: false, error: "Error de configuración: Falta la llave de servicio en el servidor." };
     }
 
     // 1. Crear el usuario en Supabase Auth
-    // Usamos una contraseña genérica o el email como base (puedes cambiar esto)
+    // Usamos una contraseña por defecto: Zapata2025!
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: userData.email,
-      password: 'Zapata' + Math.random().toString(36).slice(-4) + '!', // Contraseña temporal
+      password: userData.password || 'Zapata2025!',
       email_confirm: true,
       user_metadata: { 
         full_name: `${userData.nombre} ${userData.apellidos}` 
@@ -36,14 +39,17 @@ export async function createUserWithProfile(userData: any) {
     });
 
     if (authError) {
-      return { success: false, error: `Auth Error: ${authError.message}` };
+      console.error("Error en Supabase Auth:", authError.message);
+      return { success: false, error: `Error de Autenticación: ${authError.message}` };
     }
 
     if (!authData.user) {
-      return { success: false, error: "No se pudo crear el usuario de autenticación." };
+      return { success: false, error: "No se pudo generar el usuario de acceso." };
     }
 
-    // 2. Crear el perfil en la tabla 'profiles' vinculado al ID de Auth
+    console.log("Usuario de Auth creado con ID:", authData.user.id);
+
+    // 2. Crear el perfil en la tabla 'profiles'
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
       .insert([{
@@ -51,7 +57,7 @@ export async function createUserWithProfile(userData: any) {
         nombre: userData.nombre,
         apellidos: userData.apellidos,
         email: userData.email,
-        curp: userData.curp.toUpperCase(),
+        curp: (userData.curp || '').toUpperCase(),
         rol: userData.rol,
         estatus: userData.estatus,
         telefono: userData.telefono,
@@ -61,17 +67,21 @@ export async function createUserWithProfile(userData: any) {
       }]);
 
     if (profileError) {
-      // Si falla el perfil, borramos el usuario de auth para mantener integridad
+      console.error("Error al crear perfil SQL:", profileError.message);
+      // Revertimos la creación del usuario si falla el perfil
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
-      return { success: false, error: `Profile Error: ${profileError.message}` };
+      return { success: false, error: `Error de Base de Datos: ${profileError.message}` };
     }
 
+    console.log("Perfil académico creado exitosamente.");
     revalidatePath('/dashboard/admin/usuarios');
-    return { success: true, data: authData.user };
+    revalidatePath('/dashboard/admin');
+    
+    return { success: true };
 
   } catch (error: any) {
-    console.error("Error en createUserWithProfile:", error);
-    return { success: false, error: error.message };
+    console.error("Error inesperado en el servidor:", error);
+    return { success: false, error: error.message || "Error interno del servidor." };
   }
 }
 
@@ -82,7 +92,7 @@ export async function updateUserProfile(id: string, userData: any) {
       .update({
         nombre: userData.nombre,
         apellidos: userData.apellidos,
-        curp: userData.curp.toUpperCase(),
+        curp: (userData.curp || '').toUpperCase(),
         rol: userData.rol,
         estatus: userData.estatus,
         telefono: userData.telefono,

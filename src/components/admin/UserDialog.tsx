@@ -19,13 +19,13 @@ const userSchema = z.object({
   nombre: z.string().min(2, "El nombre es muy corto"),
   apellidos: z.string().min(2, "Los apellidos son muy cortos"),
   email: z.string().email("Email inválido"),
-  curp: z.string().length(18, "La CURP debe tener 18 caracteres"),
+  curp: z.string().min(10, "CURP incompleta").max(18, "Máximo 18 caracteres"),
   rol: z.enum(['superuser', 'admin', 'profesor', 'alumno']),
   estatus: z.enum(['activo', 'inactivo', 'suspendido']),
-  telefono: z.string().optional(),
-  matricula: z.string().optional(),
-  numero_empleado: z.string().optional(),
-  fecha_expiracion: z.string().optional(),
+  telefono: z.string().optional().or(z.literal('')),
+  matricula: z.string().optional().or(z.literal('')),
+  numero_empleado: z.string().optional().or(z.literal('')),
+  fecha_expiracion: z.string().optional().or(z.literal('')),
 });
 
 type UserFormValues = z.infer<typeof userSchema>;
@@ -59,33 +59,35 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
   });
 
   useEffect(() => {
-    setDbError(null);
-    if (user) {
-      form.reset({
-        nombre: user.nombre || '',
-        apellidos: user.apellidos || '',
-        email: user.email || '',
-        curp: user.curp || '',
-        rol: user.rol || 'alumno',
-        estatus: user.estatus || 'activo',
-        telefono: user.telefono || '',
-        matricula: user.matricula || '',
-        numero_empleado: user.numero_empleado || '',
-        fecha_expiracion: user.fecha_expiracion || '',
-      });
-    } else {
-      form.reset({
-        nombre: '',
-        apellidos: '',
-        email: '',
-        curp: '',
-        rol: 'alumno',
-        estatus: 'activo',
-        telefono: '',
-        matricula: '',
-        numero_empleado: '',
-        fecha_expiracion: '',
-      });
+    if (open) {
+      setDbError(null);
+      if (user) {
+        form.reset({
+          nombre: user.nombre || '',
+          apellidos: user.apellidos || '',
+          email: user.email || '',
+          curp: user.curp || '',
+          rol: user.rol || 'alumno',
+          estatus: user.estatus || 'activo',
+          telefono: user.telefono || '',
+          matricula: user.matricula || '',
+          numero_empleado: user.numero_empleado || '',
+          fecha_expiracion: user.fecha_expiracion || '',
+        });
+      } else {
+        form.reset({
+          nombre: '',
+          apellidos: '',
+          email: '',
+          curp: '',
+          rol: 'alumno',
+          estatus: 'activo',
+          telefono: '',
+          matricula: '',
+          numero_empleado: '',
+          fecha_expiracion: '',
+        });
+      }
     }
   }, [user, form, open]);
 
@@ -93,27 +95,37 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
     setLoading(true);
     setDbError(null);
     try {
+      console.log("Enviando formulario...", values);
       let result;
       if (user) {
-        // ACTUALIZAR PERFIL EXISTENTE
         result = await updateUserProfile(user.id, values);
       } else {
-        // CREAR NUEVO USUARIO (AUTH + PERFIL)
         result = await createUserWithProfile(values);
       }
 
       if (result.success) {
         toast({ 
           title: user ? "Usuario Actualizado" : "Usuario Creado", 
-          description: user ? "Los cambios se guardaron correctamente." : "El usuario y su perfil académico han sido registrados." 
+          description: user ? "Los cambios se guardaron correctamente." : "El acceso y el perfil académico han sido registrados." 
         });
         onSuccess();
         onOpenChange(false);
       } else {
-        setDbError(result.error || "Ocurrió un error en la operación.");
+        setDbError(result.error || "Ocurrió un error inesperado.");
+        toast({
+          variant: "destructive",
+          title: "Error en la operación",
+          description: result.error || "Revisa los detalles en el formulario."
+        });
       }
     } catch (error: any) {
-      setDbError(error.message || "Error inesperado en el servidor.");
+      const msg = error.message || "Error de conexión con el servidor.";
+      setDbError(msg);
+      toast({
+        variant: "destructive",
+        title: "Error Crítico",
+        description: msg
+      });
     } finally {
       setLoading(false);
     }
@@ -127,21 +139,16 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
           <DialogDescription>
             {user 
               ? 'Modifica los datos del usuario. Los cambios se sincronizarán inmediatamente.' 
-              : 'Al crear el perfil, también se generará un acceso de autenticación para el usuario.'}
+              : 'Al crear el perfil, también se generará una cuenta de acceso con la contraseña: Zapata2025!'}
           </DialogDescription>
         </DialogHeader>
 
         {dbError && (
           <Alert variant="destructive" className="mb-4">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error de Registro</AlertTitle>
+            <AlertTitle>No se pudo completar el registro</AlertTitle>
             <AlertDescription className="text-xs">
               {dbError}
-              {!user && dbError.includes("SUPABASE_SERVICE_ROLE_KEY") && (
-                <p className="mt-2 font-bold text-amber-600">
-                  Nota: Debes configurar la Service Role Key en las variables de entorno para crear nuevos usuarios.
-                </p>
-              )}
             </AlertDescription>
           </Alert>
         )}
@@ -188,7 +195,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>CURP</FormLabel>
-                    <FormControl><Input className="uppercase font-mono" {...field} maxLength={18} placeholder="18 caracteres" /></FormControl>
+                    <FormControl><Input className="uppercase font-mono" {...field} placeholder="18 caracteres" /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -292,7 +299,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
             </div>
 
             <DialogFooter className="gap-2 pt-4 border-t">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
                 Cancelar
               </Button>
               <Button type="submit" disabled={loading} className="bg-primary min-w-[140px]">
