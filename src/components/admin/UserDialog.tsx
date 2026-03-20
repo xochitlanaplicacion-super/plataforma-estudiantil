@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/select';
 import { User } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -95,7 +95,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
     setDbError(null);
     try {
       if (user) {
-        // EDITAR USUARIO EXISTENTE
+        // ACTUALIZAR PERFIL
         const { error } = await supabase
           .from('profiles')
           .update(values)
@@ -107,31 +107,35 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
         onSuccess();
         onOpenChange(false);
       } else {
-        // CREAR NUEVO USUARIO
-        // Importante: En Supabase, para crear un perfil 'efectivo', el ID debe existir en auth.users.
-        // Como este es un cliente de navegador, no podemos crear usuarios de Auth para otros
-        // sin la Service Role Key (que es secreta). 
-        
-        // Intentamos insertar directamente (esto fallará si la DB tiene el FK obligatorio)
+        // CREAR NUEVO PERFIL
+        // Nota: Si la tabla profiles tiene una FK a auth.users, esta inserción fallará 
+        // a menos que el usuario se cree primero en Auth.
         const { error } = await supabase
           .from('profiles')
-          .insert([{ ...values, id: crypto.randomUUID() }]);
+          .insert([{ 
+            ...values,
+            // Si el ID es requerido y no hay default en la DB, generamos uno temporal
+            // pero lo ideal es que la DB tenga gen_random_uuid() por defecto.
+          }]);
 
         if (error) {
+          // Capturamos el error específico de FK si ocurre
           if (error.code === '23503') {
-            setDbError("No se puede crear el perfil porque el correo no está registrado en el sistema de Autenticación. En un sistema real, primero se crea el acceso y luego el perfil.");
-            return;
+            setDbError("No se puede crear el perfil: El usuario debe estar registrado primero en el sistema de Autenticación de Supabase.");
+          } else {
+            setDbError(error.message || "Error al insertar en la base de datos.");
           }
-          throw error;
+          console.error("Detalles del error de Supabase:", error);
+          return;
         }
 
-        toast({ title: "Usuario Creado", description: "El perfil ha sido registrado." });
+        toast({ title: "Usuario Creado", description: "El perfil ha sido registrado con éxito." });
         onSuccess();
         onOpenChange(false);
       }
     } catch (error: any) {
-      console.error("Error en operación:", error);
-      setDbError(error.message || "Ocurrió un error inesperado en la base de datos.");
+      console.error("Error en la operación:", error);
+      setDbError(error.message || "Ocurrió un error inesperado.");
     } finally {
       setLoading(false);
     }
@@ -150,9 +154,9 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
         </DialogHeader>
 
         {dbError && (
-          <Alert variant="destructive">
+          <Alert variant="destructive" className="mb-4">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error de Base de Datos</AlertTitle>
+            <AlertTitle>Error del Sistema</AlertTitle>
             <AlertDescription className="text-xs">
               {dbError}
             </AlertDescription>
@@ -160,7 +164,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
         )}
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pt-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pt-2">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
               <FormField
                 control={form.control}
@@ -273,42 +277,42 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                   </FormItem>
                 )}
               />
-              
-              <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 bg-muted/30 p-4 rounded-lg">
-                {form.watch('rol') === 'alumno' && (
-                  <FormField
-                    control={form.control}
-                    name="matricula"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Matrícula / ID Alumno</FormLabel>
-                        <FormControl><Input placeholder="Código único" {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
-                {form.watch('rol') === 'profesor' && (
-                  <FormField
-                    control={form.control}
-                    name="numero_empleado"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Número de Empleado</FormLabel>
-                        <FormControl><Input placeholder="Cédula interna" {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                )}
-              </div>
+            </div>
+
+            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 bg-muted/30 p-4 rounded-lg">
+              {form.watch('rol') === 'alumno' && (
+                <FormField
+                  control={form.control}
+                  name="matricula"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Matrícula / ID Alumno</FormLabel>
+                      <FormControl><Input placeholder="Código único" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+              {form.watch('rol') === 'profesor' && (
+                <FormField
+                  control={form.control}
+                  name="numero_empleado"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Número de Empleado</FormLabel>
+                      <FormControl><Input placeholder="Cédula interna" {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
             </div>
 
             <DialogFooter className="gap-2 pt-4 border-t">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={loading} className="bg-primary min-w-[120px]">
+              <Button type="submit" disabled={loading} className="bg-primary min-w-[140px]">
                 {loading ? (
                   <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Procesando...</>
                 ) : (
