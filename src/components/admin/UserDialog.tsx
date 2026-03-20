@@ -10,10 +10,10 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { User } from '@/lib/types';
-import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, AlertCircle } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { createUserWithProfile, updateUserProfile } from '@/lib/actions/users';
 
 const userSchema = z.object({
   nombre: z.string().min(2, "El nombre es muy corto"),
@@ -39,7 +39,6 @@ interface UserDialogProps {
 
 export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogProps) {
   const { toast } = useToast();
-  const supabase = createClient();
   const [loading, setLoading] = React.useState(false);
   const [dbError, setDbError] = React.useState<string | null>(null);
 
@@ -94,43 +93,27 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
     setLoading(true);
     setDbError(null);
     try {
+      let result;
       if (user) {
-        // ACTUALIZAR PERFIL
-        const { error } = await supabase
-          .from('profiles')
-          .update(values)
-          .eq('id', user.id);
+        // ACTUALIZAR PERFIL EXISTENTE
+        result = await updateUserProfile(user.id, values);
+      } else {
+        // CREAR NUEVO USUARIO (AUTH + PERFIL)
+        result = await createUserWithProfile(values);
+      }
 
-        if (error) throw error;
-        
-        toast({ title: "Usuario Actualizado", description: "Los cambios se guardaron correctamente." });
+      if (result.success) {
+        toast({ 
+          title: user ? "Usuario Actualizado" : "Usuario Creado", 
+          description: user ? "Los cambios se guardaron correctamente." : "El usuario y su perfil académico han sido registrados." 
+        });
         onSuccess();
         onOpenChange(false);
       } else {
-        // CREAR NUEVO PERFIL
-        const { error } = await supabase
-          .from('profiles')
-          .insert([{ 
-            ...values,
-          }]);
-
-        if (error) {
-          if (error.code === '23503') {
-            setDbError("No se puede crear el perfil: El usuario debe estar registrado primero en el sistema de Autenticación de Supabase.");
-          } else {
-            setDbError(error.message || "Error al insertar en la base de datos.");
-          }
-          console.error("Detalles del error de Supabase:", error);
-          return;
-        }
-
-        toast({ title: "Usuario Creado", description: "El perfil ha sido registrado con éxito." });
-        onSuccess();
-        onOpenChange(false);
+        setDbError(result.error || "Ocurrió un error en la operación.");
       }
     } catch (error: any) {
-      console.error("Error en la operación:", error);
-      setDbError(error.message || "Ocurrió un error inesperado.");
+      setDbError(error.message || "Error inesperado en el servidor.");
     } finally {
       setLoading(false);
     }
@@ -140,20 +123,25 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{user ? 'Editar Perfil Académico' : 'Registrar Nuevo Perfil'}</DialogTitle>
+          <DialogTitle>{user ? 'Editar Perfil Académico' : 'Registrar Nuevo Perfil Efectivo'}</DialogTitle>
           <DialogDescription>
             {user 
               ? 'Modifica los datos del usuario. Los cambios se sincronizarán inmediatamente.' 
-              : 'Completa los datos para el nuevo registro académico.'}
+              : 'Al crear el perfil, también se generará un acceso de autenticación para el usuario.'}
           </DialogDescription>
         </DialogHeader>
 
         {dbError && (
           <Alert variant="destructive" className="mb-4">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>Error del Sistema</AlertTitle>
+            <AlertTitle>Error de Registro</AlertTitle>
             <AlertDescription className="text-xs">
               {dbError}
+              {!user && dbError.includes("SUPABASE_SERVICE_ROLE_KEY") && (
+                <p className="mt-2 font-bold text-amber-600">
+                  Nota: Debes configurar la Service Role Key en las variables de entorno para crear nuevos usuarios.
+                </p>
+              )}
             </AlertDescription>
           </Alert>
         )}
@@ -311,7 +299,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                 {loading ? (
                   <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Procesando...</>
                 ) : (
-                  user ? 'Guardar Cambios' : 'Crear Registro'
+                  user ? 'Guardar Cambios' : 'Crear Registro Efectivo'
                 )}
               </Button>
             </DialogFooter>
