@@ -100,6 +100,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
       let nextNumber = 1;
       if (profiles && profiles.length > 0) {
         const lastMat = profiles[0].matricula;
+        // Buscamos los 6 dígitos secuenciales
         const match = lastMat.match(/IEZPTA\d{4}(\d{6})/);
         if (match) {
           nextNumber = parseInt(match[1]) + 1;

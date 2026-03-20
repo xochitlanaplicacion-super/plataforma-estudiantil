@@ -35,14 +35,15 @@ export async function createUserWithProfile(userData: any) {
     }
 
     // 1. Crear el usuario en Supabase Auth
+    // Pasamos toda la metadata para que el Trigger handle_new_user tenga datos
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
-      email: userData.email,
+      email: userData.email.toLowerCase().trim(),
       password: userData.password || 'Zapata2025!',
       email_confirm: true,
       user_metadata: { 
         nombre: userData.nombre,
         apellidos: userData.apellidos,
-        curp: (userData.curp || '').toUpperCase(),
+        curp: (userData.curp || '').toUpperCase().trim(),
         rol: userData.rol,
         matricula: emptyToNull(userData.matricula),
         numero_empleado: emptyToNull(userData.numero_empleado)
@@ -51,6 +52,9 @@ export async function createUserWithProfile(userData: any) {
 
     if (authError) {
       console.error("Error en Supabase Auth:", authError.message);
+      if (authError.message.includes("already registered")) {
+        return { success: false, error: "Este correo electrónico ya está registrado en el sistema." };
+      }
       return { success: false, error: `Error de Autenticación: ${authError.message}` };
     }
 
@@ -58,15 +62,13 @@ export async function createUserWithProfile(userData: any) {
       return { success: false, error: "No se pudo generar el usuario de acceso." };
     }
 
-    console.log("Usuario de Auth creado con ID:", authData.user.id);
-
-    // 2. Preparar datos para el perfil (Upsert)
+    // 2. Preparar datos para el perfil (Upsert para manejar el trigger)
     const profileData = {
       id: authData.user.id,
       nombre: userData.nombre,
       apellidos: userData.apellidos,
-      email: userData.email,
-      curp: (userData.curp || '').toUpperCase(),
+      email: userData.email.toLowerCase().trim(),
+      curp: (userData.curp || '').toUpperCase().trim(),
       rol: userData.rol,
       estatus: userData.estatus,
       telefono: emptyToNull(userData.telefono),
@@ -76,16 +78,28 @@ export async function createUserWithProfile(userData: any) {
       password_plain: userData.password,
     };
 
-    // 3. Crear o actualizar el perfil en la tabla 'profiles'
+    // 3. Actualizar el perfil (el trigger ya debió crear uno básico)
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
       .upsert(profileData, { onConflict: 'id' });
 
     if (profileError) {
-      console.error("Error al gestionar perfil SQL:", profileError.message);
-      // Opcional: Podrías querer borrar el usuario de Auth aquí si el perfil falla
-      // await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
-      return { success: false, error: `Error de Base de Datos: ${profileError.message}. Asegúrate de que la CURP y Email sean únicos.` };
+      console.error("Error al gestionar perfil SQL:", profileError);
+      
+      // Manejo específico de duplicados en SQL (Código 23505)
+      if (profileError.code === '23505') {
+        // Borramos el usuario de Auth si falló el perfil por duplicidad para permitir re-intento
+        await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+        
+        if (profileError.message.includes('curp')) {
+          return { success: false, error: "La CURP ingresada ya existe en los registros." };
+        }
+        if (profileError.message.includes('email')) {
+          return { success: false, error: "El correo electrónico ya existe en los registros." };
+        }
+      }
+
+      return { success: false, error: `Error de Base de Datos: ${profileError.message}.` };
     }
 
     console.log("Perfil académico gestionado exitosamente.");
@@ -105,17 +119,17 @@ export async function updateUserProfile(id: string, userData: any) {
     const updateData: any = {
       nombre: userData.nombre,
       apellidos: userData.apellidos,
-      curp: (userData.curp || '').toUpperCase(),
+      curp: (userData.curp || '').toUpperCase().trim(),
       rol: userData.rol,
       estatus: userData.estatus,
       telefono: emptyToNull(userData.telefono),
       matricula: emptyToNull(userData.matricula),
       numero_empleado: emptyToNull(userData.numero_empleado),
       fecha_expiracion: emptyToNull(userData.fecha_expiracion),
+      password_plain: emptyToNull(userData.password),
     };
 
     if (userData.password) {
-      updateData.password_plain = userData.password;
       await supabaseAdmin.auth.admin.updateUserById(id, {
         password: userData.password
       });
@@ -126,7 +140,13 @@ export async function updateUserProfile(id: string, userData: any) {
       .update(updateData)
       .eq('id', id);
 
-    if (error) throw error;
+    if (error) {
+      if (error.code === '23505') {
+        if (error.message.includes('curp')) return { success: false, error: "La CURP ya pertenece a otro usuario." };
+        if (error.message.includes('email')) return { success: false, error: "El correo ya pertenece a otro usuario." };
+      }
+      throw error;
+    }
 
     revalidatePath('/dashboard/admin/usuarios');
     return { success: true };
