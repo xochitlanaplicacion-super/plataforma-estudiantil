@@ -3,11 +3,8 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
+import { sendWelcomeEmail } from '@/lib/email';
 
-/**
- * Cliente administrativo de Supabase. 
- * Requiere SUPABASE_SERVICE_ROLE_KEY en las variables de entorno.
- */
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cuuohbztrxxneozagecr.supabase.co',
   process.env.SUPABASE_SERVICE_ROLE_KEY || '', 
@@ -19,7 +16,6 @@ const supabaseAdmin = createClient(
   }
 );
 
-// Función auxiliar para normalizar cadenas vacías a null
 const emptyToNull = (val: any) => {
   if (typeof val === 'string' && val.trim() === '') return null;
   return val;
@@ -34,7 +30,7 @@ export async function createUserWithProfile(userData: any) {
     const email = userData.email.toLowerCase().trim();
     const curp = (userData.curp || '').toUpperCase().trim();
 
-    // 1. VERIFICACIÓN PREVIA DE DUPLICADOS (Evita errores genéricos de Supabase Auth)
+    // 1. VERIFICACIÓN PREVIA DE DUPLICADOS
     const { data: existingUser, error: checkError } = await supabaseAdmin
       .from('profiles')
       .select('email, curp')
@@ -66,7 +62,6 @@ export async function createUserWithProfile(userData: any) {
     });
 
     if (authError) {
-      // Si el error es de Auth específicamente (ej. correo duplicado que se nos pasó en la verificación)
       if (authError.message.includes("already registered")) {
         return { success: false, error: "Este correo electrónico ya está registrado en el acceso." };
       }
@@ -77,7 +72,7 @@ export async function createUserWithProfile(userData: any) {
       return { success: false, error: "No se pudo generar el usuario de acceso." };
     }
 
-    // 3. Llenar el perfil (Usamos upsert porque el trigger handle_new_user ya creó una base)
+    // 3. Llenar el perfil
     const profileData = {
       id: authData.user.id,
       nombre: userData.nombre,
@@ -90,7 +85,7 @@ export async function createUserWithProfile(userData: any) {
       matricula: emptyToNull(userData.matricula),
       numero_empleado: emptyToNull(userData.numero_empleado),
       fecha_expiracion: emptyToNull(userData.fecha_expiracion),
-      password_plain: userData.password, // Columna de respaldo para administración
+      password_plain: userData.password,
     };
 
     const { error: profileError } = await supabaseAdmin
@@ -98,10 +93,28 @@ export async function createUserWithProfile(userData: any) {
       .upsert(profileData, { onConflict: 'id' });
 
     if (profileError) {
-      // Limpiamos el usuario de Auth si falló la creación del perfil final
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
       return { success: false, error: `Error en Base de Datos: ${profileError.message}` };
     }
+
+    // 4. ENVIAR CORREO DE BIENVENIDA (NO BLOQUEA)
+    sendWelcomeEmail({
+      to: email,
+      nombre: userData.nombre,
+      apellidos: userData.apellidos,
+      rol: userData.rol,
+      matricula: emptyToNull(userData.matricula),
+      numero_empleado: emptyToNull(userData.numero_empleado),
+      password: userData.password,
+    }).then((result) => {
+      if (result.success) {
+        console.log('✅ Correo de bienvenida enviado a:', email);
+      } else {
+        console.warn('⚠️ No se pudo enviar el correo de bienvenida:', result.error);
+      }
+    }).catch((err) => {
+      console.warn('⚠️ Error al intentar enviar correo:', err);
+    });
 
     revalidatePath('/dashboard/admin/usuarios');
     revalidatePath('/dashboard/admin');
@@ -130,7 +143,6 @@ export async function updateUserProfile(id: string, userData: any) {
       password_plain: emptyToNull(userData.password),
     };
 
-    // Actualizar contraseña en Auth si se cambió
     if (userData.password) {
       await supabaseAdmin.auth.admin.updateUserById(id, {
         password: userData.password
