@@ -2,17 +2,19 @@
 
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, GraduationCap, School, Layers, AlertCircle, Loader2 } from 'lucide-react';
+import { Users, GraduationCap, School, Layers, AlertCircle, Loader2, Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { createClient } from '@/lib/supabase/client';
 import { User } from '@/lib/types';
+import { UserDialog } from '@/components/admin/UserDialog';
 import Link from 'next/link';
 
 export default function AdminDashboard() {
   const supabase = createClient();
   const [loading, setLoading] = useState(true);
+  const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
   const [stats, setStats] = useState({
     alumnos: 0,
     profesores: 0,
@@ -21,38 +23,36 @@ export default function AdminDashboard() {
   });
   const [recentUsers, setRecentUsers] = useState<User[]>([]);
 
-  useEffect(() => {
-    async function fetchData() {
-      setLoading(true);
-      try {
-        // Consultar conteos
-        const { count: alumnosCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('rol', 'alumno');
-        const { count: profesCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('rol', 'profesor');
-        const { count: carrerasCount } = await supabase.from('careers').select('*', { count: 'exact', head: true });
-        const { count: gruposCount } = await supabase.from('groups').select('*', { count: 'exact', head: true });
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const { count: alumnosCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('rol', 'alumno');
+      const { count: profesCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('rol', 'profesor');
+      const { count: carrerasCount } = await supabase.from('careers').select('*', { count: 'exact', head: true });
+      const { count: gruposCount } = await supabase.from('groups').select('*', { count: 'exact', head: true });
 
-        setStats({
-          alumnos: alumnosCount || 0,
-          profesores: profesCount || 0,
-          carreras: carrerasCount || 0,
-          grupos: gruposCount || 0
-        });
+      setStats({
+        alumnos: alumnosCount || 0,
+        profesores: profesCount || 0,
+        carreras: carrerasCount || 0,
+        grupos: gruposCount || 0
+      });
 
-        // Consultar usuarios recientes
-        const { data: users } = await supabase
-          .from('profiles')
-          .select('*')
-          .order('created_at', { ascending: false })
-          .limit(5);
+      const { data: users } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(5);
 
-        if (users) setRecentUsers(users as any);
-      } catch (error) {
-        console.error("Error fetching admin stats:", error);
-      } finally {
-        setLoading(false);
-      }
+      if (users) setRecentUsers(users as any);
+    } catch (error) {
+      console.error("Error fetching admin stats:", error);
+    } finally {
+      setLoading(false);
     }
+  };
 
+  useEffect(() => {
     fetchData();
   }, []);
 
@@ -87,7 +87,7 @@ export default function AdminDashboard() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-7">
-        <Card className="col-span-4">
+        <Card className="col-span-4 shadow-sm border-muted/60">
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
@@ -119,14 +119,16 @@ export default function AdminDashboard() {
                 <TableBody>
                   {recentUsers.map((user) => (
                     <TableRow key={user.id}>
-                      <TableCell className="font-medium">{user.nombre} {user.apellidos}</TableCell>
-                      <TableCell className="capitalize">{user.rol}</TableCell>
+                      <TableCell className="font-medium text-xs">
+                        {user.nombre} {user.apellidos}
+                      </TableCell>
+                      <TableCell className="capitalize text-xs">{user.rol}</TableCell>
                       <TableCell>
-                        <Badge variant={user.estatus === 'activo' ? 'default' : 'secondary'}>
+                        <Badge variant={user.estatus === 'activo' ? 'default' : 'secondary'} className="text-[10px] h-5">
                           {user.estatus}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-sm">
+                      <TableCell className="text-xs">
                         {user.fecha_expiracion && new Date(user.fecha_expiracion) < new Date() ? (
                           <span className="text-destructive font-semibold flex items-center gap-1">
                             <AlertCircle className="h-3 w-3" />
@@ -144,27 +146,36 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
-        <Card className="col-span-3">
+        <Card className="col-span-3 shadow-sm border-muted/60">
           <CardHeader>
             <CardTitle>Acciones Rápidas</CardTitle>
             <CardDescription>Operaciones frecuentes del sistema.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Button className="w-full justify-start gap-2 bg-primary">
+            <Button 
+              className="w-full justify-start gap-2 bg-primary shadow-md hover:opacity-90 transition-opacity"
+              onClick={() => setIsUserDialogOpen(true)}
+            >
               <Users size={18} /> Crear Nuevo Usuario
             </Button>
-            <Button variant="outline" className="w-full justify-start gap-2">
+            <Button variant="outline" className="w-full justify-start gap-2 border-muted hover:bg-muted/50">
               <School size={18} /> Nueva Carrera
             </Button>
-            <Button variant="outline" className="w-full justify-start gap-2">
+            <Button variant="outline" className="w-full justify-start gap-2 border-muted hover:bg-muted/50">
               <GraduationCap size={18} /> Asignar Profesor
             </Button>
-            <Button variant="outline" className="w-full justify-start gap-2">
+            <Button variant="outline" className="w-full justify-start gap-2 border-muted hover:bg-muted/50">
               <Layers size={18} /> Gestionar Niveles
             </Button>
           </CardContent>
         </Card>
       </div>
+
+      <UserDialog 
+        open={isUserDialogOpen} 
+        onOpenChange={setIsUserDialogOpen} 
+        onSuccess={fetchData} 
+      />
     </div>
   );
 }
