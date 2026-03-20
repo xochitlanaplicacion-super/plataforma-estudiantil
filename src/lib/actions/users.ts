@@ -19,6 +19,12 @@ const supabaseAdmin = createClient(
   }
 );
 
+// Función auxiliar para normalizar cadenas vacías a null
+const emptyToNull = (val: any) => {
+  if (typeof val === 'string' && val.trim() === '') return null;
+  return val;
+};
+
 export async function createUserWithProfile(userData: any) {
   try {
     console.log("Iniciando creación de usuario para:", userData.email);
@@ -28,7 +34,7 @@ export async function createUserWithProfile(userData: any) {
       return { success: false, error: "Error de configuración: Falta la llave de servicio en el servidor." };
     }
 
-    // 1. Crear el usuario en Supabase Auth enviando TODA la metadata que espera tu TRIGGER
+    // 1. Crear el usuario en Supabase Auth
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: userData.email,
       password: userData.password || 'Zapata2025!',
@@ -38,8 +44,8 @@ export async function createUserWithProfile(userData: any) {
         apellidos: userData.apellidos,
         curp: (userData.curp || '').toUpperCase(),
         rol: userData.rol,
-        matricula: userData.matricula,
-        numero_empleado: userData.numero_empleado
+        matricula: emptyToNull(userData.matricula),
+        numero_empleado: emptyToNull(userData.numero_empleado)
       }
     });
 
@@ -54,34 +60,32 @@ export async function createUserWithProfile(userData: any) {
 
     console.log("Usuario de Auth creado con ID:", authData.user.id);
 
-    // 2. Manejo de campos de fecha (convertir cadena vacía a null)
-    const fechaExpiracion = userData.fecha_expiracion && userData.fecha_expiracion.trim() !== "" 
-      ? userData.fecha_expiracion 
-      : null;
+    // 2. Preparar datos para el perfil (Upsert)
+    const profileData = {
+      id: authData.user.id,
+      nombre: userData.nombre,
+      apellidos: userData.apellidos,
+      email: userData.email,
+      curp: (userData.curp || '').toUpperCase(),
+      rol: userData.rol,
+      estatus: userData.estatus,
+      telefono: emptyToNull(userData.telefono),
+      matricula: emptyToNull(userData.matricula),
+      numero_empleado: emptyToNull(userData.numero_empleado),
+      fecha_expiracion: emptyToNull(userData.fecha_expiracion),
+      password_plain: userData.password,
+    };
 
     // 3. Crear o actualizar el perfil en la tabla 'profiles'
-    // Usamos UPSERT porque el Trigger 'handle_new_user' ya creó una versión básica
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
-      .upsert({
-        id: authData.user.id,
-        nombre: userData.nombre,
-        apellidos: userData.apellidos,
-        email: userData.email,
-        curp: (userData.curp || '').toUpperCase(),
-        rol: userData.rol,
-        estatus: userData.estatus,
-        telefono: userData.telefono,
-        matricula: userData.matricula,
-        numero_empleado: userData.numero_empleado,
-        fecha_expiracion: fechaExpiracion,
-        password_plain: userData.password,
-      }, { onConflict: 'id' });
+      .upsert(profileData, { onConflict: 'id' });
 
     if (profileError) {
       console.error("Error al gestionar perfil SQL:", profileError.message);
-      // Opcional: No borramos el auth por si el error es solo de sintaxis recuperable
-      return { success: false, error: `Error de Base de Datos: ${profileError.message}. Verifica que la columna password_plain exista.` };
+      // Opcional: Podrías querer borrar el usuario de Auth aquí si el perfil falla
+      // await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      return { success: false, error: `Error de Base de Datos: ${profileError.message}. Asegúrate de que la CURP y Email sean únicos.` };
     }
 
     console.log("Perfil académico gestionado exitosamente.");
@@ -98,20 +102,16 @@ export async function createUserWithProfile(userData: any) {
 
 export async function updateUserProfile(id: string, userData: any) {
   try {
-    const fechaExpiracion = userData.fecha_expiracion && userData.fecha_expiracion.trim() !== "" 
-      ? userData.fecha_expiracion 
-      : null;
-
     const updateData: any = {
       nombre: userData.nombre,
       apellidos: userData.apellidos,
       curp: (userData.curp || '').toUpperCase(),
       rol: userData.rol,
       estatus: userData.estatus,
-      telefono: userData.telefono,
-      matricula: userData.matricula,
-      numero_empleado: userData.numero_empleado,
-      fecha_expiracion: fechaExpiracion,
+      telefono: emptyToNull(userData.telefono),
+      matricula: emptyToNull(userData.matricula),
+      numero_empleado: emptyToNull(userData.numero_empleado),
+      fecha_expiracion: emptyToNull(userData.fecha_expiracion),
     };
 
     if (userData.password) {

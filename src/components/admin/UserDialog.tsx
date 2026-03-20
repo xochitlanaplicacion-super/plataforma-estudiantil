@@ -18,8 +18,8 @@ import { createUserWithProfile, updateUserProfile } from '@/lib/actions/users';
 import { createClient } from '@/lib/supabase/client';
 
 const userSchema = z.object({
-  nombre: z.string().min(2, "El nombre es muy corto"),
-  apellidos: z.string().min(2, "Los apellidos son muy cortos"),
+  nombre: z.string().min(2, "El nombre es obligatorio"),
+  apellidos: z.string().min(2, "Los apellidos son obligatorios"),
   email: z.string().email("Email inválido"),
   curp: z.string().min(10, "CURP incompleta").max(18, "Máximo 18 caracteres"),
   rol: z.enum(['superuser', 'admin', 'profesor', 'alumno']),
@@ -28,7 +28,7 @@ const userSchema = z.object({
   matricula: z.string().optional().or(z.literal('')),
   numero_empleado: z.string().optional().or(z.literal('')),
   fecha_expiracion: z.string().optional().or(z.literal('')),
-  nivel_estudios: z.string().optional().or(z.literal('')),
+  nivel_estudios: z.string().min(1, "El nivel de estudios es obligatorio"),
   password: z.string().min(8, "Mínimo 8 caracteres").optional().or(z.literal('')),
 });
 
@@ -208,7 +208,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                 name="nombre"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Nombre(s)</FormLabel>
+                    <FormLabel>Nombre(s) *</FormLabel>
                     <FormControl><Input placeholder="Ej. María Elena" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
@@ -219,7 +219,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                 name="apellidos"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Apellidos</FormLabel>
+                    <FormLabel>Apellidos *</FormLabel>
                     <FormControl><Input placeholder="Ej. Sánchez Méndez" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
@@ -230,7 +230,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                 name="email"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Correo Electrónico</FormLabel>
+                    <FormLabel>Correo Electrónico *</FormLabel>
                     <FormControl><Input type="email" placeholder="correo@ejemplo.com" {...field} disabled={!!user} /></FormControl>
                     <FormMessage />
                   </FormItem>
@@ -241,7 +241,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                 name="curp"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>CURP</FormLabel>
+                    <FormLabel>CURP *</FormLabel>
                     <FormControl><Input className="uppercase font-mono" {...field} placeholder="18 CARACTERES" /></FormControl>
                     <FormMessage />
                   </FormItem>
@@ -291,7 +291,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                 name="rol"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Rol de Usuario</FormLabel>
+                    <FormLabel>Rol de Usuario *</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
@@ -314,7 +314,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                 name="estatus"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Estatus</FormLabel>
+                    <FormLabel>Estatus *</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
@@ -368,7 +368,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                       name="nivel_estudios"
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Nivel de Estudios</FormLabel>
+                          <FormLabel>Nivel de Estudios a Estudiar *</FormLabel>
                           <Select 
                             onValueChange={(val) => {
                               field.onChange(val);
