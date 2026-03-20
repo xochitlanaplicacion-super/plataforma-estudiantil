@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -11,9 +11,10 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { User } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, RefreshCw, Key } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { createUserWithProfile, updateUserProfile } from '@/lib/actions/users';
+import { createClient } from '@/lib/supabase/client';
 
 const userSchema = z.object({
   nombre: z.string().min(2, "El nombre es muy corto"),
@@ -26,6 +27,8 @@ const userSchema = z.object({
   matricula: z.string().optional().or(z.literal('')),
   numero_empleado: z.string().optional().or(z.literal('')),
   fecha_expiracion: z.string().optional().or(z.literal('')),
+  nivel_estudios: z.string().optional().or(z.literal('')),
+  password: z.string().min(8, "Mínimo 8 caracteres").optional().or(z.literal('')),
 });
 
 type UserFormValues = z.infer<typeof userSchema>;
@@ -39,8 +42,10 @@ interface UserDialogProps {
 
 export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogProps) {
   const { toast } = useToast();
-  const [loading, setLoading] = React.useState(false);
-  const [dbError, setDbError] = React.useState<string | null>(null);
+  const supabase = createClient();
+  const [loading, setLoading] = useState(false);
+  const [dbError, setDbError] = useState<string | null>(null);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userSchema),
@@ -55,8 +60,62 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
       matricula: '',
       numero_empleado: '',
       fecha_expiracion: '',
+      nivel_estudios: '',
+      password: '',
     },
   });
+
+  const generatePassword = useCallback(() => {
+    const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+";
+    let retVal = "";
+    for (let i = 0, n = charset.length; i < 10; ++i) {
+      retVal += charset.charAt(Math.floor(Math.random() * n));
+    }
+    form.setValue('password', retVal);
+  }, [form]);
+
+  const generateMatricula = async (nivel: string) => {
+    if (!nivel || user) return;
+    
+    setIsGenerating(true);
+    try {
+      const now = new Date();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const year = String(now.getFullYear()).slice(-2);
+      
+      let suffix = "";
+      if (nivel === 'universidad') suffix = "UNI";
+      else if (nivel === 'bachillerato') suffix = "BAC";
+      else if (nivel === 'capacitacion') suffix = "CAP";
+
+      // Consultar la base de datos para obtener la última matrícula de este nivel
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('matricula')
+        .like('matricula', `%${suffix}`)
+        .order('matricula', { ascending: false })
+        .limit(1);
+
+      let nextNumber = 1;
+      if (profiles && profiles.length > 0) {
+        const lastMat = profiles[0].matricula;
+        // Extraer el número secuencial (asumiendo formato IEZPTAMM YY [000000] SUF)
+        // IEZPTA (6) + MM (2) + YY (2) = 10 caracteres antes del secuencial
+        const match = lastMat.match(/IEZPTA\d{4}(\d{6})/);
+        if (match) {
+          nextNumber = parseInt(match[1]) + 1;
+        }
+      }
+
+      const sequential = String(nextNumber).padStart(6, '0');
+      const finalMatricula = `IEZPTA${month}${year}${sequential}${suffix}`;
+      form.setValue('matricula', finalMatricula);
+    } catch (err) {
+      console.error("Error generating matricula:", err);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   useEffect(() => {
     if (open) {
@@ -73,6 +132,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
           matricula: user.matricula || '',
           numero_empleado: user.numero_empleado || '',
           fecha_expiracion: user.fecha_expiracion || '',
+          password: '',
         });
       } else {
         form.reset({
@@ -86,16 +146,17 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
           matricula: '',
           numero_empleado: '',
           fecha_expiracion: '',
+          password: '',
         });
+        generatePassword();
       }
     }
-  }, [user, form, open]);
+  }, [user, form, open, generatePassword]);
 
   const onSubmit = async (values: UserFormValues) => {
     setLoading(true);
     setDbError(null);
     try {
-      console.log("Enviando formulario...", values);
       let result;
       if (user) {
         result = await updateUserProfile(user.id, values);
@@ -106,26 +167,15 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
       if (result.success) {
         toast({ 
           title: user ? "Usuario Actualizado" : "Usuario Creado", 
-          description: user ? "Los cambios se guardaron correctamente." : "El acceso y el perfil académico han sido registrados." 
+          description: user ? "Los cambios se guardaron correctamente." : `Registro exitoso. Matrícula: ${values.matricula}` 
         });
         onSuccess();
         onOpenChange(false);
       } else {
         setDbError(result.error || "Ocurrió un error inesperado.");
-        toast({
-          variant: "destructive",
-          title: "Error en la operación",
-          description: result.error || "Revisa los detalles en el formulario."
-        });
       }
     } catch (error: any) {
-      const msg = error.message || "Error de conexión con el servidor.";
-      setDbError(msg);
-      toast({
-        variant: "destructive",
-        title: "Error Crítico",
-        description: msg
-      });
+      setDbError(error.message || "Error de conexión con el servidor.");
     } finally {
       setLoading(false);
     }
@@ -139,17 +189,15 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
           <DialogDescription>
             {user 
               ? 'Modifica los datos del usuario. Los cambios se sincronizarán inmediatamente.' 
-              : 'Al crear el perfil, también se generará una cuenta de acceso con la contraseña: Zapata2025!'}
+              : 'Completa los campos para generar el acceso y la matrícula oficial.'}
           </DialogDescription>
         </DialogHeader>
 
         {dbError && (
           <Alert variant="destructive" className="mb-4">
             <AlertCircle className="h-4 w-4" />
-            <AlertTitle>No se pudo completar el registro</AlertTitle>
-            <AlertDescription className="text-xs">
-              {dbError}
-            </AlertDescription>
+            <AlertTitle>Error en la operación</AlertTitle>
+            <AlertDescription className="text-xs">{dbError}</AlertDescription>
           </Alert>
         )}
 
@@ -162,7 +210,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Nombre(s)</FormLabel>
-                    <FormControl><Input placeholder="Ej. Jose Luis" {...field} /></FormControl>
+                    <FormControl><Input placeholder="Ej. María Elena" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -173,7 +221,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Apellidos</FormLabel>
-                    <FormControl><Input placeholder="Ej. Flores Bautista" {...field} /></FormControl>
+                    <FormControl><Input placeholder="Ej. Sánchez Méndez" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -195,11 +243,39 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>CURP</FormLabel>
-                    <FormControl><Input className="uppercase font-mono" {...field} placeholder="18 caracteres" /></FormControl>
+                    <FormControl><Input className="uppercase font-mono" {...field} placeholder="18 CARACTERES" /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
+              
+              {!user && (
+                <FormField
+                  control={form.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="flex justify-between items-center">
+                        Contraseña de Acceso
+                        <Button 
+                          type="button" 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-6 text-[10px] gap-1"
+                          onClick={generatePassword}
+                        >
+                          <RefreshCw size={10} /> Regenerar
+                        </Button>
+                      </FormLabel>
+                      <div className="relative">
+                        <FormControl><Input {...field} placeholder="Contraseña sugerida" /></FormControl>
+                        <Key className="absolute right-3 top-2.5 text-muted-foreground opacity-20" size={16} />
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                )}
+
               <FormField
                 control={form.control}
                 name="rol"
@@ -269,33 +345,73 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
               />
             </div>
 
-            <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 bg-muted/30 p-4 rounded-lg">
-              {form.watch('rol') === 'alumno' && (
-                <FormField
-                  control={form.control}
-                  name="matricula"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Matrícula / ID Alumno</FormLabel>
-                      <FormControl><Input placeholder="Código único" {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-              {form.watch('rol') === 'profesor' && (
-                <FormField
-                  control={form.control}
-                  name="numero_empleado"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Número de Empleado</FormLabel>
-                      <FormControl><Input placeholder="Cédula interna" {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
+            <div className="md:col-span-2 space-y-4 bg-muted/30 p-6 rounded-xl border border-dashed border-primary/20">
+              <h4 className="text-sm font-bold text-primary flex items-center gap-2">
+                Datos Académicos e Identificación
+              </h4>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {form.watch('rol') === 'alumno' && (
+                  <>
+                    <FormField
+                      control={form.control}
+                      name="nivel_estudios"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Nivel de Estudios</FormLabel>
+                          <Select 
+                            onValueChange={(val) => {
+                              field.onChange(val);
+                              generateMatricula(val);
+                            }} 
+                            value={field.value}
+                          >
+                            <FormControl>
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecciona nivel" />
+                              </SelectTrigger>
+                            </FormControl>
+                            <SelectContent>
+                              <SelectItem value="bachillerato">Bachillerato</SelectItem>
+                              <SelectItem value="universidad">Universidad</SelectItem>
+                              <SelectItem value="capacitacion">Capacitaciones</SelectItem>
+                            </SelectContent>
+                          </Select>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={form.control}
+                      name="matricula"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel className="flex justify-between">
+                            Matrícula Sugerida
+                            {isGenerating && <Loader2 size={12} className="animate-spin" />}
+                          </FormLabel>
+                          <FormControl><Input placeholder="IEZPTA..." {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  </>
+                )}
+                
+                {form.watch('rol') === 'profesor' && (
+                  <FormField
+                    control={form.control}
+                    name="numero_empleado"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Número de Empleado</FormLabel>
+                        <FormControl><Input placeholder="Cédula interna" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+              </div>
             </div>
 
             <DialogFooter className="gap-2 pt-4 border-t">
