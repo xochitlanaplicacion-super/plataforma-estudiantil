@@ -9,10 +9,11 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { User, UserRole, UserEstatus } from '@/lib/types';
+import { User } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const userSchema = z.object({
   nombre: z.string().min(2, "El nombre es muy corto"),
@@ -40,6 +41,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
   const { toast } = useToast();
   const supabase = createClient();
   const [loading, setLoading] = React.useState(false);
+  const [dbError, setDbError] = React.useState<string | null>(null);
 
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userSchema),
@@ -58,6 +60,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
   });
 
   useEffect(() => {
+    setDbError(null);
     if (user) {
       form.reset({
         nombre: user.nombre || '',
@@ -85,39 +88,50 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
         fecha_expiracion: '',
       });
     }
-  }, [user, form]);
+  }, [user, form, open]);
 
   const onSubmit = async (values: UserFormValues) => {
     setLoading(true);
+    setDbError(null);
     try {
       if (user) {
-        // Editar Usuario
+        // EDITAR USUARIO EXISTENTE
         const { error } = await supabase
           .from('profiles')
           .update(values)
           .eq('id', user.id);
 
         if (error) throw error;
+        
         toast({ title: "Usuario Actualizado", description: "Los cambios se guardaron correctamente." });
+        onSuccess();
+        onOpenChange(false);
       } else {
-        // Crear Usuario (Solo perfil por ahora, en un sistema real esto requiere Auth Admin)
-        // Simulamos la creación generando un ID único para el perfil
+        // CREAR NUEVO USUARIO
+        // Importante: En Supabase, para crear un perfil 'efectivo', el ID debe existir en auth.users.
+        // Como este es un cliente de navegador, no podemos crear usuarios de Auth para otros
+        // sin la Service Role Key (que es secreta). 
+        
+        // Intentamos insertar directamente (esto fallará si la DB tiene el FK obligatorio)
         const { error } = await supabase
           .from('profiles')
           .insert([{ ...values, id: crypto.randomUUID() }]);
 
-        if (error) throw error;
-        toast({ title: "Usuario Creado", description: "El perfil ha sido registrado en la base de datos." });
+        if (error) {
+          if (error.code === '23503') {
+            setDbError("No se puede crear el perfil porque el correo no está registrado en el sistema de Autenticación. En un sistema real, primero se crea el acceso y luego el perfil.");
+            return;
+          }
+          throw error;
+        }
+
+        toast({ title: "Usuario Creado", description: "El perfil ha sido registrado." });
+        onSuccess();
+        onOpenChange(false);
       }
-      onSuccess();
-      onOpenChange(false);
     } catch (error: any) {
-      console.error(error);
-      toast({ 
-        variant: "destructive", 
-        title: "Error", 
-        description: error.message || "No se pudo procesar la solicitud." 
-      });
+      console.error("Error en operación:", error);
+      setDbError(error.message || "Ocurrió un error inesperado en la base de datos.");
     } finally {
       setLoading(false);
     }
@@ -127,22 +141,34 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{user ? 'Editar Usuario' : 'Registrar Nuevo Usuario'}</DialogTitle>
+          <DialogTitle>{user ? 'Editar Perfil Académico' : 'Registrar Nuevo Perfil'}</DialogTitle>
           <DialogDescription>
-            Completa los datos del perfil académico. La información se guardará en la tabla de perfiles.
+            {user 
+              ? 'Modifica los datos del usuario. Los cambios se sincronizarán inmediatamente.' 
+              : 'Completa los datos para el nuevo registro académico.'}
           </DialogDescription>
         </DialogHeader>
 
+        {dbError && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error de Base de Datos</AlertTitle>
+            <AlertDescription className="text-xs">
+              {dbError}
+            </AlertDescription>
+          </Alert>
+        )}
+
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pt-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
               <FormField
                 control={form.control}
                 name="nombre"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Nombre(s)</FormLabel>
-                    <FormControl><Input {...field} /></FormControl>
+                    <FormControl><Input placeholder="Ej. Jose Luis" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -153,7 +179,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Apellidos</FormLabel>
-                    <FormControl><Input {...field} /></FormControl>
+                    <FormControl><Input placeholder="Ej. Flores Bautista" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -164,7 +190,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Correo Electrónico</FormLabel>
-                    <FormControl><Input type="email" {...field} /></FormControl>
+                    <FormControl><Input type="email" placeholder="correo@ejemplo.com" {...field} disabled={!!user} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -175,7 +201,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>CURP</FormLabel>
-                    <FormControl><Input className="uppercase" {...field} maxLength={18} /></FormControl>
+                    <FormControl><Input className="uppercase font-mono" {...field} maxLength={18} placeholder="18 caracteres" /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
@@ -186,7 +212,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Rol de Usuario</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Selecciona un rol" />
@@ -209,7 +235,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Estatus</FormLabel>
-                    <Select onValueChange={field.onChange} defaultValue={field.value}>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger>
                           <SelectValue placeholder="Selecciona estatus" />
@@ -242,46 +268,52 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Teléfono</FormLabel>
-                    <FormControl><Input {...field} /></FormControl>
+                    <FormControl><Input placeholder="10 dígitos" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              {form.watch('rol') === 'alumno' && (
-                <FormField
-                  control={form.control}
-                  name="matricula"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Matrícula</FormLabel>
-                      <FormControl><Input {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
-              {form.watch('rol') === 'profesor' && (
-                <FormField
-                  control={form.control}
-                  name="numero_empleado"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Número de Empleado</FormLabel>
-                      <FormControl><Input {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              )}
+              
+              <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 bg-muted/30 p-4 rounded-lg">
+                {form.watch('rol') === 'alumno' && (
+                  <FormField
+                    control={form.control}
+                    name="matricula"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Matrícula / ID Alumno</FormLabel>
+                        <FormControl><Input placeholder="Código único" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+                {form.watch('rol') === 'profesor' && (
+                  <FormField
+                    control={form.control}
+                    name="numero_empleado"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Número de Empleado</FormLabel>
+                        <FormControl><Input placeholder="Cédula interna" {...field} /></FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
+              </div>
             </div>
 
-            <DialogFooter className="gap-2 pt-4">
+            <DialogFooter className="gap-2 pt-4 border-t">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
                 Cancelar
               </Button>
-              <Button type="submit" disabled={loading} className="bg-primary">
-                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {user ? 'Guardar Cambios' : 'Crear Usuario'}
+              <Button type="submit" disabled={loading} className="bg-primary min-w-[120px]">
+                {loading ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Procesando...</>
+                ) : (
+                  user ? 'Guardar Cambios' : 'Crear Registro'
+                )}
               </Button>
             </DialogFooter>
           </form>
