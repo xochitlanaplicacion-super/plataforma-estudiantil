@@ -28,18 +28,24 @@ export async function createUserWithProfile(userData: any) {
       return { success: false, error: "Error de configuración: Falta la llave de servicio en el servidor." };
     }
 
-    // 1. Crear el usuario en Supabase Auth
+    // 1. Crear el usuario en Supabase Auth enviando TODA la metadata que espera tu TRIGGER
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: userData.email,
       password: userData.password || 'Zapata2025!',
       email_confirm: true,
       user_metadata: { 
-        full_name: `${userData.nombre} ${userData.apellidos}` 
+        nombre: userData.nombre,
+        apellidos: userData.apellidos,
+        curp: (userData.curp || '').toUpperCase(),
+        rol: userData.rol,
+        matricula: userData.matricula,
+        numero_empleado: userData.numero_empleado
       }
     });
 
     if (authError) {
       console.error("Error en Supabase Auth:", authError.message);
+      // Si el error es "Database error", suele ser el TRIGGER el que falló
       return { success: false, error: `Error de Autenticación: ${authError.message}` };
     }
 
@@ -49,7 +55,8 @@ export async function createUserWithProfile(userData: any) {
 
     console.log("Usuario de Auth creado con ID:", authData.user.id);
 
-    // 2. Crear o actualizar el perfil en la tabla 'profiles'
+    // 2. Crear o actualizar el perfil en la tabla 'profiles' con campos adicionales
+    // Usamos UPSERT porque el Trigger ya pudo haber creado una versión básica del perfil
     const { error: profileError } = await supabaseAdmin
       .from('profiles')
       .upsert({
@@ -64,12 +71,14 @@ export async function createUserWithProfile(userData: any) {
         matricula: userData.matricula,
         numero_empleado: userData.numero_empleado,
         fecha_expiracion: userData.fecha_expiracion,
-        password_plain: userData.password, // Guardamos la contraseña para recuperación administrativa
+        password_plain: userData.password, // Asegúrate de haber ejecutado: ALTER TABLE profiles ADD COLUMN password_plain VARCHAR(100);
       }, { onConflict: 'id' });
 
     if (profileError) {
       console.error("Error al gestionar perfil SQL:", profileError.message);
-      return { success: false, error: `Error de Base de Datos: ${profileError.message}` };
+      // Si falla el perfil, eliminamos el usuario de auth para no dejar datos huérfanos
+      await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+      return { success: false, error: `Error de Base de Datos: ${profileError.message}. Verifica que la columna password_plain exista.` };
     }
 
     console.log("Perfil académico gestionado exitosamente.");
@@ -98,10 +107,8 @@ export async function updateUserProfile(id: string, userData: any) {
       fecha_expiracion: userData.fecha_expiracion,
     };
 
-    // Si se proporciona una nueva contraseña en el formulario de edición
     if (userData.password) {
       updateData.password_plain = userData.password;
-      // También la actualizamos en Supabase Auth
       await supabaseAdmin.auth.admin.updateUserById(id, {
         password: userData.password
       });
