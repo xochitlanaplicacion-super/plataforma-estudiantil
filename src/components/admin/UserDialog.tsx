@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { User } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -108,18 +108,13 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
         onOpenChange(false);
       } else {
         // CREAR NUEVO PERFIL
-        // Nota: Si la tabla profiles tiene una FK a auth.users, esta inserción fallará 
-        // a menos que el usuario se cree primero en Auth.
         const { error } = await supabase
           .from('profiles')
           .insert([{ 
             ...values,
-            // Si el ID es requerido y no hay default en la DB, generamos uno temporal
-            // pero lo ideal es que la DB tenga gen_random_uuid() por defecto.
           }]);
 
         if (error) {
-          // Capturamos el error específico de FK si ocurre
           if (error.code === '23503') {
             setDbError("No se puede crear el perfil: El usuario debe estar registrado primero en el sistema de Autenticación de Supabase.");
           } else {
