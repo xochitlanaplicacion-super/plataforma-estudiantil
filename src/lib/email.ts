@@ -1,4 +1,3 @@
-
 import nodemailer from 'nodemailer';
 
 const transporter = nodemailer.createTransport({
@@ -64,9 +63,9 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
     </head>
     <body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: sans-serif;">
       <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
-        <div style="background: linear-gradient(135deg, #8B2332, #6B1A27); padding: 30px; text-align: center;">
-          <img src="${logoUrl}" alt="Logo" style="height: 60px; width: auto; margin-bottom: 10px;">
-          <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: bold; text-transform: uppercase;">
+        <div style="background: linear-gradient(135deg, #8B2332, #6B1A27); padding: 40px 30px; text-align: center;">
+          <img src="${logoUrl}" alt="Logo" style="height: 180px; width: auto; margin-bottom: 15px;">
+          <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">
             Instituto Educativo Emiliano Zapata
           </h1>
           <p style="color: #f0d0d5; margin: 5px 0 0; font-size: 13px;">Sistema de Gestión Académica</p>
