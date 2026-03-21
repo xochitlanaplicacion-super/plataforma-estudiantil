@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { BookOpen, GraduationCap, Users, Clock, MapPin, Phone, Mail, ChevronUp, Menu, X, CheckCircle, Award } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Variants } from 'framer-motion';
 
 // Custom hook to detect scroll position
 const useScroll = () => {
@@ -20,12 +21,12 @@ const useScroll = () => {
 };
 
 // Animation Variants
-const fadeUp = {
+const fadeUp: Variants = {
   hidden: { opacity: 0, y: 40 },
   visible: { opacity: 1, y: 0, transition: { duration: 0.8, ease: "easeOut" } }
 };
 
-const staggerContainer = {
+const staggerContainer: Variants = {
   hidden: { opacity: 0 },
   visible: {
     opacity: 1,
@@ -141,10 +142,9 @@ const Hero = () => {
       <div className="absolute inset-0 z-0">
         <div className="absolute inset-0 bg-gradient-to-r from-[#0A2647] via-[#0A2647]/80 to-transparent z-10" />
         <img
-          src="https://picsum.photos/seed/edu1/1920/1080"
+          src="/images/hero.jpg"
           alt="Estudiantes en el campus"
           className="w-full h-full object-cover object-center"
-          data-ai-hint="university campus students"
         />
       </div>
 
@@ -198,10 +198,9 @@ const About = () => {
           >
             <div className="relative rounded-2xl overflow-hidden shadow-2xl aspect-video">
               <img 
-                src="https://picsum.photos/seed/edu2/800/600" 
+                src="/images/about.jpg" 
                 alt="Aula moderna en México" 
                 className="w-full h-full object-cover" 
-                data-ai-hint="modern classroom"
               />
               <div className="absolute inset-0 bg-blue-900/10 mix-blend-multiply"></div>
             </div>
@@ -384,10 +383,9 @@ const Banner = () => {
       <div className="absolute inset-0 z-0">
         <div className="absolute inset-0 bg-[#0A2647]/70 z-10" />
         <img 
-          src="https://picsum.photos/seed/edu3/1920/1080" 
+          src="/images/graduation.jpg" 
           alt="Estudiantes graduándose" 
           className="w-full h-full object-cover" 
-          data-ai-hint="graduation students"
         />
       </div>
       <div className="relative z-20 text-center px-4">
