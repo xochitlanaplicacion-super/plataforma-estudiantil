@@ -45,7 +45,7 @@ export async function createAspiranteRecord(aspiranteData: any) {
 export async function getPublicCareers() {
   try {
     const { data, error } = await supabaseAdmin
-      .from('careers')
+      .from('carreras')
       .select('id, nombre')
       .eq('activo', true);
     

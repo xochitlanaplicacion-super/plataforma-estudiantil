@@ -49,7 +49,7 @@ export default function AdminDashboard() {
         .eq('rol', 'profesor')
         .eq('estatus', 'activo');
 
-      const { count: carrerasCount } = await supabase.from('careers').select('*', { count: 'exact', head: true });
+      const { count: carrerasCount } = await supabase.from('carreras').select('*', { count: 'exact', head: true });
       const { count: gruposCount } = await supabase.from('groups').select('*', { count: 'exact', head: true });
 
       setStats({
