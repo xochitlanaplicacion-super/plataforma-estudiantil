@@ -16,6 +16,7 @@ type Theme = {
   bgImage: string;
   buttonColor: string;
   textColor: string;
+  glassStyle: string;
 };
 
 const themes: Theme[] = [
@@ -23,19 +24,22 @@ const themes: Theme[] = [
     id: 'vino',
     bgImage: '/images/FONDO_ROJO.png',
     buttonColor: '#8B2332',
-    textColor: 'text-white'
+    textColor: 'text-white',
+    glassStyle: 'bg-black/20 border-white/30 text-white'
   },
   {
     id: 'verde',
     bgImage: '/images/FONDOS_VERDE.png',
     buttonColor: '#1A4A3F',
-    textColor: 'text-white'
+    textColor: 'text-white',
+    glassStyle: 'bg-black/20 border-white/30 text-white'
   },
   {
     id: 'beige',
     bgImage: '/images/fondos_beige.jpg',
     buttonColor: '#E8D5B7',
-    textColor: 'text-[#1A4A3F]'
+    textColor: 'text-[#1A4A3F]',
+    glassStyle: 'bg-primary/10 border-primary/20 text-primary'
   }
 ];
 
@@ -64,8 +68,11 @@ export default function LoginPage() {
 
   useEffect(() => {
     setMounted(true);
-    const savedTheme = localStorage.getItem('ez-theme');
-    const themeToUse = themes.find(t => t.id === savedTheme) || themes[Math.floor(Math.random() * themes.length)];
+    // Forzamos aleatoriedad real en cada carga si no hay preferencia guardada
+    const randomIndex = Math.floor(Math.random() * themes.length);
+    const savedThemeId = localStorage.getItem('ez-theme');
+    const themeToUse = themes.find(t => t.id === savedThemeId) || themes[randomIndex];
+    
     setCurrentTheme(themeToUse);
     setBgLoaded(false);
   }, []);
@@ -115,7 +122,6 @@ export default function LoginPage() {
           return;
         }
 
-        // VERIFICACIÓN DE EXPIRACIÓN Y ESTATUS
         const hoy = new Date().toISOString().split('T')[0];
         const isExpired = profile.fecha_expiracion && profile.fecha_expiracion < hoy;
 
@@ -177,14 +183,13 @@ export default function LoginPage() {
             </div>
           </div>
           
-          {/* BOTÓN PREREGISTRO POSICIONADO EN EL LADO DEL LOGO/FONDO */}
           <div className="absolute bottom-10 left-10 z-20">
             <Link href="/preregistro">
               <Button 
                 variant="outline" 
-                className="gap-3 bg-white/10 backdrop-blur-md border-white/20 hover:bg-white/20 text-white font-bold px-6 h-12 shadow-2xl"
+                className={`gap-3 backdrop-blur-md font-bold px-8 h-14 shadow-2xl transition-all hover:scale-105 border-2 ${currentTheme.glassStyle}`}
               >
-                <ClipboardEdit size={20} /> Preregistro Aspirantes
+                <ClipboardEdit size={22} /> Preregistro Aspirantes
               </Button>
             </Link>
           </div>
@@ -212,7 +217,7 @@ export default function LoginPage() {
 
             <form onSubmit={handleLogin} className="space-y-8">
               <div className="space-y-3">
-                <Label htmlFor="email" className="text-gray-700 text-base">Correo Electrónico</Label>
+                <Label htmlFor="email" className="text-gray-700 text-base font-semibold">Correo Electrónico</Label>
                 <Input 
                   id="email" 
                   type="email" 
@@ -220,10 +225,11 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="h-14 text-lg border-muted focus:ring-primary/20 bg-gray-50/30"
+                  placeholder="ejemplo@correo.com"
                 />
               </div>
               <div className="space-y-3">
-                <Label htmlFor="password" title="Contraseña" className="text-gray-700 text-base">Contraseña</Label>
+                <Label htmlFor="password" title="Contraseña" className="text-gray-700 text-base font-semibold">Contraseña</Label>
                 <div className="relative">
                   <Input 
                     id="password" 
@@ -232,6 +238,7 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="h-14 text-lg border-muted focus:ring-primary/20 bg-gray-50/30 pr-14"
+                    placeholder="••••••••"
                   />
                   <button
                     type="button"
@@ -244,7 +251,7 @@ export default function LoginPage() {
               </div>
               <Button 
                 type="submit" 
-                className="w-full h-14 text-lg shadow-lg font-bold transition-all mt-6 border-none text-white" 
+                className="w-full h-14 text-lg shadow-lg font-bold transition-all mt-6 border-none text-white hover:opacity-90 active:scale-[0.98]" 
                 style={{ backgroundColor: currentTheme.buttonColor }}
                 disabled={loading}
               >
@@ -253,11 +260,10 @@ export default function LoginPage() {
             </form>
           </div>
           
-          {/* BOTÓN PREREGISTRO VISIBLE SÓLO EN MÓVIL (para no perder funcionalidad) */}
           <div className="md:hidden mt-8 flex justify-center">
             <Link href="/preregistro">
-              <Button variant="outline" className="gap-2 border-primary/20 text-primary font-bold">
-                <ClipboardEdit size={16} /> Preregistro Aspirantes
+              <Button variant="outline" className="gap-2 border-primary/20 text-primary font-bold w-full h-12 shadow-sm">
+                <ClipboardEdit size={18} /> Preregistro Aspirantes
               </Button>
             </Link>
           </div>
