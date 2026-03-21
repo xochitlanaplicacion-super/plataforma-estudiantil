@@ -39,6 +39,7 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
+  // Permitir acceso a login y página de expiración
   if (pathname === '/' || pathname === '/expired') {
     return supabaseResponse;
   }
@@ -62,6 +63,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  // VERIFICACIÓN DE VIGENCIA (Excepto para Superusuarios y Administradores si se desea)
   if (profile.rol !== 'superuser' && profile.fecha_expiracion) {
     const hoy = new Date().toISOString().split('T')[0];
     if (profile.fecha_expiracion < hoy && pathname !== '/expired') {

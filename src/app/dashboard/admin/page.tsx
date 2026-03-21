@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useState } from 'react';
@@ -33,6 +34,8 @@ export default function AdminDashboard() {
   const fetchData = async () => {
     setLoading(true);
     try {
+      const hoy = new Date().toISOString().split('T')[0];
+
       const { count: alumnosCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('rol', 'alumno');
       const { count: profesCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('rol', 'profesor');
       const { count: carrerasCount } = await supabase.from('careers').select('*', { count: 'exact', head: true });
@@ -53,12 +56,14 @@ export default function AdminDashboard() {
 
       if (users) setRecentUsers(users as any);
 
-      // Alumnos con documentos faltantes exclusivamente
+      // Alumnos con documentos faltantes QUE NO HAYAN EXPIRADO
       const { data: missingDocsAlumnos } = await supabase
         .from('profiles')
         .select('*')
         .eq('rol', 'alumno')
+        .eq('estatus', 'activo')
         .or('doc_acta_nacimiento.eq.false,doc_certificado_estudios.eq.false,doc_curp.eq.false,doc_ine.eq.false')
+        .gte('fecha_expiracion', hoy) // Solo mostrar los que tienen vigencia vigente
         .order('nombre', { ascending: true });
 
       if (missingDocsAlumnos) setAlumnosMissingDocs(missingDocsAlumnos as any);
@@ -90,7 +95,6 @@ export default function AdminDashboard() {
     setSendingReminder(null);
   };
 
-  // Datos para la gráfica de documentos (Solo alumnos)
   const chartData = [
     { name: 'Actas', count: alumnosMissingDocs.filter(u => !u.doc_acta_nacimiento).length, color: '#8B2332' },
     { name: 'Certificados', count: alumnosMissingDocs.filter(u => !u.doc_certificado_estudios).length, color: '#E8D5B7' },
@@ -133,8 +137,8 @@ export default function AdminDashboard() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Expedientes Pendientes (Alumnos)</CardTitle>
-                <CardDescription>Estadística de documentos faltantes exclusivamente de alumnos.</CardDescription>
+                <CardTitle>Expedientes Pendientes (Alumnos Vigentes)</CardTitle>
+                <CardDescription>Estadística de documentos faltantes de alumnos con acceso activo.</CardDescription>
               </div>
               <Badge variant="outline" className="text-primary border-primary">
                 {alumnosMissingDocs.length} Alumnos
@@ -197,14 +201,14 @@ export default function AdminDashboard() {
               <CardTitle className="flex items-center gap-2">
                 <FileWarning className="text-amber-600" size={20} /> Alumnos con Documentación Pendiente
               </CardTitle>
-              <CardDescription>Enlista solo a los estudiantes que tienen al menos un documento faltante.</CardDescription>
+              <CardDescription>Enlista a los estudiantes vigentes que tienen al menos un documento faltante.</CardDescription>
             </div>
           </CardHeader>
           <CardContent>
             {loading ? (
                <div className="flex justify-center py-10"><Loader2 className="animate-spin" /></div>
             ) : alumnosMissingDocs.length === 0 ? (
-               <div className="text-center py-10 text-muted-foreground">Todos los alumnos tienen su documentación completa.</div>
+               <div className="text-center py-10 text-muted-foreground">No hay alumnos vigentes con pendientes.</div>
             ) : (
                <Table>
                  <TableHeader>
