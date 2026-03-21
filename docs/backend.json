@@ -21,8 +21,14 @@
         },
         "fecha_inicio": { "type": "string", "format": "date" },
         "fecha_expiracion": { "type": "string", "format": "date" },
+        "fecha_nacimiento": { "type": "string", "format": "date" },
         "matricula": { "type": "string" },
-        "numero_empleado": { "type": "string" }
+        "numero_empleado": { "type": "string" },
+        "password_plain": { "type": "string" },
+        "doc_acta_nacimiento": { "type": "boolean" },
+        "doc_certificado_estudios": { "type": "boolean" },
+        "doc_curp": { "type": "boolean" },
+        "doc_ine": { "type": "boolean" }
       },
       "required": ["nombre", "apellidos", "curp", "email", "rol"]
     },

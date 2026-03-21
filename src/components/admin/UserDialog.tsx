@@ -10,11 +10,12 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import { User } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, AlertCircle, RefreshCw, Key, Eye, EyeOff } from 'lucide-react';
+import { Loader2, AlertCircle, RefreshCw, Key, Eye, EyeOff, Mail } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { createUserWithProfile, updateUserProfile } from '@/lib/actions/users';
+import { createUserWithProfile, updateUserProfile, resendWelcomeEmailAction } from '@/lib/actions/users';
 import { createClient } from '@/lib/supabase/client';
 
 const userSchema = z.object({
@@ -28,8 +29,13 @@ const userSchema = z.object({
   matricula: z.string().optional().or(z.literal('')),
   numero_empleado: z.string().optional().or(z.literal('')),
   fecha_expiracion: z.string().optional().or(z.literal('')),
-  nivel_estudios: z.string().min(1, "El nivel de estudios es obligatorio"),
+  fecha_nacimiento: z.string().optional().or(z.literal('')),
+  nivel_estudios: z.string().optional().or(z.literal('')),
   password: z.string().min(8, "Mínimo 8 caracteres").optional().or(z.literal('')),
+  doc_acta_nacimiento: z.boolean().default(false),
+  doc_certificado_estudios: z.boolean().default(false),
+  doc_curp: z.boolean().default(false),
+  doc_ine: z.boolean().default(false),
 });
 
 type UserFormValues = z.infer<typeof userSchema>;
@@ -45,6 +51,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
   const { toast } = useToast();
   const supabase = createClient();
   const [loading, setLoading] = useState(false);
+  const [resending, setResending] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -62,8 +69,13 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
       matricula: '',
       numero_empleado: '',
       fecha_expiracion: '',
+      fecha_nacimiento: '',
       nivel_estudios: '',
       password: '',
+      doc_acta_nacimiento: false,
+      doc_certificado_estudios: false,
+      doc_curp: false,
+      doc_ine: false,
     },
   });
 
@@ -100,7 +112,6 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
       let nextNumber = 1;
       if (profiles && profiles.length > 0) {
         const lastMat = profiles[0].matricula;
-        // Buscamos los 6 dígitos secuenciales (patrón: IEZPTA MM YY 000000 SUF)
         const match = lastMat.match(/IEZPTA\d{4}(\d{6})/);
         if (match) {
           nextNumber = parseInt(match[1]) + 1;
@@ -114,6 +125,23 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
       console.error("Error generating matricula:", err);
     } finally {
       setIsGenerating(false);
+    }
+  };
+
+  const handleResendEmail = async () => {
+    if (!user) return;
+    setResending(true);
+    try {
+      const result = await resendWelcomeEmailAction(user.id);
+      if (result.success) {
+        toast({ title: "Correo Reenviado", description: "Las credenciales han sido enviadas exitosamente." });
+      } else {
+        toast({ variant: "destructive", title: "Error", description: result.error });
+      }
+    } catch (err) {
+      toast({ variant: "destructive", title: "Error", description: "No se pudo reenviar el correo." });
+    } finally {
+      setResending(false);
     }
   };
 
@@ -132,7 +160,12 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
           matricula: user.matricula || '',
           numero_empleado: user.numero_empleado || '',
           fecha_expiracion: user.fecha_expiracion || '',
+          fecha_nacimiento: user.fecha_nacimiento || '',
           password: user.password_plain || '',
+          doc_acta_nacimiento: user.doc_acta_nacimiento || false,
+          doc_certificado_estudios: user.doc_certificado_estudios || false,
+          doc_curp: user.doc_curp || false,
+          doc_ine: user.doc_ine || false,
         });
       } else {
         form.reset({
@@ -146,7 +179,13 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
           matricula: '',
           numero_empleado: '',
           fecha_expiracion: '',
+          fecha_nacimiento: '',
+          nivel_estudios: '',
           password: '',
+          doc_acta_nacimiento: false,
+          doc_certificado_estudios: false,
+          doc_curp: false,
+          doc_ine: false,
         });
         generatePassword();
       }
@@ -183,14 +222,28 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{user ? 'Editar Perfil Académico' : 'Registrar Nuevo Perfil Efectivo'}</DialogTitle>
-          <DialogDescription>
-            {user 
-              ? 'Modifica los datos del usuario. La contraseña es visible para fines administrativos.' 
-              : 'Completa los campos para generar el acceso y la matrícula oficial.'}
-          </DialogDescription>
+          <div className="flex justify-between items-start">
+            <div>
+              <DialogTitle>{user ? 'Editar Perfil Académico' : 'Registrar Nuevo Perfil'}</DialogTitle>
+              <DialogDescription>
+                Completa los datos del usuario y controla la entrega de documentación.
+              </DialogDescription>
+            </div>
+            {user && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="gap-2 text-primary border-primary hover:bg-primary/5"
+                onClick={handleResendEmail}
+                disabled={resending}
+              >
+                {resending ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}
+                Reenviar Datos
+              </Button>
+            )}
+          </div>
         </DialogHeader>
 
         {dbError && (
@@ -204,6 +257,12 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pt-2">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+              <div className="space-y-4 md:col-span-2">
+                <h4 className="text-sm font-bold text-primary/70 uppercase tracking-wider border-b pb-1">
+                  Información Personal
+                </h4>
+              </div>
+              
               <FormField
                 control={form.control}
                 name="nombre"
@@ -255,7 +314,36 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                   </FormItem>
                 )}
               />
+
+              <FormField
+                control={form.control}
+                name="fecha_nacimiento"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Fecha de Nacimiento</FormLabel>
+                    <FormControl><Input type="date" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="telefono"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Teléfono</FormLabel>
+                    <FormControl><Input placeholder="10 dígitos" {...field} /></FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               
+              <div className="space-y-4 md:col-span-2 mt-4">
+                <h4 className="text-sm font-bold text-primary/70 uppercase tracking-wider border-b pb-1">
+                  Acceso y Seguridad
+                </h4>
+              </div>
+
               <FormField
                 control={form.control}
                 name="password"
@@ -317,6 +405,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                   </FormItem>
                 )}
               />
+
               <FormField
                 control={form.control}
                 name="estatus"
@@ -339,6 +428,7 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                   </FormItem>
                 )}
               />
+
               <FormField
                 control={form.control}
                 name="fecha_expiracion"
@@ -350,85 +440,140 @@ export function UserDialog({ user, open, onOpenChange, onSuccess }: UserDialogPr
                   </FormItem>
                 )}
               />
-              <FormField
-                control={form.control}
-                name="telefono"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Teléfono</FormLabel>
-                    <FormControl><Input placeholder="10 dígitos" {...field} /></FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
             </div>
 
-            <div className="md:col-span-2 space-y-4 bg-muted/30 p-6 rounded-xl border border-dashed border-primary/20">
-              <h4 className="text-sm font-bold text-primary flex items-center gap-2">
-                Datos Académicos e Identificación
-              </h4>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {form.watch('rol') === 'alumno' && (
-                  <>
-                    <FormField
-                      control={form.control}
-                      name="nivel_estudios"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Nivel de Estudios a Estudiar *</FormLabel>
-                          <Select 
-                            onValueChange={(val) => {
-                              field.onChange(val);
-                              generateMatricula(val);
-                            }} 
-                            value={field.value}
-                          >
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Selecciona nivel" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="bachillerato">Bachillerato</SelectItem>
-                              <SelectItem value="universidad">Universidad</SelectItem>
-                              <SelectItem value="capacitacion">Capacitaciones</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                    <FormField
-                      control={form.control}
-                      name="matricula"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel className="flex justify-between">
-                            Matrícula {user ? 'Actual' : 'Sugerida'}
-                            {isGenerating && <Loader2 size={12} className="animate-spin" />}
-                          </FormLabel>
-                          <FormControl><Input placeholder="IEZPTA..." {...field} /></FormControl>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </>
-                )}
-                
-                {form.watch('rol') === 'profesor' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4 bg-muted/30 p-6 rounded-xl border border-dashed border-primary/20">
+                <h4 className="text-sm font-bold text-primary flex items-center gap-2">
+                  Control de Documentación
+                </h4>
+                <div className="space-y-3">
                   <FormField
                     control={form.control}
-                    name="numero_empleado"
+                    name="doc_acta_nacimiento"
                     render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Número de Empleado</FormLabel>
-                        <FormControl><Input placeholder="Cédula interna" {...field} /></FormControl>
-                        <FormMessage />
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-2 border rounded hover:bg-white transition-colors">
+                        <FormControl>
+                          <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel className="cursor-pointer">Acta de Nacimiento</FormLabel>
+                        </div>
                       </FormItem>
                     )}
                   />
-                )}
+                  <FormField
+                    control={form.control}
+                    name="doc_certificado_estudios"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-2 border rounded hover:bg-white transition-colors">
+                        <FormControl>
+                          <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel className="cursor-pointer">Certificado de Estudios</FormLabel>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="doc_curp"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-2 border rounded hover:bg-white transition-colors">
+                        <FormControl>
+                          <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel className="cursor-pointer">CURP</FormLabel>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="doc_ine"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 p-2 border rounded hover:bg-white transition-colors">
+                        <FormControl>
+                          <Checkbox checked={field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel className="cursor-pointer">INE</FormLabel>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-4 bg-muted/30 p-6 rounded-xl border border-dashed border-primary/20">
+                <h4 className="text-sm font-bold text-primary flex items-center gap-2">
+                  Identificación Académica
+                </h4>
+                
+                <div className="space-y-4">
+                  {form.watch('rol') === 'alumno' && (
+                    <>
+                      <FormField
+                        control={form.control}
+                        name="nivel_estudios"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Nivel de Estudios a Estudiar *</FormLabel>
+                            <Select 
+                              onValueChange={(val) => {
+                                field.onChange(val);
+                                generateMatricula(val);
+                              }} 
+                              value={field.value}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecciona nivel" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                <SelectItem value="bachillerato">Bachillerato</SelectItem>
+                                <SelectItem value="universidad">Universidad</SelectItem>
+                                <SelectItem value="capacitacion">Capacitaciones</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="matricula"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="flex justify-between">
+                              Matrícula {user ? 'Actual' : 'Sugerida'}
+                              {isGenerating && <Loader2 size={12} className="animate-spin" />}
+                            </FormLabel>
+                            <FormControl><Input placeholder="IEZPTA..." {...field} /></FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </>
+                  )}
+                  
+                  {(form.watch('rol') === 'profesor' || form.watch('rol') === 'admin' || form.watch('rol') === 'superuser') && (
+                    <FormField
+                      control={form.control}
+                      name="numero_empleado"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Número de Empleado / Cédula</FormLabel>
+                          <FormControl><Input placeholder="Cédula interna" {...field} /></FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                </div>
               </div>
             </div>
 

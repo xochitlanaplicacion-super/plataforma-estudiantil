@@ -18,6 +18,7 @@ const supabaseAdmin = createClient(
 
 const emptyToNull = (val: any) => {
   if (typeof val === 'string' && val.trim() === '') return null;
+  if (val === undefined) return null;
   return val;
 };
 
@@ -63,7 +64,7 @@ export async function createUserWithProfile(userData: any) {
 
     if (authError) {
       if (authError.message.includes("already registered")) {
-        return { success: false, error: "Este correo ya tiene un acceso activo. Si no aparece en la lista, bórralo de Authentication en el panel de Supabase." };
+        return { success: false, error: "Este correo ya tiene un acceso activo." };
       }
       return { success: false, error: authError.message };
     }
@@ -72,7 +73,7 @@ export async function createUserWithProfile(userData: any) {
       return { success: false, error: "No se pudo generar el usuario de acceso." };
     }
 
-    // 3. Llenar el perfil (Usamos UPSERT por si el trigger ya creó algo)
+    // 3. Llenar el perfil
     const profileData = {
       id: authData.user.id,
       nombre: userData.nombre,
@@ -85,7 +86,12 @@ export async function createUserWithProfile(userData: any) {
       matricula: emptyToNull(userData.matricula),
       numero_empleado: emptyToNull(userData.numero_empleado),
       fecha_expiracion: emptyToNull(userData.fecha_expiracion),
+      fecha_nacimiento: emptyToNull(userData.fecha_nacimiento),
       password_plain: userData.password,
+      doc_acta_nacimiento: !!userData.doc_acta_nacimiento,
+      doc_certificado_estudios: !!userData.doc_certificado_estudios,
+      doc_curp: !!userData.doc_curp,
+      doc_ine: !!userData.doc_ine,
     };
 
     const { error: profileError } = await supabaseAdmin
@@ -93,7 +99,6 @@ export async function createUserWithProfile(userData: any) {
       .upsert(profileData, { onConflict: 'id' });
 
     if (profileError) {
-      // Si falla SQL, limpiamos Auth para no dejar huérfanos
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
       return { success: false, error: `Error en Base de Datos: ${profileError.message}` };
     }
@@ -133,7 +138,12 @@ export async function updateUserProfile(id: string, userData: any) {
       matricula: emptyToNull(userData.matricula),
       numero_empleado: emptyToNull(userData.numero_empleado),
       fecha_expiracion: emptyToNull(userData.fecha_expiracion),
+      fecha_nacimiento: emptyToNull(userData.fecha_nacimiento),
       password_plain: emptyToNull(userData.password),
+      doc_acta_nacimiento: !!userData.doc_acta_nacimiento,
+      doc_certificado_estudios: !!userData.doc_certificado_estudios,
+      doc_curp: !!userData.doc_curp,
+      doc_ine: !!userData.doc_ine,
     };
 
     if (userData.password) {
@@ -163,13 +173,40 @@ export async function updateUserProfile(id: string, userData: any) {
 
 export async function deleteUserAccount(id: string) {
   try {
-    // Borrar de Auth elimina automáticamente de profiles por el CASCADE en la DB
     const { error } = await supabaseAdmin.auth.admin.deleteUser(id);
     if (error) throw error;
     
     revalidatePath('/dashboard/admin/usuarios');
     revalidatePath('/dashboard/admin');
     return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function resendWelcomeEmailAction(id: string) {
+  try {
+    const { data: profile, error } = await supabaseAdmin
+      .from('profiles')
+      .select('*')
+      .eq('id', id)
+      .single();
+
+    if (error || !profile) {
+      return { success: false, error: "No se encontró el perfil para reenviar el correo." };
+    }
+
+    const result = await sendWelcomeEmail({
+      to: profile.email,
+      nombre: profile.nombre,
+      apellidos: profile.apellidos,
+      rol: profile.rol,
+      matricula: profile.matricula,
+      numero_empleado: profile.numero_empleado,
+      password: profile.password_plain || '********',
+    });
+
+    return result;
   } catch (error: any) {
     return { success: false, error: error.message };
   }

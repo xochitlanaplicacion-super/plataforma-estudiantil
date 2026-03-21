@@ -13,9 +13,14 @@ export interface User {
   estatus: UserEstatus;
   fecha_inicio?: string;
   fecha_expiracion?: string;
+  fecha_nacimiento?: string;
   matricula?: string;
   numero_empleado?: string;
   password_plain?: string;
+  doc_acta_nacimiento?: boolean;
+  doc_certificado_estudios?: boolean;
+  doc_curp?: boolean;
+  doc_ine?: boolean;
   created_at?: string;
   updated_at?: string;
 }
