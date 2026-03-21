@@ -6,9 +6,10 @@ import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Loader2, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Eye, EyeOff, ClipboardEdit } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import Link from 'next/link';
 
 type Theme = {
   id: string;
@@ -119,7 +120,6 @@ export default function LoginPage() {
         const isExpired = profile.fecha_expiracion && profile.fecha_expiracion < hoy;
 
         if (profile.estatus !== 'activo' || isExpired) {
-          // Si está inactivo o expirado, redirección inmediata a la página de aviso
           router.push('/expired');
           return;
         }
@@ -140,8 +140,8 @@ export default function LoginPage() {
   if (!mounted) return null;
 
   return (
-    <div className="min-h-screen w-full bg-white font-body overflow-hidden">
-      <div className="w-full min-h-screen grid grid-cols-1 md:grid-cols-2 overflow-hidden">
+    <div className="min-h-screen w-full bg-white font-body overflow-hidden flex flex-col">
+      <div className="flex-1 w-full grid grid-cols-1 md:grid-cols-2 overflow-hidden">
         
         <div className="hidden md:flex relative overflow-hidden bg-gray-100">
           <img 
@@ -178,7 +178,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <div className="p-8 md:p-14 lg:p-24 flex flex-col justify-center bg-white">
+        <div className="p-8 md:p-14 lg:p-24 flex flex-col justify-center bg-white relative">
           <div className="md:hidden flex justify-center mb-8">
             <img src={LOGO_URL} alt="Logo" className="w-24 h-24 object-contain" />
           </div>
@@ -239,6 +239,14 @@ export default function LoginPage() {
                 {loading ? <Loader2 className="mr-2 h-6 w-6 animate-spin" /> : "Entrar al Sistema"}
               </Button>
             </form>
+          </div>
+
+          <div className="absolute bottom-6 left-6">
+            <Link href="/preregistro">
+              <Button variant="outline" className="gap-2 border-primary/20 hover:bg-primary/5 text-primary text-xs h-9">
+                <ClipboardEdit size={14} /> Preregistro Aspirantes
+              </Button>
+            </Link>
           </div>
         </div>
       </div>

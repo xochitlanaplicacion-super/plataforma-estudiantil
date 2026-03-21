@@ -25,6 +25,18 @@ export interface User {
   updated_at?: string;
 }
 
+export interface Aspirante {
+  id: string;
+  nombre: string;
+  apellidos: string;
+  email: string;
+  curp: string;
+  telefono: string;
+  nivel: string;
+  carrera_id?: string;
+  created_at?: string;
+}
+
 export interface Level {
   id: string;
   nombre: string;

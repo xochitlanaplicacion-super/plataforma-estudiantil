@@ -39,8 +39,8 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
-  // Permitir siempre acceso a login y página de expiración
-  if (pathname === '/' || pathname === '/expired') {
+  // Permitir siempre acceso a login, página de expiración y PREREGISTRO
+  if (pathname === '/' || pathname === '/expired' || pathname === '/preregistro') {
     return supabaseResponse;
   }
 
