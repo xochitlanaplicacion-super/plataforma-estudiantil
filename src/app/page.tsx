@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { Loader2, Eye, EyeOff, ClipboardEdit } from 'lucide-react';
+import { Loader2, Eye, EyeOff, ClipboardEdit, Info } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
@@ -68,7 +68,6 @@ export default function LoginPage() {
 
   useEffect(() => {
     setMounted(true);
-    // Forzamos aleatoriedad real en cada carga si no hay preferencia guardada
     const randomIndex = Math.floor(Math.random() * themes.length);
     const savedThemeId = localStorage.getItem('ez-theme');
     const themeToUse = themes.find(t => t.id === savedThemeId) || themes[randomIndex];
@@ -183,13 +182,21 @@ export default function LoginPage() {
             </div>
           </div>
           
-          <div className="absolute bottom-10 left-10 z-20">
+          <div className="absolute bottom-10 left-10 z-20 flex flex-col gap-3">
+            <Link href="/acerca-de-nosotros">
+              <Button 
+                variant="outline" 
+                className={`gap-3 backdrop-blur-md font-bold px-8 h-12 shadow-2xl transition-all hover:scale-105 border-2 ${currentTheme.glassStyle}`}
+              >
+                <Info size={18} /> Acerca de nosotros
+              </Button>
+            </Link>
             <Link href="/preregistro">
               <Button 
                 variant="outline" 
-                className={`gap-3 backdrop-blur-md font-bold px-8 h-14 shadow-2xl transition-all hover:scale-105 border-2 ${currentTheme.glassStyle}`}
+                className={`gap-3 backdrop-blur-md font-bold px-8 h-12 shadow-2xl transition-all hover:scale-105 border-2 ${currentTheme.glassStyle}`}
               >
-                <ClipboardEdit size={22} /> Preregistro Aspirantes
+                <ClipboardEdit size={18} /> Preregistro Aspirantes
               </Button>
             </Link>
           </div>
@@ -260,7 +267,12 @@ export default function LoginPage() {
             </form>
           </div>
           
-          <div className="md:hidden mt-8 flex justify-center">
+          <div className="md:hidden mt-8 flex flex-col gap-3">
+            <Link href="/acerca-de-nosotros">
+              <Button variant="outline" className="gap-2 border-primary/20 text-primary font-bold w-full h-12 shadow-sm">
+                <Info size={18} /> Acerca de nosotros
+              </Button>
+            </Link>
             <Link href="/preregistro">
               <Button variant="outline" className="gap-2 border-primary/20 text-primary font-bold w-full h-12 shadow-sm">
                 <ClipboardEdit size={18} /> Preregistro Aspirantes
