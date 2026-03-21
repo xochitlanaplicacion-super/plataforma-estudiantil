@@ -176,6 +176,18 @@ export default function LoginPage() {
               />
             </div>
           </div>
+          
+          {/* BOTÓN PREREGISTRO POSICIONADO EN EL LADO DEL LOGO/FONDO */}
+          <div className="absolute bottom-10 left-10 z-20">
+            <Link href="/preregistro">
+              <Button 
+                variant="outline" 
+                className="gap-3 bg-white/10 backdrop-blur-md border-white/20 hover:bg-white/20 text-white font-bold px-6 h-12 shadow-2xl"
+              >
+                <ClipboardEdit size={20} /> Preregistro Aspirantes
+              </Button>
+            </Link>
+          </div>
         </div>
 
         <div className="p-8 md:p-14 lg:p-24 flex flex-col justify-center bg-white relative">
@@ -240,11 +252,12 @@ export default function LoginPage() {
               </Button>
             </form>
           </div>
-
-          <div className="absolute bottom-6 left-6">
+          
+          {/* BOTÓN PREREGISTRO VISIBLE SÓLO EN MÓVIL (para no perder funcionalidad) */}
+          <div className="md:hidden mt-8 flex justify-center">
             <Link href="/preregistro">
-              <Button variant="outline" className="gap-2 border-primary/20 hover:bg-primary/5 text-primary text-xs h-9">
-                <ClipboardEdit size={14} /> Preregistro Aspirantes
+              <Button variant="outline" className="gap-2 border-primary/20 text-primary font-bold">
+                <ClipboardEdit size={16} /> Preregistro Aspirantes
               </Button>
             </Link>
           </div>

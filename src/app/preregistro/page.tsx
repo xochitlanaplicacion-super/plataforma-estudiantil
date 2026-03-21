@@ -115,39 +115,39 @@ export default function PreregistroPage() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col">
       <header className="bg-primary text-white p-6 shadow-md">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <img src="/images/logo_zapata.png" alt="Logo" className="h-12 w-auto brightness-0 invert" />
-            <h1 className="text-xl font-bold font-headline hidden md:block">Instituto Educativo Emiliano Zapata</h1>
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <div className="flex items-center gap-6">
+            <img src="/images/logo_zapata.png" alt="Logo" className="h-24 w-auto drop-shadow-lg" />
+            <h1 className="text-2xl font-bold font-headline hidden md:block">Instituto Educativo Emiliano Zapata</h1>
           </div>
           <Link href="/">
-            <Button variant="ghost" className="text-white hover:bg-white/10 gap-2">
-              <ArrowLeft size={16} /> Volver
+            <Button variant="ghost" className="text-white hover:bg-white/10 gap-2 font-bold">
+              <ArrowLeft size={18} /> Volver
             </Button>
           </Link>
         </div>
       </header>
 
-      <main className="flex-1 max-w-2xl w-full mx-auto p-6 md:py-12">
-        <Card className="shadow-xl border-muted">
-          <CardHeader className="text-center space-y-2">
-            <CardTitle className="text-3xl font-bold font-headline text-primary">Preregistro de Aspirantes</CardTitle>
-            <CardDescription>Completa todos los campos para iniciar tu proceso de inscripción.</CardDescription>
+      <main className="flex-1 max-w-3xl w-full mx-auto p-6 md:py-12">
+        <Card className="shadow-2xl border-muted">
+          <CardHeader className="text-center space-y-4 pb-8">
+            <CardTitle className="text-4xl font-bold font-headline text-primary">Preregistro de Aspirantes</CardTitle>
+            <CardDescription className="text-lg">Completa todos los campos para iniciar tu proceso de inscripción.</CardDescription>
           </CardHeader>
           <CardContent>
             <Form {...form}>
               <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <FormField
                     control={form.control}
                     name="nombre"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Nombre(s) *</FormLabel>
+                        <FormLabel className="text-base">Nombre(s) *</FormLabel>
                         <FormControl>
                           <Input 
                             placeholder="EJ. MARÍA ELENA" 
-                            className="uppercase" 
+                            className="uppercase h-12" 
                             {...field} 
                             onChange={(e) => field.onChange(e.target.value.toUpperCase())}
                           />
@@ -161,11 +161,11 @@ export default function PreregistroPage() {
                     name="apellidos"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Apellidos *</FormLabel>
+                        <FormLabel className="text-base">Apellidos *</FormLabel>
                         <FormControl>
                           <Input 
                             placeholder="EJ. SÁNCHEZ PÉREZ" 
-                            className="uppercase" 
+                            className="uppercase h-12" 
                             {...field}
                             onChange={(e) => field.onChange(e.target.value.toUpperCase())}
                           />
@@ -179,9 +179,9 @@ export default function PreregistroPage() {
                     name="email"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Correo Electrónico *</FormLabel>
+                        <FormLabel className="text-base">Correo Electrónico *</FormLabel>
                         <FormControl>
-                          <Input type="email" placeholder="ejemplo@correo.com" {...field} />
+                          <Input type="email" placeholder="ejemplo@correo.com" className="h-12" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -192,11 +192,11 @@ export default function PreregistroPage() {
                     name="curp"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>CURP *</FormLabel>
+                        <FormLabel className="text-base">CURP *</FormLabel>
                         <FormControl>
                           <Input 
                             placeholder="18 CARACTERES" 
-                            className="uppercase font-mono" 
+                            className="uppercase font-mono h-12" 
                             maxLength={18} 
                             {...field}
                             onChange={(e) => field.onChange(e.target.value.toUpperCase())}
@@ -211,9 +211,9 @@ export default function PreregistroPage() {
                     name="telefono"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Teléfono Celular *</FormLabel>
+                        <FormLabel className="text-base">Teléfono Celular *</FormLabel>
                         <FormControl>
-                          <Input placeholder="10 DÍGITOS" maxLength={10} {...field} />
+                          <Input placeholder="10 DÍGITOS" maxLength={10} className="h-12" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -224,10 +224,10 @@ export default function PreregistroPage() {
                     name="nivel"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Nivel Educativo de Interés *</FormLabel>
+                        <FormLabel className="text-base">Nivel Educativo de Interés *</FormLabel>
                         <Select onValueChange={field.onChange} defaultValue={field.value}>
                           <FormControl>
-                            <SelectTrigger>
+                            <SelectTrigger className="h-12">
                               <SelectValue placeholder="Selecciona nivel" />
                             </SelectTrigger>
                           </FormControl>
@@ -248,10 +248,10 @@ export default function PreregistroPage() {
                       name="carrera_id"
                       render={({ field }) => (
                         <FormItem className="md:col-span-2">
-                          <FormLabel>Carrera a la que Aspiras *</FormLabel>
+                          <FormLabel className="text-base">Carrera a la que Aspiras *</FormLabel>
                           <Select onValueChange={field.onChange} defaultValue={field.value}>
                             <FormControl>
-                              <SelectTrigger>
+                              <SelectTrigger className="h-12">
                                 <SelectValue placeholder="Selecciona una carrera" />
                               </SelectTrigger>
                             </FormControl>
@@ -270,14 +270,14 @@ export default function PreregistroPage() {
                   )}
                 </div>
 
-                <div className="pt-4">
+                <div className="pt-6">
                   <Button 
                     type="submit" 
-                    className="w-full h-12 text-lg font-bold bg-primary shadow-lg"
+                    className="w-full h-14 text-xl font-bold bg-primary shadow-xl hover:opacity-90 transition-opacity"
                     disabled={loading}
                   >
                     {loading ? (
-                      <><Loader2 className="mr-2 h-5 w-5 animate-spin" /> Procesando...</>
+                      <><Loader2 className="mr-2 h-6 w-6 animate-spin" /> Procesando...</>
                     ) : (
                       "Enviar Solicitud de Registro"
                     )}
@@ -286,15 +286,15 @@ export default function PreregistroPage() {
               </form>
             </Form>
           </CardContent>
-          <CardFooter className="justify-center border-t py-6 bg-muted/10">
-            <p className="text-[10px] text-muted-foreground text-center">
+          <CardFooter className="justify-center border-t py-8 bg-muted/10 px-8">
+            <p className="text-xs text-muted-foreground text-center leading-relaxed">
               Al enviar este formulario, aceptas que el Instituto Educativo Emiliano Zapata trate tus datos personales para fines de inscripción y comunicación académica.
             </p>
           </CardFooter>
         </Card>
       </main>
 
-      <footer className="py-6 text-center text-muted-foreground text-xs">
+      <footer className="py-8 text-center text-muted-foreground text-sm border-t bg-white">
         <p>Instituto Educativo Emiliano Zapata &copy; {new Date().getFullYear()}</p>
       </footer>
     </div>
