@@ -1,9 +1,8 @@
-
 'use server';
 
 import { createClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
-import { sendWelcomeEmail } from '@/lib/email';
+import { sendWelcomeEmail, sendDocumentReminderEmail } from '@/lib/email';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cuuohbztrxxneozagecr.supabase.co',
@@ -31,7 +30,6 @@ export async function createUserWithProfile(userData: any) {
     const email = userData.email.toLowerCase().trim();
     const curp = (userData.curp || '').toUpperCase().trim();
 
-    // 1. VERIFICACIÓN PREVIA EN SQL
     const { data: existingUser } = await supabaseAdmin
       .from('profiles')
       .select('email, curp')
@@ -47,7 +45,6 @@ export async function createUserWithProfile(userData: any) {
       }
     }
 
-    // 2. Crear el usuario en Supabase Auth
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: email,
       password: userData.password,
@@ -73,7 +70,6 @@ export async function createUserWithProfile(userData: any) {
       return { success: false, error: "No se pudo generar el usuario de acceso." };
     }
 
-    // 3. Llenar el perfil
     const profileData = {
       id: authData.user.id,
       nombre: userData.nombre,
@@ -103,7 +99,6 @@ export async function createUserWithProfile(userData: any) {
       return { success: false, error: `Error en Base de Datos: ${profileError.message}` };
     }
 
-    // 4. Correo de bienvenida (Asíncrono)
     sendWelcomeEmail({
       to: email,
       nombre: userData.nombre,
@@ -165,6 +160,7 @@ export async function updateUserProfile(id: string, userData: any) {
     }
 
     revalidatePath('/dashboard/admin/usuarios');
+    revalidatePath('/dashboard/admin');
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
@@ -207,6 +203,29 @@ export async function resendWelcomeEmailAction(id: string) {
     });
 
     return result;
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function sendDocReminderAction(id: string) {
+  try {
+    const { data: profile } = await supabaseAdmin.from('profiles').select('*').eq('id', id).single();
+    if (!profile) return { success: false, error: "No se encontró el perfil" };
+
+    const faltantes = [];
+    if (!profile.doc_acta_nacimiento) faltantes.push("Acta de Nacimiento");
+    if (!profile.doc_certificado_estudios) faltantes.push("Certificado de Estudios");
+    if (!profile.doc_curp) faltantes.push("CURP (Documento)");
+    if (!profile.doc_ine) faltantes.push("Identificación Oficial (INE)");
+
+    if (faltantes.length === 0) return { success: false, error: "El usuario ya entregó todo." };
+
+    return await sendDocumentReminderEmail({
+      to: profile.email,
+      nombre: `${profile.nombre} ${profile.apellidos}`,
+      faltantes
+    });
   } catch (error: any) {
     return { success: false, error: error.message };
   }

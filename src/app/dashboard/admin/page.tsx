@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, GraduationCap, School, Layers, AlertCircle, Loader2, Plus } from 'lucide-react';
+import { Users, GraduationCap, School, Layers, AlertCircle, Loader2, FileWarning, Mail, Send, Eye } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -10,11 +10,16 @@ import { createClient } from '@/lib/supabase/client';
 import { User } from '@/lib/types';
 import { UserDialog } from '@/components/admin/UserDialog';
 import Link from 'next/link';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer, Cell } from 'recharts';
+import { sendDocReminderAction } from '@/lib/actions/users';
+import { useToast } from '@/hooks/use-toast';
 
 export default function AdminDashboard() {
+  const { toast } = useToast();
   const supabase = createClient();
   const [loading, setLoading] = useState(true);
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<User | null>(null);
   const [stats, setStats] = useState({
     alumnos: 0,
     profesores: 0,
@@ -22,6 +27,8 @@ export default function AdminDashboard() {
     grupos: 0
   });
   const [recentUsers, setRecentUsers] = useState<User[]>([]);
+  const [usersMissingDocs, setUsersMissingDocs] = useState<User[]>([]);
+  const [sendingReminder, setSendingReminder] = useState<string | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -45,6 +52,16 @@ export default function AdminDashboard() {
         .limit(5);
 
       if (users) setRecentUsers(users as any);
+
+      // Usuarios con documentos faltantes
+      const { data: missingDocsUsers } = await supabase
+        .from('profiles')
+        .select('*')
+        .or('doc_acta_nacimiento.eq.false,doc_certificado_estudios.eq.false,doc_curp.eq.false,doc_ine.eq.false')
+        .order('nombre', { ascending: true });
+
+      if (missingDocsUsers) setUsersMissingDocs(missingDocsUsers as any);
+
     } catch (error) {
       console.error("Error fetching admin stats:", error);
     } finally {
@@ -55,6 +72,30 @@ export default function AdminDashboard() {
   useEffect(() => {
     fetchData();
   }, []);
+
+  const handleEditUser = (user: User) => {
+    setSelectedUser(user);
+    setIsUserDialogOpen(true);
+  };
+
+  const handleSendReminder = async (id: string) => {
+    setSendingReminder(id);
+    const result = await sendDocReminderAction(id);
+    if (result.success) {
+      toast({ title: "Recordatorio Enviado", description: "Se ha enviado un correo con la lista de documentos faltantes." });
+    } else {
+      toast({ variant: "destructive", title: "Error", description: result.error });
+    }
+    setSendingReminder(null);
+  };
+
+  // Datos para la gráfica de documentos
+  const chartData = [
+    { name: 'Actas', count: usersMissingDocs.filter(u => !u.doc_acta_nacimiento).length, color: '#8B2332' },
+    { name: 'Certificados', count: usersMissingDocs.filter(u => !u.doc_certificado_estudios).length, color: '#E8D5B7' },
+    { name: 'CURP Doc', count: usersMissingDocs.filter(u => !u.doc_curp).length, color: '#1A4A3F' },
+    { name: 'INE', count: usersMissingDocs.filter(u => !u.doc_ine).length, color: '#f59e0b' },
+  ];
 
   const statCards = [
     { label: 'Total Alumnos', value: stats.alumnos, icon: Users, color: 'text-blue-600' },
@@ -91,58 +132,34 @@ export default function AdminDashboard() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Usuarios Recientes</CardTitle>
-                <CardDescription>Últimos registros en la plataforma.</CardDescription>
+                <CardTitle>Control de Documentación</CardTitle>
+                <CardDescription>Estadística de documentos faltantes por categoría.</CardDescription>
               </div>
-              <Link href="/dashboard/admin/usuarios">
-                <Button variant="outline" size="sm">Ver todos</Button>
-              </Link>
+              <Badge variant="outline" className="text-primary border-primary">
+                {usersMissingDocs.length} Pendientes
+              </Badge>
             </div>
           </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="flex justify-center p-8">
-                <Loader2 className="animate-spin text-primary" />
-              </div>
-            ) : recentUsers.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">No hay usuarios registrados aún.</div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nombre</TableHead>
-                    <TableHead>Rol</TableHead>
-                    <TableHead>Estado</TableHead>
-                    <TableHead>Vigencia</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {recentUsers.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell className="font-medium text-xs">
-                        {user.nombre} {user.apellidos}
-                      </TableCell>
-                      <TableCell className="capitalize text-xs">{user.rol}</TableCell>
-                      <TableCell>
-                        <Badge variant={user.estatus === 'activo' ? 'default' : 'secondary'} className="text-[10px] h-5">
-                          {user.estatus}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs">
-                        {user.fecha_expiracion && new Date(user.fecha_expiracion) < new Date() ? (
-                          <span className="text-destructive font-semibold flex items-center gap-1">
-                            <AlertCircle className="h-3 w-3" />
-                            Expirado
-                          </span>
-                        ) : (
-                          user.fecha_expiracion || 'N/A'
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
+          <CardContent className="h-[300px]">
+             {loading ? (
+                <div className="flex justify-center items-center h-full"><Loader2 className="animate-spin" /></div>
+             ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                    <XAxis dataKey="name" />
+                    <YAxis allowDecimals={false} />
+                    <ChartTooltip 
+                      contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                    />
+                    <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                      {chartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+             )}
           </CardContent>
         </Card>
 
@@ -154,7 +171,10 @@ export default function AdminDashboard() {
           <CardContent className="space-y-4">
             <Button 
               className="w-full justify-start gap-2 bg-primary shadow-md hover:opacity-90 transition-opacity"
-              onClick={() => setIsUserDialogOpen(true)}
+              onClick={() => {
+                setSelectedUser(null);
+                setIsUserDialogOpen(true);
+              }}
             >
               <Users size={18} /> Crear Nuevo Usuario
             </Button>
@@ -169,9 +189,90 @@ export default function AdminDashboard() {
             </Button>
           </CardContent>
         </Card>
+
+        <Card className="col-span-7 shadow-sm border-muted/60">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <FileWarning className="text-amber-600" size={20} /> Usuarios con Documentos Pendientes
+              </CardTitle>
+              <CardDescription>Enlista alumnos y personal que tienen al menos un documento faltante.</CardDescription>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+               <div className="flex justify-center py-10"><Loader2 className="animate-spin" /></div>
+            ) : usersMissingDocs.length === 0 ? (
+               <div className="text-center py-10 text-muted-foreground">Todo el personal tiene su documentación completa.</div>
+            ) : (
+               <Table>
+                 <TableHeader>
+                   <TableRow>
+                     <TableHead>Nombre Completo</TableHead>
+                     <TableHead>Rol</TableHead>
+                     <TableHead>Documentos Faltantes</TableHead>
+                     <TableHead className="text-right">Acciones</TableHead>
+                   </TableRow>
+                 </TableHeader>
+                 <TableBody>
+                   {usersMissingDocs.map((user) => {
+                     const faltantes = [];
+                     if (!user.doc_acta_nacimiento) faltantes.push("Acta");
+                     if (!user.doc_certificado_estudios) faltantes.push("Certificado");
+                     if (!user.doc_curp) faltantes.push("CURP");
+                     if (!user.doc_ine) faltantes.push("INE");
+
+                     return (
+                       <TableRow key={user.id}>
+                         <TableCell className="font-semibold cursor-pointer text-primary hover:underline" onClick={() => handleEditUser(user)}>
+                            {user.nombre} {user.apellidos}
+                         </TableCell>
+                         <TableCell className="capitalize text-xs">{user.rol}</TableCell>
+                         <TableCell>
+                            <div className="flex flex-wrap gap-1">
+                              {faltantes.map(f => (
+                                <Badge key={f} variant="secondary" className="text-[9px] bg-destructive/10 text-destructive border-none">
+                                  {f}
+                                </Badge>
+                              ))}
+                            </div>
+                         </TableCell>
+                         <TableCell className="text-right flex justify-end gap-2">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-8 gap-1 text-xs" 
+                              onClick={() => handleEditUser(user)}
+                            >
+                              <Eye size={14} /> Detalles
+                            </Button>
+                            <Button 
+                              variant="outline" 
+                              size="sm" 
+                              className="h-8 gap-1 text-xs border-amber-500 text-amber-600 hover:bg-amber-50"
+                              disabled={sendingReminder === user.id}
+                              onClick={() => handleSendReminder(user.id)}
+                            >
+                              {sendingReminder === user.id ? (
+                                <Loader2 size={14} className="animate-spin" />
+                              ) : (
+                                <Send size={14} />
+                              )}
+                              Recordatorio
+                            </Button>
+                         </TableCell>
+                       </TableRow>
+                     );
+                   })}
+                 </TableBody>
+               </Table>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       <UserDialog 
+        user={selectedUser}
         open={isUserDialogOpen} 
         onOpenChange={setIsUserDialogOpen} 
         onSuccess={fetchData} 

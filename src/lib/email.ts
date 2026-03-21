@@ -18,6 +18,12 @@ interface WelcomeEmailData {
   password: string;
 }
 
+interface ReminderEmailData {
+  to: string;
+  nombre: string;
+  faltantes: string[];
+}
+
 export async function sendWelcomeEmail(data: WelcomeEmailData) {
   try {
     const user = process.env.GMAIL_USER || 'ieemilianozapata@gmail.com';
@@ -119,6 +125,54 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
     return { success: true, messageId: info.messageId };
   } catch (error: any) {
     console.error('Error correo:', error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function sendDocumentReminderEmail(data: ReminderEmailData) {
+  try {
+    const user = process.env.GMAIL_USER || 'ieemilianozapata@gmail.com';
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://institutoeducativoemilianozapata.vercel.app';
+    const logoUrl = `${appUrl}/images/logo_zapata.png`;
+
+    const listaFaltantes = data.faltantes.map(doc => `<li style="margin-bottom: 8px; color: #8B2332; font-weight: bold;">• ${doc}</li>`).join('');
+
+    const htmlContent = `
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"></head>
+    <body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: sans-serif;">
+      <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #eee;">
+        <div style="background: linear-gradient(135deg, #8B2332, #6B1A27); padding: 30px; text-align: center;">
+          <img src="${logoUrl}" alt="Logo" style="height: 120px; width: auto; margin-bottom: 10px;">
+          <h1 style="color: #ffffff; margin: 0; font-size: 18px; text-transform: uppercase;">Instituto Educativo Emiliano Zapata</h1>
+        </div>
+        <div style="padding: 30px;">
+          <h2 style="color: #333;">Recordatorio de Documentación Pendiente</h2>
+          <p style="color: #555; line-height: 1.6;">Estimado(a) <strong>${data.nombre}</strong>,</p>
+          <p style="color: #555; line-height: 1.6;">Le informamos que su expediente académico se encuentra incompleto. Para regularizar su situación, es necesario entregar a la brevedad los siguientes documentos:</p>
+          <ul style="list-style: none; padding-left: 0; margin: 20px 0;">
+            ${listaFaltantes}
+          </ul>
+          <div style="background-color: #fff3cd; padding: 15px; border-radius: 6px; border-left: 4px solid #ffc107; margin: 20px 0;">
+            <p style="margin: 0; color: #856404; font-size: 13px;">Favor de presentarlos en el área de Servicios Escolares de lunes a viernes en un horario de 9:00 AM a 6:00 PM.</p>
+          </div>
+          <p style="color: #999; font-size: 12px; margin-top: 30px; text-align: center;">Este es un recordatorio automático. Si ya entregó estos documentos, favor de hacer caso omiso.</p>
+        </div>
+      </div>
+    </body>
+    </html>`;
+
+    await transporter.sendMail({
+      from: `"Servicios Escolares - IE Emiliano Zapata" <${user}>`,
+      to: data.to,
+      subject: '⚠️ Aviso: Documentación Pendiente - IE Emiliano Zapata',
+      html: htmlContent,
+    });
+
+    return { success: true };
+  } catch (error: any) {
+    console.error('Error enviando recordatorio:', error);
     return { success: false, error: error.message };
   }
 }
