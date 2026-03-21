@@ -30,8 +30,8 @@ export async function createUserWithProfile(userData: any) {
     const email = userData.email.toLowerCase().trim();
     const curp = (userData.curp || '').toUpperCase().trim();
 
-    // 1. VERIFICACIÓN PREVIA DE DUPLICADOS
-    const { data: existingUser, error: checkError } = await supabaseAdmin
+    // 1. VERIFICACIÓN PREVIA EN SQL
+    const { data: existingUser } = await supabaseAdmin
       .from('profiles')
       .select('email, curp')
       .or(`email.eq.${email},curp.eq.${curp}`)
@@ -63,7 +63,7 @@ export async function createUserWithProfile(userData: any) {
 
     if (authError) {
       if (authError.message.includes("already registered")) {
-        return { success: false, error: "Este correo electrónico ya está registrado en el acceso." };
+        return { success: false, error: "Este correo ya tiene un acceso activo. Si no aparece en la lista, bórralo de Authentication en el panel de Supabase." };
       }
       return { success: false, error: authError.message };
     }
@@ -72,7 +72,7 @@ export async function createUserWithProfile(userData: any) {
       return { success: false, error: "No se pudo generar el usuario de acceso." };
     }
 
-    // 3. Llenar el perfil
+    // 3. Llenar el perfil (Usamos UPSERT por si el trigger ya creó algo)
     const profileData = {
       id: authData.user.id,
       nombre: userData.nombre,
@@ -93,11 +93,12 @@ export async function createUserWithProfile(userData: any) {
       .upsert(profileData, { onConflict: 'id' });
 
     if (profileError) {
+      // Si falla SQL, limpiamos Auth para no dejar huérfanos
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
       return { success: false, error: `Error en Base de Datos: ${profileError.message}` };
     }
 
-    // 4. ENVIAR CORREO DE BIENVENIDA (NO BLOQUEA)
+    // 4. Correo de bienvenida (Asíncrono)
     sendWelcomeEmail({
       to: email,
       nombre: userData.nombre,
@@ -106,15 +107,7 @@ export async function createUserWithProfile(userData: any) {
       matricula: emptyToNull(userData.matricula),
       numero_empleado: emptyToNull(userData.numero_empleado),
       password: userData.password,
-    }).then((result) => {
-      if (result.success) {
-        console.log('✅ Correo de bienvenida enviado a:', email);
-      } else {
-        console.warn('⚠️ No se pudo enviar el correo de bienvenida:', result.error);
-      }
-    }).catch((err) => {
-      console.warn('⚠️ Error al intentar enviar correo:', err);
-    });
+    }).catch(err => console.error("Error envío correo:", err));
 
     revalidatePath('/dashboard/admin/usuarios');
     revalidatePath('/dashboard/admin');
@@ -162,6 +155,20 @@ export async function updateUserProfile(id: string, userData: any) {
     }
 
     revalidatePath('/dashboard/admin/usuarios');
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function deleteUserAccount(id: string) {
+  try {
+    // Borrar de Auth elimina automáticamente de profiles por el CASCADE en la DB
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(id);
+    if (error) throw error;
+    
+    revalidatePath('/dashboard/admin/usuarios');
+    revalidatePath('/dashboard/admin');
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };

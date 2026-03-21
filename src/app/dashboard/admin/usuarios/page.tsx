@@ -13,6 +13,7 @@ import { User } from '@/lib/types';
 import { UserDialog } from '@/components/admin/UserDialog';
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { deleteUserAccount } from '@/lib/actions/users';
 
 export default function UsuariosManagement() {
   const { toast } = useToast();
@@ -20,14 +21,14 @@ export default function UsuariosManagement() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   
-  // Estados para el diálogo
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
   const fetchUsers = async () => {
     setLoading(true);
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('profiles')
       .select('*')
       .order('nombre', { ascending: true });
@@ -51,22 +52,22 @@ export default function UsuariosManagement() {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('¿Estás seguro de que deseas eliminar este perfil? Esto no borrará el acceso de autenticación por seguridad, contacta a TI.')) {
-      const { error } = await supabase.from('profiles').delete().eq('id', id);
-      if (error) {
-        toast({ variant: 'destructive', title: 'Error', description: 'No se pudo eliminar el usuario.' });
-      } else {
-        toast({ title: 'Éxito', description: 'Usuario eliminado correctamente.' });
+    if (confirm('¿Estás seguro de que deseas eliminar permanentemente a este usuario y su acceso al sistema?')) {
+      setDeletingId(id);
+      const result = await deleteUserAccount(id);
+      
+      if (result.success) {
+        toast({ title: 'Éxito', description: 'Usuario y acceso eliminados correctamente.' });
         fetchUsers();
+      } else {
+        toast({ variant: 'destructive', title: 'Error', description: result.error || 'No se pudo eliminar el acceso.' });
       }
+      setDeletingId(null);
     }
   };
 
   const filteredUsers = users.filter(user => 
-    `${user.nombre} ${user.apellidos}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.curp?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    user.matricula?.toLowerCase().includes(searchTerm.toLowerCase())
+    `${user.nombre} ${user.apellidos} ${user.email} ${user.curp} ${user.matricula}`.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -93,9 +94,6 @@ export default function UsuariosManagement() {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
-            <Button variant="outline" className="gap-2 h-11 border-muted">
-              <Filter size={16} /> Filtros
-            </Button>
           </div>
         </CardHeader>
         <CardContent>
@@ -105,7 +103,7 @@ export default function UsuariosManagement() {
             </div>
           ) : filteredUsers.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground italic border-2 border-dashed rounded-xl">
-              No se encontraron usuarios en la base de datos.
+              No se encontraron usuarios registrados.
             </div>
           ) : (
             <div className="rounded-md border border-muted/50 overflow-hidden">
@@ -148,7 +146,7 @@ export default function UsuariosManagement() {
                               </div>
                             </TooltipTrigger>
                             <TooltipContent>
-                              <p className="text-xs">Contraseña de recuperación (Pasa el mouse para ver)</p>
+                              <p className="text-xs">Pasa el mouse para ver clave</p>
                             </TooltipContent>
                           </Tooltip>
                         </TooltipProvider>
@@ -166,7 +164,7 @@ export default function UsuariosManagement() {
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10"
+                            className="h-8 w-8 text-primary"
                             onClick={() => handleEdit(user)}
                           >
                             <Edit size={16} />
@@ -174,10 +172,11 @@ export default function UsuariosManagement() {
                           <Button 
                             variant="ghost" 
                             size="icon" 
-                            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            className="h-8 w-8 text-destructive"
                             onClick={() => handleDelete(user.id)}
+                            disabled={deletingId === user.id}
                           >
-                            <Trash2 size={16} />
+                            {deletingId === user.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
                           </Button>
                         </div>
                       </TableCell>
