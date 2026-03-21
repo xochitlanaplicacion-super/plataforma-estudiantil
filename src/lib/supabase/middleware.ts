@@ -39,11 +39,12 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
-  // Permitir acceso a login y página de expiración
+  // Permitir siempre acceso a login y página de expiración
   if (pathname === '/' || pathname === '/expired') {
     return supabaseResponse;
   }
 
+  // Redirigir a login si no hay sesión iniciada en rutas protegidas
   if (!user) {
     const url = request.nextUrl.clone();
     url.pathname = '/';
@@ -56,17 +57,17 @@ export async function updateSession(request: NextRequest) {
     .eq('id', user.id)
     .single();
 
+  // SI EL ESTATUS NO ES ACTIVO -> Redirigir a página de aviso institucional
   if (!profile || profile.estatus !== 'activo') {
-    await supabase.auth.signOut();
     const url = request.nextUrl.clone();
-    url.pathname = '/';
+    url.pathname = '/expired';
     return NextResponse.redirect(url);
   }
 
-  // VERIFICACIÓN DE VIGENCIA (Excepto para Superusuarios y Administradores si se desea)
+  // VERIFICACIÓN DE VIGENCIA POR FECHA
   if (profile.rol !== 'superuser' && profile.fecha_expiracion) {
     const hoy = new Date().toISOString().split('T')[0];
-    if (profile.fecha_expiracion < hoy && pathname !== '/expired') {
+    if (profile.fecha_expiracion < hoy) {
       const url = request.nextUrl.clone();
       url.pathname = '/expired';
       return NextResponse.redirect(url);

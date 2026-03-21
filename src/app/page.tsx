@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useState, useEffect } from 'react';
@@ -62,9 +63,9 @@ export default function LoginPage() {
 
   useEffect(() => {
     setMounted(true);
-    const randomTheme = themes[Math.floor(Math.random() * themes.length)];
-    setCurrentTheme(randomTheme);
-    localStorage.setItem('ez-theme', randomTheme.id);
+    const savedTheme = localStorage.getItem('ez-theme');
+    const themeToUse = themes.find(t => t.id === savedTheme) || themes[Math.floor(Math.random() * themes.length)];
+    setCurrentTheme(themeToUse);
     setBgLoaded(false);
   }, []);
 
@@ -103,7 +104,7 @@ export default function LoginPage() {
       if (data?.user) {
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
-          .select('rol, estatus')
+          .select('rol, estatus, fecha_expiracion')
           .eq('id', data.user.id)
           .single();
 
@@ -113,10 +114,13 @@ export default function LoginPage() {
           return;
         }
 
-        if (profile.estatus !== 'activo') {
-          setError(`Tu cuenta está ${profile.estatus}. Contacta a administración.`);
-          await supabase.auth.signOut();
-          setLoading(false);
+        // VERIFICACIÓN DE EXPIRACIÓN Y ESTATUS
+        const hoy = new Date().toISOString().split('T')[0];
+        const isExpired = profile.fecha_expiracion && profile.fecha_expiracion < hoy;
+
+        if (profile.estatus !== 'activo' || isExpired) {
+          // Si está inactivo o expirado, redirección inmediata a la página de aviso
+          router.push('/expired');
           return;
         }
 
@@ -149,11 +153,6 @@ export default function LoginPage() {
               ${bgLoaded ? 'opacity-100' : 'opacity-0'}
             `}
             onLoad={() => setBgLoaded(true)}
-            onError={(e) => {
-              console.error('Error cargando fondo:', currentTheme.bgImage);
-              const target = e.target as HTMLImageElement;
-              target.style.display = 'none';
-            }}
           />
           
           {!bgLoaded && (
@@ -175,23 +174,13 @@ export default function LoginPage() {
                 `}
                 onLoad={() => setLogoLoaded(true)}
               />
-              
-              {!logoLoaded && (
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="text-white/50 text-6xl font-bold animate-pulse">EZ</div>
-                </div>
-              )}
             </div>
           </div>
         </div>
 
         <div className="p-8 md:p-14 lg:p-24 flex flex-col justify-center bg-white">
           <div className="md:hidden flex justify-center mb-8">
-            <img 
-              src={LOGO_URL}
-              alt="Logo"
-              className="w-24 h-24 object-contain"
-            />
+            <img src={LOGO_URL} alt="Logo" className="w-24 h-24 object-contain" />
           </div>
 
           <div className="max-w-md w-full mx-auto space-y-10">
@@ -219,7 +208,6 @@ export default function LoginPage() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="h-14 text-lg border-muted focus:ring-primary/20 bg-gray-50/30"
-                  placeholder=""
                 />
               </div>
               <div className="space-y-3">
@@ -232,13 +220,11 @@ export default function LoginPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="h-14 text-lg border-muted focus:ring-primary/20 bg-gray-50/30 pr-14"
-                    placeholder=""
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     className="absolute right-5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary transition-colors focus:outline-none"
-                    aria-label={showPassword ? "Ocultar contraseña" : "Ver contraseña"}
                   >
                     {showPassword ? <EyeOff size={24} /> : <Eye size={24} />}
                   </button>
@@ -250,11 +236,7 @@ export default function LoginPage() {
                 style={{ backgroundColor: currentTheme.buttonColor }}
                 disabled={loading}
               >
-                {loading ? (
-                  <><Loader2 className="mr-2 h-6 w-6 animate-spin" /> Verificando...</>
-                ) : (
-                  "Entrar al Sistema"
-                )}
+                {loading ? <Loader2 className="mr-2 h-6 w-6 animate-spin" /> : "Entrar al Sistema"}
               </Button>
             </form>
           </div>
