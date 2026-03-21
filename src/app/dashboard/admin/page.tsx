@@ -27,7 +27,7 @@ export default function AdminDashboard() {
     grupos: 0
   });
   const [recentUsers, setRecentUsers] = useState<User[]>([]);
-  const [usersMissingDocs, setUsersMissingDocs] = useState<User[]>([]);
+  const [alumnosMissingDocs, setAlumnosMissingDocs] = useState<User[]>([]);
   const [sendingReminder, setSendingReminder] = useState<string | null>(null);
 
   const fetchData = async () => {
@@ -53,14 +53,15 @@ export default function AdminDashboard() {
 
       if (users) setRecentUsers(users as any);
 
-      // Usuarios con documentos faltantes
-      const { data: missingDocsUsers } = await supabase
+      // Alumnos con documentos faltantes exclusivamente
+      const { data: missingDocsAlumnos } = await supabase
         .from('profiles')
         .select('*')
+        .eq('rol', 'alumno')
         .or('doc_acta_nacimiento.eq.false,doc_certificado_estudios.eq.false,doc_curp.eq.false,doc_ine.eq.false')
         .order('nombre', { ascending: true });
 
-      if (missingDocsUsers) setUsersMissingDocs(missingDocsUsers as any);
+      if (missingDocsAlumnos) setAlumnosMissingDocs(missingDocsAlumnos as any);
 
     } catch (error) {
       console.error("Error fetching admin stats:", error);
@@ -89,12 +90,12 @@ export default function AdminDashboard() {
     setSendingReminder(null);
   };
 
-  // Datos para la gráfica de documentos
+  // Datos para la gráfica de documentos (Solo alumnos)
   const chartData = [
-    { name: 'Actas', count: usersMissingDocs.filter(u => !u.doc_acta_nacimiento).length, color: '#8B2332' },
-    { name: 'Certificados', count: usersMissingDocs.filter(u => !u.doc_certificado_estudios).length, color: '#E8D5B7' },
-    { name: 'CURP Doc', count: usersMissingDocs.filter(u => !u.doc_curp).length, color: '#1A4A3F' },
-    { name: 'INE', count: usersMissingDocs.filter(u => !u.doc_ine).length, color: '#f59e0b' },
+    { name: 'Actas', count: alumnosMissingDocs.filter(u => !u.doc_acta_nacimiento).length, color: '#8B2332' },
+    { name: 'Certificados', count: alumnosMissingDocs.filter(u => !u.doc_certificado_estudios).length, color: '#E8D5B7' },
+    { name: 'CURP Doc', count: alumnosMissingDocs.filter(u => !u.doc_curp).length, color: '#1A4A3F' },
+    { name: 'INE', count: alumnosMissingDocs.filter(u => !u.doc_ine).length, color: '#f59e0b' },
   ];
 
   const statCards = [
@@ -132,11 +133,11 @@ export default function AdminDashboard() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle>Control de Documentación</CardTitle>
-                <CardDescription>Estadística de documentos faltantes por categoría.</CardDescription>
+                <CardTitle>Expedientes Pendientes (Alumnos)</CardTitle>
+                <CardDescription>Estadística de documentos faltantes exclusivamente de alumnos.</CardDescription>
               </div>
               <Badge variant="outline" className="text-primary border-primary">
-                {usersMissingDocs.length} Pendientes
+                {alumnosMissingDocs.length} Alumnos
               </Badge>
             </div>
           </CardHeader>
@@ -176,7 +177,7 @@ export default function AdminDashboard() {
                 setIsUserDialogOpen(true);
               }}
             >
-              <Users size={18} /> Crear Nuevo Usuario
+              <Users size={18} /> Registrar Alumno / Usuario
             </Button>
             <Button variant="outline" className="w-full justify-start gap-2 border-muted hover:bg-muted/50">
               <School size={18} /> Nueva Carrera
@@ -194,28 +195,28 @@ export default function AdminDashboard() {
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle className="flex items-center gap-2">
-                <FileWarning className="text-amber-600" size={20} /> Usuarios con Documentos Pendientes
+                <FileWarning className="text-amber-600" size={20} /> Alumnos con Documentación Pendiente
               </CardTitle>
-              <CardDescription>Enlista alumnos y personal que tienen al menos un documento faltante.</CardDescription>
+              <CardDescription>Enlista solo a los estudiantes que tienen al menos un documento faltante.</CardDescription>
             </div>
           </CardHeader>
           <CardContent>
             {loading ? (
                <div className="flex justify-center py-10"><Loader2 className="animate-spin" /></div>
-            ) : usersMissingDocs.length === 0 ? (
-               <div className="text-center py-10 text-muted-foreground">Todo el personal tiene su documentación completa.</div>
+            ) : alumnosMissingDocs.length === 0 ? (
+               <div className="text-center py-10 text-muted-foreground">Todos los alumnos tienen su documentación completa.</div>
             ) : (
                <Table>
                  <TableHeader>
                    <TableRow>
                      <TableHead>Nombre Completo</TableHead>
-                     <TableHead>Rol</TableHead>
+                     <TableHead>Matrícula</TableHead>
                      <TableHead>Documentos Faltantes</TableHead>
                      <TableHead className="text-right">Acciones</TableHead>
                    </TableRow>
                  </TableHeader>
                  <TableBody>
-                   {usersMissingDocs.map((user) => {
+                   {alumnosMissingDocs.map((user) => {
                      const faltantes = [];
                      if (!user.doc_acta_nacimiento) faltantes.push("Acta");
                      if (!user.doc_certificado_estudios) faltantes.push("Certificado");
@@ -227,7 +228,7 @@ export default function AdminDashboard() {
                          <TableCell className="font-semibold cursor-pointer text-primary hover:underline" onClick={() => handleEditUser(user)}>
                             {user.nombre} {user.apellidos}
                          </TableCell>
-                         <TableCell className="capitalize text-xs">{user.rol}</TableCell>
+                         <TableCell className="font-mono text-[10px]">{user.matricula || 'SIN MATRÍCULA'}</TableCell>
                          <TableCell>
                             <div className="flex flex-wrap gap-1">
                               {faltantes.map(f => (
