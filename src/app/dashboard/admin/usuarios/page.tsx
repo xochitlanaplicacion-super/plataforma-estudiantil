@@ -1,19 +1,20 @@
 
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, UserPlus, Search, Filter, Loader2, Edit, Trash2, Key } from 'lucide-react';
+import { Users, UserPlus, Search, Filter, Loader2, Edit, Trash2, Key, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { createClient } from '@/lib/supabase/client';
-import { User } from '@/lib/types';
+import { User, UserRole, UserEstatus } from '@/lib/types';
 import { UserDialog } from '@/components/admin/UserDialog';
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { deleteUserAccount } from '@/lib/actions/users';
+import { deleteUserAccount, updateUserProfile } from '@/lib/actions/users';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function UsuariosManagement() {
   const { toast } = useToast();
@@ -21,6 +22,8 @@ export default function UsuariosManagement() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState<string>('todos');
+  const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -30,10 +33,27 @@ export default function UsuariosManagement() {
     setLoading(true);
     const { data } = await supabase
       .from('profiles')
-      .select('*')
-      .order('nombre', { ascending: true });
+      .select('*');
 
-    if (data) setUsers(data as any);
+    if (data) {
+      const rawUsers = data as User[];
+      const hoy = new Date().toISOString().split('T')[0];
+      
+      // Proceso silencioso de desactivación de expirados
+      const expiredActiveUsers = rawUsers.filter(u => 
+        u.fecha_expiracion && u.fecha_expiracion < hoy && u.estatus === 'activo'
+      );
+
+      if (expiredActiveUsers.length > 0) {
+        console.log(`Detectados ${expiredActiveUsers.length} usuarios expirados. Actualizando estatus...`);
+        for (const user of expiredActiveUsers) {
+          await updateUserProfile(user.id, { ...user, estatus: 'inactivo' });
+          user.estatus = 'inactivo'; // Actualización local inmediata
+        }
+      }
+
+      setUsers(rawUsers);
+    }
     setLoading(false);
   };
 
@@ -66,9 +86,40 @@ export default function UsuariosManagement() {
     }
   };
 
-  const filteredUsers = users.filter(user => 
-    `${user.nombre} ${user.apellidos} ${user.email} ${user.curp} ${user.matricula}`.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const processedUsers = useMemo(() => {
+    let filtered = users.filter(user => {
+      const matchesSearch = `${user.nombre} ${user.apellidos} ${user.email} ${user.curp} ${user.matricula}`
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase());
+      
+      const matchesRole = roleFilter === 'todos' || user.rol === roleFilter;
+      const matchesStatus = statusFilter === 'todos' || user.estatus === statusFilter;
+
+      return matchesSearch && matchesRole && matchesStatus;
+    });
+
+    // Ordenamiento por prioridad solicitado:
+    // 1. Superuser
+    // 2. Admin
+    // 3. Profesor
+    // 4. Alumno (Activo)
+    // 5. Inactivos (Al final de todo)
+    return filtered.sort((a, b) => {
+      // Primero, si uno es inactivo y el otro no, el inactivo va al final
+      if (a.estatus === 'inactivo' && b.estatus !== 'inactivo') return 1;
+      if (a.estatus !== 'inactivo' && b.estatus === 'inactivo') return -1;
+
+      // Si ambos tienen el mismo estatus (o ambos son inactivos), ordenar por Rol
+      const roleOrder = { superuser: 0, admin: 1, profesor: 2, alumno: 3 };
+      const roleA = roleOrder[a.rol] ?? 99;
+      const roleB = roleOrder[b.rol] ?? 99;
+
+      if (roleA !== roleB) return roleA - roleB;
+
+      // Finalmente por nombre
+      return a.nombre.localeCompare(b.nombre);
+    });
+  }, [users, searchTerm, roleFilter, statusFilter]);
 
   return (
     <div className="space-y-6">
@@ -84,8 +135,8 @@ export default function UsuariosManagement() {
 
       <Card className="border-muted/60 shadow-sm">
         <CardHeader className="pb-3">
-          <div className="flex flex-col md:flex-row gap-4 items-center">
-            <div className="relative flex-1 w-full">
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+            <div className="relative md:col-span-6 w-full">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
               <Input 
                 placeholder="Buscar por nombre, correo, matrícula o CURP..." 
@@ -94,6 +145,39 @@ export default function UsuariosManagement() {
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
+            <div className="md:col-span-3">
+              <Select value={roleFilter} onValueChange={setRoleFilter}>
+                <SelectTrigger className="h-11">
+                  <div className="flex items-center gap-2">
+                    <Users size={14} className="text-muted-foreground" />
+                    <SelectValue placeholder="Rol" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos los Roles</SelectItem>
+                  <SelectItem value="superuser">Superusuarios</SelectItem>
+                  <SelectItem value="admin">Administrativos</SelectItem>
+                  <SelectItem value="profesor">Profesores</SelectItem>
+                  <SelectItem value="alumno">Alumnos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="md:col-span-3">
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="h-11">
+                  <div className="flex items-center gap-2">
+                    <Filter size={14} className="text-muted-foreground" />
+                    <SelectValue placeholder="Estatus" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos los Estados</SelectItem>
+                  <SelectItem value="activo">Activos</SelectItem>
+                  <SelectItem value="inactivo">Inactivos (Expirados)</SelectItem>
+                  <SelectItem value="suspendido">Suspendidos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -101,9 +185,9 @@ export default function UsuariosManagement() {
             <div className="flex justify-center p-12">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
             </div>
-          ) : filteredUsers.length === 0 ? (
+          ) : processedUsers.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground italic border-2 border-dashed rounded-xl">
-              No se encontraron usuarios registrados.
+              No se encontraron usuarios con los filtros aplicados.
             </div>
           ) : (
             <div className="rounded-md border border-muted/50 overflow-hidden">
@@ -113,13 +197,13 @@ export default function UsuariosManagement() {
                     <TableHead className="font-bold">Nombre Completo</TableHead>
                     <TableHead className="font-bold">Rol/Matrícula</TableHead>
                     <TableHead className="font-bold">Contraseña</TableHead>
-                    <TableHead className="font-bold">Estado</TableHead>
+                    <TableHead className="font-bold text-center">Estado</TableHead>
                     <TableHead className="text-right font-bold">Acciones</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredUsers.map((user) => (
-                    <TableRow key={user.id} className="hover:bg-muted/10 transition-colors">
+                  {processedUsers.map((user) => (
+                    <TableRow key={user.id} className={`hover:bg-muted/10 transition-colors ${user.estatus === 'inactivo' ? 'bg-destructive/5' : ''}`}>
                       <TableCell className="font-medium">
                         <div className="flex flex-col">
                           <span className="text-sm font-semibold">{user.nombre} {user.apellidos}</span>
@@ -151,10 +235,13 @@ export default function UsuariosManagement() {
                           </Tooltip>
                         </TooltipProvider>
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="text-center">
                         <Badge 
-                          variant={user.estatus === 'activo' ? 'default' : 'secondary'}
-                          className="text-[10px] px-2 h-5"
+                          className={`text-[10px] px-3 h-6 uppercase font-bold ${
+                            user.estatus === 'activo' ? 'bg-primary text-white' : 
+                            user.estatus === 'inactivo' ? 'bg-red-600 text-white' : 
+                            'bg-amber-500 text-white'
+                          }`}
                         >
                           {user.estatus}
                         </Badge>

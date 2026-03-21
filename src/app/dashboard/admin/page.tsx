@@ -36,8 +36,19 @@ export default function AdminDashboard() {
     try {
       const hoy = new Date().toISOString().split('T')[0];
 
-      const { count: alumnosCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('rol', 'alumno');
-      const { count: profesCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('rol', 'profesor');
+      // Contadores inteligentes (Solo activos)
+      const { count: alumnosCount } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .eq('rol', 'alumno')
+        .eq('estatus', 'activo');
+
+      const { count: profesCount } = await supabase
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .eq('rol', 'profesor')
+        .eq('estatus', 'activo');
+
       const { count: carrerasCount } = await supabase.from('careers').select('*', { count: 'exact', head: true });
       const { count: gruposCount } = await supabase.from('groups').select('*', { count: 'exact', head: true });
 
@@ -103,8 +114,8 @@ export default function AdminDashboard() {
   ];
 
   const statCards = [
-    { label: 'Total Alumnos', value: stats.alumnos, icon: Users, color: 'text-blue-600' },
-    { label: 'Profesores', value: stats.profesores, icon: GraduationCap, color: 'text-emerald-600' },
+    { label: 'Alumnos Activos', value: stats.alumnos, icon: Users, color: 'text-blue-600' },
+    { label: 'Profesores Activos', value: stats.profesores, icon: GraduationCap, color: 'text-emerald-600' },
     { label: 'Carreras', value: stats.carreras, icon: School, color: 'text-amber-600' },
     { label: 'Grupos Activos', value: stats.grupos, icon: Layers, color: 'text-purple-600' },
   ];

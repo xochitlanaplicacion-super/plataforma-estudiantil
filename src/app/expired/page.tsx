@@ -10,14 +10,16 @@ export default function ExpiredPage() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="max-w-md w-full text-center p-8 border-destructive/20 shadow-2xl">
         <div className="flex justify-center mb-6">
-          <div className="h-20 w-20 bg-destructive/10 rounded-full flex items-center justify-center text-destructive">
-            <Clock size={40} />
-          </div>
+          <img 
+            src="/images/logo_zapata.png" 
+            alt="Logo Instituto Emiliano Zapata" 
+            className="h-32 w-auto drop-shadow-md"
+          />
         </div>
         <CardHeader className="p-0 space-y-2">
           <CardTitle className="text-2xl font-bold font-headline">Acceso Expirado</CardTitle>
-          <CardDescription className="text-base">
-            Tu suscripción o periodo de acceso a la plataforma del Instituto Emiliano Zapata ha terminado.
+          <CardDescription className="text-base font-medium text-destructive">
+            Tu periodo de acceso a la plataforma del Instituto Educativo Emiliano Zapata ha terminado.
           </CardDescription>
         </CardHeader>
         <CardContent className="mt-8 p-0 space-y-6">
