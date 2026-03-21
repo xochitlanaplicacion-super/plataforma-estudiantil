@@ -6,6 +6,9 @@ import { AlertCircle, Clock, Mail, Phone } from 'lucide-react';
 import Link from 'next/link';
 
 export default function ExpiredPage() {
+  const supportEmail = "instituto.edu.emilianozapata@gmail.com";
+  const supportPhone = "7352826206";
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="max-w-md w-full text-center p-8 border-destructive/20 shadow-2xl">
@@ -31,12 +34,16 @@ export default function ExpiredPage() {
           </div>
           
           <div className="space-y-3">
-            <Button className="w-full gap-2" variant="outline">
-              <Mail size={16} /> enviar correo a soporte
-            </Button>
-            <Button className="w-full gap-2" variant="ghost">
-              <Phone size={16} /> llamar a ventanilla
-            </Button>
+            <a href={`mailto:${supportEmail}`} className="block w-full">
+              <Button className="w-full gap-2 py-6 text-base" variant="outline">
+                <Mail size={18} /> enviar correo a soporte
+              </Button>
+            </a>
+            <a href={`tel:${supportPhone}`} className="block w-full">
+              <Button className="w-full gap-2 py-6 text-base" variant="ghost">
+                <Phone size={18} /> llamar a ventanilla
+              </Button>
+            </a>
           </div>
         </CardContent>
         <div className="mt-8 pt-6 border-t">
