@@ -24,6 +24,7 @@ export async function createAspiranteRecord(aspiranteData: any) {
         email: aspiranteData.email.toLowerCase().trim(),
         curp: aspiranteData.curp.toUpperCase().trim(),
         telefono: aspiranteData.telefono.trim(),
+        fecha_nacimiento: aspiranteData.fecha_nacimiento,
         nivel: aspiranteData.nivel,
         carrera_id: aspiranteData.carrera_id || null,
       });

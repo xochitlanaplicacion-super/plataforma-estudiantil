@@ -32,6 +32,7 @@ export interface Aspirante {
   email: string;
   curp: string;
   telefono: string;
+  fecha_nacimiento: string;
   nivel: string;
   carrera_id?: string;
   estatus?: string;

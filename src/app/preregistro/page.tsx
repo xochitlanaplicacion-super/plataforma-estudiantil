@@ -22,6 +22,7 @@ const preregistroSchema = z.object({
   email: z.string().email("Correo electrónico inválido"),
   curp: z.string().length(18, "La CURP debe tener exactamente 18 caracteres"),
   telefono: z.string().min(10, "El teléfono debe tener al menos 10 dígitos"),
+  fecha_nacimiento: z.string().min(1, "La fecha de nacimiento es obligatoria"),
   nivel: z.string().min(1, "Selecciona un nivel educativo"),
   carrera_id: z.string().optional(),
 }).refine((data) => {
@@ -50,6 +51,7 @@ export default function PreregistroPage() {
       email: '',
       curp: '',
       telefono: '',
+      fecha_nacimiento: '',
       nivel: '',
       carrera_id: '',
     },
@@ -201,6 +203,19 @@ export default function PreregistroPage() {
                             {...field}
                             onChange={(e) => field.onChange(e.target.value.toUpperCase())}
                           />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="fecha_nacimiento"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-base">Fecha de Nacimiento *</FormLabel>
+                        <FormControl>
+                          <Input type="date" className="h-12" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
