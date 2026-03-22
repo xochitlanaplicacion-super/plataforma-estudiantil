@@ -622,7 +622,7 @@ const Footer = ({ theme }: { theme: any }) => {
             <img 
               src={LOGO_URL} 
               alt="Logo IEEZ" 
-              className="h-full w-auto object-contain brightness-0 invert opacity-90" 
+              className="h-full w-auto object-contain" 
             />
           </div>
           <div className="flex flex-col">
