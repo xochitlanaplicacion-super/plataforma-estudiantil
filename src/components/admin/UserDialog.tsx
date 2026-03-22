@@ -36,7 +36,6 @@ const userSchema = z.object({
   doc_curp: z.boolean().default(false),
   doc_ine: z.boolean().default(false),
 }).refine((data) => {
-  // VALIDACIÓN CRÍTICA: Si es alumno, la fecha de expiración DEBE existir
   if (data.rol === 'alumno' && !data.fecha_expiracion) {
     return false;
   }
@@ -60,7 +59,6 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
   const { toast } = useToast();
   const supabase = createClient();
   const [loading, setLoading] = useState(false);
-  const [resending, setResending] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -136,6 +134,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
           numero_empleado: user.numero_empleado || '',
           fecha_expiracion: user.fecha_expiracion || '',
           fecha_nacimiento: user.fecha_nacimiento || '',
+          nivel_estudios: '', // No disponible en perfil básico por defecto
           password: user.password_plain || '',
           doc_acta_nacimiento: !!user.doc_acta_nacimiento,
           doc_certificado_estudios: !!user.doc_certificado_estudios,
@@ -144,14 +143,18 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
         });
       } else if (prefillAspirante) {
         form.reset({
-          nombre: prefillAspirante.nombre,
-          apellidos: prefillAspirante.apellidos,
-          email: prefillAspirante.email,
-          curp: prefillAspirante.curp,
+          nombre: prefillAspirante.nombre || '',
+          apellidos: prefillAspirante.apellidos || '',
+          email: prefillAspirante.email || '',
+          curp: prefillAspirante.curp || '',
           rol: 'alumno',
           estatus: 'activo',
-          telefono: prefillAspirante.telefono,
-          nivel_estudios: prefillAspirante.nivel,
+          telefono: prefillAspirante.telefono || '',
+          nivel_estudios: prefillAspirante.nivel || '',
+          matricula: '',
+          numero_empleado: '',
+          fecha_expiracion: '',
+          fecha_nacimiento: '',
           password: '',
           doc_acta_nacimiento: false,
           doc_certificado_estudios: false,
@@ -197,7 +200,6 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
     }
   };
 
-  // Función para manejar errores de validación y mostrar el popup solicitado
   const onInvalid = (errors: any) => {
     if (errors.fecha_expiracion) {
       toast({
@@ -278,7 +280,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
                   <FormLabel>Rol *</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value} disabled={!!prefillAspirante}>
                     <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                    <SelectContent><SelectItem value="alumno">Alumno</SelectItem><SelectItem value="profesor">Profesor</SelectItem><SelectItem value="admin">Administrador</SelectItem></SelectContent>
+                    <SelectContent><SelectItem value="alumno">Alumno</SelectItem><SelectItem value="profesor">Professor</SelectItem><SelectItem value="admin">Administrador</SelectItem></SelectContent>
                   </Select>
                 </FormItem>
               )} />
