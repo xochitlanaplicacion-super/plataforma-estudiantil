@@ -35,6 +35,15 @@ const userSchema = z.object({
   doc_certificado_estudios: z.boolean().default(false),
   doc_curp: z.boolean().default(false),
   doc_ine: z.boolean().default(false),
+}).refine((data) => {
+  // VALIDACIÓN CRÍTICA: Si es alumno, la fecha de expiración DEBE existir
+  if (data.rol === 'alumno' && !data.fecha_expiracion) {
+    return false;
+  }
+  return true;
+}, {
+  message: "La vigencia (fecha de expiración) es obligatoria para Alumnos.",
+  path: ["fecha_expiracion"],
 });
 
 type UserFormValues = z.infer<typeof userSchema>;
@@ -188,6 +197,17 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
     }
   };
 
+  // Función para manejar errores de validación y mostrar el popup solicitado
+  const onInvalid = (errors: any) => {
+    if (errors.fecha_expiracion) {
+      toast({
+        variant: "destructive",
+        title: "Dato Obligatorio Faltante",
+        description: "Para dar de alta a un ALUMNO, es estrictamente necesario definir la Fecha de Expiración (vigencia de su acceso)."
+      });
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -213,7 +233,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
         )}
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pt-2">
+          <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6 pt-2">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
               <div className="space-y-4 md:col-span-2">
                 <h4 className="text-sm font-bold text-primary/70 uppercase tracking-wider border-b pb-1">Información Personal</h4>
@@ -264,7 +284,19 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
               )} />
 
               <FormField control={form.control} name="fecha_expiracion" render={({ field }) => (
-                <FormItem><FormLabel>Fecha de Expiración (Acceso) *</FormLabel><FormControl><Input type="date" {...field} required /></FormControl><FormMessage /></FormItem>
+                <FormItem>
+                  <FormLabel className={form.watch('rol') === 'alumno' ? "text-destructive font-bold" : ""}>
+                    Fecha de Expiración (Acceso) {form.watch('rol') === 'alumno' && " *"}
+                  </FormLabel>
+                  <FormControl>
+                    <Input 
+                      type="date" 
+                      {...field} 
+                      className={form.formState.errors.fecha_expiracion ? "border-destructive ring-destructive" : ""}
+                    />
+                  </FormControl>
+                  <FormMessage className="text-[10px]" />
+                </FormItem>
               )} />
               
               <FormField control={form.control} name="estatus" render={({ field }) => (
