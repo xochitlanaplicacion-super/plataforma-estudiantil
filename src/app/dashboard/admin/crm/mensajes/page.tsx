@@ -19,6 +19,7 @@ const STAGES = [
   { id: 'contactando', label: 'Contactando', color: 'bg-blue-500' },
   { id: 'cita', label: 'Cita Programada', color: 'bg-purple-500' },
   { id: 'interesado', label: 'Interesados', color: 'bg-emerald-500' },
+  { id: 'inscrito', label: 'Ya Inscrito', color: 'bg-indigo-700' },
   { id: 'descartado', label: 'Descartados', color: 'bg-slate-400' },
 ];
 
