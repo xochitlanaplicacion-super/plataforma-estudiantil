@@ -2,16 +2,25 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Mail, Phone, MessageSquare, Clock, Filter, CheckCircle2, MoreVertical, Trash2, Edit, Loader2 } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Mail, Phone, MessageSquare, Clock, Edit, Loader2, User, MoreHorizontal, Calendar, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { updateCRMStatus } from '@/lib/actions/users';
+import { ScrollArea } from '@/components/ui/scroll-area';
+
+const STAGES = [
+  { id: 'nuevo', label: 'Nuevos Clientes', color: 'bg-amber-500' },
+  { id: 'contactando', label: 'Contactando', color: 'bg-blue-500' },
+  { id: 'cita', label: 'Cita Programada', color: 'bg-purple-500' },
+  { id: 'interesado', label: 'Interesados', color: 'bg-emerald-500' },
+  { id: 'descartado', label: 'Descartados', color: 'bg-slate-400' },
+];
 
 export default function MensajesCRM() {
   const { toast } = useToast();
@@ -34,7 +43,7 @@ export default function MensajesCRM() {
       setMensajes(data || []);
     } catch (err: any) {
       console.error("Error fetching mensajes:", err);
-      toast({ variant: "destructive", title: "Error de conexión", description: "No se pudieron cargar los mensajes. Revisa las políticas RLS." });
+      toast({ variant: "destructive", title: "Error de conexión", description: "No se pudieron cargar los prospectos." });
     } finally {
       setLoading(false);
     }
@@ -43,10 +52,15 @@ export default function MensajesCRM() {
   useEffect(() => { fetchMensajes(); }, []);
 
   const handleStatusChange = async (id: string, newStatus: string) => {
+    // Optimistic update
+    setMensajes(prev => prev.map(m => m.id === id ? { ...m, estatus: newStatus } : m));
+    
     const result = await updateCRMStatus('mensajes_contacto', id, { estatus: newStatus });
-    if (result.success) {
-      toast({ title: "Estatus actualizado", description: `Estado cambiado a ${newStatus}` });
-      fetchMensajes();
+    if (!result.success) {
+      toast({ variant: "destructive", title: "Error", description: "No se pudo actualizar el estado." });
+      fetchMensajes(); // Rollback
+    } else {
+      toast({ title: "Estado actualizado", description: `Prospecto movido a ${newStatus}` });
     }
   };
 
@@ -60,74 +74,152 @@ export default function MensajesCRM() {
     }
   };
 
+  const getMessagesByStage = (stageId: string) => {
+    return mensajes.filter(m => (m.estatus || 'nuevo') === stageId);
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="h-[calc(100vh-140px)] flex flex-col space-y-6">
+      <div className="flex justify-between items-center shrink-0">
         <div>
-          <h2 className="text-3xl font-bold font-headline tracking-tight text-primary">Prospectos (Mensajes)</h2>
-          <p className="text-muted-foreground">Pipeline de atención inicial a interesados.</p>
+          <h2 className="text-3xl font-bold font-headline tracking-tight text-primary">Pipeline de Ventas</h2>
+          <p className="text-muted-foreground text-sm font-medium">Gestiona el flujo de atención a prospectos interesados.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="bg-white border-primary/20 text-primary px-3 py-1 font-bold">
+            {mensajes.length} TOTAL LEADS
+          </Badge>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {loading ? (
-          <div className="col-span-full py-20 flex flex-col items-center gap-4 text-muted-foreground">
-            <Loader2 className="animate-spin h-8 w-8 text-primary" />
-            <p>Cargando prospectos...</p>
-          </div>
-        ) : mensajes.length === 0 ? (
-          <div className="col-span-full py-20 text-center text-muted-foreground border-2 border-dashed rounded-xl">
-            No se encontraron mensajes. Verifica la tabla 'mensajes_contacto'.
-          </div>
-        ) : (
-          mensajes.map((msg) => (
-            <Card key={msg.id} className={`border-l-4 ${msg.estatus === 'nuevo' || !msg.estatus ? 'border-l-amber-500' : 'border-l-primary/20'}`}>
-              <CardHeader className="pb-2">
-                <div className="flex justify-between items-start">
-                  <Badge variant={msg.estatus === 'nuevo' || !msg.estatus ? 'default' : 'secondary'} className="capitalize text-[10px]">
-                    {msg.estatus || 'nuevo'}
+      <ScrollArea className="w-full h-full pb-4">
+        <div className="flex gap-6 min-w-max h-full px-1">
+          {STAGES.map((stage) => {
+            const stageMessages = getMessagesByStage(stage.id);
+            return (
+              <div key={stage.id} className="w-80 flex flex-col bg-slate-100/50 rounded-2xl border border-slate-200/60 p-3 shadow-sm">
+                <div className="flex items-center justify-between mb-4 px-2">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-3 h-3 rounded-full ${stage.color}`} />
+                    <h3 className="font-black text-sm uppercase tracking-wider text-slate-700">{stage.label}</h3>
+                  </div>
+                  <Badge variant="secondary" className="bg-white shadow-sm text-[10px] font-black h-5">
+                    {stageMessages.length}
                   </Badge>
-                  <span className="text-[10px] text-muted-foreground">{new Date(msg.created_at).toLocaleDateString()}</span>
                 </div>
-                <CardTitle className="text-lg mt-2">{msg.nombre}</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="text-sm space-y-1">
-                  <div className="flex items-center gap-2 text-muted-foreground"><Mail size={14} /> {msg.email}</div>
-                  <div className="flex items-center gap-2 text-muted-foreground"><Phone size={14} /> {msg.telefono}</div>
-                </div>
-                <div className="p-3 bg-muted rounded-lg text-xs italic">"{msg.mensaje || 'Sin mensaje'}"</div>
-                
-                {msg.notas && <div className="p-2 border rounded-md text-[10px] bg-amber-50 border-amber-200"><strong>Nota:</strong> {msg.notas}</div>}
 
-                <div className="flex gap-2">
-                  <Select value={msg.estatus || 'nuevo'} onValueChange={(val) => handleStatusChange(msg.id, val)}>
-                    <SelectTrigger className="h-8 text-xs flex-1"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="nuevo">Nuevo</SelectItem>
-                      <SelectItem value="contactando">Contactando</SelectItem>
-                      <SelectItem value="cita">Cita Programada</SelectItem>
-                      <SelectItem value="interesado">Interesado</SelectItem>
-                      <SelectItem value="descartado">Descartado</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => { setSelectedMsg(msg); setNote(msg.notas || ''); setIsNoteOpen(true); }}><Edit size={14} /></Button>
+                <div className="flex-1 space-y-3">
+                  {loading && mensajes.length === 0 ? (
+                    <div className="flex justify-center py-10 opacity-50"><Loader2 className="animate-spin" /></div>
+                  ) : stageMessages.map((msg) => (
+                    <Card key={msg.id} className="border-none shadow-md hover:shadow-lg transition-all duration-300 group overflow-hidden bg-white">
+                      <CardHeader className="p-4 pb-2 space-y-0">
+                        <div className="flex justify-between items-start mb-2">
+                          <span className="text-[9px] font-bold text-muted-foreground uppercase flex items-center gap-1">
+                            <Clock size={10} /> {new Date(msg.created_at).toLocaleDateString()}
+                          </span>
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-6 w-6 text-muted-foreground hover:text-primary"
+                            onClick={() => { setSelectedMsg(msg); setNote(msg.notas || ''); setIsNoteOpen(true); }}
+                          >
+                            <Edit size={12} />
+                          </Button>
+                        </div>
+                        <CardTitle className="text-sm font-black text-slate-800 leading-tight">
+                          {msg.nombre}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-2 space-y-3">
+                        <div className="text-[10px] space-y-1.5 font-medium text-slate-600">
+                          <div className="flex items-center gap-2"><Phone size={10} className="text-primary/60" /> {msg.telefono}</div>
+                          <div className="flex items-center gap-2"><Mail size={10} className="text-primary/60" /> {msg.email}</div>
+                        </div>
+
+                        {msg.mensaje && (
+                          <div className="p-2 bg-slate-50 rounded-md text-[10px] italic text-slate-500 border-l-2 border-primary/20 line-clamp-2">
+                            "{msg.mensaje}"
+                          </div>
+                        )}
+
+                        {msg.notas && (
+                          <div className="p-2 bg-amber-50/50 rounded-md text-[9px] border border-amber-100 text-amber-800">
+                            <strong>Nota:</strong> {msg.notas}
+                          </div>
+                        )}
+
+                        <div className="pt-2 border-t border-slate-100 flex gap-2">
+                          <Select 
+                            value={msg.estatus || 'nuevo'} 
+                            onValueChange={(val) => handleStatusChange(msg.id, val)}
+                          >
+                            <SelectTrigger className="h-7 text-[9px] bg-slate-50 font-bold uppercase tracking-tighter">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {STAGES.map(s => (
+                                <SelectItem key={s.id} value={s.id} className="text-[10px] font-bold uppercase">
+                                  {s.label}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          
+                          <div className="flex gap-1">
+                            <a href={`tel:${msg.telefono}`}>
+                              <Button variant="outline" size="icon" className="h-7 w-7 border-slate-200 hover:bg-primary/10 hover:text-primary hover:border-primary/30 shadow-sm">
+                                <Phone size={12} />
+                              </Button>
+                            </a>
+                            <a href={`mailto:${msg.email}`}>
+                              <Button variant="outline" size="icon" className="h-7 w-7 border-slate-200 hover:bg-primary/10 hover:text-primary hover:border-primary/30 shadow-sm">
+                                <Mail size={12} />
+                              </Button>
+                            </a>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                  
+                  {!loading && stageMessages.length === 0 && (
+                    <div className="flex flex-col items-center justify-center py-10 opacity-30">
+                      <div className="w-12 h-12 rounded-full border-2 border-dashed border-slate-400 mb-2 flex items-center justify-center">
+                        <Info size={20} />
+                      </div>
+                      <p className="text-[10px] font-bold uppercase tracking-widest">Sin leads</p>
+                    </div>
+                  )}
                 </div>
-              </CardContent>
-              <div className="px-6 pb-4 flex gap-2">
-                <a href={`tel:${msg.telefono}`} className="flex-1"><Button variant="secondary" className="w-full h-8 text-[10px] gap-1"><Phone size={12} /> Llamar</Button></a>
-                <a href={`mailto:${msg.email}`} className="flex-1"><Button variant="outline" className="w-full h-8 text-[10px] gap-1"><Mail size={12} /> Correo</Button></a>
               </div>
-            </Card>
-          ))
-        )}
-      </div>
+            );
+          })}
+        </div>
+      </ScrollArea>
 
       <Dialog open={isNoteOpen} onOpenChange={setIsNoteOpen}>
-        <DialogContent>
-          <DialogHeader><DialogTitle>Seguimiento de {selectedMsg?.nombre}</DialogTitle></DialogHeader>
-          <Textarea value={note} onChange={(e) => setNote(e.target.value)} placeholder="Escribe aquí las notas del seguimiento..." className="min-h-[150px]" />
-          <DialogFooter><Button onClick={handleSaveNote}>Guardar Nota</Button></DialogFooter>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <User size={18} className="text-primary" /> Seguimiento de {selectedMsg?.nombre}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-xs font-black uppercase tracking-widest text-muted-foreground">Notas del Prospecto</label>
+              <Textarea 
+                value={note} 
+                onChange={(e) => setNote(e.target.value)} 
+                placeholder="Escribe aquí los detalles de la llamada, acuerdos o interés particular..." 
+                className="min-h-[120px] bg-slate-50 border-slate-200 focus:ring-primary/20" 
+              />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setIsNoteOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSaveNote} className="bg-primary px-8">Guardar Seguimiento</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
