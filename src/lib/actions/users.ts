@@ -1,3 +1,4 @@
+
 'use server';
 
 import { createClient } from '@supabase/supabase-js';
@@ -30,7 +31,29 @@ export async function createUserWithProfile(userData: any, aspiranteId?: string)
     const email = userData.email.toLowerCase().trim();
     const curp = (userData.curp || '').toUpperCase().trim();
 
-    // 1. Crear el usuario en Auth
+    // 1. VALIDACIÓN PREVIA: Verificar si el email o CURP ya existen en profiles
+    // Esto evita intentar crear un usuario en Auth que ya tiene perfil
+    const { data: existingEmail } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle();
+    
+    if (existingEmail) {
+      return { success: false, error: `El correo ${email} ya está registrado en el sistema.` };
+    }
+
+    const { data: existingCurp } = await supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .eq('curp', curp)
+      .maybeSingle();
+    
+    if (existingCurp) {
+      return { success: false, error: `La CURP ${curp} ya está asignada a otro usuario.` };
+    }
+
+    // 2. Crear el usuario en Auth
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: email,
       password: userData.password,
@@ -43,13 +66,17 @@ export async function createUserWithProfile(userData: any, aspiranteId?: string)
       }
     });
 
-    if (authError) return { success: false, error: authError.message };
+    if (authError) {
+      return { success: false, error: `Error en Autenticación: ${authError.message}` };
+    }
 
-    // 2. Crear el perfil en DB
+    // 3. Crear o Actualizar el perfil en DB
+    // Usamos .upsert() en lugar de .insert() para que si un Trigger de BD 
+    // ya creó el perfil al momento de crear el auth user, simplemente lo actualice.
     const profileData = {
       id: authData.user.id,
-      nombre: userData.nombre,
-      apellidos: userData.apellidos,
+      nombre: userData.nombre.toUpperCase().trim(),
+      apellidos: userData.apellidos.toUpperCase().trim(),
       email: email,
       curp: curp,
       rol: userData.rol,
@@ -66,19 +93,22 @@ export async function createUserWithProfile(userData: any, aspiranteId?: string)
       doc_ine: !!userData.doc_ine,
     };
 
-    const { error: profileError } = await supabaseAdmin.from('profiles').insert(profileData);
+    const { error: profileError } = await supabaseAdmin
+      .from('profiles')
+      .upsert(profileData, { onConflict: 'id' });
 
     if (profileError) {
+      // Si falla la DB, borramos el usuario de Auth para no dejar basura
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
-      return { success: false, error: profileError.message };
+      return { success: false, error: `Error en Perfil: ${profileError.message}` };
     }
 
-    // 3. Si viene de un aspirante, marcarlo como inscrito
+    // 4. Si viene de un aspirante, marcarlo como inscrito
     if (aspiranteId) {
       await supabaseAdmin.from('aspirantes').update({ estatus: 'inscrito' }).eq('id', aspiranteId);
     }
 
-    // 4. Enviar correo
+    // 5. Enviar correo de bienvenida (sin bloquear el flujo)
     sendWelcomeEmail({
       to: email,
       nombre: userData.nombre,
@@ -86,22 +116,23 @@ export async function createUserWithProfile(userData: any, aspiranteId?: string)
       rol: userData.rol,
       matricula: emptyToNull(userData.matricula),
       password: userData.password,
-    }).catch(console.error);
+    }).catch(err => console.error("Error envío correo bienvenida:", err));
 
     revalidatePath('/dashboard/admin/crm/aspirantes');
     revalidatePath('/dashboard/admin/usuarios');
     return { success: true };
 
   } catch (error: any) {
-    return { success: false, error: error.message };
+    console.error("Error crítico en registro:", error);
+    return { success: false, error: error.message || "Ocurrió un error inesperado al crear el usuario." };
   }
 }
 
 export async function updateUserProfile(id: string, userData: any) {
   try {
     const updateData: any = {
-      nombre: userData.nombre,
-      apellidos: userData.apellidos,
+      nombre: userData.nombre.toUpperCase().trim(),
+      apellidos: userData.apellidos.toUpperCase().trim(),
       curp: (userData.curp || '').toUpperCase().trim(),
       rol: userData.rol,
       estatus: userData.estatus,
