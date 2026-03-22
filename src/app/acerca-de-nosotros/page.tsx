@@ -7,7 +7,7 @@ import { BookOpen, GraduationCap, Users, Clock, MapPin, Phone, Mail, ChevronUp, 
 import { cn } from '@/lib/utils';
 import { Variants } from 'framer-motion';
 
-// Temas disponibles
+// Temas disponibles (Sin Beige para esta página)
 const themes = [
   {
     id: 'azul',
@@ -41,17 +41,6 @@ const themes = [
     textPrimary: 'text-[#8B2332]',
     bgSecondary: 'bg-[#8B2332]',
     borderAccent: 'border-rose-500'
-  },
-  {
-    id: 'beige',
-    primary: '#E8D5B7',
-    secondary: '#d4c1a5',
-    accent: '#b45309',
-    gradient: 'from-amber-600 to-orange-400',
-    light: 'bg-amber-50',
-    textPrimary: 'text-[#1A4A3F]', // Texto oscuro para contraste
-    bgSecondary: 'bg-[#E8D5B7]',
-    borderAccent: 'border-amber-500'
   }
 ];
 
@@ -544,7 +533,7 @@ const Contact = ({ theme }: { theme: any }) => {
                     </div>
                     <div>
                       <p className="text-xs font-black uppercase tracking-[0.2em] mb-2 text-white/60">Ubicación</p>
-                      <p className="text-xl font-bold">México</p>
+                      <p className="text-xl font-bold">Yautepec Morelos México</p>
                     </div>
                   </div>
                 </div>
@@ -626,17 +615,23 @@ const Contact = ({ theme }: { theme: any }) => {
 
 const Footer = ({ theme }: { theme: any }) => {
   return (
-    <footer className="text-white/60 py-20 border-t border-gray-100" style={{ backgroundColor: theme.id === 'azul' ? '#051426' : theme.id === 'verde' ? '#064e3b' : theme.id === 'vino' ? '#4c0519' : '#b45309' }}>
+    <footer className="text-white/80 py-20 border-t border-gray-100" style={{ backgroundColor: theme.id === 'azul' ? '#051426' : theme.id === 'verde' ? '#064e3b' : '#4c0519' }}>
       <div className="container mx-auto px-4 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-10">
-        <div className="flex items-center gap-5">
-          <img src={LOGO_URL} alt="Logo" className="h-20 w-auto brightness-200 grayscale" />
-          <div>
+        <div className="flex items-center gap-6">
+          <div className="h-20 w-auto">
+            <img 
+              src={LOGO_URL} 
+              alt="Logo IEEZ" 
+              className="h-full w-auto object-contain brightness-0 invert opacity-90" 
+            />
+          </div>
+          <div className="flex flex-col">
             <h4 className="text-white font-black text-2xl leading-none">IEEZ</h4>
-            <p className="text-xs uppercase tracking-[0.2em] font-bold mt-2">Instituto Educativo Emiliano Zapata</p>
+            <p className="text-[10px] uppercase tracking-[0.2em] font-bold mt-2 text-white/60">Instituto Educativo Emiliano Zapata</p>
           </div>
         </div>
         
-        <p className="text-sm font-bold uppercase tracking-widest">
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/50">
           © {new Date().getFullYear()} IEEZ. Todos los derechos reservados.
         </p>
         
@@ -657,6 +652,7 @@ export default function AcercaDeNosotrosPage() {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // Escoger solo entre Azul, Verde y Vino
     const randomTheme = themes[Math.floor(Math.random() * themes.length)];
     setCurrentTheme(randomTheme);
     setMounted(true);
