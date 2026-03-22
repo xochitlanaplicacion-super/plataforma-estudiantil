@@ -3,9 +3,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, GraduationCap, Users, Clock, MapPin, Phone, Mail, ChevronUp, Menu, X, CheckCircle, Award } from 'lucide-react';
+import { BookOpen, GraduationCap, Users, Clock, MapPin, Phone, Mail, ChevronUp, Menu, X, CheckCircle, Award, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Variants } from 'framer-motion';
+import { createContactoRecord } from '@/lib/actions/contacto';
+import { useToast } from '@/hooks/use-toast';
 
 // Temas disponibles (Sin Beige para esta página)
 const themes = [
@@ -476,16 +478,64 @@ const Banner = ({ theme }: { theme: any }) => {
 }
 
 const Contact = ({ theme }: { theme: any }) => {
+  const { toast } = useToast();
   const [formData, setFormData] = useState({ name: '', email: '', phone: '', message: '' });
+  const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.toUpperCase();
+    setFormData({ ...formData, name: value });
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value.replace(/\D/g, ''); // Solo números
+    setFormData({ ...formData, phone: value });
+  };
+
+  const validateEmail = (email: string) => {
+    return String(email)
+      .toLowerCase()
+      .match(
+        /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/
+      );
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
-    setTimeout(() => {
-      setSubmitted(false);
-      setFormData({ name: '', email: '', phone: '', message: '' });
-    }, 3000);
+    
+    if (!validateEmail(formData.email)) {
+      toast({ variant: "destructive", title: "Email Inválido", description: "Por favor ingresa un correo electrónico real." });
+      return;
+    }
+
+    if (formData.phone.length < 10) {
+      toast({ variant: "destructive", title: "Teléfono Inválido", description: "El número debe tener al menos 10 dígitos." });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const result = await createContactoRecord({
+        nombre: formData.name,
+        email: formData.email,
+        telefono: formData.phone,
+        mensaje: formData.message
+      });
+
+      if (result.success) {
+        setSubmitted(true);
+        toast({ title: "Mensaje Enviado", description: "Pronto nos pondremos en contacto contigo." });
+        setFormData({ name: '', email: '', phone: '', message: '' });
+        setTimeout(() => setSubmitted(false), 5000);
+      } else {
+        toast({ variant: "destructive", title: "Error", description: result.error });
+      }
+    } catch (err) {
+      toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el mensaje." });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -561,48 +611,57 @@ const Contact = ({ theme }: { theme: any }) => {
               <form onSubmit={handleSubmit} className="space-y-8">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-3">
-                    <label className="text-sm font-black text-gray-900 uppercase tracking-widest">Nombre Completo</label>
+                    <label className="text-sm font-black text-gray-900 uppercase tracking-widest">Nombre Completo *</label>
                     <input 
                       type="text" 
                       required
                       value={formData.name}
-                      onChange={(e) => setFormData({...formData, name: e.target.value})}
-                      className="w-full px-6 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 transition-all text-lg"
-                      style={{ focusRingColor: `${theme.primary}20` } as any}
-                      placeholder="Juan Pérez"
+                      onChange={handleNameChange}
+                      className="w-full px-6 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 transition-all text-lg uppercase"
+                      placeholder="JUAN PÉREZ"
                     />
                   </div>
                   <div className="space-y-3">
-                    <label className="text-sm font-black text-gray-900 uppercase tracking-widest">Teléfono</label>
+                    <label className="text-sm font-black text-gray-900 uppercase tracking-widest">Teléfono *</label>
                     <input 
                       type="tel" 
                       required
                       value={formData.phone}
-                      onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                      onChange={handlePhoneChange}
+                      maxLength={10}
                       className="w-full px-6 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 transition-all text-lg"
-                      style={{ focusRingColor: `${theme.primary}20` } as any}
-                      placeholder="735 000 0000"
+                      placeholder="7350000000"
                     />
                   </div>
                 </div>
                 <div className="space-y-3">
-                  <label className="text-sm font-black text-gray-900 uppercase tracking-widest">Correo Electrónico</label>
+                  <label className="text-sm font-black text-gray-900 uppercase tracking-widest">Correo Electrónico *</label>
                   <input 
                     type="email" 
                     required
                     value={formData.email}
                     onChange={(e) => setFormData({...formData, email: e.target.value})}
                     className="w-full px-6 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 transition-all text-lg"
-                    style={{ focusRingColor: `${theme.primary}20` } as any}
                     placeholder="correo@ejemplo.com"
+                  />
+                </div>
+                <div className="space-y-3">
+                  <label className="text-sm font-black text-gray-900 uppercase tracking-widest">Cuéntanos que necesitas saber</label>
+                  <textarea 
+                    rows={4}
+                    value={formData.message}
+                    onChange={(e) => setFormData({...formData, message: e.target.value})}
+                    className="w-full px-6 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 transition-all text-lg resize-none"
+                    placeholder="Escribe tu mensaje aquí..."
                   />
                 </div>
                 <button 
                   type="submit" 
-                  className="w-full text-white font-black py-6 rounded-2xl transition-all shadow-2xl uppercase tracking-[0.3em] hover:scale-[1.02] active:scale-[0.98]"
+                  disabled={loading}
+                  className="w-full text-white font-black py-6 rounded-2xl transition-all shadow-2xl uppercase tracking-[0.3em] hover:scale-[1.02] active:scale-[0.98] flex justify-center items-center gap-2"
                   style={{ backgroundColor: theme.primary }}
                 >
-                  Enviar Datos
+                  {loading ? <Loader2 className="animate-spin" /> : "Enviar Datos"}
                 </button>
               </form>
             )}
