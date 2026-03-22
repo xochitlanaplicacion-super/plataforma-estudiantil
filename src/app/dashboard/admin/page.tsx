@@ -2,21 +2,23 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, GraduationCap, School, Layers, AlertCircle, Loader2, FileWarning, Mail, Send, Eye } from 'lucide-react';
+import { Users, GraduationCap, School, Layers, AlertCircle, Loader2, FileWarning, Mail, Send, Eye, MessageSquare } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { createClient } from '@/lib/supabase/client';
 import { User } from '@/lib/types';
 import { UserDialog } from '@/components/admin/UserDialog';
-import Link from 'next/link';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer, Cell } from 'recharts';
 import { sendDocReminderAction } from '@/lib/actions/users';
 import { useToast } from '@/hooks/use-toast';
+import { ToastAction } from '@/components/ui/toast';
 
 export default function AdminDashboard() {
   const { toast } = useToast();
+  const router = useRouter();
   const supabase = createClient();
   const [loading, setLoading] = useState(true);
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
@@ -25,7 +27,8 @@ export default function AdminDashboard() {
     alumnos: 0,
     profesores: 0,
     carreras: 0,
-    grupos: 0
+    grupos: 0,
+    nuevosMensajes: 0
   });
   const [recentUsers, setRecentUsers] = useState<User[]>([]);
   const [alumnosMissingDocs, setAlumnosMissingDocs] = useState<User[]>([]);
@@ -52,12 +55,37 @@ export default function AdminDashboard() {
       const { count: carrerasCount } = await supabase.from('carreras').select('*', { count: 'exact', head: true });
       const { count: gruposCount } = await supabase.from('groups').select('*', { count: 'exact', head: true });
 
+      // Verificar mensajes nuevos para el popup
+      const { count: newMessagesCount } = await supabase
+        .from('mensajes_contacto')
+        .select('*', { count: 'exact', head: true })
+        .eq('estatus', 'nuevo');
+
       setStats({
         alumnos: alumnosCount || 0,
         profesores: profesCount || 0,
         carreras: carrerasCount || 0,
-        grupos: gruposCount || 0
+        grupos: gruposCount || 0,
+        nuevosMensajes: newMessagesCount || 0
       });
+
+      // Mostrar notificación si hay mensajes nuevos
+      if (newMessagesCount && newMessagesCount > 0) {
+        toast({
+          title: "📬 ¡Nuevos Prospectos!",
+          description: `Tienes ${newMessagesCount} mensajes nuevos esperando atención en el CRM.`,
+          variant: "default",
+          action: (
+            <ToastAction 
+              altText="Ver mensajes" 
+              onClick={() => router.push('/dashboard/admin/crm/mensajes')}
+              className="bg-primary text-white hover:bg-primary/90"
+            >
+              Ver ahora
+            </ToastAction>
+          ),
+        });
+      }
 
       const { data: users } = await supabase
         .from('profiles')
@@ -74,7 +102,7 @@ export default function AdminDashboard() {
         .eq('rol', 'alumno')
         .eq('estatus', 'activo')
         .or('doc_acta_nacimiento.eq.false,doc_certificado_estudios.eq.false,doc_curp.eq.false,doc_ine.eq.false')
-        .gte('fecha_expiracion', hoy) // Solo mostrar los que tienen vigencia vigente
+        .gte('fecha_expiracion', hoy) 
         .order('nombre', { ascending: true });
 
       if (missingDocsAlumnos) setAlumnosMissingDocs(missingDocsAlumnos as any);
@@ -116,20 +144,27 @@ export default function AdminDashboard() {
   const statCards = [
     { label: 'Alumnos Activos', value: stats.alumnos, icon: Users, color: 'text-blue-600' },
     { label: 'Profesores Activos', value: stats.profesores, icon: GraduationCap, color: 'text-emerald-600' },
-    { label: 'Carreras', value: stats.carreras, icon: School, color: 'text-amber-600' },
+    { label: 'Nuevos Mensajes', value: stats.nuevosMensajes, icon: MessageSquare, color: 'text-amber-600', link: '/dashboard/admin/crm/mensajes' },
     { label: 'Grupos Activos', value: stats.grupos, icon: Layers, color: 'text-purple-600' },
   ];
 
   return (
     <div className="space-y-8">
-      <div>
-        <h2 className="text-3xl font-bold font-headline tracking-tight text-primary">Panel Administrativo</h2>
-        <p className="text-muted-foreground">Control global de la plataforma Emiliano Zapata.</p>
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className="text-3xl font-bold font-headline tracking-tight text-primary">Panel Administrativo</h2>
+          <p className="text-muted-foreground">Control global de la plataforma Emiliano Zapata.</p>
+        </div>
+        {stats.nuevosMensajes > 0 && (
+          <Badge className="bg-amber-100 text-amber-800 border-amber-200 animate-pulse px-4 py-1.5 rounded-full">
+            {stats.nuevosMensajes} MENSAJES PENDIENTES
+          </Badge>
+        )}
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         {statCards.map((stat) => (
-          <Card key={stat.label}>
+          <Card key={stat.label} className={stat.link ? "cursor-pointer hover:border-primary/50 transition-colors" : ""} onClick={() => stat.link && router.push(stat.link)}>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">{stat.label}</CardTitle>
               <stat.icon className={`h-4 w-4 ${stat.color}`} />
@@ -194,14 +229,14 @@ export default function AdminDashboard() {
             >
               <Users size={18} /> Registrar Alumno / Usuario
             </Button>
-            <Button variant="outline" className="w-full justify-start gap-2 border-muted hover:bg-muted/50">
-              <School size={18} /> Nueva Carrera
+            <Button variant="outline" className="w-full justify-start gap-2 border-muted hover:bg-muted/50" onClick={() => router.push('/dashboard/admin/crm/mensajes')}>
+              <MessageSquare size={18} /> CRM Prospectos
             </Button>
-            <Button variant="outline" className="w-full justify-start gap-2 border-muted hover:bg-muted/50">
-              <GraduationCap size={18} /> Asignar Profesor
+            <Button variant="outline" className="w-full justify-start gap-2 border-muted hover:bg-muted/50" onClick={() => router.push('/dashboard/admin/crm/aspirantes')}>
+              <GraduationCap size={18} /> Validar Preregistros
             </Button>
-            <Button variant="outline" className="w-full justify-start gap-2 border-muted hover:bg-muted/50">
-              <Layers size={18} /> Gestionar Niveles
+            <Button variant="outline" className="w-full justify-start gap-2 border-muted hover:bg-muted/50" onClick={() => router.push('/dashboard/admin/usuarios')}>
+              <Users size={18} /> Gestión de Usuarios
             </Button>
           </CardContent>
         </Card>
