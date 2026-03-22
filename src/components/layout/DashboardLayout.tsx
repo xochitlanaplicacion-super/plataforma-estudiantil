@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useState } from 'react';
@@ -150,9 +151,9 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
           </div>
         </SidebarFooter>
       </Sidebar>
-      <SidebarInset className="bg-slate-50/50">
-        <div className="h-full flex flex-col">
-          <header className="h-16 border-b bg-white flex items-center px-8 justify-between shrink-0 shadow-sm z-10">
+      <SidebarInset className="bg-slate-50/50 overflow-hidden">
+        <div className="h-full flex flex-col overflow-hidden">
+          <header className="h-16 border-b bg-white flex items-center px-8 justify-between shrink-0 shadow-sm z-10 w-full">
              <div className="flex items-center gap-2">
                <span className="text-sm text-muted-foreground">Módulo:</span>
                <span className="text-sm font-semibold text-primary capitalize">{pathname.split('/').pop()?.replace('-', ' ') || 'Inicio'}</span>
@@ -174,8 +175,8 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
               </div>
              </div>
           </header>
-          <main className="flex-1 overflow-auto p-6 md:p-10">
-            <div className="max-w-7xl mx-auto animate-in fade-in slide-in-from-bottom-2 duration-700">{children}</div>
+          <main className="flex-1 overflow-y-auto overflow-x-hidden p-6 md:p-10">
+            <div className="max-w-full mx-auto animate-in fade-in slide-in-from-bottom-2 duration-700">{children}</div>
           </main>
         </div>
       </SidebarInset>

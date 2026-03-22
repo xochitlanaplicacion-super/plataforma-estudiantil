@@ -75,7 +75,6 @@ export default function MensajesCRM() {
     }
   };
 
-  // Función para determinar si un lead está estancado (más de 3 días sin cambios)
   const isStale = (updatedAt: string, currentStatus: string) => {
     if (currentStatus === 'inscrito' || currentStatus === 'descartado') return false;
     
@@ -88,8 +87,6 @@ export default function MensajesCRM() {
 
   const getMessagesByStage = (stageId: string) => {
     const stageItems = mensajes.filter(m => (m.estatus || 'nuevo') === stageId);
-    
-    // Ordenar: Estancados primero
     return stageItems.sort((a, b) => {
       const aStale = isStale(a.updated_at || a.created_at, a.estatus);
       const bStale = isStale(b.updated_at || b.created_at, b.estatus);
@@ -100,7 +97,7 @@ export default function MensajesCRM() {
   };
 
   return (
-    <div className="h-[calc(100vh-140px)] flex flex-col space-y-6 overflow-hidden">
+    <div className="h-[calc(100vh-160px)] flex flex-col space-y-6 w-full max-w-full overflow-hidden">
       <div className="flex justify-between items-center shrink-0">
         <div>
           <h2 className="text-3xl font-bold font-headline tracking-tight text-primary">Pipeline de Ventas</h2>
@@ -113,134 +110,136 @@ export default function MensajesCRM() {
         </div>
       </div>
 
-      <ScrollArea className="w-full flex-1 border rounded-3xl bg-slate-50/50 p-4">
-        <div className="flex gap-6 min-w-max h-full pb-6">
-          {STAGES.map((stage) => {
-            const stageMessages = getMessagesByStage(stage.id);
-            const staleCount = stageMessages.filter(m => isStale(m.updated_at || m.created_at, m.estatus)).length;
+      <div className="flex-1 w-full overflow-hidden border rounded-[40px] bg-slate-50/50 shadow-inner">
+        <ScrollArea className="h-full w-full">
+          <div className="flex gap-6 p-6 min-w-max">
+            {STAGES.map((stage) => {
+              const stageMessages = getMessagesByStage(stage.id);
+              const staleCount = stageMessages.filter(m => isStale(m.updated_at || m.created_at, m.estatus)).length;
 
-            return (
-              <div key={stage.id} className="w-85 flex flex-col bg-slate-100/40 rounded-3xl border border-slate-200/60 p-4 shadow-sm">
-                <div className="flex items-center justify-between mb-4 px-2">
-                  <div className="flex flex-col">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-3 h-3 rounded-full ${stage.color} shadow-sm`} />
-                      <h3 className="font-black text-sm uppercase tracking-wider text-slate-700">{stage.label}</h3>
+              return (
+                <div key={stage.id} className="w-80 flex flex-col bg-slate-100/40 rounded-[32px] border border-slate-200/60 p-4 shadow-sm h-full min-h-[500px]">
+                  <div className="flex items-center justify-between mb-4 px-2">
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-2">
+                        <div className={`w-3 h-3 rounded-full ${stage.color} shadow-sm`} />
+                        <h3 className="font-black text-sm uppercase tracking-wider text-slate-700">{stage.label}</h3>
+                      </div>
+                      {staleCount > 0 && stage.id !== 'inscrito' && stage.id !== 'descartado' && (
+                        <span className="text-[10px] text-destructive font-black uppercase mt-1 flex items-center gap-1">
+                          <AlertTriangle size={10} /> {staleCount} ALERTAS
+                        </span>
+                      )}
                     </div>
-                    {staleCount > 0 && stage.id !== 'inscrito' && stage.id !== 'descartado' && (
-                      <span className="text-[10px] text-destructive font-black uppercase mt-1 flex items-center gap-1">
-                        <AlertTriangle size={10} /> {staleCount} ALERTAS
-                      </span>
+                    <Badge variant="secondary" className="bg-white shadow-sm text-[10px] font-black h-5">
+                      {stageMessages.length}
+                    </Badge>
+                  </div>
+
+                  <div className="flex-1 space-y-4 pr-1">
+                    {loading && mensajes.length === 0 ? (
+                      <div className="flex justify-center py-10 opacity-50"><Loader2 className="animate-spin" /></div>
+                    ) : stageMessages.map((msg) => {
+                      const stale = isStale(msg.updated_at || msg.created_at, msg.estatus);
+                      return (
+                        <Card 
+                          key={msg.id} 
+                          className={cn(
+                            "border-none shadow-md hover:shadow-lg transition-all duration-300 group overflow-hidden bg-white rounded-2xl",
+                            stale && "ring-2 ring-destructive/20 bg-red-50/30"
+                          )}
+                        >
+                          <CardHeader className="p-4 pb-2 space-y-0">
+                            <div className="flex justify-between items-start mb-2">
+                              <span className={cn(
+                                "text-[9px] font-bold uppercase flex items-center gap-1",
+                                stale ? "text-destructive" : "text-muted-foreground"
+                              )}>
+                                {stale ? <AlertTriangle size={10} /> : <Clock size={10} />} 
+                                {stale ? 'ESTANCADO (+3 DÍAS)' : `MOD: ${new Date(msg.updated_at || msg.created_at).toLocaleDateString()}`}
+                              </span>
+                              <Button 
+                                variant="ghost" 
+                                size="icon" 
+                                className="h-6 w-6 text-muted-foreground hover:text-primary"
+                                onClick={() => { setSelectedMsg(msg); setNote(msg.notas || ''); setIsNoteOpen(true); }}
+                              >
+                                <Edit size={12} />
+                              </Button>
+                            </div>
+                            <CardTitle className="text-sm font-black text-slate-800 leading-tight">
+                              {msg.nombre}
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="p-4 pt-2 space-y-3">
+                            <div className="text-[10px] space-y-1.5 font-medium text-slate-600">
+                              <div className="flex items-center gap-2"><Phone size={10} className="text-primary/60" /> {msg.telefono}</div>
+                              <div className="flex items-center gap-2"><Mail size={10} className="text-primary/60" /> {msg.email}</div>
+                            </div>
+
+                            {msg.mensaje && (
+                              <div className="p-2 bg-slate-50/80 rounded-md text-[10px] italic text-slate-500 border-l-2 border-primary/20 line-clamp-2">
+                                "{msg.mensaje}"
+                              </div>
+                            )}
+
+                            {msg.notas && (
+                              <div className="p-2 bg-amber-50/50 rounded-md text-[9px] border border-amber-100 text-amber-800">
+                                <strong>Nota Seguimiento:</strong> {msg.notas}
+                              </div>
+                            )}
+
+                            <div className="pt-2 border-t border-slate-100 flex gap-2">
+                              <Select 
+                                value={msg.estatus || 'nuevo'} 
+                                onValueChange={(val) => handleStatusChange(msg.id, val)}
+                              >
+                                <SelectTrigger className="h-7 text-[9px] bg-slate-50 font-bold uppercase tracking-tighter border-none shadow-none">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {STAGES.map(s => (
+                                    <SelectItem key={s.id} value={s.id} className="text-[10px] font-bold uppercase">
+                                      {s.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              
+                              <div className="flex gap-1">
+                                <a href={`tel:${msg.telefono}`}>
+                                  <Button variant="outline" size="icon" className="h-7 w-7 border-slate-200 hover:bg-primary/10 hover:text-primary hover:border-primary/30 shadow-sm rounded-full">
+                                    <Phone size={12} />
+                                  </Button>
+                                </a>
+                                <a href={`mailto:${msg.email}`}>
+                                  <Button variant="outline" size="icon" className="h-7 w-7 border-slate-200 hover:bg-primary/10 hover:text-primary hover:border-primary/30 shadow-sm rounded-full">
+                                    <Mail size={12} />
+                                  </Button>
+                                </a>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                    
+                    {!loading && stageMessages.length === 0 && (
+                      <div className="flex flex-col items-center justify-center py-10 opacity-20">
+                        <div className="w-12 h-12 rounded-full border-2 border-dashed border-slate-400 mb-2 flex items-center justify-center">
+                          <Info size={20} />
+                        </div>
+                        <p className="text-[10px] font-bold uppercase tracking-widest">Sin prospectos</p>
+                      </div>
                     )}
                   </div>
-                  <Badge variant="secondary" className="bg-white shadow-sm text-[10px] font-black h-5">
-                    {stageMessages.length}
-                  </Badge>
                 </div>
-
-                <div className="flex-1 space-y-4 overflow-y-auto pr-1">
-                  {loading && mensajes.length === 0 ? (
-                    <div className="flex justify-center py-10 opacity-50"><Loader2 className="animate-spin" /></div>
-                  ) : stageMessages.map((msg) => {
-                    const stale = isStale(msg.updated_at || msg.created_at, msg.estatus);
-                    return (
-                      <Card 
-                        key={msg.id} 
-                        className={cn(
-                          "border-none shadow-md hover:shadow-lg transition-all duration-300 group overflow-hidden bg-white",
-                          stale && "ring-2 ring-destructive/20 bg-red-50/30"
-                        )}
-                      >
-                        <CardHeader className="p-4 pb-2 space-y-0">
-                          <div className="flex justify-between items-start mb-2">
-                            <span className={cn(
-                              "text-[9px] font-bold uppercase flex items-center gap-1",
-                              stale ? "text-destructive" : "text-muted-foreground"
-                            )}>
-                              {stale ? <AlertTriangle size={10} /> : <Clock size={10} />} 
-                              {stale ? 'ESTANCADO (+3 DÍAS)' : `MOD: ${new Date(msg.updated_at || msg.created_at).toLocaleDateString()}`}
-                            </span>
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-6 w-6 text-muted-foreground hover:text-primary"
-                              onClick={() => { setSelectedMsg(msg); setNote(msg.notas || ''); setIsNoteOpen(true); }}
-                            >
-                              <Edit size={12} />
-                            </Button>
-                          </div>
-                          <CardTitle className="text-sm font-black text-slate-800 leading-tight">
-                            {msg.nombre}
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-4 pt-2 space-y-3">
-                          <div className="text-[10px] space-y-1.5 font-medium text-slate-600">
-                            <div className="flex items-center gap-2"><Phone size={10} className="text-primary/60" /> {msg.telefono}</div>
-                            <div className="flex items-center gap-2"><Mail size={10} className="text-primary/60" /> {msg.email}</div>
-                          </div>
-
-                          {msg.mensaje && (
-                            <div className="p-2 bg-slate-50/80 rounded-md text-[10px] italic text-slate-500 border-l-2 border-primary/20 line-clamp-2">
-                              "{msg.mensaje}"
-                            </div>
-                          )}
-
-                          {msg.notas && (
-                            <div className="p-2 bg-amber-50/50 rounded-md text-[9px] border border-amber-100 text-amber-800">
-                              <strong>Nota Seguimiento:</strong> {msg.notas}
-                            </div>
-                          )}
-
-                          <div className="pt-2 border-t border-slate-100 flex gap-2">
-                            <Select 
-                              value={msg.estatus || 'nuevo'} 
-                              onValueChange={(val) => handleStatusChange(msg.id, val)}
-                            >
-                              <SelectTrigger className="h-7 text-[9px] bg-slate-50 font-bold uppercase tracking-tighter border-none shadow-none">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {STAGES.map(s => (
-                                  <SelectItem key={s.id} value={s.id} className="text-[10px] font-bold uppercase">
-                                    {s.label}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            
-                            <div className="flex gap-1">
-                              <a href={`tel:${msg.telefono}`}>
-                                <Button variant="outline" size="icon" className="h-7 w-7 border-slate-200 hover:bg-primary/10 hover:text-primary hover:border-primary/30 shadow-sm rounded-full">
-                                  <Phone size={12} />
-                                </Button>
-                              </a>
-                              <a href={`mailto:${msg.email}`}>
-                                <Button variant="outline" size="icon" className="h-7 w-7 border-slate-200 hover:bg-primary/10 hover:text-primary hover:border-primary/30 shadow-sm rounded-full">
-                                  <Mail size={12} />
-                                </Button>
-                              </a>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    );
-                  })}
-                  
-                  {!loading && stageMessages.length === 0 && (
-                    <div className="flex flex-col items-center justify-center py-10 opacity-20">
-                      <div className="w-12 h-12 rounded-full border-2 border-dashed border-slate-400 mb-2 flex items-center justify-center">
-                        <Info size={20} />
-                      </div>
-                      <p className="text-[10px] font-bold uppercase tracking-widest">Sin prospectos</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <ScrollBar orientation="horizontal" className="h-2.5" />
-      </ScrollArea>
+              );
+            })}
+          </div>
+          <ScrollBar orientation="horizontal" className="h-3 bg-slate-200/50" />
+        </ScrollArea>
+      </div>
 
       <Dialog open={isNoteOpen} onOpenChange={setIsNoteOpen}>
         <DialogContent className="max-w-md rounded-3xl">
