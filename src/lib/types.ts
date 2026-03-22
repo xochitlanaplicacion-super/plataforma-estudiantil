@@ -34,6 +34,8 @@ export interface Aspirante {
   telefono: string;
   nivel: string;
   carrera_id?: string;
+  estatus?: string;
+  notas?: string;
   created_at?: string;
 }
 

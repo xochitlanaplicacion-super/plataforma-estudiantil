@@ -1,8 +1,9 @@
+
 "use client";
 
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Mail, Phone, MessageSquare, Clock, Filter, CheckCircle2, MoreVertical, Trash2, Edit } from 'lucide-react';
+import { Mail, Phone, MessageSquare, Clock, Filter, CheckCircle2, MoreVertical, Trash2, Edit, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { createClient } from '@/lib/supabase/client';
@@ -23,9 +24,20 @@ export default function MensajesCRM() {
 
   const fetchMensajes = async () => {
     setLoading(true);
-    const { data } = await supabase.from('mensajes_contacto').select('*').order('created_at', { ascending: false });
-    if (data) setMensajes(data);
-    setLoading(false);
+    try {
+      const { data, error } = await supabase
+        .from('mensajes_contacto')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setMensajes(data || []);
+    } catch (err: any) {
+      console.error("Error fetching mensajes:", err);
+      toast({ variant: "destructive", title: "Error de conexión", description: "No se pudieron cargar los mensajes. Revisa las políticas RLS." });
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { fetchMensajes(); }, []);
@@ -58,13 +70,22 @@ export default function MensajesCRM() {
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {loading ? <div className="col-span-full py-20 text-center">Cargando prospectos...</div> : 
+        {loading ? (
+          <div className="col-span-full py-20 flex flex-col items-center gap-4 text-muted-foreground">
+            <Loader2 className="animate-spin h-8 w-8 text-primary" />
+            <p>Cargando prospectos...</p>
+          </div>
+        ) : mensajes.length === 0 ? (
+          <div className="col-span-full py-20 text-center text-muted-foreground border-2 border-dashed rounded-xl">
+            No se encontraron mensajes. Verifica la tabla 'mensajes_contacto'.
+          </div>
+        ) : (
           mensajes.map((msg) => (
-            <Card key={msg.id} className={`border-l-4 ${msg.estatus === 'nuevo' ? 'border-l-amber-500' : 'border-l-primary/20'}`}>
+            <Card key={msg.id} className={`border-l-4 ${msg.estatus === 'nuevo' || !msg.estatus ? 'border-l-amber-500' : 'border-l-primary/20'}`}>
               <CardHeader className="pb-2">
                 <div className="flex justify-between items-start">
-                  <Badge variant={msg.estatus === 'nuevo' ? 'default' : 'secondary'} className="capitalize text-[10px]">
-                    {msg.estatus}
+                  <Badge variant={msg.estatus === 'nuevo' || !msg.estatus ? 'default' : 'secondary'} className="capitalize text-[10px]">
+                    {msg.estatus || 'nuevo'}
                   </Badge>
                   <span className="text-[10px] text-muted-foreground">{new Date(msg.created_at).toLocaleDateString()}</span>
                 </div>
@@ -80,7 +101,7 @@ export default function MensajesCRM() {
                 {msg.notas && <div className="p-2 border rounded-md text-[10px] bg-amber-50 border-amber-200"><strong>Nota:</strong> {msg.notas}</div>}
 
                 <div className="flex gap-2">
-                  <Select value={msg.estatus} onValueChange={(val) => handleStatusChange(msg.id, val)}>
+                  <Select value={msg.estatus || 'nuevo'} onValueChange={(val) => handleStatusChange(msg.id, val)}>
                     <SelectTrigger className="h-8 text-xs flex-1"><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="nuevo">Nuevo</SelectItem>
@@ -99,7 +120,7 @@ export default function MensajesCRM() {
               </div>
             </Card>
           ))
-        }
+        )}
       </div>
 
       <Dialog open={isNoteOpen} onOpenChange={setIsNoteOpen}>

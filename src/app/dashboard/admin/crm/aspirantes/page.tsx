@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useState } from 'react';
@@ -8,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { createClient } from '@/lib/supabase/client';
 import { Aspirante } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { GraduationCap, Mail, Phone, Clock, FileCheck, Search, Sparkles } from 'lucide-react';
+import { GraduationCap, Mail, Phone, Clock, FileCheck, Search, Sparkles, Loader2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { UserDialog } from '@/components/admin/UserDialog';
 
@@ -24,9 +25,20 @@ export default function AspirantesCRM() {
 
   const fetchAspirantes = async () => {
     setLoading(true);
-    const { data } = await supabase.from('aspirantes').select('*').order('created_at', { ascending: false });
-    if (data) setAspirantes(data);
-    setLoading(false);
+    try {
+      const { data, error } = await supabase
+        .from('aspirantes')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (error) throw error;
+      setAspirantes(data || []);
+    } catch (err: any) {
+      console.error("Error fetching aspirantes:", err);
+      toast({ variant: "destructive", title: "Error de conexión", description: "No se pudieron cargar los aspirantes. Verifica los permisos RLS." });
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { fetchAspirantes(); }, []);
@@ -57,7 +69,16 @@ export default function AspirantesCRM() {
           </div>
         </CardHeader>
         <CardContent>
-          {loading ? <div className="py-10 text-center">Cargando aspirantes...</div> : (
+          {loading ? (
+            <div className="py-20 flex flex-col items-center gap-4 text-muted-foreground">
+              <Loader2 className="animate-spin h-8 w-8 text-primary" />
+              <p>Cargando aspirantes...</p>
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="py-20 text-center text-muted-foreground border-2 border-dashed rounded-xl">
+              No se encontraron aspirantes. Verifica que existan registros en la tabla 'aspirantes'.
+            </div>
+          ) : (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -86,7 +107,7 @@ export default function AspirantesCRM() {
                     <TableCell><Badge variant="outline" className="text-primary border-primary/30">Pendiente Validar</Badge></TableCell>
                     <TableCell>
                       <Badge className={asp.estatus === 'inscrito' ? 'bg-emerald-600' : 'bg-amber-500'}>
-                        {asp.estatus}
+                        {asp.estatus || 'pendiente'}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
