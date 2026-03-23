@@ -1,4 +1,3 @@
-
 'use server';
 
 import { createClient } from '@supabase/supabase-js';
@@ -66,6 +65,12 @@ export async function upsertGrado(grado: any) {
   return { data, error };
 }
 
+export async function deleteGrado(id: string) {
+  const { error } = await supabaseAdmin.from('grados').delete().eq('id', id);
+  revalidatePath('/dashboard/admin/grupos');
+  return { error };
+}
+
 // --- GRUPOS ---
 export async function getGrupos(carreraId: string) {
   const { data, error } = await supabaseAdmin.from('grupos').select('*, grados(nombre)').eq('carrera_id', carreraId).order('nombre');
@@ -76,6 +81,12 @@ export async function upsertGrupo(grupo: any) {
   const { data, error } = await supabaseAdmin.from('grupos').upsert(grupo).select().single();
   revalidatePath('/dashboard/admin/grupos');
   return { data, error };
+}
+
+export async function deleteGrupo(id: string) {
+  const { error } = await supabaseAdmin.from('grupos').delete().eq('id', id);
+  revalidatePath('/dashboard/admin/grupos');
+  return { error };
 }
 
 // --- MATERIAS ---
@@ -90,6 +101,12 @@ export async function upsertMateria(materia: any) {
   return { data, error };
 }
 
+export async function deleteMateria(id: string) {
+  const { error } = await supabaseAdmin.from('materias').delete().eq('id', id);
+  revalidatePath('/dashboard/admin/materias');
+  return { error };
+}
+
 // --- UNIDADES ---
 export async function getUnidades(materiaId: string) {
   const { data, error } = await supabaseAdmin.from('unidades').select('*').eq('materia_id', materiaId).order('orden');
@@ -100,6 +117,12 @@ export async function upsertUnidad(unidad: any) {
   const { data, error } = await supabaseAdmin.from('unidades').upsert(unidad).select().single();
   revalidatePath('/dashboard/admin/materias');
   return { data, error };
+}
+
+export async function deleteUnidad(id: string) {
+  const { error } = await supabaseAdmin.from('unidades').delete().eq('id', id);
+  revalidatePath('/dashboard/admin/materias');
+  return { error };
 }
 
 // --- TEMAS ---
@@ -114,6 +137,12 @@ export async function upsertTema(tema: any) {
   return { data, error };
 }
 
+export async function deleteTema(id: string) {
+  const { error } = await supabaseAdmin.from('temas').delete().eq('id', id);
+  revalidatePath('/dashboard/admin/materias');
+  return { error };
+}
+
 // --- EJERCICIOS ---
 export async function getEjercicios(temaId: string) {
   const { data, error } = await supabaseAdmin.from('ejercicios').select('*').eq('tema_id', temaId).order('orden');
@@ -124,4 +153,10 @@ export async function upsertEjercicio(ejercicio: any) {
   const { data, error } = await supabaseAdmin.from('ejercicios').upsert(ejercicio).select().single();
   revalidatePath('/dashboard/admin/materias');
   return { data, error };
+}
+
+export async function deleteEjercicio(id: string) {
+  const { error } = await supabaseAdmin.from('ejercicios').delete().eq('id', id);
+  revalidatePath('/dashboard/admin/materias');
+  return { error };
 }

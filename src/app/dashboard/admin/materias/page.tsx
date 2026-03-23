@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useEffect, useState } from 'react';
@@ -7,11 +6,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { BookOpen, ListTree, FileText, Sparkles, ChevronRight, Plus, Edit, Loader2, ArrowLeft } from 'lucide-react';
-import { getNiveles, getCarreras, getMaterias, getUnidades, getTemas, getEjercicios, upsertMateria, upsertUnidad, upsertTema, upsertEjercicio } from '@/lib/actions/academic';
+import { BookOpen, ListTree, FileText, Sparkles, ChevronRight, Plus, Edit, Trash2, Loader2, ArrowLeft } from 'lucide-react';
+import { getNiveles, getCarreras, getMaterias, getUnidades, getTemas, getEjercicios, upsertMateria, upsertUnidad, upsertTema, upsertEjercicio, deleteMateria, deleteUnidad, deleteTema, deleteEjercicio } from '@/lib/actions/academic';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
 export default function MateriasUnidades() {
   const { toast } = useToast();
@@ -30,6 +30,7 @@ export default function MateriasUnidades() {
   const [ejercicios, setEjercicios] = useState<any[]>([]);
 
   const [loading, setLoading] = useState(false);
+  const [currentTab, setCurrentTab] = useState('materias');
 
   // Dialog State
   const [dialog, setDialog] = useState<any>({ open: false, type: '', data: {} });
@@ -40,6 +41,8 @@ export default function MateriasUnidades() {
 
   useEffect(() => {
     if (selNivel) getCarreras(selNivel).then(({ data }) => data && setCarreras(data));
+    setSelCarrera('');
+    setSelectedMateria(null);
   }, [selNivel]);
 
   useEffect(() => {
@@ -85,6 +88,22 @@ export default function MateriasUnidades() {
     }
   };
 
+  const handleDelete = async (type: string, id: string) => {
+    let error;
+    if (type === 'materia') ({ error } = await deleteMateria(id));
+    if (type === 'unidad') ({ error } = await deleteUnidad(id));
+    if (type === 'tema') ({ error } = await deleteTema(id));
+    if (type === 'ejercicio') ({ error } = await deleteEjercicio(id));
+
+    if (!error) {
+      toast({ title: "Eliminado correctamente" });
+      if (type === 'materia') { getMaterias(selCarrera).then(r => r.data && setMaterias(r.data)); setSelectedMateria(null); }
+      if (type === 'unidad') { fetchUnidades(selectedMateria.id); setSelectedUnidad(null); }
+      if (type === 'tema') { fetchTemas(selectedUnidad.id); setSelectedTema(null); }
+      if (type === 'ejercicio') fetchEjercicios(selectedTema.id);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -96,11 +115,11 @@ export default function MateriasUnidades() {
 
       <Card className="bg-primary/5 border-primary/10">
         <CardContent className="pt-6 flex flex-col md:flex-row gap-4">
-          <Select onValueChange={setSelNivel}>
+          <Select value={selNivel} onValueChange={setSelNivel}>
             <SelectTrigger className="bg-white"><SelectValue placeholder="Nivel Educativo" /></SelectTrigger>
             <SelectContent>{niveles.map(n => <SelectItem key={n.id} value={n.id}>{n.nombre}</SelectItem>)}</SelectContent>
           </Select>
-          <Select onValueChange={setSelCarrera} disabled={!selNivel}>
+          <Select value={selCarrera} onValueChange={setSelCarrera} disabled={!selNivel}>
             <SelectTrigger className="bg-white"><SelectValue placeholder="Programa / Carrera" /></SelectTrigger>
             <SelectContent>{carreras.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}</SelectContent>
           </Select>
@@ -112,7 +131,7 @@ export default function MateriasUnidades() {
           Selecciona una carrera para comenzar a gestionar sus materias.
         </div>
       ) : (
-        <Tabs defaultValue="materias" className="w-full">
+        <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
           <TabsList className="grid w-full grid-cols-4 h-12 bg-muted/50 rounded-2xl p-1">
             <TabsTrigger value="materias" className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white">Materias</TabsTrigger>
             <TabsTrigger value="unidades" disabled={!selectedMateria} className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white">Unidades</TabsTrigger>
@@ -136,14 +155,19 @@ export default function MateriasUnidades() {
                   {materias.map(m => (
                     <div 
                       key={m.id} 
-                      onClick={() => { setSelectedMateria(m); fetchUnidades(m.id); }}
+                      onClick={() => { setSelectedMateria(m); fetchUnidades(m.id); setCurrentTab('unidades'); }}
                       className={`p-5 rounded-2xl border-2 transition-all cursor-pointer group flex items-center justify-between ${selectedMateria?.id === m.id ? 'border-primary bg-primary/5 shadow-md' : 'border-slate-100 hover:border-primary/30'}`}
                     >
                       <div className="flex flex-col">
                         <span className="text-[10px] font-bold text-primary/60 uppercase tracking-tighter">{m.clave || 'SIN CLAVE'}</span>
                         <span className="font-black text-sm">{m.nombre}</span>
                       </div>
-                      <ChevronRight className={`transition-transform ${selectedMateria?.id === m.id ? 'translate-x-1 text-primary' : 'text-slate-300'}`} />
+                      <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100" onClick={(e) => { e.stopPropagation(); setDialog({ open: true, type: 'materia', data: m }); }}>
+                          <Edit size={12}/>
+                        </Button>
+                        <ChevronRight className={`transition-transform ${selectedMateria?.id === m.id ? 'translate-x-1 text-primary' : 'text-slate-300'}`} />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -155,7 +179,7 @@ export default function MateriasUnidades() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <Button variant="ghost" size="sm" onClick={() => setSelectedMateria(null)} className="mb-2 -ml-2 text-primary">
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentTab('materias')} className="mb-2 -ml-2 text-primary">
                     <ArrowLeft size={14} className="mr-1" /> Volver a Materias
                   </Button>
                   <CardTitle className="text-lg flex items-center gap-2"><ListTree size={18} /> Unidades de {selectedMateria?.nombre}</CardTitle>
@@ -169,14 +193,17 @@ export default function MateriasUnidades() {
                   {unidades.map(u => (
                     <div 
                       key={u.id} 
-                      onClick={() => { setSelectedUnidad(u); fetchTemas(u.id); }}
+                      onClick={() => { setSelectedUnidad(u); fetchTemas(u.id); setCurrentTab('temas'); }}
                       className={`p-4 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${selectedUnidad?.id === u.id ? 'bg-primary/5 border-primary ring-1 ring-primary' : 'hover:bg-slate-50'}`}
                     >
                       <div className="flex items-center gap-4">
                         <span className="h-8 w-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">{u.orden}</span>
                         <span className="font-bold">{u.titulo}</span>
                       </div>
-                      <ChevronRight size={16} className="text-slate-300" />
+                      <div className="flex items-center gap-2">
+                         <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDialog({ open: true, type: 'unidad', data: u }); }}><Edit size={14}/></Button>
+                         <ChevronRight size={16} className="text-slate-300" />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -184,12 +211,11 @@ export default function MateriasUnidades() {
             </Card>
           </TabsContent>
 
-          {/* TEMAS Y EJERCICIOS (Similar logic applied) */}
           <TabsContent value="temas" className="mt-6">
              <Card>
                <CardHeader className="flex flex-row items-center justify-between">
                  <div>
-                   <Button variant="ghost" size="sm" onClick={() => setSelectedUnidad(null)} className="mb-2 -ml-2 text-primary">
+                   <Button variant="ghost" size="sm" onClick={() => setCurrentTab('unidades')} className="mb-2 -ml-2 text-primary">
                      <ArrowLeft size={14} className="mr-1" /> Volver a Unidades
                    </Button>
                    <CardTitle className="text-lg">Temas de {selectedUnidad?.titulo}</CardTitle>
@@ -199,12 +225,17 @@ export default function MateriasUnidades() {
                  </Button>
                </CardHeader>
                <CardContent>
-                 {temas.map(t => (
-                   <div key={t.id} onClick={() => { setSelectedTema(t); fetchEjercicios(t.id); }} className="p-4 border-b last:border-0 flex justify-between cursor-pointer hover:bg-muted/30">
-                     <span className="font-medium">{t.titulo}</span>
-                     <ChevronRight size={16} />
-                   </div>
-                 ))}
+                 <div className="space-y-2">
+                   {temas.map(t => (
+                     <div key={t.id} onClick={() => { setSelectedTema(t); fetchEjercicios(t.id); setCurrentTab('ejercicios'); }} className="p-4 border rounded-xl flex items-center justify-between cursor-pointer hover:bg-muted/30">
+                       <span className="font-medium">{t.titulo}</span>
+                       <div className="flex items-center gap-2">
+                         <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDialog({ open: true, type: 'tema', data: t }); }}><Edit size={14}/></Button>
+                         <ChevronRight size={16} />
+                       </div>
+                     </div>
+                   ))}
+                 </div>
                </CardContent>
              </Card>
           </TabsContent>
@@ -213,7 +244,7 @@ export default function MateriasUnidades() {
              <Card>
                <CardHeader className="flex flex-row items-center justify-between">
                  <div>
-                   <Button variant="ghost" size="sm" onClick={() => setSelectedTema(null)} className="mb-2 -ml-2 text-primary">
+                   <Button variant="ghost" size="sm" onClick={() => setCurrentTab('temas')} className="mb-2 -ml-2 text-primary">
                      <ArrowLeft size={14} className="mr-1" /> Volver a Temas
                    </Button>
                    <CardTitle className="text-lg flex items-center gap-2"><Sparkles size={18} className="text-amber-500" /> Ejercicios de {selectedTema?.titulo}</CardTitle>
@@ -224,13 +255,32 @@ export default function MateriasUnidades() {
                </CardHeader>
                <CardContent>
                  <Table>
-                   <TableHeader><TableRow><TableHead>Orden</TableHead><TableHead>Actividad</TableHead><TableHead className="text-right">Acción</TableHead></TableRow></TableHeader>
+                   <TableHeader><TableRow><TableHead>Orden</TableHead><TableHead>Actividad</TableHead><TableHead className="text-right">Acciones</TableHead></TableRow></TableHeader>
                    <TableBody>
                      {ejercicios.map(e => (
                        <TableRow key={e.id}>
                          <TableCell>{e.orden}</TableCell>
                          <TableCell className="font-bold">{e.titulo}</TableCell>
-                         <TableCell className="text-right"><Button variant="ghost" size="icon"><Edit size={14}/></Button></TableCell>
+                         <TableCell className="text-right">
+                           <div className="flex justify-end gap-1">
+                             <Button variant="ghost" size="icon" onClick={() => setDialog({ open: true, type: 'ejercicio', data: e })}><Edit size={14}/></Button>
+                             <AlertDialog>
+                               <AlertDialogTrigger asChild>
+                                 <Button variant="ghost" size="icon" className="text-destructive"><Trash2 size={14}/></Button>
+                               </AlertDialogTrigger>
+                               <AlertDialogContent>
+                                 <AlertDialogHeader>
+                                   <AlertDialogTitle>¿Eliminar actividad {e.titulo}?</AlertDialogTitle>
+                                   <AlertDialogDescription>Esta acción no se puede deshacer.</AlertDialogDescription>
+                                 </AlertDialogHeader>
+                                 <AlertDialogFooter>
+                                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                   <AlertDialogAction className="bg-destructive" onClick={() => handleDelete('ejercicio', e.id)}>Eliminar</AlertDialogAction>
+                                 </AlertDialogFooter>
+                               </AlertDialogContent>
+                             </AlertDialog>
+                           </div>
+                         </TableCell>
                        </TableRow>
                      ))}
                    </TableBody>
@@ -250,7 +300,11 @@ export default function MateriasUnidades() {
                <label className="text-xs font-bold uppercase">Nombre / Título</label>
                <Input 
                  value={dialog.data.nombre || dialog.data.titulo || ''} 
-                 onChange={e => setDialog({...dialog, data: {...dialog.data, [dialog.type === 'materia' ? 'nombre' : 'titulo']: e.target.value.toUpperCase()}})} 
+                 onChange={e => {
+                   const val = e.target.value.toUpperCase();
+                   if (dialog.type === 'materia') setDialog({...dialog, data: {...dialog.data, nombre: val}});
+                   else setDialog({...dialog, data: {...dialog.data, titulo: val}});
+                 }} 
                />
              </div>
              {(dialog.type === 'materia' || dialog.type === 'unidad' || dialog.type === 'tema' || dialog.type === 'ejercicio') && (
@@ -258,13 +312,22 @@ export default function MateriasUnidades() {
                  <label className="text-xs font-bold uppercase">{dialog.type === 'materia' ? 'Clave' : 'Orden'}</label>
                  <Input 
                    type={dialog.type === 'materia' ? 'text' : 'number'}
-                   value={dialog.type === 'materia' ? dialog.data.clave : dialog.data.orden} 
-                   onChange={e => setDialog({...dialog, data: {...dialog.data, [dialog.type === 'materia' ? 'clave' : 'orden']: e.target.value}})} 
+                   value={dialog.type === 'materia' ? (dialog.data.clave || '') : (dialog.data.orden || 1)} 
+                   onChange={e => {
+                     const val = e.target.value;
+                     if (dialog.type === 'materia') setDialog({...dialog, data: {...dialog.data, clave: val.toUpperCase()}});
+                     else setDialog({...dialog, data: {...dialog.data, orden: parseInt(val)}});
+                   }} 
                  />
                </div>
              )}
           </div>
-          <DialogFooter><Button onClick={handleSave}>Guardar Cambios</Button></DialogFooter>
+          <DialogFooter>
+             {dialog.data.id && (
+               <Button variant="ghost" className="text-destructive mr-auto" onClick={() => { handleDelete(dialog.type, dialog.data.id); setDialog({...dialog, open: false}); }}>Eliminar</Button>
+             )}
+             <Button onClick={handleSave}>Guardar Cambios</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

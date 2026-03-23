@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useEffect, useState } from 'react';
@@ -7,10 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Layers, Users, Plus, Edit, Loader2 } from 'lucide-react';
-import { getNiveles, getCarreras, getGrados, getGrupos, upsertGrado, upsertGrupo } from '@/lib/actions/academic';
+import { Layers, Users, Plus, Edit, Trash2, Loader2 } from 'lucide-react';
+import { getNiveles, getCarreras, getGrados, getGrupos, upsertGrado, upsertGrupo, deleteGrado, deleteGrupo } from '@/lib/actions/academic';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
 export default function GradosGrupos() {
   const { toast } = useToast();
@@ -33,6 +33,7 @@ export default function GradosGrupos() {
 
   useEffect(() => {
     if (selNivel) getCarreras(selNivel).then(({ data }) => data && setCarreras(data));
+    setSelCarrera('');
   }, [selNivel]);
 
   const fetchAcademicData = async (cId: string) => {
@@ -57,10 +58,30 @@ export default function GradosGrupos() {
   };
 
   const handleSaveGrupo = async () => {
-    const { error } = await upsertGrupo({ ...grupoDialog.data, carrera_id: selCarrera, grado_id: grupoDialog.data.grado_id || null });
+    const { error } = await upsertGrupo({ 
+      ...grupoDialog.data, 
+      carrera_id: selCarrera, 
+      grado_id: grupoDialog.data.grado_id === 'ninguno' ? null : grupoDialog.data.grado_id 
+    });
     if (!error) {
       toast({ title: "Grupo guardado" });
       setGrupoDialog({ ...grupoDialog, open: false });
+      fetchAcademicData(selCarrera);
+    }
+  };
+
+  const handleDeleteGrado = async (id: string) => {
+    const { error } = await deleteGrado(id);
+    if (!error) {
+      toast({ title: "Grado eliminado" });
+      fetchAcademicData(selCarrera);
+    }
+  };
+
+  const handleDeleteGrupo = async (id: string) => {
+    const { error } = await deleteGrupo(id);
+    if (!error) {
+      toast({ title: "Grupo eliminado" });
       fetchAcademicData(selCarrera);
     }
   };
@@ -78,14 +99,14 @@ export default function GradosGrupos() {
         <CardContent className="pt-6 flex flex-col md:flex-row gap-4">
           <div className="flex-1 space-y-2">
             <label className="text-[10px] font-black uppercase tracking-widest text-primary">1. Selecciona Nivel</label>
-            <Select onValueChange={setSelNivel}>
+            <Select value={selNivel} onValueChange={setSelNivel}>
               <SelectTrigger className="bg-white"><SelectValue placeholder="Nivel Educativo" /></SelectTrigger>
               <SelectContent>{niveles.map(n => <SelectItem key={n.id} value={n.id}>{n.nombre}</SelectItem>)}</SelectContent>
             </Select>
           </div>
           <div className="flex-1 space-y-2">
             <label className="text-[10px] font-black uppercase tracking-widest text-primary">2. Selecciona Carrera</label>
-            <Select onValueChange={setSelCarrera} disabled={!selNivel}>
+            <Select value={selCarrera} onValueChange={setSelCarrera} disabled={!selNivel}>
               <SelectTrigger className="bg-white"><SelectValue placeholder="Programa / Carrera" /></SelectTrigger>
               <SelectContent>{carreras.map(c => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}</SelectContent>
             </Select>
@@ -112,13 +133,32 @@ export default function GradosGrupos() {
             </CardHeader>
             <CardContent>
               <Table>
-                <TableHeader><TableRow><TableHead>Orden</TableHead><TableHead>Nombre</TableHead><TableHead className="text-right">Editar</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Orden</TableHead><TableHead>Nombre</TableHead><TableHead className="text-right">Acciones</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {grados.map(g => (
+                  {grados.length === 0 ? <TableRow><TableCell colSpan={3} className="text-center py-6 text-muted-foreground italic">Sin grados registrados</TableCell></TableRow> : grados.map(g => (
                     <TableRow key={g.id}>
                       <TableCell className="font-mono text-xs">{g.orden}</TableCell>
                       <TableCell className="font-bold">{g.nombre}</TableCell>
-                      <TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => setGradoDialog({ open: true, data: g })}><Edit size={14}/></Button></TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => setGradoDialog({ open: true, data: g })}><Edit size={14}/></Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="text-destructive"><Trash2 size={14}/></Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>¿Eliminar grado {g.nombre}?</AlertDialogTitle>
+                                <AlertDialogDescription>Esto desvinculará a los grupos asignados a este grado.</AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction className="bg-destructive" onClick={() => handleDeleteGrado(g.id)}>Eliminar</AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -139,14 +179,33 @@ export default function GradosGrupos() {
             </CardHeader>
             <CardContent>
               <Table>
-                <TableHeader><TableRow><TableHead>Grupo</TableHead><TableHead>Grado</TableHead><TableHead>Turno</TableHead><TableHead className="text-right">Editar</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Grupo</TableHead><TableHead>Grado</TableHead><TableHead>Turno</TableHead><TableHead className="text-right">Acciones</TableHead></TableRow></TableHeader>
                 <TableBody>
-                  {grupos.map(g => (
+                  {grupos.length === 0 ? <TableRow><TableCell colSpan={4} className="text-center py-6 text-muted-foreground italic">Sin grupos registrados</TableCell></TableRow> : grupos.map(g => (
                     <TableRow key={g.id}>
                       <TableCell className="font-black text-primary">{g.nombre}</TableCell>
                       <TableCell className="text-xs uppercase">{g.grados?.nombre || 'Independiente'}</TableCell>
                       <TableCell className="text-xs italic">{g.turno}</TableCell>
-                      <TableCell className="text-right"><Button variant="ghost" size="icon" onClick={() => setGrupoDialog({ open: true, data: g })}><Edit size={14}/></Button></TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => setGrupoDialog({ open: true, data: g })}><Edit size={14}/></Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="text-destructive"><Trash2 size={14}/></Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>¿Eliminar grupo {g.nombre}?</AlertDialogTitle>
+                                <AlertDialogDescription>Esta acción no se puede deshacer.</AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction className="bg-destructive" onClick={() => handleDeleteGrupo(g.id)}>Eliminar</AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -178,10 +237,10 @@ export default function GradosGrupos() {
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase">Vincular a Grado (Opcional)</label>
-              <Select value={grupoDialog.data.grado_id || 'ninguno'} onValueChange={v => setGrupoDialog({...grupoDialog, data: {...grupoDialog.data, grado_id: v === 'ninguno' ? '' : v}})}>
+              <Select value={grupoDialog.data.grado_id || 'ninguno'} onValueChange={v => setGrupoDialog({...grupoDialog, data: {...grupoDialog.data, grado_id: v}})}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ninguno">Sin Grado (Preparatoria Abierta)</SelectItem>
+                  <SelectItem value="ninguno">Sin Grado (Independiente)</SelectItem>
                   {grados.map(g => <SelectItem key={g.id} value={g.id}>{g.nombre}</SelectItem>)}
                 </SelectContent>
               </Select>

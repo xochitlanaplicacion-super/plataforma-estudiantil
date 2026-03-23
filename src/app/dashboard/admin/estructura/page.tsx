@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useEffect, useState } from 'react';
@@ -7,10 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, School, GraduationCap, Loader2, Save, X } from 'lucide-react';
+import { Plus, Edit, Trash2, School, GraduationCap, Loader2 } from 'lucide-react';
 import { getNiveles, upsertNivel, deleteNivel, getCarreras, upsertCarrera, deleteCarrera } from '@/lib/actions/academic';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
 export default function EstructuraAcademica() {
   const { toast } = useToast();
@@ -57,6 +57,15 @@ export default function EstructuraAcademica() {
     setActionLoading(false);
   };
 
+  const handleDeleteNivel = async (id: string) => {
+    const { error } = await deleteNivel(id);
+    if (!error) {
+      toast({ title: "Nivel eliminado" });
+      fetchData();
+      if (selectedNivel?.id === id) setSelectedNivel(null);
+    }
+  };
+
   const handleUpsertCarrera = async () => {
     if (!carreraDialog.data.nombre || !selectedNivel) return;
     setActionLoading(true);
@@ -68,6 +77,17 @@ export default function EstructuraAcademica() {
       if (c) setCarreras(c);
     }
     setActionLoading(false);
+  };
+
+  const handleDeleteCarrera = async (id: string) => {
+    const { error } = await deleteCarrera(id);
+    if (!error) {
+      toast({ title: "Carrera eliminada" });
+      if (selectedNivel) {
+        const { data: c } = await getCarreras(selectedNivel.id);
+        if (c) setCarreras(c);
+      }
+    }
   };
 
   return (
@@ -87,7 +107,7 @@ export default function EstructuraAcademica() {
         <Card className="lg:col-span-4 h-fit">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2"><School size={20} className="text-primary" /> Niveles Educativos</CardTitle>
-            <CardDescription>Ej: Bachillerato, Licenciatura...</CardDescription>
+            <CardDescription>Ej: Bachillerato, Universidad...</CardDescription>
           </CardHeader>
           <CardContent>
             {loading ? <div className="flex justify-center py-10"><Loader2 className="animate-spin text-primary" /></div> : (
@@ -102,9 +122,28 @@ export default function EstructuraAcademica() {
                       <span className="font-bold text-sm">{n.nombre}</span>
                       <span className="text-[10px] text-muted-foreground uppercase">{n.activo ? 'Activo' : 'Inactivo'}</span>
                     </div>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 opacity-0 group-hover:opacity-100" onClick={(e) => { e.stopPropagation(); setNivelDialog({ open: true, data: n }); }}>
-                      <Edit size={14} />
-                    </Button>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); setNivelDialog({ open: true, data: n }); }}>
+                        <Edit size={14} />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={(e) => e.stopPropagation()}>
+                            <Trash2 size={14} />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>¿Eliminar nivel {n.nombre}?</AlertDialogTitle>
+                            <AlertDialogDescription>Esto eliminará todas las carreras y grupos vinculados. Esta acción no se puede deshacer.</AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction className="bg-destructive" onClick={() => handleDeleteNivel(n.id)}>Eliminar</AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -145,16 +184,35 @@ export default function EstructuraAcademica() {
                 </TableHeader>
                 <TableBody>
                   {carreras.length === 0 ? (
-                    <TableRow><TableCell colSpan={4} className="text-center py-10 text-muted-foreground">No hay carreras registradas.</TableCell></TableRow>
+                    <TableRow><TableCell colSpan={4} className="text-center py-10 text-muted-foreground">No hay carreras registradas en este nivel.</TableCell></TableRow>
                   ) : carreras.map(c => (
                     <TableRow key={c.id}>
                       <TableCell className="font-bold">{c.nombre}</TableCell>
                       <TableCell className="font-mono text-xs">{c.clave || 'S/C'}</TableCell>
                       <TableCell><Badge variant={c.activo ? 'default' : 'secondary'}>{c.activo ? 'Activo' : 'Inactivo'}</Badge></TableCell>
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="icon" onClick={() => setCarreraDialog({ open: true, data: c })}>
-                          <Edit size={16} />
-                        </Button>
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => setCarreraDialog({ open: true, data: c })}>
+                            <Edit size={16} />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="ghost" size="icon" className="text-destructive">
+                                <Trash2 size={16} />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>¿Eliminar carrera {c.nombre}?</AlertDialogTitle>
+                                <AlertDialogDescription>Se eliminarán los grados y grupos vinculados.</AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction className="bg-destructive" onClick={() => handleDeleteCarrera(c.id)}>Eliminar</AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
