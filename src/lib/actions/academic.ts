@@ -14,6 +14,18 @@ const supabaseAdmin = createClient(
   }
 );
 
+/**
+ * Limpia los datos eliminando el campo ID si es una cadena vacía o nulo,
+ * evitando errores de tipo UUID en PostgreSQL al realizar un upsert.
+ */
+const prepareForUpsert = (data: any) => {
+  const cleanData = { ...data };
+  if (!cleanData.id || cleanData.id === '' || cleanData.id === 'new') {
+    delete cleanData.id;
+  }
+  return cleanData;
+};
+
 // --- NIVELES ---
 export async function getNiveles() {
   const { data, error } = await supabaseAdmin.from('niveles').select('*').order('nombre');
@@ -21,7 +33,8 @@ export async function getNiveles() {
 }
 
 export async function upsertNivel(nivel: any) {
-  const { data, error } = await supabaseAdmin.from('niveles').upsert(nivel).select().single();
+  const cleanData = prepareForUpsert(nivel);
+  const { data, error } = await supabaseAdmin.from('niveles').upsert(cleanData).select().single();
   revalidatePath('/dashboard/admin/estructura');
   return { data, error };
 }
@@ -41,7 +54,8 @@ export async function getCarreras(nivelId?: string) {
 }
 
 export async function upsertCarrera(carrera: any) {
-  const { data, error } = await supabaseAdmin.from('carreras').upsert(carrera).select().single();
+  const cleanData = prepareForUpsert(carrera);
+  const { data, error } = await supabaseAdmin.from('carreras').upsert(cleanData).select().single();
   revalidatePath('/dashboard/admin/estructura');
   revalidatePath('/dashboard/admin/grupos');
   return { data, error };
@@ -60,7 +74,8 @@ export async function getGrados(carreraId: string) {
 }
 
 export async function upsertGrado(grado: any) {
-  const { data, error } = await supabaseAdmin.from('grados').upsert(grado).select().single();
+  const cleanData = prepareForUpsert(grado);
+  const { data, error } = await supabaseAdmin.from('grados').upsert(cleanData).select().single();
   revalidatePath('/dashboard/admin/grupos');
   return { data, error };
 }
@@ -78,7 +93,8 @@ export async function getGrupos(carreraId: string) {
 }
 
 export async function upsertGrupo(grupo: any) {
-  const { data, error } = await supabaseAdmin.from('grupos').upsert(grupo).select().single();
+  const cleanData = prepareForUpsert(grupo);
+  const { data, error } = await supabaseAdmin.from('grupos').upsert(cleanData).select().single();
   revalidatePath('/dashboard/admin/grupos');
   return { data, error };
 }
@@ -96,7 +112,8 @@ export async function getMaterias(carreraId: string) {
 }
 
 export async function upsertMateria(materia: any) {
-  const { data, error } = await supabaseAdmin.from('materias').upsert(materia).select().single();
+  const cleanData = prepareForUpsert(materia);
+  const { data, error } = await supabaseAdmin.from('materias').upsert(cleanData).select().single();
   revalidatePath('/dashboard/admin/materias');
   return { data, error };
 }
@@ -114,7 +131,8 @@ export async function getUnidades(materiaId: string) {
 }
 
 export async function upsertUnidad(unidad: any) {
-  const { data, error } = await supabaseAdmin.from('unidades').upsert(unidad).select().single();
+  const cleanData = prepareForUpsert(unidad);
+  const { data, error } = await supabaseAdmin.from('unidades').upsert(cleanData).select().single();
   revalidatePath('/dashboard/admin/materias');
   return { data, error };
 }
@@ -132,7 +150,8 @@ export async function getTemas(unidadId: string) {
 }
 
 export async function upsertTema(tema: any) {
-  const { data, error } = await supabaseAdmin.from('temas').upsert(tema).select().single();
+  const cleanData = prepareForUpsert(tema);
+  const { data, error } = await supabaseAdmin.from('temas').upsert(cleanData).select().single();
   revalidatePath('/dashboard/admin/materias');
   return { data, error };
 }
@@ -150,7 +169,8 @@ export async function getEjercicios(temaId: string) {
 }
 
 export async function upsertEjercicio(ejercicio: any) {
-  const { data, error } = await supabaseAdmin.from('ejercicios').upsert(ejercicio).select().single();
+  const cleanData = prepareForUpsert(ejercicio);
+  const { data, error } = await supabaseAdmin.from('ejercicios').upsert(cleanData).select().single();
   revalidatePath('/dashboard/admin/materias');
   return { data, error };
 }
