@@ -16,21 +16,18 @@ const supabaseAdmin = createClient(
 );
 
 /**
- * Limpia los datos eliminando el campo ID si es una cadena vacía o nulo,
- * evitando errores de tipo UUID en PostgreSQL al realizar un upsert.
- * Además, convierte cualquier cadena vacía en null para campos opcionales.
+ * Prepara los datos para ser guardados en la base de datos.
+ * Convierte cadenas vacías en nulos y maneja IDs de forma segura.
  */
 const prepareForUpsert = (data: any) => {
   const cleanData = { ...data };
   
-  // Manejo del ID principal
   if (!cleanData.id || cleanData.id === '' || cleanData.id === 'new') {
     delete cleanData.id;
   }
 
-  // Convertir todas las demás cadenas vacías a null (vital para UUIDs opcionales como grado_id)
   Object.keys(cleanData).forEach(key => {
-    if (cleanData[key] === '') {
+    if (cleanData[key] === '' || cleanData[key] === undefined) {
       cleanData[key] = null;
     }
   });
@@ -206,7 +203,7 @@ export async function getProfesores() {
 export async function getAsignacionesProfesor() {
   const { data, error } = await supabaseAdmin
     .from('asignaciones_profesor')
-    .select('*, profiles:profesor_id(nombre, apellidos), niveles(nombre), carreras(nombre), grados(nombre), grupos(nombre), materias(nombre)')
+    .select('*, profiles:profesor_id(nombre, apellidos), niveles(nombre), carreras(nombre), materias(nombre)')
     .order('created_at', { ascending: false });
   return { data, error };
 }
