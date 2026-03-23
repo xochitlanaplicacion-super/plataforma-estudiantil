@@ -1,3 +1,4 @@
+
 'use server';
 
 import { createClient } from '@supabase/supabase-js';
@@ -189,5 +190,36 @@ export async function upsertEjercicio(ejercicio: any) {
 export async function deleteEjercicio(id: string) {
   const { error } = await supabaseAdmin.from('ejercicios').delete().eq('id', id);
   revalidatePath('/dashboard/admin/materias');
+  return { error };
+}
+
+// --- PROFESORES ---
+export async function getProfesores() {
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('id, nombre, apellidos, email')
+    .eq('rol', 'profesor')
+    .order('nombre');
+  return { data, error };
+}
+
+export async function getAsignacionesProfesor() {
+  const { data, error } = await supabaseAdmin
+    .from('asignaciones_profesor')
+    .select('*, profiles:profesor_id(nombre, apellidos), niveles(nombre), carreras(nombre), grados(nombre), grupos(nombre), materias(nombre)')
+    .order('created_at', { ascending: false });
+  return { data, error };
+}
+
+export async function upsertAsignacionProfesor(asignacion: any) {
+  const cleanData = prepareForUpsert(asignacion);
+  const { data, error } = await supabaseAdmin.from('asignaciones_profesor').upsert(cleanData).select().single();
+  revalidatePath('/dashboard/admin/profesores');
+  return { data, error };
+}
+
+export async function deleteAsignacionProfesor(id: string) {
+  const { error } = await supabaseAdmin.from('asignaciones_profesor').delete().eq('id', id);
+  revalidatePath('/dashboard/admin/profesores');
   return { error };
 }
