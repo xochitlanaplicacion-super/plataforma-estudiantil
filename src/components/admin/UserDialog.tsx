@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -12,9 +13,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { User, Aspirante } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, AlertCircle, RefreshCw, Key, Eye, EyeOff, Mail, Sparkles } from 'lucide-react';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { createUserWithProfile, updateUserProfile, resendWelcomeEmailAction } from '@/lib/actions/users';
+import { Loader2, AlertCircle, RefreshCw, Eye, EyeOff, Sparkles } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { createUserWithProfile, updateUserProfile } from '@/lib/actions/users';
+import { getPublicCareers } from '@/lib/actions/aspirantes';
 import { createClient } from '@/lib/supabase/client';
 
 const userSchema = z.object({
@@ -30,6 +32,7 @@ const userSchema = z.object({
   fecha_expiracion: z.string().optional().or(z.literal('')),
   fecha_nacimiento: z.string().optional().or(z.literal('')),
   nivel_estudios: z.string().optional().or(z.literal('')),
+  carrera_id: z.string().optional().or(z.literal('')),
   password: z.string().min(8, "Mínimo 8 caracteres").optional().or(z.literal('')),
   doc_acta_nacimiento: z.boolean().default(false),
   doc_certificado_estudios: z.boolean().default(false),
@@ -62,6 +65,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
   const [dbError, setDbError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [careers, setCareers] = useState<{id: string, nombre: string}[]>([]);
 
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userSchema),
@@ -78,6 +82,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
       fecha_expiracion: '',
       fecha_nacimiento: '',
       nivel_estudios: '',
+      carrera_id: '',
       password: '',
       doc_acta_nacimiento: false,
       doc_certificado_estudios: false,
@@ -119,6 +124,14 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
   };
 
   useEffect(() => {
+    async function loadCareers() {
+      const res = await getPublicCareers();
+      if (res.success && res.data) setCareers(res.data);
+    }
+    loadCareers();
+  }, []);
+
+  useEffect(() => {
     if (open) {
       setDbError(null);
       if (user) {
@@ -134,7 +147,8 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
           numero_empleado: user.numero_empleado || '',
           fecha_expiracion: user.fecha_expiracion || '',
           fecha_nacimiento: user.fecha_nacimiento || '',
-          nivel_estudios: '', // No disponible en perfil básico por defecto
+          nivel_estudios: user.matricula?.endsWith('UNI') ? 'universidad' : user.matricula?.endsWith('BAC') ? 'bachillerato' : 'capacitacion',
+          carrera_id: user.carrera_id || '',
           password: user.password_plain || '',
           doc_acta_nacimiento: !!user.doc_acta_nacimiento,
           doc_certificado_estudios: !!user.doc_certificado_estudios,
@@ -151,10 +165,11 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
           estatus: 'activo',
           telefono: prefillAspirante.telefono || '',
           nivel_estudios: prefillAspirante.nivel || '',
+          carrera_id: prefillAspirante.carrera_id || '',
           matricula: '',
           numero_empleado: '',
           fecha_expiracion: '',
-          fecha_nacimiento: '',
+          fecha_nacimiento: prefillAspirante.fecha_nacimiento || '',
           password: '',
           doc_acta_nacimiento: false,
           doc_certificado_estudios: false,
@@ -167,7 +182,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
         form.reset({
           nombre: '', apellidos: '', email: '', curp: '', rol: 'alumno', estatus: 'activo',
           telefono: '', matricula: '', numero_empleado: '', fecha_expiracion: '',
-          fecha_nacimiento: '', nivel_estudios: '', password: '',
+          fecha_nacimiento: '', nivel_estudios: '', carrera_id: '', password: '',
           doc_acta_nacimiento: false, doc_certificado_estudios: false, doc_curp: false, doc_ine: false,
         });
         generatePassword();
@@ -205,7 +220,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
       toast({
         variant: "destructive",
         title: "Dato Obligatorio Faltante",
-        description: "Para dar de alta a un ALUMNO, es estrictamente necesario definir la Fecha de Expiración (vigencia de su acceso)."
+        description: "Para dar de alta a un ALUMNO, es necesario definir la Fecha de Expiración."
       });
     }
   };
@@ -220,7 +235,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
                 {user ? 'Editar Perfil Académico' : prefillAspirante ? 'Inscribir Alumno (Desde Preregistro)' : 'Registrar Nuevo Perfil'}
               </DialogTitle>
               <DialogDescription>
-                {prefillAspirante ? 'Los datos han sido pre-cargados del formulario de aspirante.' : 'Completa los datos y controla la vigencia.'}
+                Completa los datos y controla la vigencia.
               </DialogDescription>
             </div>
             {prefillAspirante && <Sparkles className="text-amber-500 animate-pulse" />}
@@ -330,8 +345,35 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
               <div className="space-y-4 bg-muted/30 p-4 rounded-xl border border-dashed border-primary/20">
                 <h4 className="text-xs font-bold text-primary uppercase">Identificación Académica</h4>
                 <FormField control={form.control} name="nivel_estudios" render={({ field }) => (
-                  <FormItem><FormLabel className="text-xs">Nivel</FormLabel><Select onValueChange={(val) => { field.onChange(val); generateMatricula(val); }} value={field.value}><FormControl><SelectTrigger className="h-8"><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="bachillerato">Bachillerato</SelectItem><SelectItem value="universidad">Universidad</SelectItem><SelectItem value="capacitacion">Capacitaciones</SelectItem></SelectContent></Select></FormItem>
+                  <FormItem>
+                    <FormLabel className="text-xs">Nivel</FormLabel>
+                    <Select onValueChange={(val) => { field.onChange(val); generateMatricula(val); }} value={field.value}>
+                      <FormControl><SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger></FormControl>
+                      <SelectContent>
+                        <SelectItem value="bachillerato">Bachillerato</SelectItem>
+                        <SelectItem value="universidad">Universidad</SelectItem>
+                        <SelectItem value="capacitacion">Capacitaciones</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </FormItem>
                 )} />
+
+                {form.watch('nivel_estudios') === 'universidad' && (
+                  <FormField control={form.control} name="carrera_id" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-xs font-bold text-primary">Carrera Universitaria *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value || ''}>
+                        <FormControl><SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Elegir Carrera" /></SelectTrigger></FormControl>
+                        <SelectContent>
+                          {careers.map((c) => (
+                            <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </FormItem>
+                  )} />
+                )}
+
                 <FormField control={form.control} name="matricula" render={({ field }) => (
                   <FormItem><FormLabel className="text-xs">Matrícula {isGenerating && <Loader2 size={10} className="animate-spin inline" />}</FormLabel><FormControl><Input className="h-8 text-xs font-mono" {...field} /></FormControl></FormItem>
                 )} />

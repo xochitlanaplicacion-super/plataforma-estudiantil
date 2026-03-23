@@ -31,8 +31,6 @@ export async function createUserWithProfile(userData: any, aspiranteId?: string)
     const email = userData.email.toLowerCase().trim();
     const curp = (userData.curp || '').toUpperCase().trim();
 
-    // 1. VALIDACIÓN PREVIA: Verificar si el email o CURP ya existen en profiles
-    // Esto evita intentar crear un usuario en Auth que ya tiene perfil
     const { data: existingEmail } = await supabaseAdmin
       .from('profiles')
       .select('id')
@@ -53,7 +51,6 @@ export async function createUserWithProfile(userData: any, aspiranteId?: string)
       return { success: false, error: `La CURP ${curp} ya está asignada a otro usuario.` };
     }
 
-    // 2. Crear el usuario en Auth
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: email,
       password: userData.password,
@@ -70,9 +67,6 @@ export async function createUserWithProfile(userData: any, aspiranteId?: string)
       return { success: false, error: `Error en Autenticación: ${authError.message}` };
     }
 
-    // 3. Crear o Actualizar el perfil en DB
-    // Usamos .upsert() en lugar de .insert() para que si un Trigger de BD 
-    // ya creó el perfil al momento de crear el auth user, simplemente lo actualice.
     const profileData = {
       id: authData.user.id,
       nombre: userData.nombre.toUpperCase().trim(),
@@ -86,6 +80,7 @@ export async function createUserWithProfile(userData: any, aspiranteId?: string)
       numero_empleado: emptyToNull(userData.numero_empleado),
       fecha_expiracion: emptyToNull(userData.fecha_expiracion),
       fecha_nacimiento: emptyToNull(userData.fecha_nacimiento),
+      carrera_id: emptyToNull(userData.carrera_id),
       password_plain: userData.password,
       doc_acta_nacimiento: !!userData.doc_acta_nacimiento,
       doc_certificado_estudios: !!userData.doc_certificado_estudios,
@@ -98,17 +93,14 @@ export async function createUserWithProfile(userData: any, aspiranteId?: string)
       .upsert(profileData, { onConflict: 'id' });
 
     if (profileError) {
-      // Si falla la DB, borramos el usuario de Auth para no dejar basura
       await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
       return { success: false, error: `Error en Perfil: ${profileError.message}` };
     }
 
-    // 4. Si viene de un aspirante, marcarlo como inscrito
     if (aspiranteId) {
       await supabaseAdmin.from('aspirantes').update({ estatus: 'inscrito' }).eq('id', aspiranteId);
     }
 
-    // 5. Enviar correo de bienvenida (sin bloquear el flujo)
     sendWelcomeEmail({
       to: email,
       nombre: userData.nombre,
@@ -141,6 +133,7 @@ export async function updateUserProfile(id: string, userData: any) {
       numero_empleado: emptyToNull(userData.numero_empleado),
       fecha_expiracion: emptyToNull(userData.fecha_expiracion),
       fecha_nacimiento: emptyToNull(userData.fecha_nacimiento),
+      carrera_id: emptyToNull(userData.carrera_id),
       password_plain: emptyToNull(userData.password),
       doc_acta_nacimiento: !!userData.doc_acta_nacimiento,
       doc_certificado_estudios: !!userData.doc_certificado_estudios,

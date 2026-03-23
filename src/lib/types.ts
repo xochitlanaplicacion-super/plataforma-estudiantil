@@ -17,6 +17,7 @@ export interface User {
   matricula?: string;
   numero_empleado?: string;
   password_plain?: string;
+  carrera_id?: string;
   doc_acta_nacimiento?: boolean;
   doc_certificado_estudios?: boolean;
   doc_curp?: boolean;
