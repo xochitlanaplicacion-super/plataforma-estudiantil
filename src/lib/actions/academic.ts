@@ -17,12 +17,23 @@ const supabaseAdmin = createClient(
 /**
  * Limpia los datos eliminando el campo ID si es una cadena vacía o nulo,
  * evitando errores de tipo UUID en PostgreSQL al realizar un upsert.
+ * Además, convierte cualquier cadena vacía en null para campos opcionales.
  */
 const prepareForUpsert = (data: any) => {
   const cleanData = { ...data };
+  
+  // Manejo del ID principal
   if (!cleanData.id || cleanData.id === '' || cleanData.id === 'new') {
     delete cleanData.id;
   }
+
+  // Convertir todas las demás cadenas vacías a null (vital para UUIDs opcionales como grado_id)
+  Object.keys(cleanData).forEach(key => {
+    if (cleanData[key] === '') {
+      cleanData[key] = null;
+    }
+  });
+
   return cleanData;
 };
 
