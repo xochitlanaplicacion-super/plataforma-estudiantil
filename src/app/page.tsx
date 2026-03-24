@@ -68,11 +68,14 @@ export default function LoginPage() {
 
   useEffect(() => {
     setMounted(true);
+    // Cada vez que se carga la página de login, se elige un tema al azar
     const randomIndex = Math.floor(Math.random() * themes.length);
-    const savedThemeId = localStorage.getItem('ez-theme');
-    const themeToUse = themes.find(t => t.id === savedThemeId) || themes[randomIndex];
+    const selectedTheme = themes[randomIndex];
     
-    setCurrentTheme(themeToUse);
+    // Guardamos la selección para que la plataforma interna la reconozca
+    localStorage.setItem('ez-theme', selectedTheme.id);
+    
+    setCurrentTheme(selectedTheme);
     setBgLoaded(false);
   }, []);
 

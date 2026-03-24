@@ -1,3 +1,4 @@
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -52,15 +53,15 @@
   }
 
   .theme-beige {
-    --primary: 342 61% 29%;
+    --primary: 46 65% 35%; /* Ajustado para ser Oro/Beige y no Guinda */
     --sidebar-background: 37 51% 82%;
     --sidebar-foreground: 342 61% 10%;
-    --sidebar-primary: 342 61% 29%;
+    --sidebar-primary: 46 65% 35%;
     --sidebar-primary-foreground: 37 51% 98%;
     --sidebar-accent: 37 30% 75%;
     --sidebar-accent-foreground: 342 61% 10%;
     --sidebar-border: 37 30% 70%;
-    --sidebar-ring: 342 61% 29%;
+    --sidebar-ring: 46 65% 35%;
   }
 
   .dark {
