@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -24,15 +24,7 @@ const preregistroSchema = z.object({
   telefono: z.string().min(10, "El teléfono debe tener al menos 10 dígitos"),
   fecha_nacimiento: z.string().min(1, "La fecha de nacimiento es obligatoria"),
   nivel: z.string().min(1, "Selecciona un nivel educativo"),
-  carrera_id: z.string().optional(),
-}).refine((data) => {
-  if (data.nivel === 'universidad' && !data.carrera_id) {
-    return false;
-  }
-  return true;
-}, {
-  message: "Debes seleccionar una carrera para el nivel universidad",
-  path: ["carrera_id"],
+  carrera_id: z.string().optional().or(z.literal('')),
 });
 
 type PreregistroValues = z.infer<typeof preregistroSchema>;
@@ -41,7 +33,7 @@ export default function PreregistroPage() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [careers, setCareers] = useState<{id: string, nombre: string}[]>([]);
+  const [allCareers, setAllCareers] = useState<any[]>([]);
 
   const form = useForm<PreregistroValues>({
     resolver: zodResolver(preregistroSchema),
@@ -63,11 +55,30 @@ export default function PreregistroPage() {
     async function loadCareers() {
       const result = await getPublicCareers();
       if (result.success && result.data) {
-        setCareers(result.data);
+        setAllCareers(result.data);
       }
     }
     loadCareers();
   }, []);
+
+  const filteredCareers = useMemo(() => {
+    if (!nivelWatch) return [];
+    return allCareers.filter(c => {
+      const levelName = c.niveles?.nombre?.toLowerCase() || '';
+      if (nivelWatch === 'universidad') return levelName.includes('universidad') || levelName.includes('superior');
+      if (nivelWatch === 'bachillerato') return levelName.includes('bachillerato') || levelName.includes('preparatoria');
+      if (nivelWatch === 'capacitacion') return levelName.includes('capacitacion') || levelName.includes('curso');
+      return false;
+    });
+  }, [allCareers, nivelWatch]);
+
+  // Limpiar carrera seleccionada si el nivel cambia y la carrera ya no es válida
+  useEffect(() => {
+    const currentCarrera = form.getValues('carrera_id');
+    if (currentCarrera && !filteredCareers.find(c => c.id === currentCarrera)) {
+      form.setValue('carrera_id', '');
+    }
+  }, [nivelWatch, filteredCareers, form]);
 
   const onSubmit = async (values: PreregistroValues) => {
     setLoading(true);
@@ -257,21 +268,21 @@ export default function PreregistroPage() {
                     )}
                   />
 
-                  {nivelWatch === 'universidad' && (
+                  {filteredCareers.length > 0 && (
                     <FormField
                       control={form.control}
                       name="carrera_id"
                       render={({ field }) => (
                         <FormItem className="md:col-span-2">
-                          <FormLabel className="text-base">Carrera a la que Aspiras *</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormLabel className="text-base">Programa o Carrera de Interés *</FormLabel>
+                          <Select onValueChange={field.onChange} value={field.value}>
                             <FormControl>
                               <SelectTrigger className="h-12">
-                                <SelectValue placeholder="Selecciona una carrera" />
+                                <SelectValue placeholder="Selecciona una opción" />
                               </SelectTrigger>
                             </FormControl>
                             <SelectContent>
-                              {careers.map((career) => (
+                              {filteredCareers.map((career) => (
                                 <SelectItem key={career.id} value={career.id}>
                                   {career.nombre}
                                 </SelectItem>

@@ -47,7 +47,7 @@ export async function getPublicCareers() {
   try {
     const { data, error } = await supabaseAdmin
       .from('carreras')
-      .select('id, nombre')
+      .select('id, nombre, niveles(nombre)')
       .eq('activo', true);
     
     if (error) throw error;

@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
@@ -65,7 +65,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
   const [dbError, setDbError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [careers, setCareers] = useState<{id: string, nombre: string}[]>([]);
+  const [allCareers, setAllCareers] = useState<any[]>([]);
 
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userSchema),
@@ -91,6 +91,19 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
     },
   });
 
+  const nivelEstudios = form.watch('nivel_estudios');
+
+  const filteredCareers = useMemo(() => {
+    if (!nivelEstudios) return [];
+    return allCareers.filter(c => {
+      const levelName = c.niveles?.nombre?.toLowerCase() || '';
+      if (nivelEstudios === 'universidad') return levelName.includes('universidad') || levelName.includes('superior');
+      if (nivelEstudios === 'bachillerato') return levelName.includes('bachillerato') || levelName.includes('preparatoria');
+      if (nivelEstudios === 'capacitacion') return levelName.includes('capacitacion') || levelName.includes('curso');
+      return false;
+    });
+  }, [allCareers, nivelEstudios]);
+
   const generatePassword = useCallback(() => {
     const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%&*";
     let retVal = "";
@@ -101,14 +114,21 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
   }, [form]);
 
   const generateMatricula = async (nivel: string) => {
-    if (!nivel || user) return;
+    if (!nivel) return;
     setIsGenerating(true);
     try {
       const now = new Date();
       const month = String(now.getMonth() + 1).padStart(2, '0');
       const year = String(now.getFullYear()).slice(-2);
       let suffix = nivel === 'universidad' ? "UNI" : nivel === 'bachillerato' ? "BAC" : "CAP";
-      const { data } = await supabase.from('profiles').select('matricula').like('matricula', `%${suffix}`).order('matricula', { ascending: false }).limit(1);
+      
+      const { data } = await supabase
+        .from('profiles')
+        .select('matricula')
+        .like('matricula', `%${suffix}`)
+        .order('matricula', { ascending: false })
+        .limit(1);
+
       let nextNumber = 1;
       if (data && data.length > 0) {
         const match = data[0].matricula.match(/IEZPTA\d{4}(\d{6})/);
@@ -126,7 +146,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
   useEffect(() => {
     async function loadCareers() {
       const res = await getPublicCareers();
-      if (res.success && res.data) setCareers(res.data);
+      if (res.success && res.data) setAllCareers(res.data);
     }
     loadCareers();
   }, []);
@@ -135,6 +155,10 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
     if (open) {
       setDbError(null);
       if (user) {
+        const detectLevel = user.matricula?.endsWith('UNI') ? 'universidad' : 
+                           user.matricula?.endsWith('BAC') ? 'bachillerato' : 
+                           user.matricula?.endsWith('CAP') ? 'capacitacion' : '';
+        
         form.reset({
           nombre: user.nombre || '',
           apellidos: user.apellidos || '',
@@ -147,7 +171,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
           numero_empleado: user.numero_empleado || '',
           fecha_expiracion: user.fecha_expiracion || '',
           fecha_nacimiento: user.fecha_nacimiento || '',
-          nivel_estudios: user.matricula?.endsWith('UNI') ? 'universidad' : user.matricula?.endsWith('BAC') ? 'bachillerato' : 'capacitacion',
+          nivel_estudios: detectLevel,
           carrera_id: user.carrera_id || '',
           password: user.password_plain || '',
           doc_acta_nacimiento: !!user.doc_acta_nacimiento,
@@ -215,16 +239,6 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
     }
   };
 
-  const onInvalid = (errors: any) => {
-    if (errors.fecha_expiracion) {
-      toast({
-        variant: "destructive",
-        title: "Dato Obligatorio Faltante",
-        description: "Para dar de alta a un ALUMNO, es necesario definir la Fecha de Expiración."
-      });
-    }
-  };
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
@@ -250,7 +264,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
         )}
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit, onInvalid)} className="space-y-6 pt-2">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pt-2">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
               <div className="space-y-4 md:col-span-2">
                 <h4 className="text-sm font-bold text-primary/70 uppercase tracking-wider border-b pb-1">Información Personal</h4>
@@ -263,7 +277,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
                 <FormItem><FormLabel>Apellidos *</FormLabel><FormControl><Input placeholder="Ej. Sánchez Méndez" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="email" render={({ field }) => (
-                <FormItem><FormLabel>Correo Electrónico *</FormLabel><FormControl><Input type="email" placeholder="correo@ejemplo.com" {...field} disabled={!!user || !!prefillAspirante} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Correo Electrónico *</FormLabel><FormControl><Input type="email" placeholder="correo@ejemplo.com" {...field} disabled={!!user} /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="curp" render={({ field }) => (
                 <FormItem><FormLabel>CURP *</FormLabel><FormControl><Input className="uppercase font-mono" {...field} placeholder="18 CARACTERES" onChange={(e) => field.onChange(e.target.value.toUpperCase())} /></FormControl><FormMessage /></FormItem>
@@ -293,9 +307,13 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
               <FormField control={form.control} name="rol" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Rol *</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value} disabled={!!prefillAspirante}>
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl>
-                    <SelectContent><SelectItem value="alumno">Alumno</SelectItem><SelectItem value="profesor">Professor</SelectItem><SelectItem value="admin">Administrador</SelectItem></SelectContent>
+                    <SelectContent>
+                      <SelectItem value="alumno">Alumno</SelectItem>
+                      <SelectItem value="profesor">Profesor</SelectItem>
+                      <SelectItem value="admin">Administrador</SelectItem>
+                    </SelectContent>
                   </Select>
                 </FormItem>
               )} />
@@ -305,14 +323,8 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
                   <FormLabel className={form.watch('rol') === 'alumno' ? "text-destructive font-bold" : ""}>
                     Fecha de Expiración (Acceso) {form.watch('rol') === 'alumno' && " *"}
                   </FormLabel>
-                  <FormControl>
-                    <Input 
-                      type="date" 
-                      {...field} 
-                      className={form.formState.errors.fecha_expiracion ? "border-destructive ring-destructive" : ""}
-                    />
-                  </FormControl>
-                  <FormMessage className="text-[10px]" />
+                  <FormControl><Input type="date" {...field} /></FormControl>
+                  <FormMessage />
                 </FormItem>
               )} />
               
@@ -348,7 +360,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
                   <FormItem>
                     <FormLabel className="text-xs">Nivel</FormLabel>
                     <Select onValueChange={(val) => { field.onChange(val); generateMatricula(val); }} value={field.value}>
-                      <FormControl><SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger></FormControl>
+                      <FormControl><SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Elegir Nivel" /></SelectTrigger></FormControl>
                       <SelectContent>
                         <SelectItem value="bachillerato">Bachillerato</SelectItem>
                         <SelectItem value="universidad">Universidad</SelectItem>
@@ -358,14 +370,14 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
                   </FormItem>
                 )} />
 
-                {form.watch('nivel_estudios') === 'universidad' && (
+                {filteredCareers.length > 0 && (
                   <FormField control={form.control} name="carrera_id" render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-xs font-bold text-primary">Carrera Universitaria *</FormLabel>
+                      <FormLabel className="text-xs font-bold text-primary">Programa o Especialidad *</FormLabel>
                       <Select onValueChange={field.onChange} value={field.value || ''}>
-                        <FormControl><SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Elegir Carrera" /></SelectTrigger></FormControl>
+                        <FormControl><SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Seleccionar..." /></SelectTrigger></FormControl>
                         <SelectContent>
-                          {careers.map((c) => (
+                          {filteredCareers.map((c) => (
                             <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>
                           ))}
                         </SelectContent>
