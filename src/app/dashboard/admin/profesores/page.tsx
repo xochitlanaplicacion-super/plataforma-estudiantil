@@ -1,15 +1,25 @@
 
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { GraduationCap, Plus, Trash2, Edit, Loader2, UserCheck, School, BookOpen, Layers, Users } from 'lucide-react';
+import { 
+  Plus, 
+  Trash2, 
+  Edit, 
+  Loader2, 
+  Layers, 
+  Users, 
+  ChevronDown, 
+  UserCircle,
+  BookOpen,
+  School,
+  GraduationCap
+} from 'lucide-react';
 import { 
   getNiveles, 
   getCarreras, 
@@ -24,6 +34,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { cn } from '@/lib/utils';
 
 export default function AsignacionProfesores() {
@@ -54,7 +65,6 @@ export default function AsignacionProfesores() {
     } 
   });
 
-  // Auxiliar para multiselección
   const [selGrados, setSelGrados] = useState<string[]>([]);
   const [selGrupos, setSelGrupos] = useState<string[]>([]);
 
@@ -72,6 +82,17 @@ export default function AsignacionProfesores() {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  // Agrupar asignaciones por profesor para la interfaz
+  const groupedData = useMemo(() => {
+    return profesores.map(prof => {
+      const hisAsignaciones = asignaciones.filter(a => a.profesor_id === prof.id);
+      return {
+        ...prof,
+        asignaciones: hisAsignaciones
+      };
+    }).sort((a, b) => (b.asignaciones.length - a.asignaciones.length)); // Profesores con más carga arriba
+  }, [profesores, asignaciones]);
 
   useEffect(() => {
     if (dialog.data.nivel_id) {
@@ -116,14 +137,6 @@ export default function AsignacionProfesores() {
     });
   };
 
-  const toggleSelection = (id: string, type: 'grado' | 'grupo') => {
-    if (type === 'grado') {
-      setSelGrados(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-    } else {
-      setSelGrupos(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
-    }
-  };
-
   const handleSave = async () => {
     if (!dialog.data.profesor_id || !dialog.data.nivel_id || !dialog.data.carrera_id || !dialog.data.materia_id) {
       toast({ variant: "destructive", title: "Campos incompletos", description: "Profesor, Nivel, Carrera y Materia son obligatorios." });
@@ -141,8 +154,6 @@ export default function AsignacionProfesores() {
       toast({ title: "Asignación guardada" });
       setDialog({ ...dialog, open: false });
       fetchData();
-    } else {
-      toast({ variant: "destructive", title: "Error", description: "No se pudo guardar la asignación." });
     }
   };
 
@@ -158,10 +169,10 @@ export default function AsignacionProfesores() {
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-3xl font-bold font-headline tracking-tight text-primary">Asignación de Profesores</h2>
-          <p className="text-muted-foreground">Gestiona privilegios de acceso múltiples para docentes.</p>
+          <h2 className="text-3xl font-bold font-headline tracking-tight text-primary">Carga Académica Docente</h2>
+          <p className="text-muted-foreground">Gestiona las materias y grupos asignados por profesor.</p>
         </div>
-        <Button className="gap-2" onClick={() => {
+        <Button className="gap-2 bg-primary shadow-lg hover:scale-105 transition-transform" onClick={() => {
           setSelGrados([]);
           setSelGrupos([]);
           setDialog({ open: true, data: { id: '', profesor_id: '', nivel_id: '', carrera_id: '', grado_id: '', grupo_id: '', materia_id: '', activo: true } });
@@ -170,139 +181,195 @@ export default function AsignacionProfesores() {
         </Button>
       </div>
 
-      <Card className="shadow-sm border-muted/60">
-        <CardContent className="p-0">
-          {loading ? (
-            <div className="flex justify-center py-20"><Loader2 className="animate-spin text-primary h-8 w-8" /></div>
-          ) : asignaciones.length === 0 ? (
-            <div className="py-20 text-center text-muted-foreground italic border-2 border-dashed m-6 rounded-3xl">
-              No hay asignaciones registradas.
-            </div>
-          ) : (
-            <Table>
-              <TableHeader className="bg-muted/30">
-                <TableRow>
-                  <TableHead className="font-bold">Profesor</TableHead>
-                  <TableHead className="font-bold">Nivel / Carrera</TableHead>
-                  <TableHead className="font-bold">Grados / Grupos</TableHead>
-                  <TableHead className="font-bold">Materia</TableHead>
-                  <TableHead className="text-right font-bold">Acciones</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {asignaciones.map((asig) => (
-                  <TableRow key={asig.id} className="hover:bg-muted/10 transition-colors">
-                    <TableCell className="font-bold">{asig.profiles?.nombre} {asig.profiles?.apellidos}</TableCell>
-                    <TableCell>
-                      <div className="flex flex-col">
-                        <span className="text-xs font-semibold uppercase text-primary">{asig.niveles?.nombre}</span>
-                        <span className="text-[10px] text-muted-foreground">{asig.carreras?.nombre}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex flex-wrap gap-1">
-                        <Badge variant="secondary" className="text-[9px] font-bold">
-                          {asig.grado_id ? `${asig.grado_id.split(',').length} Grados` : 'General'}
-                        </Badge>
-                        <Badge variant="outline" className="text-[9px] font-bold">
-                          {asig.grupo_id ? `${asig.grupo_id.split(',').length} Grupos` : 'Todos'}
+      {loading ? (
+        <div className="flex flex-col items-center justify-center py-20 gap-4">
+          <Loader2 className="animate-spin text-primary h-10 w-10" />
+          <p className="text-muted-foreground font-medium">Cargando directorio de profesores...</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4">
+          <Accordion type="single" collapsible className="space-y-4">
+            {groupedData.map((prof) => (
+              <AccordionItem 
+                key={prof.id} 
+                value={prof.id} 
+                className="border rounded-2xl bg-white shadow-sm overflow-hidden border-slate-200 px-2"
+              >
+                <AccordionTrigger className="hover:no-underline px-4 py-6 group">
+                  <div className="flex items-center gap-4 text-left w-full">
+                    <div className="h-12 w-12 rounded-full bg-primary/5 flex items-center justify-center text-primary border border-primary/10">
+                      <UserCircle size={28} />
+                    </div>
+                    <div className="flex flex-col flex-1">
+                      <span className="text-lg font-black text-slate-800 uppercase tracking-tight group-hover:text-primary transition-colors">
+                        {prof.nombre} {prof.apellidos}
+                      </span>
+                      <div className="flex items-center gap-3 mt-1">
+                        <span className="text-xs text-muted-foreground font-medium">{prof.email}</span>
+                        <Badge variant="secondary" className="bg-slate-100 text-slate-600 text-[10px] font-bold">
+                          {prof.asignaciones.length} {prof.asignaciones.length === 1 ? 'ASIGNACIÓN' : 'ASIGNACIONES'}
                         </Badge>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge className="bg-primary/10 text-primary border-primary/20 hover:bg-primary/20">
-                        {asig.materias?.nombre}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-primary" onClick={() => handleEdit(asig)}>
-                          <Edit size={14} />
-                        </Button>
-                        <AlertDialog>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="ghost" size="icon" className="text-destructive h-8 w-8">
-                              <Trash2 size={14} />
-                            </Button>
-                          </AlertDialogTrigger>
-                          <AlertDialogContent>
-                            <AlertDialogHeader>
-                              <AlertDialogTitle>¿Eliminar asignación?</AlertDialogTitle>
-                              <AlertDialogDescription>El profesor perderá el acceso para gestionar esta materia y sus contenidos asignados.</AlertDialogDescription>
-                            </AlertDialogHeader>
-                            <AlertDialogFooter>
-                              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                              <AlertDialogAction className="bg-destructive" onClick={() => handleDelete(asig.id)}>Eliminar</AlertDialogAction>
-                            </AlertDialogFooter>
-                          </AlertDialogContent>
-                        </AlertDialog>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+                    </div>
+                  </div>
+                </AccordionTrigger>
+                <AccordionContent className="px-4 pb-6 pt-2">
+                  {prof.asignaciones.length === 0 ? (
+                    <div className="bg-slate-50 border-2 border-dashed rounded-xl p-8 text-center">
+                      <p className="text-sm text-muted-foreground italic">Este profesor no tiene materias o grupos asignados todavía.</p>
+                      <Button 
+                        variant="link" 
+                        className="mt-2 text-primary font-bold text-xs"
+                        onClick={() => {
+                          setSelGrados([]);
+                          setSelGrupos([]);
+                          setDialog({ open: true, data: { id: '', profesor_id: prof.id, nivel_id: '', carrera_id: '', grado_id: '', grupo_id: '', materia_id: '', activo: true } });
+                        }}
+                      >
+                        + Crear primera asignación
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      {prof.asignaciones.map((asig: any) => (
+                        <Card key={asig.id} className="border-slate-200 shadow-none hover:shadow-md transition-all group overflow-hidden">
+                          <div className="h-1 bg-primary w-full opacity-20 group-hover:opacity-100 transition-opacity" />
+                          <CardHeader className="p-4 pb-2 flex flex-row justify-between items-start space-y-0">
+                            <div className="flex flex-col">
+                              <span className="text-[10px] font-black text-primary uppercase tracking-widest">{asig.niveles?.nombre}</span>
+                              <CardTitle className="text-sm font-bold mt-1 line-clamp-1">{asig.materias?.nombre}</CardTitle>
+                            </div>
+                            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-600" onClick={() => handleEdit(asig)}>
+                                <Edit size={14} />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive">
+                                    <Trash2 size={14} />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>¿Retirar asignatura?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Se eliminará el acceso del profesor para gestionar la materia <strong>{asig.materias?.nombre}</strong>.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction className="bg-destructive" onClick={() => handleDelete(asig.id)}>Eliminar</AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="p-4 pt-0 space-y-3">
+                            <div className="flex flex-col text-[11px] text-muted-foreground bg-slate-50 p-2 rounded-lg border border-slate-100">
+                              <span className="font-bold text-slate-600 uppercase text-[9px] mb-1">Carrera / Programa:</span>
+                              <span className="font-medium text-slate-800">{asig.carreras?.nombre}</span>
+                            </div>
+                            
+                            <div className="flex flex-wrap gap-1">
+                              {asig.grado_id ? asig.grado_id.split(',').filter(Boolean).map((gid: string, i: number) => (
+                                <Badge key={i} variant="outline" className="text-[9px] bg-amber-50 border-amber-200 text-amber-700">Gdo</Badge>
+                              )) : <Badge variant="outline" className="text-[9px] bg-slate-50">Gral.</Badge>}
+                              
+                              {asig.grupo_id ? asig.grupo_id.split(',').filter(Boolean).map((gpid: string, i: number) => (
+                                <Badge key={i} variant="secondary" className="text-[9px] bg-blue-50 text-blue-700 border-blue-100">Gp</Badge>
+                              )) : <Badge variant="secondary" className="text-[9px]">Todos</Badge>}
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                      <button 
+                        onClick={() => {
+                          setSelGrados([]);
+                          setSelGrupos([]);
+                          setDialog({ open: true, data: { id: '', profesor_id: prof.id, nivel_id: '', carrera_id: '', grado_id: '', grupo_id: '', materia_id: '', activo: true } });
+                        }}
+                        className="border-2 border-dashed rounded-xl flex items-center justify-center gap-2 text-muted-foreground hover:bg-slate-50 hover:text-primary transition-all py-8"
+                      >
+                        <Plus size={16} /> <span className="text-xs font-bold uppercase">Asignar Materia</span>
+                      </button>
+                    </div>
+                  )}
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        </div>
+      )}
 
+      {/* DIÁLOGO DE ASIGNACIÓN (SIN CAMBIOS EN LÓGICA DE CAPAS PARA EVITAR REGRESIONES) */}
       <Dialog open={dialog.open} onOpenChange={(o) => setDialog({ ...dialog, open: o })}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0">
           <DialogHeader className="p-6 pb-2">
-            <DialogTitle>{dialog.data.id ? 'Editar' : 'Nueva'} Asignación Académica</DialogTitle>
-            <DialogDescription>Asigna múltiples grupos y grados a un docente.</DialogDescription>
+            <DialogTitle className="flex items-center gap-2">
+              <School className="text-primary" size={20} />
+              {dialog.data.id ? 'Editar' : 'Nueva'} Asignación Académica
+            </DialogTitle>
+            <DialogDescription>Configura los privilegios de acceso para el docente seleccionado.</DialogDescription>
           </DialogHeader>
           
           <ScrollArea className="flex-1 px-6 py-2">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pb-6">
-              {/* Selectores Básicos */}
               <div className="space-y-4">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-primary tracking-widest">1. Profesor</label>
-                  <Select value={dialog.data.profesor_id} onValueChange={(val) => setDialog({ ...dialog, data: { ...dialog.data, profesor_id: val } })}>
-                    <SelectTrigger><SelectValue placeholder="Seleccionar Docente" /></SelectTrigger>
-                    <SelectContent>
-                      {profesores.map(p => <SelectItem key={p.id} value={p.id}>{p.nombre} {p.apellidos}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <select 
+                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                    value={dialog.data.profesor_id} 
+                    onChange={(e) => setDialog({ ...dialog, data: { ...dialog.data, profesor_id: e.target.value } })}
+                  >
+                    <option value="">Seleccionar Docente...</option>
+                    {profesores.map(p => <option key={p.id} value={p.id}>{p.nombre} {p.apellidos}</option>)}
+                  </select>
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-primary tracking-widest">2. Nivel Educativo</label>
-                  <Select value={dialog.data.nivel_id} onValueChange={(val) => setDialog({ ...dialog, data: { ...dialog.data, nivel_id: val, carrera_id: '', materia_id: '' } })}>
-                    <SelectTrigger><SelectValue placeholder="Nivel" /></SelectTrigger>
-                    <SelectContent>
-                      {catalogos.niveles.map((n: any) => <SelectItem key={n.id} value={n.id}>{n.nombre}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <select 
+                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                    value={dialog.data.nivel_id} 
+                    onChange={(e) => setDialog({ ...dialog, data: { ...dialog.data, nivel_id: e.target.value, carrera_id: '', materia_id: '' } })}
+                  >
+                    <option value="">Seleccionar Nivel...</option>
+                    {catalogos.niveles.map((n: any) => <option key={n.id} value={n.id}>{n.nombre}</option>)}
+                  </select>
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-primary tracking-widest">3. Carrera / Programa</label>
-                  <Select value={dialog.data.carrera_id} onValueChange={(val) => {
-                    setSelGrados([]);
-                    setSelGrupos([]);
-                    setDialog({ ...dialog, data: { ...dialog.data, carrera_id: val, materia_id: '' } });
-                  }} disabled={!dialog.data.nivel_id}>
-                    <SelectTrigger><SelectValue placeholder="Carrera" /></SelectTrigger>
-                    <SelectContent>
-                      {catalogos.carreras.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <select 
+                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:ring-2 focus:ring-primary/20 outline-none disabled:opacity-50"
+                    disabled={!dialog.data.nivel_id}
+                    value={dialog.data.carrera_id} 
+                    onChange={(e) => {
+                      setSelGrados([]);
+                      setSelGrupos([]);
+                      setDialog({ ...dialog, data: { ...dialog.data, carrera_id: e.target.value, materia_id: '' } });
+                    }} 
+                  >
+                    <option value="">Seleccionar Carrera...</option>
+                    {catalogos.carreras.map((c: any) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                  </select>
                 </div>
 
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-primary tracking-widest">4. Materia Específica</label>
-                  <Select value={dialog.data.materia_id} onValueChange={(val) => setDialog({ ...dialog, data: { ...dialog.data, materia_id: val } })} disabled={!dialog.data.carrera_id}>
-                    <SelectTrigger><SelectValue placeholder="Materia" /></SelectTrigger>
-                    <SelectContent>
-                      {catalogos.materias.map((m: any) => <SelectItem key={m.id} value={m.id}>{m.nombre}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
+                  <select 
+                    className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:ring-2 focus:ring-primary/20 outline-none disabled:opacity-50"
+                    disabled={!dialog.data.carrera_id}
+                    value={dialog.data.materia_id} 
+                    onChange={(e) => setDialog({ ...dialog, data: { ...dialog.data, materia_id: e.target.value } })}
+                  >
+                    <option value="">Seleccionar Materia...</option>
+                    {catalogos.materias.map((m: any) => <option key={m.id} value={m.id}>{m.nombre}</option>)}
+                  </select>
                 </div>
               </div>
 
-              {/* Multiselectores Integrados (Solución a Transparencia) */}
               <div className="space-y-4">
                 <div className="space-y-2">
                   <div className="flex justify-between items-center">
@@ -323,7 +390,10 @@ export default function AsignacionProfesores() {
                           <div 
                             key={g.id} 
                             className="flex items-center space-x-3 p-2 rounded-lg hover:bg-white transition-colors cursor-pointer border border-transparent hover:border-slate-200 group"
-                            onClick={() => toggleSelection(g.id, 'grado')}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setSelGrados(prev => prev.includes(g.id) ? prev.filter(i => i !== g.id) : [...prev, g.id]);
+                            }}
                           >
                             <Checkbox checked={selGrados.includes(g.id)} className="pointer-events-none" />
                             <span className="text-xs font-bold text-slate-700 group-hover:text-primary">{g.nombre}</span>
@@ -353,12 +423,15 @@ export default function AsignacionProfesores() {
                           <div 
                             key={g.id} 
                             className="flex items-center space-x-3 p-2 rounded-lg hover:bg-white transition-colors cursor-pointer border border-transparent hover:border-slate-200 group"
-                            onClick={() => toggleSelection(g.id, 'grupo')}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              setSelGrupos(prev => prev.includes(g.id) ? prev.filter(i => i !== g.id) : [...prev, g.id]);
+                            }}
                           >
                             <Checkbox checked={selGrupos.includes(g.id)} className="pointer-events-none" />
                             <div className="flex flex-col">
                               <span className="text-xs font-bold text-slate-700 group-hover:text-primary leading-none">{g.nombre}</span>
-                              <span className="text-[9px] text-muted-foreground uppercase">{g.turno}</span>
+                              <span className="text-[9px] text-muted-foreground uppercase mt-1">{g.turno}</span>
                             </div>
                           </div>
                         ))}
