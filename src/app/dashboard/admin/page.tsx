@@ -4,7 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, GraduationCap, School, Layers, AlertCircle, Loader2, FileWarning, Mail, Send, Eye, MessageSquare } from 'lucide-react';
+import { Users, GraduationCap, School, Layers, AlertCircle, Loader2, FileWarning, Mail, Send, Eye, MessageSquare, ClipboardList, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +15,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, Re
 import { sendDocReminderAction } from '@/lib/actions/users';
 import { useToast } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
+import { cn } from '@/lib/utils';
 
 export default function AdminDashboard() {
   const { toast } = useToast();
@@ -28,7 +29,8 @@ export default function AdminDashboard() {
     profesores: 0,
     carreras: 0,
     grupos: 0,
-    nuevosMensajes: 0
+    nuevosMensajes: 0,
+    aspirantesPendientes: 0
   });
   const [recentUsers, setRecentUsers] = useState<User[]>([]);
   const [alumnosMissingDocs, setAlumnosMissingDocs] = useState<User[]>([]);
@@ -61,12 +63,19 @@ export default function AdminDashboard() {
         .select('*', { count: 'exact', head: true })
         .eq('estatus', 'nuevo');
 
+      // Aspirantes pendientes (No inscritos aún)
+      const { count: aspirantesCount } = await supabase
+        .from('aspirantes')
+        .select('*', { count: 'exact', head: true })
+        .neq('estatus', 'inscrito');
+
       setStats({
         alumnos: alumnosCount || 0,
         profesores: profesCount || 0,
         carreras: carrerasCount || 0,
         grupos: gruposCount || 0,
-        nuevosMensajes: newMessagesCount || 0
+        nuevosMensajes: newMessagesCount || 0,
+        aspirantesPendientes: aspirantesCount || 0
       });
 
       // Mostrar notificación si hay mensajes nuevos
@@ -141,13 +150,6 @@ export default function AdminDashboard() {
     { name: 'INE', count: alumnosMissingDocs.filter(u => !u.doc_ine).length, color: '#f59e0b' },
   ];
 
-  const statCards = [
-    { label: 'Alumnos Activos', value: stats.alumnos, icon: Users, color: 'text-blue-600' },
-    { label: 'Profesores Activos', value: stats.profesores, icon: GraduationCap, color: 'text-emerald-600' },
-    { label: 'Nuevos Mensajes', value: stats.nuevosMensajes, icon: MessageSquare, color: 'text-amber-600', link: '/dashboard/admin/crm/mensajes' },
-    { label: 'Grupos Activos', value: stats.grupos, icon: Layers, color: 'text-purple-600' },
-  ];
-
   return (
     <div className="space-y-8">
       <div className="flex justify-between items-center">
@@ -162,20 +164,86 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {statCards.map((stat) => (
-          <Card key={stat.label} className={stat.link ? "cursor-pointer hover:border-primary/50 transition-colors" : ""} onClick={() => stat.link && router.push(stat.link)}>
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">{stat.label}</CardTitle>
-              <stat.icon className={`h-4 w-4 ${stat.color}`} />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {loading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : stat.value.toLocaleString()}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        {/* NUEVA TARJETA: ASPIRANTES */}
+        <Card 
+          className={cn(
+            "cursor-pointer transition-all duration-300 hover:shadow-lg border-2",
+            stats.aspirantesPendientes > 0 
+              ? "bg-emerald-50/50 border-emerald-200" 
+              : "bg-white border-muted"
+          )}
+          onClick={() => router.push('/dashboard/admin/crm/aspirantes')}
+        >
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Aspirantes</CardTitle>
+            <ClipboardList className={cn("h-5 w-5", stats.aspirantesPendientes > 0 ? "text-emerald-600" : "text-muted-foreground")} />
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col gap-1">
+              <div className="text-3xl font-black text-slate-800">
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : stats.aspirantesPendientes.toLocaleString()}
               </div>
-            </CardContent>
-          </Card>
-        ))}
+              <p className="text-[10px] font-bold text-muted-foreground uppercase">Por Inscribir</p>
+            </div>
+            {stats.aspirantesPendientes > 0 && (
+              <Button variant="ghost" className="w-full mt-4 h-8 text-[10px] font-black uppercase tracking-widest bg-emerald-600 text-white hover:bg-emerald-700 gap-2 p-0">
+                Atender <ArrowRight size={12} />
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="hover:border-primary/50 transition-colors">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Alumnos Activos</CardTitle>
+            <Users className="h-4 w-4 text-blue-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {loading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : stats.alumnos.toLocaleString()}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:border-primary/50 transition-colors">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Profesores Activos</CardTitle>
+            <GraduationCap className="h-4 w-4 text-emerald-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {loading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : stats.profesores.toLocaleString()}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card 
+          className="cursor-pointer hover:border-primary/50 transition-colors" 
+          onClick={() => router.push('/dashboard/admin/crm/mensajes')}
+        >
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Nuevos Mensajes</CardTitle>
+            <MessageSquare className="h-4 w-4 text-amber-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {loading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : stats.nuevosMensajes.toLocaleString()}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="hover:border-primary/50 transition-colors">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium text-muted-foreground">Grupos Activos</CardTitle>
+            <Layers className="h-4 w-4 text-purple-600" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {loading ? <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" /> : stats.grupos.toLocaleString()}
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       <div className="grid gap-6 md:grid-cols-7">
