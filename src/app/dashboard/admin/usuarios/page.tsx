@@ -80,7 +80,7 @@ export default function UsuariosManagement() {
         toast({ title: 'Éxito', description: 'Usuario y acceso eliminados correctamente.' });
         fetchUsers();
       } else {
-        toast({ variant: 'destructive', title: 'Error', description: result.error || 'No se pudo eliminar el acceso.' });
+        toast({ variant: "destructive", title: "Error", description: result.error || 'No se pudo eliminar el acceso.' });
       }
       setDeletingId(null);
     }
@@ -98,25 +98,16 @@ export default function UsuariosManagement() {
       return matchesSearch && matchesRole && matchesStatus;
     });
 
-    // Ordenamiento por prioridad solicitado:
-    // 1. Superuser
-    // 2. Admin
-    // 3. Profesor
-    // 4. Alumno (Activo)
-    // 5. Inactivos (Al final de todo)
     return filtered.sort((a, b) => {
-      // Primero, si uno es inactivo y el otro no, el inactivo va al final
       if (a.estatus === 'inactivo' && b.estatus !== 'inactivo') return 1;
       if (a.estatus !== 'inactivo' && b.estatus === 'inactivo') return -1;
 
-      // Si ambos tienen el mismo estatus (o ambos son inactivos), ordenar por Rol
       const roleOrder = { superuser: 0, admin: 1, profesor: 2, alumno: 3 };
       const roleA = roleOrder[a.rol] ?? 99;
       const roleB = roleOrder[b.rol] ?? 99;
 
       if (roleA !== roleB) return roleA - roleB;
 
-      // Finalmente por nombre
       return a.nombre.localeCompare(b.nombre);
     });
   }, [users, searchTerm, roleFilter, statusFilter]);
@@ -256,15 +247,28 @@ export default function UsuariosManagement() {
                           >
                             <Edit size={16} />
                           </Button>
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-destructive"
-                            onClick={() => handleDelete(user.id)}
-                            disabled={deletingId === user.id}
-                          >
-                            {deletingId === user.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-                          </Button>
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span>
+                                  <Button 
+                                    variant="ghost" 
+                                    size="icon" 
+                                    className="h-8 w-8 text-destructive"
+                                    onClick={() => handleDelete(user.id)}
+                                    disabled={deletingId === user.id || user.rol === 'superuser'}
+                                  >
+                                    {deletingId === user.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                                  </Button>
+                                </span>
+                              </TooltipTrigger>
+                              {user.rol === 'superuser' && (
+                                <TooltipContent>
+                                  <p className="text-xs">No se puede eliminar la cuenta raíz</p>
+                                </TooltipContent>
+                              )}
+                            </Tooltip>
+                          </TooltipProvider>
                         </div>
                       </TableCell>
                     </TableRow>
