@@ -33,7 +33,7 @@ const userSchema = z.object({
   fecha_nacimiento: z.string().optional().or(z.literal('')),
   nivel_estudios: z.string().optional().or(z.literal('')),
   carrera_id: z.string().optional().or(z.literal('')),
-  password: z.string().min(8, "Mínimo 8 caracteres").optional().or(z.literal('')),
+  password: z.string().min(8, "La contraseña es obligatoria (mínimo 8 caracteres)"),
   doc_acta_nacimiento: z.boolean().default(false),
   doc_certificado_estudios: z.boolean().default(false),
   doc_curp: z.boolean().default(false),
@@ -65,7 +65,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
   const [sendingEmail, setSendingEmail] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
+  const [showPassword, setShowPassword] = useState(true); // Siempre visible en edición por defecto
   const [allCareers, setAllCareers] = useState<any[]>([]);
 
   const form = useForm<UserFormValues>({
@@ -173,9 +173,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
     if (open) {
       setDbError(null);
       if (user) {
-        // En modo edición, mostramos la contraseña real por defecto si existe
         setShowPassword(true);
-        
         const detectLevel = user.matricula?.endsWith('UNI') ? 'universidad' : 
                            user.matricula?.endsWith('BAC') ? 'bachillerato' : 
                            user.matricula?.endsWith('CAP') ? 'capacitacion' : '';
@@ -201,7 +199,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
           doc_ine: !!user.doc_ine,
         });
       } else if (prefillAspirante) {
-        setShowPassword(false);
+        setShowPassword(true);
         form.reset({
           nombre: prefillAspirante.nombre || '',
           apellidos: prefillAspirante.apellidos || '',
@@ -225,7 +223,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
         generatePassword();
         if (prefillAspirante.nivel) generateMatricula(prefillAspirante.nivel);
       } else {
-        setShowPassword(false);
+        setShowPassword(true);
         form.reset({
           nombre: '', apellidos: '', email: '', curp: '', rol: 'alumno', estatus: 'activo',
           telefono: '', matricula: '', numero_empleado: '', fecha_expiracion: '',
@@ -272,7 +270,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
                 {user ? 'Editar Perfil Académico' : prefillAspirante ? 'Inscribir Alumno (Desde Preregistro)' : 'Registrar Nuevo Perfil'}
               </DialogTitle>
               <DialogDescription>
-                Completa los datos y controla la vigencia del acceso.
+                Completa los datos y controla la vigencia del acceso. La contraseña nunca debe estar vacía.
               </DialogDescription>
             </div>
             {user && (
@@ -330,8 +328,8 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
 
               <FormField control={form.control} name="password" render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="flex justify-between items-center">
-                    Contraseña de Acceso 
+                  <FormLabel className="flex justify-between items-center text-destructive font-bold">
+                    Contraseña de Acceso *
                     <Button type="button" variant="ghost" size="sm" className="h-6 text-[10px] gap-1" onClick={generatePassword}>
                       <RefreshCw size={10} /> Regenerar
                     </Button>
@@ -342,7 +340,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
                         {...field} 
                         type={showPassword ? "text" : "password"} 
                         placeholder="Contraseña" 
-                        className="pr-10"
+                        className="pr-10 border-destructive/30 focus:ring-destructive/20"
                       />
                     </FormControl>
                     <button 

@@ -122,6 +122,16 @@ export async function createUserWithProfile(userData: any, aspiranteId?: string)
 
 export async function updateUserProfile(id: string, userData: any) {
   try {
+    // Primero obtenemos el perfil actual para comparar estados y no perder la contraseña
+    const { data: currentProfile } = await supabaseAdmin
+      .from('profiles')
+      .select('estatus, password_plain')
+      .eq('id', id)
+      .single();
+
+    // La contraseña nueva viene en userData.password. Si no viene, usamos la que ya tenemos
+    const finalPassword = userData.password || currentProfile?.password_plain || userData.password_plain;
+
     const updateData: any = {
       nombre: userData.nombre.toUpperCase().trim(),
       apellidos: userData.apellidos.toUpperCase().trim(),
@@ -134,12 +144,20 @@ export async function updateUserProfile(id: string, userData: any) {
       fecha_expiracion: emptyToNull(userData.fecha_expiracion),
       fecha_nacimiento: emptyToNull(userData.fecha_nacimiento),
       carrera_id: emptyToNull(userData.carrera_id),
-      password_plain: emptyToNull(userData.password),
+      password_plain: finalPassword,
       doc_acta_nacimiento: !!userData.doc_acta_nacimiento,
       doc_certificado_estudios: !!userData.doc_certificado_estudios,
       doc_curp: !!userData.doc_curp,
       doc_ine: !!userData.doc_ine,
     };
+
+    // Si se reactiva (de inactivo a activo), forzamos el estatus activo si hay fecha válida
+    if (userData.estatus === 'inactivo' && userData.fecha_expiracion) {
+      const hoy = new Date().toISOString().split('T')[0];
+      if (userData.fecha_expiracion >= hoy) {
+        updateData.estatus = 'activo';
+      }
+    }
 
     if (userData.password) {
       await supabaseAdmin.auth.admin.updateUserById(id, { password: userData.password });
@@ -147,6 +165,20 @@ export async function updateUserProfile(id: string, userData: any) {
 
     const { error } = await supabaseAdmin.from('profiles').update(updateData).eq('id', id);
     if (error) throw error;
+
+    // Si hubo una reactivación o cambio de contraseña intencional, avisar al usuario
+    const isReactivated = currentProfile?.estatus === 'inactivo' && updateData.estatus === 'activo';
+    if (isReactivated || userData.password) {
+      sendWelcomeEmail({
+        to: userData.email || currentProfile?.email,
+        nombre: userData.nombre,
+        apellidos: userData.apellidos,
+        rol: userData.rol,
+        matricula: updateData.matricula,
+        password: finalPassword,
+        isReactivation: isReactivated
+      }).catch(err => console.error("Error envío correo reactivación:", err));
+    }
 
     revalidatePath('/dashboard/admin/usuarios');
     return { success: true };
@@ -181,13 +213,15 @@ export async function resendWelcomeEmailAction(id: string) {
   try {
     const { data: profile } = await supabaseAdmin.from('profiles').select('*').eq('id', id).single();
     if (!profile) return { success: false, error: "Perfil no encontrado" };
+    if (!profile.password_plain) return { success: false, error: "No hay una contraseña guardada para este perfil. Asigne una nueva antes de reenviar." };
+    
     return await sendWelcomeEmail({
       to: profile.email,
       nombre: profile.nombre,
       apellidos: profile.apellidos,
       rol: profile.rol,
       matricula: profile.matricula,
-      password: profile.password_plain || '********',
+      password: profile.password_plain,
     });
   } catch (error: any) {
     return { success: false, error: error.message };

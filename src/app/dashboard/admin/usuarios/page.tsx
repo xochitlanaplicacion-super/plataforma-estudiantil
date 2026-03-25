@@ -48,11 +48,12 @@ export default function UsuariosManagement() {
         
         // 1. Caso: Activo -> Inactivo (Caducó hoy)
         if (isExpired && user.estatus === 'activo') {
+          // Importante: Al sincronizar, enviamos el objeto completo para no perder la contraseña
           updates.push(updateUserProfile(user.id, { ...user, estatus: 'inactivo' }));
           return { ...user, estatus: 'inactivo' };
         }
         
-        // 2. Caso: Inactivo -> Activo (Vigencia extendida por admin)
+        // 2. Caso: Inactivo -> Activo (Vigencia extendida por admin manualmente o detectada aquí)
         if (!isExpired && user.estatus === 'inactivo' && user.fecha_expiracion && user.fecha_expiracion >= hoy) {
           updates.push(updateUserProfile(user.id, { ...user, estatus: 'activo' }));
           return { ...user, estatus: 'activo' };

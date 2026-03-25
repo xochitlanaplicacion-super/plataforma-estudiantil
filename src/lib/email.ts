@@ -1,3 +1,4 @@
+
 import nodemailer from 'nodemailer';
 
 const transporter = nodemailer.createTransport({
@@ -16,6 +17,7 @@ interface WelcomeEmailData {
   matricula?: string | null;
   numero_empleado?: string | null;
   password: string;
+  isReactivation?: boolean;
 }
 
 interface ReminderEmailData {
@@ -44,6 +46,11 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
     const rolLabel = rolTexto[data.rol] || data.rol;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://institutoeducativoemilianozapata.vercel.app';
     const logoUrl = `${appUrl}/images/logo_zapata.png`;
+
+    const tituloPrincipal = data.isReactivation ? '¡Acceso Reactivado!' : `¡Bienvenido(a), ${data.nombre}!`;
+    const subTexto = data.isReactivation 
+      ? 'Tu periodo de acceso ha sido extendido exitosamente. Puedes volver a ingresar al sistema con los siguientes datos:'
+      : `Tu cuenta ha sido creada exitosamente como <strong>${rolLabel}</strong>.`;
 
     let identificacionHTML = '';
     if (data.rol === 'alumno' && data.matricula) {
@@ -78,15 +85,15 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
         </div>
 
         <div style="padding: 40px 30px 20px; text-align: center;">
-          <h2 style="color: #333; margin: 0 0 10px; font-size: 22px;">¡Bienvenido(a), ${data.nombre}!</h2>
+          <h2 style="color: #333; margin: 0 0 10px; font-size: 22px;">${tituloPrincipal}</h2>
           <p style="color: #666; font-size: 15px; line-height: 1.6; margin: 0;">
-            Tu cuenta ha sido creada exitosamente como <strong>${rolLabel}</strong>.
+            ${subTexto}
           </p>
         </div>
 
         <div style="margin: 20px 30px; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef; overflow: hidden;">
           <div style="background-color: #8B2332; padding: 12px 20px;">
-            <h3 style="color: #ffffff; margin: 0; font-size: 15px; text-align: center;">🔐 Datos de Acceso</h3>
+            <h3 style="color: #ffffff; margin: 0; font-size: 15px; text-align: center;">🔐 Datos de Acceso Actualizados</h3>
           </div>
           <table style="width: 100%; border-collapse: collapse;">
             <tr><td style="padding: 10px 20px; border-bottom: 1px solid #eee; font-weight: bold; color: #555;">👤 Usuario</td><td style="padding: 10px 20px; border-bottom: 1px solid #eee; color: #333;">${data.to}</td></tr>
@@ -102,7 +109,7 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
 
         <div style="margin: 0 30px 30px; padding: 15px; background-color: #fff3cd; border-radius: 6px; border-left: 4px solid #ffc107;">
           <p style="margin: 0; color: #856404; font-size: 13px;">
-            ⚠️ <strong>Importante:</strong> Guarda bien esta contraseña. No compartas estos datos con terceros.
+            ⚠️ <strong>Importante:</strong> Esta es tu contraseña vigente. No compartas estos datos con terceros.
           </p>
         </div>
 
@@ -118,7 +125,9 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
     const info = await transporter.sendMail({
       from: `"Instituto Educativo Emiliano Zapata" <${user}>`,
       to: data.to,
-      subject: '🏫 Registro Exitoso - Instituto Educativo Emiliano Zapata',
+      subject: data.isReactivation 
+        ? '🔓 Reactivación de Acceso - IE Emiliano Zapata'
+        : '🏫 Registro Exitoso - Instituto Educativo Emiliano Zapata',
       html: htmlContent,
     });
 
