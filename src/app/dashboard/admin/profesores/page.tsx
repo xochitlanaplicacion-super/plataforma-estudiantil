@@ -18,7 +18,9 @@ import {
   UserCircle,
   BookOpen,
   School,
-  GraduationCap
+  GraduationCap,
+  UserRoundCheck,
+  ArrowRightLeft
 } from 'lucide-react';
 import { 
   getNiveles, 
@@ -29,7 +31,8 @@ import {
   getProfesores, 
   getAsignacionesProfesor,
   upsertAsignacionProfesor,
-  deleteAsignacionProfesor 
+  deleteAsignacionProfesor,
+  replaceProfesorInAssignments
 } from '@/lib/actions/academic';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
@@ -65,8 +68,16 @@ export default function AsignacionProfesores() {
     } 
   });
 
+  const [replaceDialog, setReplaceDialog] = useState({
+    open: false,
+    oldProfesorId: '',
+    oldProfesorName: '',
+    newProfesorId: ''
+  });
+
   const [selGrados, setSelGrados] = useState<string[]>([]);
   const [selGrupos, setSelGrupos] = useState<string[]>([]);
+  const [replacing, setReplacing] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -165,6 +176,25 @@ export default function AsignacionProfesores() {
     }
   };
 
+  const handleReplace = async () => {
+    if (!replaceDialog.newProfesorId) {
+      toast({ variant: "destructive", title: "Error", description: "Selecciona el nuevo profesor." });
+      return;
+    }
+
+    setReplacing(true);
+    const result = await replaceProfesorInAssignments(replaceDialog.oldProfesorId, replaceDialog.newProfesorId);
+    
+    if (result.success) {
+      toast({ title: "Cambio realizado", description: "Toda la carga académica ha sido transferida." });
+      setReplaceDialog({ ...replaceDialog, open: false, newProfesorId: '' });
+      fetchData();
+    } else {
+      toast({ variant: "destructive", title: "Error", description: result.error });
+    }
+    setReplacing(false);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -214,6 +244,24 @@ export default function AsignacionProfesores() {
                   </div>
                 </AccordionTrigger>
                 <AccordionContent className="px-4 pb-6 pt-2">
+                  <div className="flex justify-end mb-4">
+                    {prof.asignaciones.length > 0 && (
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="gap-2 text-amber-600 border-amber-200 hover:bg-amber-50 hover:text-amber-700"
+                        onClick={() => setReplaceDialog({ 
+                          open: true, 
+                          oldProfesorId: prof.id, 
+                          oldProfesorName: `${prof.nombre} ${prof.apellidos}`,
+                          newProfesorId: '' 
+                        })}
+                      >
+                        <ArrowRightLeft size={14} /> Reemplazar Profesor
+                      </Button>
+                    )}
+                  </div>
+
                   {prof.asignaciones.length === 0 ? (
                     <div className="bg-slate-50 border-2 border-dashed rounded-xl p-8 text-center">
                       <p className="text-sm text-muted-foreground italic">Este profesor no tiene materias o grupos asignados todavía.</p>
@@ -249,18 +297,20 @@ export default function AsignacionProfesores() {
                                     <Trash2 size={14} />
                                   </Button>
                                 </AlertDialogTrigger>
-                                <AlertDialogContent>
-                                  <AlertDialogHeader>
-                                    <AlertDialogTitle>¿Retirar asignatura?</AlertDialogTitle>
-                                    <AlertDialogDescription>
-                                      Se eliminará el acceso del profesor para gestionar la materia <strong>{asig.materias?.nombre}</strong>.
-                                    </AlertDialogDescription>
-                                  </AlertDialogHeader>
-                                  <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                    <AlertDialogAction className="bg-destructive" onClick={() => handleDelete(asig.id)}>Eliminar</AlertDialogAction>
-                                  </AlertDialogFooter>
-                                </AlertDialogContent>
+                                <AccordionItem value="delete-confirm" className="border-none">
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>¿Retirar asignatura?</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Se eliminará el acceso del profesor para gestionar la materia <strong>{asig.materias?.nombre}</strong>.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                      <AlertDialogAction className="bg-destructive" onClick={() => handleDelete(asig.id)}>Eliminar</AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AccordionItem>
                               </AlertDialog>
                             </div>
                           </CardHeader>
@@ -301,7 +351,49 @@ export default function AsignacionProfesores() {
         </div>
       )}
 
-      {/* DIÁLOGO DE ASIGNACIÓN (SIN CAMBIOS EN LÓGICA DE CAPAS PARA EVITAR REGRESIONES) */}
+      {/* DIÁLOGO DE REEMPLAZO */}
+      <Dialog open={replaceDialog.open} onOpenChange={(o) => setReplaceDialog({ ...replaceDialog, open: o })}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ArrowRightLeft className="text-amber-600" size={20} /> Reemplazo Masivo
+            </DialogTitle>
+            <DialogDescription>
+              Se transferirán todas las materias y grupos de <strong>{replaceDialog.oldProfesorName}</strong> a un nuevo docente.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase text-primary tracking-widest">Seleccionar Nuevo Profesor</label>
+              <select 
+                className="w-full h-10 px-3 rounded-md border border-input bg-background text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                value={replaceDialog.newProfesorId} 
+                onChange={(e) => setReplaceDialog({ ...replaceDialog, newProfesorId: e.target.value })}
+              >
+                <option value="">Elegir docente para el relevo...</option>
+                {profesores.filter(p => p.id !== replaceDialog.oldProfesorId).map(p => (
+                  <option key={p.id} value={p.id}>{p.nombre} {p.apellidos}</option>
+                ))}
+              </select>
+            </div>
+            <div className="p-4 bg-amber-50 border border-amber-100 rounded-xl text-[11px] text-amber-800 leading-relaxed">
+              <strong>Nota:</strong> Este proceso actualizará todas las asignaciones vinculadas. El profesor original quedará sin carga y podrá ser dado de baja del sistema sin errores.
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setReplaceDialog({ ...replaceDialog, open: false })}>Cancelar</Button>
+            <Button 
+              className="bg-primary px-8" 
+              disabled={!replaceDialog.newProfesorId || replacing}
+              onClick={handleReplace}
+            >
+              {replacing ? <Loader2 size={16} className="animate-spin" /> : 'Confirmar Relevo'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIÁLOGO DE ASIGNACIÓN */}
       <Dialog open={dialog.open} onOpenChange={(o) => setDialog({ ...dialog, open: o })}>
         <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col p-0">
           <DialogHeader className="p-6 pb-2">

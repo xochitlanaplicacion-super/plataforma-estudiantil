@@ -220,3 +220,24 @@ export async function deleteAsignacionProfesor(id: string) {
   revalidatePath('/dashboard/admin/profesores');
   return { error };
 }
+
+/**
+ * Reemplaza un profesor por otro en todas sus asignaciones académicas.
+ */
+export async function replaceProfesorInAssignments(oldProfesorId: string, newProfesorId: string) {
+  try {
+    const { error } = await supabaseAdmin
+      .from('asignaciones_profesor')
+      .update({ profesor_id: newProfesorId })
+      .eq('profesor_id', oldProfesorId);
+
+    if (error) throw error;
+
+    revalidatePath('/dashboard/admin/profesores');
+    revalidatePath('/dashboard/admin/usuarios');
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error replacing profesor:", error);
+    return { success: false, error: error.message };
+  }
+}
