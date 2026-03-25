@@ -18,6 +18,7 @@ interface WelcomeEmailData {
   numero_empleado?: string | null;
   password: string;
   isReactivation?: boolean;
+  isExpiration?: boolean;
 }
 
 interface ReminderEmailData {
@@ -47,10 +48,18 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://institutoeducativoemilianozapata.vercel.app';
     const logoUrl = `${appUrl}/images/logo_zapata.png`;
 
-    const tituloPrincipal = data.isReactivation ? '¡Acceso Reactivado!' : `¡Bienvenido(a), ${data.nombre}!`;
-    const subTexto = data.isReactivation 
+    // Lógica de títulos y colores según el tipo de notificación
+    let colorPrincipal = '#8B2332'; // Guinda por defecto
+    let tituloPrincipal = data.isReactivation ? '¡Acceso Reactivado!' : `¡Bienvenido(a), ${data.nombre}!`;
+    let subTexto = data.isReactivation 
       ? 'Tu periodo de acceso ha sido extendido exitosamente. Puedes volver a ingresar al sistema con los siguientes datos:'
       : `Tu cuenta ha sido creada exitosamente como <strong>${rolLabel}</strong>.`;
+
+    if (data.isExpiration) {
+      colorPrincipal = '#cc6600'; // Ámbar para expiración
+      tituloPrincipal = '⚠️ Acceso Finalizado';
+      subTexto = `Estimado(a) <strong>${data.nombre}</strong>, te informamos que tu periodo de acceso a la plataforma ha terminado el día de hoy.`;
+    }
 
     let identificacionHTML = '';
     if (data.rol === 'alumno' && data.matricula) {
@@ -76,7 +85,7 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
     </head>
     <body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: sans-serif;">
       <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff;">
-        <div style="background: linear-gradient(135deg, #8B2332, #6B1A27); padding: 40px 30px; text-align: center;">
+        <div style="background: linear-gradient(135deg, ${colorPrincipal}, #000000); padding: 40px 30px; text-align: center;">
           <img src="${logoUrl}" alt="Logo" style="height: 180px; width: auto; margin-bottom: 15px;">
           <h1 style="color: #ffffff; margin: 0; font-size: 20px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px;">
             Instituto Educativo Emiliano Zapata
@@ -91,9 +100,10 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
           </p>
         </div>
 
+        ${!data.isExpiration ? `
         <div style="margin: 20px 30px; background-color: #f8f9fa; border-radius: 8px; border: 1px solid #e9ecef; overflow: hidden;">
-          <div style="background-color: #8B2332; padding: 12px 20px;">
-            <h3 style="color: #ffffff; margin: 0; font-size: 15px; text-align: center;">🔐 Datos de Acceso Actualizados</h3>
+          <div style="background-color: ${colorPrincipal}; padding: 12px 20px;">
+            <h3 style="color: #ffffff; margin: 0; font-size: 15px; text-align: center;">🔐 Datos de Acceso Vigentes</h3>
           </div>
           <table style="width: 100%; border-collapse: collapse;">
             <tr><td style="padding: 10px 20px; border-bottom: 1px solid #eee; font-weight: bold; color: #555;">👤 Usuario</td><td style="padding: 10px 20px; border-bottom: 1px solid #eee; color: #333;">${data.to}</td></tr>
@@ -104,12 +114,19 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
         </div>
 
         <div style="text-align: center; padding: 20px;">
-          <a href="${appUrl}" style="display: inline-block; background: #8B2332; color: #ffffff; padding: 14px 40px; border-radius: 6px; text-decoration: none; font-weight: bold;">Iniciar Sesión →</a>
+          <a href="${appUrl}" style="display: inline-block; background: ${colorPrincipal}; color: #ffffff; padding: 14px 40px; border-radius: 6px; text-decoration: none; font-weight: bold;">Iniciar Sesión →</a>
         </div>
+        ` : `
+        <div style="margin: 30px; padding: 20px; background-color: #fff5f5; border-radius: 8px; border: 1px solid #fed7d7; text-align: center;">
+          <p style="color: #c53030; font-size: 14px; margin: 0;">
+            Si deseas continuar con tus estudios o requieres una prórroga, por favor contacta al departamento de <strong>Servicios Escolares</strong> o acude a ventanilla para realizar el pago de tu colegiatura o trámite correspondiente.
+          </p>
+        </div>
+        `}
 
         <div style="margin: 0 30px 30px; padding: 15px; background-color: #fff3cd; border-radius: 6px; border-left: 4px solid #ffc107;">
           <p style="margin: 0; color: #856404; font-size: 13px;">
-            ⚠️ <strong>Importante:</strong> Esta es tu contraseña vigente. No compartas estos datos con terceros.
+            ⚠️ <strong>Importante:</strong> Esta información es personal. No compartas tus accesos con terceros.
           </p>
         </div>
 
@@ -125,9 +142,11 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
     const info = await transporter.sendMail({
       from: `"Instituto Educativo Emiliano Zapata" <${user}>`,
       to: data.to,
-      subject: data.isReactivation 
-        ? '🔓 Reactivación de Acceso - IE Emiliano Zapata'
-        : '🏫 Registro Exitoso - Instituto Educativo Emiliano Zapata',
+      subject: data.isExpiration 
+        ? '⚠️ Aviso de Acceso - Instituto Emiliano Zapata'
+        : data.isReactivation 
+          ? '🔓 Reactivación de Acceso - Instituto Emiliano Zapata'
+          : '🏫 Tus Credenciales de Acceso - Instituto Emiliano Zapata',
       html: htmlContent,
     });
 
