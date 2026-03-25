@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, UserPlus, Search, Filter, Loader2, Edit, Trash2, Key, ChevronDown } from 'lucide-react';
+import { Users, UserPlus, Search, Filter, Loader2, Edit, Trash2, Key, ChevronDown, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -14,6 +14,7 @@ import { UserDialog } from '@/components/admin/UserDialog';
 import { useToast } from '@/hooks/use-toast';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { deleteUserAccount, updateUserProfile } from '@/lib/actions/users';
+import { getAsignacionesProfesor } from '@/lib/actions/academic';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function UsuariosManagement() {
@@ -26,7 +27,7 @@ export default function UsuariosManagement() {
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [deletingId, setDeletingId] = useState<string | null>(null);
   
-  // Estado para rastrear qué profesores tienen asignaciones
+  // Estado para IDs de profesores con carga académica
   const [assignedProfIds, setAssignedProfIds] = useState<string[]>([]);
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -34,24 +35,48 @@ export default function UsuariosManagement() {
 
   const fetchUsers = async () => {
     setLoading(true);
-    
-    // Consultar perfiles y asignaciones de profesores en paralelo para validación de borrado
-    const [profilesRes, assignmentsRes] = await Promise.all([
-      supabase.from('profiles').select('*'),
-      supabase.from('asignaciones_profesor').select('profesor_id')
-    ]);
+    try {
+      const hoy = new Date().toISOString().split('T')[0];
+      
+      // Consultar perfiles y asignaciones (Server Action para bypass RLS si es necesario)
+      const [profilesRes, assignmentsRes] = await Promise.all([
+        supabase.from('profiles').select('*'),
+        getAsignacionesProfesor()
+      ]);
 
-    // Guardamos los IDs de los profesores que tienen carga académica
-    if (assignmentsRes.data) {
-      const ids = assignmentsRes.data.map(a => a.profesor_id);
-      setAssignedProfIds(ids);
-    }
+      if (assignmentsRes.data) {
+        const ids = assignmentsRes.data.map((a: any) => a.profesor_id);
+        setAssignedProfIds(ids);
+      }
 
-    if (profilesRes.data) {
-      const rawUsers = profilesRes.data as User[];
-      setUsers(rawUsers);
+      if (profilesRes.data) {
+        const rawUsers = profilesRes.data as User[];
+        
+        // LÓGICA DE SINCRONIZACIÓN SILENCIOSA DE ESTADOS
+        for (const user of rawUsers) {
+          if (user.rol === 'superuser') continue;
+
+          const isExpired = user.fecha_expiracion && user.fecha_expiracion < hoy;
+          const isReactivated = user.fecha_expiracion && user.fecha_expiracion >= hoy && user.estatus === 'inactivo';
+
+          if (isExpired && user.estatus === 'activo') {
+            // Cambio silencioso a inactivo (Se dispara correo desde la acción)
+            await updateUserProfile(user.id, { ...user, estatus: 'inactivo' });
+            user.estatus = 'inactivo';
+          } else if (isReactivated) {
+            // Cambio silencioso a activo (Se dispara correo de reactivación)
+            await updateUserProfile(user.id, { ...user, estatus: 'activo' });
+            user.estatus = 'activo';
+          }
+        }
+        
+        setUsers(rawUsers);
+      }
+    } catch (err) {
+      console.error("Error sync users:", err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -191,8 +216,8 @@ export default function UsuariosManagement() {
                 </TableHeader>
                 <TableBody>
                   {processedUsers.map((user) => {
-                    // Lógica de validación para habilitar/deshabilitar el borrado
-                    const isAssignedProfessor = user.rol === 'profesor' && assignedProfIds.includes(user.id);
+                    // VALIDACIÓN DE SEGURIDAD PARA BLOQUEO DE BORRADO
+                    const isAssignedProfessor = (user.rol?.toLowerCase() === 'profesor') && assignedProfIds.includes(user.id);
                     const cannotDelete = user.rol === 'superuser' || isAssignedProfessor;
                     
                     const deleteTooltip = user.rol === 'superuser' 
