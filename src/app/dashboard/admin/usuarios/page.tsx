@@ -25,35 +25,41 @@ export default function UsuariosManagement() {
   const [roleFilter, setRoleFilter] = useState<string>('todos');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [assignedProfIds, setAssignedProfIds] = useState<string[]>([]);
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
 
   const fetchUsers = async () => {
     setLoading(true);
-    const { data } = await supabase
-      .from('profiles')
-      .select('*');
+    
+    // Consultar perfiles y asignaciones de profesores en paralelo
+    const [profilesRes, assignmentsRes] = await Promise.all([
+      supabase.from('profiles').select('*'),
+      supabase.from('asignaciones_profesor').select('profesor_id')
+    ]);
 
-    if (data) {
-      const rawUsers = data as User[];
+    if (assignmentsRes.data) {
+      const ids = assignmentsRes.data.map(a => a.profesor_id);
+      setAssignedProfIds(ids);
+    }
+
+    if (profilesRes.data) {
+      const rawUsers = profilesRes.data as User[];
       const hoy = new Date().toISOString().split('T')[0];
       
       // Sincronización inteligente de estatus según fecha de vigencia
       const updates: Promise<any>[] = [];
       const updatedLocalUsers = rawUsers.map(user => {
-        if (user.rol === 'superuser') return user; // No afectar al superuser raíz
+        if (user.rol === 'superuser') return user;
 
         const isExpired = user.fecha_expiracion && user.fecha_expiracion < hoy;
         
-        // 1. Caso: Activo -> Inactivo (Caducó hoy)
         if (isExpired && user.estatus === 'activo') {
-          // Importante: Al sincronizar, enviamos el objeto completo para no perder la contraseña
           updates.push(updateUserProfile(user.id, { ...user, estatus: 'inactivo' }));
           return { ...user, estatus: 'inactivo' };
         }
         
-        // 2. Caso: Inactivo -> Activo (Vigencia extendida por admin manualmente o detectada aquí)
         if (!isExpired && user.estatus === 'inactivo' && user.fecha_expiracion && user.fecha_expiracion >= hoy) {
           updates.push(updateUserProfile(user.id, { ...user, estatus: 'activo' }));
           return { ...user, estatus: 'activo' };
@@ -63,7 +69,6 @@ export default function UsuariosManagement() {
       });
 
       if (updates.length > 0) {
-        console.log(`Sincronizando ${updates.length} estados de usuario por vigencia...`);
         await Promise.all(updates);
         setUsers(updatedLocalUsers as User[]);
       } else {
@@ -209,86 +214,96 @@ export default function UsuariosManagement() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {processedUsers.map((user) => (
-                    <TableRow key={user.id} className={`hover:bg-muted/10 transition-colors ${user.estatus === 'inactivo' ? 'bg-destructive/5' : ''}`}>
-                      <TableCell className="font-medium">
-                        <div className="flex flex-col">
-                          <span className="text-sm font-semibold">{user.nombre} {user.apellidos}</span>
-                          <span className="text-[10px] text-muted-foreground">{user.email}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex flex-col gap-1">
-                          <Badge variant="outline" className="capitalize text-[9px] font-bold w-fit">
-                            {user.rol}
-                          </Badge>
-                          <span className="text-[10px] font-mono text-muted-foreground">{user.matricula || user.numero_empleado || 'S/N'}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <div className="flex items-center gap-1 cursor-help">
-                                <Key size={12} className="text-primary/50" />
-                                <span className="text-[11px] font-mono blur-[3px] hover:blur-none transition-all duration-300">
-                                  {user.password_plain || '********'}
-                                </span>
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p className="text-xs">Pasa el mouse para ver clave</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge 
-                          className={`text-[10px] px-3 h-6 uppercase font-bold ${
-                            user.estatus === 'activo' ? 'bg-primary text-white' : 
-                            user.estatus === 'inactivo' ? 'bg-red-600 text-white' : 
-                            'bg-amber-500 text-white'
-                          }`}
-                        >
-                          {user.estatus}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button 
-                            variant="ghost" 
-                            size="icon" 
-                            className="h-8 w-8 text-primary"
-                            onClick={() => handleEdit(user)}
-                          >
-                            <Edit size={16} />
-                          </Button>
+                  {processedUsers.map((user) => {
+                    const isAssignedProfessor = user.rol === 'profesor' && assignedProfIds.includes(user.id);
+                    const cannotDelete = user.rol === 'superuser' || isAssignedProfessor;
+                    const deleteTooltip = user.rol === 'superuser' 
+                      ? "No se puede eliminar la cuenta raíz" 
+                      : isAssignedProfessor 
+                        ? "CON GRUPOS Y MATERIAS ASIGNADOS" 
+                        : "Eliminar usuario";
+
+                    return (
+                      <TableRow key={user.id} className={`hover:bg-muted/10 transition-colors ${user.estatus === 'inactivo' ? 'bg-destructive/5' : ''}`}>
+                        <TableCell className="font-medium">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-semibold">{user.nombre} {user.apellidos}</span>
+                            <span className="text-[10px] text-muted-foreground">{user.email}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-col gap-1">
+                            <Badge variant="outline" className="capitalize text-[9px] font-bold w-fit">
+                              {user.rol}
+                            </Badge>
+                            <span className="text-[10px] font-mono text-muted-foreground">{user.matricula || user.numero_empleado || 'S/N'}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <span>
-                                  <Button 
-                                    variant="ghost" 
-                                    size="icon" 
-                                    className="h-8 w-8 text-destructive"
-                                    onClick={() => handleDelete(user.id)}
-                                    disabled={deletingId === user.id || user.rol === 'superuser'}
-                                  >
-                                    {deletingId === user.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
-                                  </Button>
-                                </span>
+                                <div className="flex items-center gap-1 cursor-help">
+                                  <Key size={12} className="text-primary/50" />
+                                  <span className="text-[11px] font-mono blur-[3px] hover:blur-none transition-all duration-300">
+                                    {user.password_plain || '********'}
+                                  </span>
+                                </div>
                               </TooltipTrigger>
-                              {user.rol === 'superuser' && (
-                                <TooltipContent>
-                                  <p className="text-xs">No se puede eliminar la cuenta raíz</p>
-                                </TooltipContent>
-                              )}
+                              <TooltipContent>
+                                <p className="text-xs">Pasa el mouse para ver clave</p>
+                              </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge 
+                            className={`text-[10px] px-3 h-6 uppercase font-bold ${
+                              user.estatus === 'activo' ? 'bg-primary text-white' : 
+                              user.estatus === 'inactivo' ? 'bg-red-600 text-white' : 
+                              'bg-amber-500 text-white'
+                            }`}
+                          >
+                            {user.estatus}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-2">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-8 w-8 text-primary"
+                              onClick={() => handleEdit(user)}
+                            >
+                              <Edit size={16} />
+                            </Button>
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span>
+                                    <Button 
+                                      variant="ghost" 
+                                      size="icon" 
+                                      className="h-8 w-8 text-destructive"
+                                      onClick={() => handleDelete(user.id)}
+                                      disabled={deletingId === user.id || cannotDelete}
+                                    >
+                                      {deletingId === user.id ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                                    </Button>
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p className={cannotDelete ? "text-xs font-bold text-destructive" : "text-xs"}>
+                                    {deleteTooltip}
+                                  </p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
