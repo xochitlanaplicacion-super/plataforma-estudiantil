@@ -25,6 +25,8 @@ export default function UsuariosManagement() {
   const [roleFilter, setRoleFilter] = useState<string>('todos');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  
+  // Estado para rastrear qué profesores tienen asignaciones
   const [assignedProfIds, setAssignedProfIds] = useState<string[]>([]);
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -33,12 +35,13 @@ export default function UsuariosManagement() {
   const fetchUsers = async () => {
     setLoading(true);
     
-    // Consultar perfiles y asignaciones de profesores en paralelo
+    // Consultar perfiles y asignaciones de profesores en paralelo para validación de borrado
     const [profilesRes, assignmentsRes] = await Promise.all([
       supabase.from('profiles').select('*'),
       supabase.from('asignaciones_profesor').select('profesor_id')
     ]);
 
+    // Guardamos los IDs de los profesores que tienen carga académica
     if (assignmentsRes.data) {
       const ids = assignmentsRes.data.map(a => a.profesor_id);
       setAssignedProfIds(ids);
@@ -46,34 +49,7 @@ export default function UsuariosManagement() {
 
     if (profilesRes.data) {
       const rawUsers = profilesRes.data as User[];
-      const hoy = new Date().toISOString().split('T')[0];
-      
-      // Sincronización inteligente de estatus según fecha de vigencia
-      const updates: Promise<any>[] = [];
-      const updatedLocalUsers = rawUsers.map(user => {
-        if (user.rol === 'superuser') return user;
-
-        const isExpired = user.fecha_expiracion && user.fecha_expiracion < hoy;
-        
-        if (isExpired && user.estatus === 'activo') {
-          updates.push(updateUserProfile(user.id, { ...user, estatus: 'inactivo' }));
-          return { ...user, estatus: 'inactivo' };
-        }
-        
-        if (!isExpired && user.estatus === 'inactivo' && user.fecha_expiracion && user.fecha_expiracion >= hoy) {
-          updates.push(updateUserProfile(user.id, { ...user, estatus: 'activo' }));
-          return { ...user, estatus: 'activo' };
-        }
-        
-        return user;
-      });
-
-      if (updates.length > 0) {
-        await Promise.all(updates);
-        setUsers(updatedLocalUsers as User[]);
-      } else {
-        setUsers(rawUsers);
-      }
+      setUsers(rawUsers);
     }
     setLoading(false);
   };
@@ -215,8 +191,10 @@ export default function UsuariosManagement() {
                 </TableHeader>
                 <TableBody>
                   {processedUsers.map((user) => {
+                    // Lógica de validación para habilitar/deshabilitar el borrado
                     const isAssignedProfessor = user.rol === 'profesor' && assignedProfIds.includes(user.id);
                     const cannotDelete = user.rol === 'superuser' || isAssignedProfessor;
+                    
                     const deleteTooltip = user.rol === 'superuser' 
                       ? "No se puede eliminar la cuenta raíz" 
                       : isAssignedProfessor 
@@ -284,7 +262,7 @@ export default function UsuariosManagement() {
                                     <Button 
                                       variant="ghost" 
                                       size="icon" 
-                                      className="h-8 w-8 text-destructive"
+                                      className={`h-8 w-8 ${cannotDelete ? 'text-muted-foreground opacity-30 cursor-not-allowed' : 'text-destructive'}`}
                                       onClick={() => handleDelete(user.id)}
                                       disabled={deletingId === user.id || cannotDelete}
                                     >
@@ -293,7 +271,7 @@ export default function UsuariosManagement() {
                                   </span>
                                 </TooltipTrigger>
                                 <TooltipContent>
-                                  <p className={cannotDelete ? "text-xs font-bold text-destructive" : "text-xs"}>
+                                  <p className={cannotDelete ? "text-xs font-black text-destructive uppercase" : "text-xs"}>
                                     {deleteTooltip}
                                   </p>
                                 </TooltipContent>
