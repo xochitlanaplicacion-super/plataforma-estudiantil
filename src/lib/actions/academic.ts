@@ -19,8 +19,8 @@ const supabaseAdmin = createClient(
  * Prepara los datos para ser guardados en la base de datos.
  * 1. Maneja IDs nuevos.
  * 2. Convierte vacíos en nulos.
- * 3. ELIMINA OBJETOS Y RELACIONES: Evita que campos como 'niveles' o 'grados' 
- *    que vienen de un JOIN se envíen de regreso, causando errores SQL.
+ * 3. ELIMINA CAMPOS DE RELACIÓN: Imprescindible para evitar errores PGRST204.
+ *    Elimina campos como 'grados', 'niveles', etc., que vienen de JOINS.
  */
 const prepareForUpsert = (data: any) => {
   const cleanData = { ...data };
@@ -29,15 +29,34 @@ const prepareForUpsert = (data: any) => {
     delete cleanData.id;
   }
 
+  // Lista negra de campos que sabemos que son de relaciones y no columnas reales
+  const blacklist = [
+    'niveles', 
+    'carreras', 
+    'grados', 
+    'materias', 
+    'profiles', 
+    'unidades', 
+    'temas', 
+    'ejercicios',
+    'created_at' // Evitamos enviar la fecha de creación para que la DB la gestione
+  ];
+
   Object.keys(cleanData).forEach(key => {
-    // Si el valor es un objeto (y no es null ni una fecha), es una relación de Supabase
-    // Ejemplo: 'grados: { nombre: "..." }'. Debemos eliminarlo para que el upsert no falle.
+    // 1. Eliminar si está en la lista negra (campos de relación)
+    if (blacklist.includes(key)) {
+      delete cleanData[key];
+      return;
+    }
+
+    // 2. Eliminar si el valor es un objeto (y no es null ni una fecha)
+    // Esto captura relaciones anidadas que no estén en la blacklist
     if (cleanData[key] !== null && typeof cleanData[key] === 'object' && !(cleanData[key] instanceof Date)) {
       delete cleanData[key];
       return;
     }
 
-    // Convertir strings vacíos o undefined en null para la DB
+    // 3. Convertir strings vacíos o undefined en null para la DB
     if (cleanData[key] === '' || cleanData[key] === undefined) {
       cleanData[key] = null;
     }
