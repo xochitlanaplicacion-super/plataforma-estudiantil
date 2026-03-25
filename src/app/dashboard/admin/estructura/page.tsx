@@ -230,11 +230,11 @@ export default function EstructuraAcademica() {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase">Nombre del Nivel</label>
-              <Input value={nivelDialog.data.nombre} onChange={e => setNivelDialog({...nivelDialog, data: {...nivelDialog.data, nombre: e.target.value.toUpperCase()}})} placeholder="EJ. BACHILLERATO" />
+              <Input value={nivelDialog.data.nombre || ''} onChange={e => setNivelDialog({...nivelDialog, data: {...nivelDialog.data, nombre: e.target.value.toUpperCase()}})} placeholder="EJ. BACHILLERATO" />
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase">Descripción</label>
-              <Input value={nivelDialog.data.descripcion} onChange={e => setNivelDialog({...nivelDialog, data: {...nivelDialog.data, descripcion: e.target.value}})} placeholder="Opcional" />
+              <Input value={nivelDialog.data.descripcion || ''} onChange={e => setNivelDialog({...nivelDialog, data: {...nivelDialog.data, descripcion: e.target.value}})} placeholder="Opcional" />
             </div>
           </div>
           <DialogFooter>
@@ -250,11 +250,11 @@ export default function EstructuraAcademica() {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase">Nombre de la Carrera</label>
-              <Input value={carreraDialog.data.nombre} onChange={e => setCarreraDialog({...carreraDialog, data: {...carreraDialog.data, nombre: e.target.value.toUpperCase()}})} placeholder="EJ. INGENIERÍA EN SISTEMAS" />
+              <Input value={carreraDialog.data.nombre || ''} onChange={e => setCarreraDialog({...carreraDialog, data: {...carreraDialog.data, nombre: e.target.value.toUpperCase()}})} placeholder="EJ. INGENIERÍA EN SISTEMAS" />
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase">Clave / RVOE</label>
-              <Input value={carreraDialog.data.clave} onChange={e => setCarreraDialog({...carreraDialog, data: {...carreraDialog.data, clave: e.target.value.toUpperCase()}})} placeholder="EJ. BAC-2024" />
+              <Input value={carreraDialog.data.clave || ''} onChange={e => setCarreraDialog({...carreraDialog, data: {...carreraDialog.data, clave: e.target.value.toUpperCase()}})} placeholder="EJ. BAC-2024" />
             </div>
           </div>
           <DialogFooter>

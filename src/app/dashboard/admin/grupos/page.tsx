@@ -220,8 +220,8 @@ export default function GradosGrupos() {
         <DialogContent>
           <DialogHeader><DialogTitle>Gestionar Grado</DialogTitle></DialogHeader>
           <div className="space-y-4 py-4">
-            <Input value={gradoDialog.data.nombre} onChange={e => setGradoDialog({...gradoDialog, data: {...gradoDialog.data, nombre: e.target.value.toUpperCase()}})} placeholder="EJ. PRIMER SEMESTRE" />
-            <Input type="number" value={gradoDialog.data.orden} onChange={e => setGradoDialog({...gradoDialog, data: {...gradoDialog.data, orden: parseInt(e.target.value)}})} placeholder="Orden" />
+            <Input value={gradoDialog.data.nombre || ''} onChange={e => setGradoDialog({...gradoDialog, data: {...gradoDialog.data, nombre: e.target.value.toUpperCase()}})} placeholder="EJ. PRIMER SEMESTRE" />
+            <Input type="number" value={gradoDialog.data.orden || 1} onChange={e => setGradoDialog({...gradoDialog, data: {...gradoDialog.data, orden: parseInt(e.target.value)}})} placeholder="Orden" />
           </div>
           <DialogFooter><Button onClick={handleSaveGrado}>Guardar</Button></DialogFooter>
         </DialogContent>
@@ -233,7 +233,7 @@ export default function GradosGrupos() {
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase">Nombre del Grupo</label>
-              <Input value={grupoDialog.data.nombre} onChange={e => setGrupoDialog({...grupoDialog, data: {...grupoDialog.data, nombre: e.target.value.toUpperCase()}})} placeholder="EJ. GRUPO JUNIO 2025" />
+              <Input value={grupoDialog.data.nombre || ''} onChange={e => setGrupoDialog({...grupoDialog, data: {...grupoDialog.data, nombre: e.target.value.toUpperCase()}})} placeholder="EJ. GRUPO JUNIO 2025" />
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase">Vincular a Grado (Opcional)</label>
@@ -247,7 +247,7 @@ export default function GradosGrupos() {
             </div>
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase">Turno</label>
-              <Select value={grupoDialog.data.turno} onValueChange={v => setGrupoDialog({...grupoDialog, data: {...grupoDialog.data, turno: v}})}>
+              <Select value={grupoDialog.data.turno || 'Matutino'} onValueChange={v => setGrupoDialog({...grupoDialog, data: {...grupoDialog.data, turno: v}})}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="Matutino">Matutino</SelectItem>
