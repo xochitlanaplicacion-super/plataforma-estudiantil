@@ -39,20 +39,35 @@ export default function UsuariosManagement() {
       const rawUsers = data as User[];
       const hoy = new Date().toISOString().split('T')[0];
       
-      // Proceso silencioso de desactivación de expirados
-      const expiredActiveUsers = rawUsers.filter(u => 
-        u.fecha_expiracion && u.fecha_expiracion < hoy && u.estatus === 'activo'
-      );
+      // Sincronización inteligente de estatus según fecha de vigencia
+      const updates: Promise<any>[] = [];
+      const updatedLocalUsers = rawUsers.map(user => {
+        if (user.rol === 'superuser') return user; // No afectar al superuser raíz
 
-      if (expiredActiveUsers.length > 0) {
-        console.log(`Detectados ${expiredActiveUsers.length} usuarios expirados. Actualizando estatus...`);
-        for (const user of expiredActiveUsers) {
-          await updateUserProfile(user.id, { ...user, estatus: 'inactivo' });
-          user.estatus = 'inactivo'; // Actualización local inmediata
+        const isExpired = user.fecha_expiracion && user.fecha_expiracion < hoy;
+        
+        // 1. Caso: Activo -> Inactivo (Caducó hoy)
+        if (isExpired && user.estatus === 'activo') {
+          updates.push(updateUserProfile(user.id, { ...user, estatus: 'inactivo' }));
+          return { ...user, estatus: 'inactivo' };
         }
-      }
+        
+        // 2. Caso: Inactivo -> Activo (Vigencia extendida por admin)
+        if (!isExpired && user.estatus === 'inactivo' && user.fecha_expiracion && user.fecha_expiracion >= hoy) {
+          updates.push(updateUserProfile(user.id, { ...user, estatus: 'activo' }));
+          return { ...user, estatus: 'activo' };
+        }
+        
+        return user;
+      });
 
-      setUsers(rawUsers);
+      if (updates.length > 0) {
+        console.log(`Sincronizando ${updates.length} estados de usuario por vigencia...`);
+        await Promise.all(updates);
+        setUsers(updatedLocalUsers as User[]);
+      } else {
+        setUsers(rawUsers);
+      }
     }
     setLoading(false);
   };

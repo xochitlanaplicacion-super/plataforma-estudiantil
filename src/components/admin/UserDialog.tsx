@@ -13,9 +13,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { User, Aspirante } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, AlertCircle, RefreshCw, Eye, EyeOff, Sparkles } from 'lucide-react';
+import { Loader2, AlertCircle, RefreshCw, Eye, EyeOff, Sparkles, Mail } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { createUserWithProfile, updateUserProfile } from '@/lib/actions/users';
+import { createUserWithProfile, updateUserProfile, resendWelcomeEmailAction } from '@/lib/actions/users';
 import { getPublicCareers } from '@/lib/actions/aspirantes';
 import { createClient } from '@/lib/supabase/client';
 
@@ -62,6 +62,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
   const { toast } = useToast();
   const supabase = createClient();
   const [loading, setLoading] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -113,6 +114,23 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
     form.setValue('password', retVal);
   }, [form]);
 
+  const handleResendEmail = async () => {
+    if (!user?.id) return;
+    setSendingEmail(true);
+    try {
+      const res = await resendWelcomeEmailAction(user.id);
+      if (res.success) {
+        toast({ title: "Correo Enviado", description: "Las credenciales han sido enviadas al alumno." });
+      } else {
+        toast({ variant: "destructive", title: "Error", description: res.error });
+      }
+    } catch (err) {
+      toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el correo." });
+    } finally {
+      setSendingEmail(false);
+    }
+  };
+
   const generateMatricula = async (nivel: string) => {
     if (!nivel) return;
     setIsGenerating(true);
@@ -155,6 +173,9 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
     if (open) {
       setDbError(null);
       if (user) {
+        // En modo edición, mostramos la contraseña real por defecto si existe
+        setShowPassword(true);
+        
         const detectLevel = user.matricula?.endsWith('UNI') ? 'universidad' : 
                            user.matricula?.endsWith('BAC') ? 'bachillerato' : 
                            user.matricula?.endsWith('CAP') ? 'capacitacion' : '';
@@ -180,6 +201,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
           doc_ine: !!user.doc_ine,
         });
       } else if (prefillAspirante) {
+        setShowPassword(false);
         form.reset({
           nombre: prefillAspirante.nombre || '',
           apellidos: prefillAspirante.apellidos || '',
@@ -203,6 +225,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
         generatePassword();
         if (prefillAspirante.nivel) generateMatricula(prefillAspirante.nivel);
       } else {
+        setShowPassword(false);
         form.reset({
           nombre: '', apellidos: '', email: '', curp: '', rol: 'alumno', estatus: 'activo',
           telefono: '', matricula: '', numero_empleado: '', fecha_expiracion: '',
@@ -243,16 +266,28 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <div className="flex justify-between items-start">
+          <div className="flex justify-between items-start w-full pr-8">
             <div>
               <DialogTitle>
                 {user ? 'Editar Perfil Académico' : prefillAspirante ? 'Inscribir Alumno (Desde Preregistro)' : 'Registrar Nuevo Perfil'}
               </DialogTitle>
               <DialogDescription>
-                Completa los datos y controla la vigencia.
+                Completa los datos y controla la vigencia del acceso.
               </DialogDescription>
             </div>
-            {prefillAspirante && <Sparkles className="text-amber-500 animate-pulse" />}
+            {user && (
+              <Button 
+                type="button" 
+                variant="outline" 
+                size="sm" 
+                className="gap-2 border-primary text-primary hover:bg-primary/10 shadow-sm"
+                onClick={handleResendEmail}
+                disabled={sendingEmail}
+              >
+                {sendingEmail ? <Loader2 size={14} className="animate-spin" /> : <Mail size={14} />}
+                Reenviar Acceso
+              </Button>
+            )}
           </div>
         </DialogHeader>
 
@@ -295,10 +330,28 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
 
               <FormField control={form.control} name="password" render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="flex justify-between items-center">Contraseña de Acceso <Button type="button" variant="ghost" size="sm" className="h-6 text-[10px] gap-1" onClick={generatePassword}><RefreshCw size={10} /> Regenerar</Button></FormLabel>
+                  <FormLabel className="flex justify-between items-center">
+                    Contraseña de Acceso 
+                    <Button type="button" variant="ghost" size="sm" className="h-6 text-[10px] gap-1" onClick={generatePassword}>
+                      <RefreshCw size={10} /> Regenerar
+                    </Button>
+                  </FormLabel>
                   <div className="relative">
-                    <FormControl><Input {...field} type={showPassword ? "text" : "password"} placeholder="Contraseña" /></FormControl>
-                    <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-2.5 text-muted-foreground"><Eye size={16} /></button>
+                    <FormControl>
+                      <Input 
+                        {...field} 
+                        type={showPassword ? "text" : "password"} 
+                        placeholder="Contraseña" 
+                        className="pr-10"
+                      />
+                    </FormControl>
+                    <button 
+                      type="button" 
+                      onClick={() => setShowPassword(!showPassword)} 
+                      className="absolute right-3 top-2.5 text-muted-foreground hover:text-primary transition-colors"
+                    >
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
                   </div>
                   <FormMessage />
                 </FormItem>
