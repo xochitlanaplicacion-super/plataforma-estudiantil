@@ -17,7 +17,10 @@ const supabaseAdmin = createClient(
 
 /**
  * Prepara los datos para ser guardados en la base de datos.
- * Convierte cadenas vacías en nulos y maneja IDs de forma segura.
+ * 1. Maneja IDs nuevos.
+ * 2. Convierte vacíos en nulos.
+ * 3. ELIMINA OBJETOS Y RELACIONES: Evita que campos como 'niveles' o 'grados' 
+ *    que vienen de un JOIN se envíen de regreso, causando errores SQL.
  */
 const prepareForUpsert = (data: any) => {
   const cleanData = { ...data };
@@ -27,6 +30,14 @@ const prepareForUpsert = (data: any) => {
   }
 
   Object.keys(cleanData).forEach(key => {
+    // Si el valor es un objeto (y no es null ni una fecha), es una relación de Supabase
+    // Ejemplo: 'grados: { nombre: "..." }'. Debemos eliminarlo para que el upsert no falle.
+    if (cleanData[key] !== null && typeof cleanData[key] === 'object' && !(cleanData[key] instanceof Date)) {
+      delete cleanData[key];
+      return;
+    }
+
+    // Convertir strings vacíos o undefined en null para la DB
     if (cleanData[key] === '' || cleanData[key] === undefined) {
       cleanData[key] = null;
     }
