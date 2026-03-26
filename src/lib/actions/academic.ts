@@ -22,6 +22,7 @@ const prepareForUpsert = (data: any) => {
     delete cleanData.id;
   }
 
+  // Lista negra de campos que son relaciones o metadatos de Supabase
   const blacklist = [
     'niveles', 
     'carreras', 
@@ -40,6 +41,7 @@ const prepareForUpsert = (data: any) => {
       delete cleanData[key];
       return;
     }
+    // Eliminar cualquier objeto anidado que no sea una fecha
     if (cleanData[key] !== null && typeof cleanData[key] === 'object' && !(cleanData[key] instanceof Date)) {
       delete cleanData[key];
       return;
@@ -250,36 +252,34 @@ export async function getAlumnosVigentes() {
   try {
     const hoy = new Date().toISOString().split('T')[0];
     
-    // Consultamos los alumnos activos y vigentes
-    // Usamos el cliente administrativo para asegurar visibilidad total
-    let query = supabaseAdmin
+    // CONSULTA NIVEL 1: Intentamos traer todo incluyendo grupos (Asumiendo que grupo_id existe)
+    const { data, error } = await supabaseAdmin
       .from('profiles')
-      .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id, grupo_id, carreras(nombre), groups:grupo_id(nombre, turno)')
+      .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id, grupo_id, carreras(nombre)')
       .eq('rol', 'alumno')
       .eq('estatus', 'activo')
-      .gte('fecha_expiracion', hoy);
+      .gte('fecha_expiracion', hoy)
+      .order('nombre');
 
-    const { data, error } = await query.order('nombre');
-    
     if (error) {
-      // Fallback si grupo_id no existe en la tabla aún
-      if (error.code === 'PGRST204') {
-        const fallback = await supabaseAdmin
-          .from('profiles')
-          .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id, carreras(nombre)')
-          .eq('rol', 'alumno')
-          .eq('estatus', 'activo')
-          .gte('fecha_expiracion', hoy)
-          .order('nombre');
-        return { data: fallback.data, error: fallback.error };
-      }
-      throw error;
+      // SI FALLA (PGRST200 o PGRST204): Significa que grupo_id no existe en la tabla profiles
+      console.warn("Relación grupo_id no encontrada, intentando fallback sin grupos...");
+      const { data: fallback, error: fallbackError } = await supabaseAdmin
+        .from('profiles')
+        .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id, carreras(nombre)')
+        .eq('rol', 'alumno')
+        .eq('estatus', 'activo')
+        .gte('fecha_expiracion', hoy)
+        .order('nombre');
+      
+      if (fallbackError) throw fallbackError;
+      return { data: fallback, error: null };
     }
     
-    return { data, error };
+    return { data, error: null };
   } catch (error: any) {
-    console.error("Error getAlumnosVigentes:", error);
-    return { data: null, error };
+    console.error("Error crítico getAlumnosVigentes:", error);
+    return { data: null, error: error.message };
   }
 }
 

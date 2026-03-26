@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useEffect, useState, useMemo } from 'react';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -14,12 +14,7 @@ import {
   Search, 
   UserPlus, 
   Loader2, 
-  ChevronRight, 
-  CheckCircle2, 
   School, 
-  GraduationCap, 
-  Layers,
-  ArrowRight,
   Info,
   XCircle
 } from 'lucide-react';
@@ -69,7 +64,6 @@ export default function InscripcionAlumnos() {
 
   useEffect(() => { fetchData(); }, []);
 
-  // Encadenamiento de Selects
   useEffect(() => {
     if (selNivel) {
       getCarreras(selNivel).then(r => r.data && setCarreras(r.data));
@@ -95,8 +89,8 @@ export default function InscripcionAlumnos() {
 
   const filteredAlumnos = useMemo(() => {
     return alumnos.filter(a => {
-      const matchSearch = `${a.nombre} ${a.apellidos} ${a.matricula}`.toLowerCase().includes(search.toLowerCase());
-      return matchSearch;
+      const nameMatch = `${a.nombre} ${a.apellidos} ${a.matricula}`.toLowerCase().includes(search.toLowerCase());
+      return nameMatch;
     });
   }, [alumnos, search]);
 
@@ -121,7 +115,7 @@ export default function InscripcionAlumnos() {
       setSelectedIds([]);
       fetchData();
     } else {
-      toast({ variant: "destructive", title: "Error", description: res.error });
+      toast({ variant: "destructive", title: "Error", description: res.error || "Asegúrate de que la columna grupo_id exista en la tabla profiles." });
     }
     setSaving(false);
   };
@@ -200,7 +194,7 @@ export default function InscripcionAlumnos() {
                   <p className="text-xs font-bold uppercase tracking-widest">Cargando matrícula...</p>
                 </div>
               ) : filteredAlumnos.length === 0 ? (
-                <div className="text-center py-20 text-muted-foreground italic border-2 border-dashed rounded-3xl">
+                <div className="text-center py-20 text-muted-foreground italic border-2 border-dashed rounded-3xl p-10">
                   No se encontraron alumnos vigentes para inscribir.
                 </div>
               ) : (
@@ -226,10 +220,10 @@ export default function InscripcionAlumnos() {
                         <span className="text-[10px] font-bold text-slate-500 uppercase">{alum.carreras?.nombre || 'Carrera no def.'}</span>
                       </div>
                     </div>
-                    {alum.groups && (
+                    {alum.grupo_id && (
                       <div className="text-right">
                         <Badge variant="outline" className="text-[9px] font-black uppercase text-blue-600 border-blue-200 bg-blue-50">
-                          En: {alum.groups.nombre}
+                          YA ASIGNADO
                         </Badge>
                       </div>
                     )}
