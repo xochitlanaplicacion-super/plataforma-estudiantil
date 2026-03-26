@@ -16,12 +16,12 @@ import {
   UserPlus, 
   Loader2, 
   School, 
-  Info,
   XCircle,
-  Filter,
   RotateCcw,
   Layers,
-  ArrowRight
+  ArrowRight,
+  ChevronLeft,
+  GraduationCap
 } from 'lucide-react';
 import { 
   getNiveles, 
@@ -50,14 +50,17 @@ export default function InscripcionAlumnos() {
   const [grupos, setGrupos] = useState<any[]>([]);
   const [allGrupos, setAllGrupos] = useState<any[]>([]);
 
-  // Filtros Destino
+  // Filtros Destino (Pestaña Inscribir)
   const [selNivel, setSelNivel] = useState<string>('');
   const [selCarrera, setSelCarrera] = useState<string>('');
   const [selGrado, setSelGrado] = useState<string>('all');
   const [selGrupo, setSelGrupo] = useState<string>('');
 
-  const [saving, setSaving] = useState(false);
+  // Navegación (Pestaña Gestión)
+  const [selectedLevelId, setSelectedLevelId] = useState<string | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
+
+  const [saving, setSaving] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -107,13 +110,10 @@ export default function InscripcionAlumnos() {
   // FILTRO: Solo alumnos SIN grupo asignado para la pestaña de Inscripción
   const alumnosSinGrupo = useMemo(() => {
     return alumnos.filter(a => {
-      // Regla de negocio: Si ya tiene grupo_id, no se muestra en la lista para inscribir
       if (a.grupo_id) return false;
-
       const nameMatch = `${a.nombre} ${a.apellidos} ${a.matricula}`.toLowerCase().includes(search.toLowerCase());
       const nivelMatch = !selNivel || a.carreras?.nivel_id === selNivel;
       const carreraMatch = !selCarrera || a.carrera_id === selCarrera;
-
       return nameMatch && nivelMatch && carreraMatch;
     });
   }, [alumnos, search, selNivel, selCarrera]);
@@ -160,6 +160,29 @@ export default function InscripcionAlumnos() {
     }
     setSaving(false);
   };
+
+  // Lógica para Pestaña Gestión: Resumen por Niveles
+  const levelSummaries = useMemo(() => {
+    return niveles.map(niv => {
+      const gruposDeNivel = allGrupos.filter(g => g.carreras?.nivel_id === niv.id);
+      const idsGrupos = gruposDeNivel.map(g => g.id);
+      const alumnosCount = alumnos.filter(a => a.grupo_id && idsGrupos.includes(a.grupo_id)).length;
+      return { ...niv, totalAlumnos: alumnosCount, totalGrupos: gruposDeNivel.length };
+    }).filter(n => n.totalGrupos > 0);
+  }, [niveles, allGrupos, alumnos]);
+
+  // Grupos del nivel seleccionado organizados por carrera
+  const groupsByCareer = useMemo(() => {
+    if (!selectedLevelId) return {};
+    const filtered = allGrupos.filter(g => g.carreras?.nivel_id === selectedLevelId);
+    const grouped: Record<string, any[]> = {};
+    filtered.forEach(g => {
+      const careerName = g.carreras?.nombre || 'OTRA CARRERA';
+      if (!grouped[careerName]) grouped[careerName] = [];
+      grouped[careerName].push(g);
+    });
+    return grouped;
+  }, [allGrupos, selectedLevelId]);
 
   const currentGroupMembers = useMemo(() => {
     if (!selectedGroupId) return [];
@@ -350,46 +373,100 @@ export default function InscripcionAlumnos() {
         {/* TAB 2: GESTIÓN DE GRUPOS EXISTENTES */}
         <TabsContent value="grupos" className="mt-6">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            
-            {/* LISTADO DE GRUPOS EN TARJETAS */}
-            <div className="lg:col-span-7 grid grid-cols-1 md:grid-cols-2 gap-4 auto-rows-min">
-              {allGrupos.map((grupo) => {
-                const count = alumnos.filter(a => a.grupo_id === grupo.id).length;
-                const isSelected = selectedGroupId === grupo.id;
-
-                return (
-                  <Card 
-                    key={grupo.id} 
-                    className={cn(
-                      "cursor-pointer transition-all duration-300 hover:shadow-lg border-2",
-                      isSelected ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-slate-100 hover:border-primary/30"
-                    )}
-                    onClick={() => setSelectedGroupId(grupo.id)}
-                  >
-                    <CardHeader className="p-5 pb-2">
-                      <div className="flex justify-between items-start">
-                        <Badge variant="outline" className="text-[9px] font-black bg-slate-50 uppercase">{grupo.turno}</Badge>
-                        <div className="text-right">
-                          <span className="text-2xl font-black text-primary">{count}</span>
-                          <p className="text-[8px] font-bold text-muted-foreground uppercase">Alumnos</p>
+            <div className="lg:col-span-7 flex flex-col gap-6">
+              {!selectedLevelId ? (
+                // MODO 1: Selección de Niveles
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {levelSummaries.map((niv) => (
+                    <Card 
+                      key={niv.id} 
+                      className="cursor-pointer hover:shadow-xl transition-all border-2 border-slate-100 hover:border-primary/40 group overflow-hidden"
+                      onClick={() => setSelectedLevelId(niv.id)}
+                    >
+                      <div className="h-2 bg-primary/20 group-hover:bg-primary transition-colors" />
+                      <CardHeader className="p-8">
+                        <div className="flex justify-between items-start">
+                          <div className="p-4 rounded-2xl bg-primary/5 text-primary">
+                            <School size={32} />
+                          </div>
+                          <div className="text-right">
+                            <span className="text-4xl font-black text-primary">{niv.totalAlumnos}</span>
+                            <p className="text-[10px] font-black text-muted-foreground uppercase">Alumnos Vigentes</p>
+                          </div>
                         </div>
+                        <CardTitle className="text-2xl font-black uppercase mt-6">{niv.nombre}</CardTitle>
+                        <CardDescription className="text-xs font-bold text-slate-500 uppercase">
+                          {niv.totalGrupos} Grupos registrados
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="px-8 pb-8 pt-0">
+                        <Button variant="outline" className="w-full rounded-xl font-black uppercase text-xs tracking-widest group-hover:bg-primary group-hover:text-white transition-all">
+                          Gestionar Niveles <ArrowRight size={14} className="ml-2" />
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              ) : (
+                // MODO 2: Selección de Grupos (Agrupados por Carrera)
+                <div className="space-y-10">
+                  <Button 
+                    variant="ghost" 
+                    onClick={() => { setSelectedLevelId(null); setSelectedGroupId(null); }}
+                    className="font-black uppercase tracking-tighter text-primary hover:bg-primary/5"
+                  >
+                    <ChevronLeft size={18} className="mr-1" /> Volver a Niveles
+                  </Button>
+
+                  {Object.entries(groupsByCareer).map(([careerName, careerGroups]) => (
+                    <div key={careerName} className="space-y-4">
+                      <div className="flex items-center gap-3">
+                        <GraduationCap className="text-primary/40" size={24} />
+                        <h3 className="text-lg font-black text-slate-700 uppercase tracking-tight">{careerName}</h3>
+                        <Separator className="flex-1" />
                       </div>
-                      <CardTitle className="text-base font-black uppercase mt-2">{grupo.nombre}</CardTitle>
-                      <CardDescription className="text-[10px] font-bold text-slate-500 uppercase">
-                        {grupo.carreras?.niveles?.nombre} | {grupo.carreras?.nombre}
-                      </CardDescription>
-                    </CardHeader>
-                    <div className="p-5 pt-0 flex justify-end">
-                      <Button variant="ghost" size="sm" className="h-7 text-[10px] font-black uppercase gap-1 group">
-                        Ver Lista <ArrowRight size={12} className="group-hover:translate-x-1 transition-transform" />
-                      </Button>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {careerGroups.map((grupo) => {
+                          const count = alumnos.filter(a => a.grupo_id === grupo.id).length;
+                          const isSelected = selectedGroupId === grupo.id;
+
+                          return (
+                            <Card 
+                              key={grupo.id} 
+                              className={cn(
+                                "cursor-pointer transition-all duration-300 hover:shadow-lg border-2",
+                                isSelected ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-slate-100 hover:border-primary/30"
+                              )}
+                              onClick={() => setSelectedGroupId(grupo.id)}
+                            >
+                              <CardHeader className="p-5 pb-2">
+                                <div className="flex justify-between items-start">
+                                  <Badge variant="outline" className="text-[9px] font-black bg-slate-50 uppercase">{grupo.turno}</Badge>
+                                  <div className="text-right">
+                                    <span className="text-2xl font-black text-primary">{count}</span>
+                                    <p className="text-[8px] font-bold text-muted-foreground uppercase">Vigentes</p>
+                                  </div>
+                                </div>
+                                <CardTitle className="text-base font-black uppercase mt-2">{grupo.nombre}</CardTitle>
+                                <p className="text-[9px] font-bold text-slate-400 uppercase">{grupo.grados?.nombre || 'Grado no def.'}</p>
+                              </CardHeader>
+                              <div className="p-5 pt-0 flex justify-end">
+                                <Button variant="ghost" size="sm" className="h-7 text-[10px] font-black uppercase gap-1 group">
+                                  Ver Integrantes <ArrowRight size={12} className="group-hover:translate-x-1 transition-transform" />
+                                </Button>
+                              </div>
+                            </Card>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </Card>
-                );
-              })}
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* VISTA DE ALUMNOS EN EL GRUPO SELECCIONADO */}
+            {/* PANEL DERECHO: INTEGRANTES */}
             <div className="lg:col-span-5">
               <Card className="border-muted/60 shadow-xl rounded-[32px] overflow-hidden sticky top-6 border-t-4 border-t-amber-500">
                 <CardHeader className="bg-slate-50/50">
@@ -406,7 +483,7 @@ export default function InscripcionAlumnos() {
                       <div className="flex flex-col items-center justify-center py-20 text-center px-10 opacity-40">
                         <Layers size={48} className="mb-4 text-slate-400" />
                         <p className="text-[11px] font-black uppercase tracking-widest leading-relaxed">
-                          Selecciona un grupo del panel izquierdo para ver y gestionar a sus integrantes vigentes.
+                          Selecciona un grupo para gestionar a sus integrantes vigentes.
                         </p>
                       </div>
                     ) : currentGroupMembers.length === 0 ? (
