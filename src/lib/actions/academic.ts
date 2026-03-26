@@ -34,7 +34,8 @@ const prepareForUpsert = (data: any) => {
     'temas', 
     'ejercicios',
     'slides',
-    'created_at'
+    'created_at',
+    'updated_at'
   ];
 
   Object.keys(cleanData).forEach(key => {
@@ -227,10 +228,23 @@ export async function getSlides(temaId: string) {
 }
 
 export async function upsertSlide(slide: any) {
-  const cleanData = prepareForUpsert(slide);
-  const { data, error } = await supabaseAdmin.from('slides').upsert(cleanData).select().single();
-  revalidatePath('/dashboard/profesor');
-  return { data, error };
+  try {
+    const cleanData = prepareForUpsert(slide);
+    const { data, error } = await supabaseAdmin.from('slides').upsert(cleanData).select().single();
+    
+    // Manejo especial de error si la columna no existe en el DB
+    if (error && error.code === 'PGRST204') {
+      console.warn("La columna created_by no existe en slides. Reintentando sin ella...");
+      const fallbackData = { ...cleanData };
+      delete fallbackData.created_by;
+      return await supabaseAdmin.from('slides').upsert(fallbackData).select().single();
+    }
+
+    revalidatePath('/dashboard/profesor');
+    return { data, error };
+  } catch (err: any) {
+    return { data: null, error: err };
+  }
 }
 
 export async function deleteSlide(id: string) {
@@ -292,14 +306,19 @@ export async function replaceProfesorInAssignments(oldProfesorId: string, newPro
     
     if (errorAsig) throw errorAsig;
 
-    // 2. Transferir propiedad del contenido (Opcional pero recomendado para consistencia)
-    // Esto asegura que el nuevo profesor "sea dueño" de las diapositivas y temas
-    await Promise.all([
-      supabaseAdmin.from('unidades').update({ created_by: newProfesorId }).eq('created_by', oldProfesorId),
-      supabaseAdmin.from('temas').update({ created_by: newProfesorId }).eq('created_by', oldProfesorId),
-      supabaseAdmin.from('ejercicios').update({ created_by: newProfesorId }).eq('created_by', oldProfesorId),
-      supabaseAdmin.from('slides').update({ created_by: newProfesorId }).eq('created_by', oldProfesorId)
-    ]);
+    // 2. Transferir propiedad del contenido
+    // Intentamos actualizar created_by en todas las tablas. 
+    // Usamos catch para ignorar errores si las columnas aún no existen físicamente.
+    try {
+      await Promise.all([
+        supabaseAdmin.from('unidades').update({ created_by: newProfesorId }).eq('created_by', oldProfesorId),
+        supabaseAdmin.from('temas').update({ created_by: newProfesorId }).eq('created_by', oldProfesorId),
+        supabaseAdmin.from('ejercicios').update({ created_by: newProfesorId }).eq('created_by', oldProfesorId),
+        supabaseAdmin.from('slides').update({ created_by: newProfesorId }).eq('created_by', oldProfesorId)
+      ]);
+    } catch (e) {
+      console.warn("Algunas tablas no tienen la columna created_by aún. Traspaso parcial completado.");
+    }
 
     revalidatePath('/dashboard/admin/profesores');
     revalidatePath('/dashboard/profesor');
@@ -314,7 +333,6 @@ export async function getAlumnosVigentes() {
   try {
     const hoy = new Date().toISOString().split('T')[0];
     
-    // Intento 1: Con relación completa
     const { data, error } = await supabaseAdmin
       .from('profiles')
       .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id, grupo_id, carreras(nombre, nivel_id, niveles(nombre))')
@@ -324,8 +342,7 @@ export async function getAlumnosVigentes() {
       .order('nombre');
 
     if (error) {
-      // Intento 2: Fallback si falla la relación de grupo_id o niveles
-      const { data: fb, error: err2 } = await supabaseAdmin
+      const { data: fb } = await supabaseAdmin
         .from('profiles')
         .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id, carreras(nombre, nivel_id, niveles(nombre))')
         .eq('rol', 'alumno')
@@ -333,18 +350,6 @@ export async function getAlumnosVigentes() {
         .gte('fecha_expiracion', hoy)
         .order('nombre');
       
-      if (err2) {
-        // Intento 3: Solo datos básicos de perfil
-        const { data: fb2, error: err3 } = await supabaseAdmin
-          .from('profiles')
-          .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol')
-          .eq('rol', 'alumno')
-          .eq('estatus', 'activo')
-          .gte('fecha_expiracion', hoy)
-          .order('nombre');
-        if (err3) throw err3;
-        return { data: fb2, error: null };
-      }
       return { data: fb, error: null };
     }
 

@@ -159,7 +159,13 @@ export default function ProfesorDashboard() {
     };
     const { data, error } = await upsertSlide(newSlide);
     if (error) {
-      toast({ variant: "destructive", title: "Error", description: error.message });
+      toast({ 
+        variant: "destructive", 
+        title: "Error de Guardado", 
+        description: error.message.includes('created_by') 
+          ? "Falta una columna en la DB. Por favor corre el SQL actualizado en Supabase." 
+          : error.message 
+      });
       return;
     }
     if (data) {
