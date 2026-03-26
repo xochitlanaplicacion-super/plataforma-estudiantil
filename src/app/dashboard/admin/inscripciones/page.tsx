@@ -64,15 +64,20 @@ export default function InscripcionAlumnos() {
 
   const fetchData = async () => {
     setLoading(true);
-    const [alRes, nivRes, grRes] = await Promise.all([
-      getAlumnosVigentes(),
-      getNiveles(),
-      getAllGrupos()
-    ]);
-    if (alRes.data) setAlumnos(alRes.data);
-    if (nivRes.data) setNiveles(nivRes.data);
-    if (grRes.data) setAllGrupos(grRes.data);
-    setLoading(false);
+    try {
+      const [alRes, nivRes, grRes] = await Promise.all([
+        getAlumnosVigentes(),
+        getNiveles(),
+        getAllGrupos()
+      ]);
+      if (alRes.data) setAlumnos(alRes.data);
+      if (nivRes.data) setNiveles(nivRes.data);
+      if (grRes.data) setAllGrupos(grRes.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => { fetchData(); }, []);
@@ -107,28 +112,34 @@ export default function InscripcionAlumnos() {
     setSelGrupo('');
   };
 
-  // FILTRO: Solo alumnos SIN grupo asignado para la pestaña de Inscripción
-  const alumnosSinGrupo = useMemo(() => {
+  // FILTRO INTELIGENTE: Solo alumnos SIN grupo asignado Y que coincidan con nivel/carrera destino
+  const alumnosFiltrados = useMemo(() => {
     return alumnos.filter(a => {
+      // 1. Solo alumnos sin grupo asignado
       if (a.grupo_id) return false;
+
+      // 2. Filtro de búsqueda manual
       const nameMatch = `${a.nombre} ${a.apellidos} ${a.matricula}`.toLowerCase().includes(search.toLowerCase());
+      
+      // 3. Filtro de seguridad por Destino
       const nivelMatch = !selNivel || a.carreras?.nivel_id === selNivel;
       const carreraMatch = !selCarrera || a.carrera_id === selCarrera;
+
       return nameMatch && nivelMatch && carreraMatch;
     });
   }, [alumnos, search, selNivel, selCarrera]);
 
-  // Limpiar selección de alumnos que desaparecieron por filtros de seguridad
+  // Limpiar selección si el filtro quita al alumno de la vista
   useEffect(() => {
-    const visibleIds = alumnosSinGrupo.map(a => a.id);
+    const visibleIds = alumnosFiltrados.map(a => a.id);
     setSelectedIds(prev => prev.filter(id => visibleIds.includes(id)));
-  }, [alumnosSinGrupo]);
+  }, [alumnosFiltrados]);
 
   const toggleSelectAll = () => {
-    if (selectedIds.length === alumnosSinGrupo.length) {
+    if (selectedIds.length === alumnosFiltrados.length && alumnosFiltrados.length > 0) {
       setSelectedIds([]);
     } else {
-      setSelectedIds(alumnosSinGrupo.map(a => a.id));
+      setSelectedIds(alumnosFiltrados.map(a => a.id));
     }
   };
 
@@ -166,12 +177,12 @@ export default function InscripcionAlumnos() {
     return niveles.map(niv => {
       const gruposDeNivel = allGrupos.filter(g => g.carreras?.nivel_id === niv.id);
       const idsGrupos = gruposDeNivel.map(g => g.id);
+      // Solo contamos alumnos vigentes y activos
       const alumnosCount = alumnos.filter(a => a.grupo_id && idsGrupos.includes(a.grupo_id)).length;
       return { ...niv, totalAlumnos: alumnosCount, totalGrupos: gruposDeNivel.length };
     }).filter(n => n.totalGrupos > 0);
   }, [niveles, allGrupos, alumnos]);
 
-  // Grupos del nivel seleccionado organizados por carrera
   const groupsByCareer = useMemo(() => {
     if (!selectedLevelId) return {};
     const filtered = allGrupos.filter(g => g.carreras?.nivel_id === selectedLevelId);
@@ -212,7 +223,6 @@ export default function InscripcionAlumnos() {
           </TabsTrigger>
         </TabsList>
 
-        {/* TAB 1: PROCESO DE INSCRIPCIÓN */}
         <TabsContent value="inscribir" className="mt-6">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <Card className="lg:col-span-7 border-muted/60 shadow-xl rounded-[32px] overflow-hidden flex flex-col">
@@ -240,11 +250,11 @@ export default function InscripcionAlumnos() {
                 <div className="flex items-center gap-2">
                   <Checkbox 
                     id="select-all" 
-                    checked={selectedIds.length > 0 && selectedIds.length === alumnosSinGrupo.length}
+                    checked={selectedIds.length > 0 && selectedIds.length === alumnosFiltrados.length}
                     onCheckedChange={toggleSelectAll}
                   />
                   <label htmlFor="select-all" className="text-[10px] font-black uppercase text-primary tracking-widest cursor-pointer">
-                    SELECCIONAR TODOS ({alumnosSinGrupo.length})
+                    SELECCIONAR TODOS ({alumnosFiltrados.length})
                   </label>
                 </div>
                 {selectedIds.length > 0 && (
@@ -261,12 +271,12 @@ export default function InscripcionAlumnos() {
                       <Loader2 className="animate-spin text-primary h-8 w-8" />
                       <p className="text-xs font-bold uppercase tracking-widest">Cargando...</p>
                     </div>
-                  ) : alumnosSinGrupo.length === 0 ? (
+                  ) : alumnosFiltrados.length === 0 ? (
                     <div className="text-center py-20 text-muted-foreground italic border-2 border-dashed rounded-3xl p-10">
                       { (selNivel || selCarrera) ? "No hay alumnos vigentes que coincidan con el destino seleccionado." : "No hay alumnos pendientes de inscribir." }
                     </div>
                   ) : (
-                    alumnosSinGrupo.map((alum) => (
+                    alumnosFiltrados.map((alum) => (
                       <div 
                         key={alum.id}
                         className={cn(
@@ -370,12 +380,10 @@ export default function InscripcionAlumnos() {
           </div>
         </TabsContent>
 
-        {/* TAB 2: GESTIÓN DE GRUPOS EXISTENTES */}
         <TabsContent value="grupos" className="mt-6">
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
             <div className="lg:col-span-7 flex flex-col gap-6">
               {!selectedLevelId ? (
-                // MODO 1: Selección de Niveles
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {levelSummaries.map((niv) => (
                     <Card 
@@ -401,14 +409,13 @@ export default function InscripcionAlumnos() {
                       </CardHeader>
                       <CardContent className="px-8 pb-8 pt-0">
                         <Button variant="outline" className="w-full rounded-xl font-black uppercase text-xs tracking-widest group-hover:bg-primary group-hover:text-white transition-all">
-                          Gestionar Niveles <ArrowRight size={14} className="ml-2" />
+                          Ver Grupos <ArrowRight size={14} className="ml-2" />
                         </Button>
                       </CardContent>
                     </Card>
                   ))}
                 </div>
               ) : (
-                // MODO 2: Selección de Grupos (Agrupados por Carrera)
                 <div className="space-y-10">
                   <Button 
                     variant="ghost" 
@@ -466,7 +473,6 @@ export default function InscripcionAlumnos() {
               )}
             </div>
 
-            {/* PANEL DERECHO: INTEGRANTES */}
             <div className="lg:col-span-5">
               <Card className="border-muted/60 shadow-xl rounded-[32px] overflow-hidden sticky top-6 border-t-4 border-t-amber-500">
                 <CardHeader className="bg-slate-50/50">

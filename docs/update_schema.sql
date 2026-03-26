@@ -1,11 +1,28 @@
 
--- 1. Agregar la columna grupo_id a la tabla profiles
--- Esta columna permitirá vincular a cada alumno con un grupo específico.
-ALTER TABLE public.profiles 
-ADD COLUMN IF NOT EXISTS grupo_id UUID REFERENCES public.grupos(id) ON DELETE SET NULL;
+-- EJECUTAR ESTO EN EL SQL EDITOR DE SUPABASE --
 
--- 2. Comentario informativo para el administrador
-COMMENT ON COLUMN public.profiles.grupo_id IS 'ID del grupo académico al que pertenece el alumno (Modulo 3: Inscripciones)';
+-- 1. Agregar columna grupo_id a profiles si no existe
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'profiles' AND column_name = 'grupo_id') THEN
+        ALTER TABLE profiles ADD COLUMN grupo_id UUID;
+    END IF;
+END $$;
 
--- 3. Nota: Si utilizas RLS (Row Level Security), asegúrate de que el rol autenticado 
--- tenga permisos de UPDATE en la tabla profiles para esta columna.
+-- 2. Crear la relación de clave foránea con la tabla grupos
+DO $$ 
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'profiles_grupo_id_fkey') THEN
+        ALTER TABLE profiles 
+        ADD CONSTRAINT profiles_grupo_id_fkey 
+        FOREIGN KEY (grupo_id) 
+        REFERENCES grupos(id) 
+        ON DELETE SET NULL;
+    END IF;
+END $$;
+
+-- 3. Crear índice para mejorar el rendimiento de consultas por grupo
+CREATE INDEX IF NOT EXISTS idx_profiles_grupo_id ON profiles(grupo_id);
+
+-- 4. Notificar a PostgREST que el esquema ha cambiado (opcional pero recomendado)
+NOTIFY pgrst, 'reload schema';

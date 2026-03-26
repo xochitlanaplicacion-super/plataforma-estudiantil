@@ -22,6 +22,7 @@ const prepareForUpsert = (data: any) => {
     delete cleanData.id;
   }
 
+  // Eliminar objetos de relación para evitar errores PGRST204
   const blacklist = [
     'niveles', 
     'carreras', 
@@ -121,7 +122,7 @@ export async function getGrupos(carreraId: string) {
 export async function getAllGrupos() {
   const { data, error } = await supabaseAdmin
     .from('grupos')
-    .select('*, carreras(nombre, niveles(nombre)), grados(nombre)')
+    .select('*, carreras(nombre, nivel_id, niveles(nombre)), grados(nombre)')
     .order('nombre');
   return { data, error };
 }
@@ -254,11 +255,12 @@ export async function replaceProfesorInAssignments(oldProfesorId: string, newPro
   }
 }
 
-// --- INSCRIPCIONES MASIVAS ---
+// --- INSCRIPCIONES MASIVAS (ULTRA ROBUSTO) ---
 export async function getAlumnosVigentes() {
   try {
     const hoy = new Date().toISOString().split('T')[0];
     
+    // INTENTO 1: Consulta Completa (Requiere SQL previo)
     const { data, error } = await supabaseAdmin
       .from('profiles')
       .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id, grupo_id, carreras(nombre, nivel_id, niveles(nombre))')
@@ -267,21 +269,34 @@ export async function getAlumnosVigentes() {
       .gte('fecha_expiracion', hoy)
       .order('nombre');
 
-    if (error) {
-      const { data: fallback, error: fallbackError } = await supabaseAdmin
-        .from('profiles')
-        .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id')
-        .eq('rol', 'alumno')
-        .eq('estatus', 'activo')
-        .gte('fecha_expiracion', hoy)
-        .order('nombre');
-      
-      if (fallbackError) throw fallbackError;
-      return { data: fallback, error: null };
-    }
+    if (!error) return { data, error: null };
+
+    // INTENTO 2: Fallback si falla grupo_id o relación multinivel
+    console.warn("Fallback de consulta académica activado...");
+    const { data: fb1, error: err1 } = await supabaseAdmin
+      .from('profiles')
+      .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id, carreras(nombre, nivel_id, niveles(nombre))')
+      .eq('rol', 'alumno')
+      .eq('estatus', 'activo')
+      .gte('fecha_expiracion', hoy)
+      .order('nombre');
+
+    if (!err1) return { data: fb1, error: null };
+
+    // INTENTO 3: Consulta básica (Sin joins)
+    const { data: fb2, error: err2 } = await supabaseAdmin
+      .from('profiles')
+      .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id')
+      .eq('rol', 'alumno')
+      .eq('estatus', 'activo')
+      .gte('fecha_expiracion', hoy)
+      .order('nombre');
     
-    return { data, error: null };
+    if (err2) throw err2;
+    return { data: fb2, error: null };
+
   } catch (error: any) {
+    console.error("Error crítico getAlumnosVigentes:", error);
     return { data: null, error: error.message };
   }
 }
@@ -293,7 +308,13 @@ export async function bulkAssignGroup(userIds: string[], groupId: string | null)
       .update({ grupo_id: groupId })
       .in('id', userIds);
 
-    if (error) throw error;
+    if (error) {
+      // Si falla porque no existe la columna, intentamos informar al usuario
+      if (error.code === '42703') {
+        throw new Error("La columna 'grupo_id' no existe en la tabla profiles. Por favor corre el SQL proporcionado.");
+      }
+      throw error;
+    }
     
     revalidatePath('/dashboard/admin/inscripciones');
     return { success: true };
