@@ -22,7 +22,6 @@ const prepareForUpsert = (data: any) => {
     delete cleanData.id;
   }
 
-  // Eliminar agresivamente objetos de relación que Supabase no aceptará en un UPDATE/INSERT
   const blacklist = [
     'niveles', 
     'carreras', 
@@ -42,7 +41,6 @@ const prepareForUpsert = (data: any) => {
       delete cleanData[key];
       return;
     }
-    // Eliminar cualquier objeto anidado (relaciones de consulta)
     if (cleanData[key] !== null && typeof cleanData[key] === 'object' && !(cleanData[key] instanceof Date)) {
       delete cleanData[key];
       return;
@@ -117,6 +115,14 @@ export async function deleteGrado(id: string) {
 // --- GRUPOS ---
 export async function getGrupos(carreraId: string) {
   const { data, error } = await supabaseAdmin.from('grupos').select('*, grados(nombre)').eq('carrera_id', carreraId).order('nombre');
+  return { data, error };
+}
+
+export async function getAllGrupos() {
+  const { data, error } = await supabaseAdmin
+    .from('grupos')
+    .select('*, carreras(nombre, niveles(nombre)), grados(nombre)')
+    .order('nombre');
   return { data, error };
 }
 
@@ -253,7 +259,6 @@ export async function getAlumnosVigentes() {
   try {
     const hoy = new Date().toISOString().split('T')[0];
     
-    // Intento con todas las relaciones (incluyendo nivel vía carrera)
     const { data, error } = await supabaseAdmin
       .from('profiles')
       .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id, grupo_id, carreras(nombre, nivel_id, niveles(nombre))')
@@ -263,7 +268,6 @@ export async function getAlumnosVigentes() {
       .order('nombre');
 
     if (error) {
-      console.warn("Fallo en consulta compleja de alumnos, intentando fallback básico...", error);
       const { data: fallback, error: fallbackError } = await supabaseAdmin
         .from('profiles')
         .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id')
@@ -278,7 +282,6 @@ export async function getAlumnosVigentes() {
     
     return { data, error: null };
   } catch (error: any) {
-    console.error("Error crítico getAlumnosVigentes:", error);
     return { data: null, error: error.message };
   }
 }
@@ -295,7 +298,6 @@ export async function bulkAssignGroup(userIds: string[], groupId: string | null)
     revalidatePath('/dashboard/admin/inscripciones');
     return { success: true };
   } catch (error: any) {
-    console.error("Error bulkAssignGroup:", error);
     return { success: false, error: error.message };
   }
 }
