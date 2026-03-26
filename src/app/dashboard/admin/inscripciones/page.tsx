@@ -16,7 +16,8 @@ import {
   Loader2, 
   School, 
   Info,
-  XCircle
+  XCircle,
+  Filter
 } from 'lucide-react';
 import { 
   getNiveles, 
@@ -87,12 +88,27 @@ export default function InscripcionAlumnos() {
     }
   }, [selCarrera]);
 
+  // FILTRADO DINÁMICO E INTELIGENTE
   const filteredAlumnos = useMemo(() => {
     return alumnos.filter(a => {
+      // 1. Filtro por nombre/matricula
       const nameMatch = `${a.nombre} ${a.apellidos} ${a.matricula}`.toLowerCase().includes(search.toLowerCase());
-      return nameMatch;
+      
+      // 2. Filtro de Seguridad por Nivel (Si se eligió un destino)
+      const nivelMatch = !selNivel || a.carreras?.nivel_id === selNivel;
+      
+      // 3. Filtro de Seguridad por Carrera (Si se eligió una carrera destino)
+      const carreraMatch = !selCarrera || a.carrera_id === selCarrera;
+
+      return nameMatch && nivelMatch && carreraMatch;
     });
-  }, [alumnos, search]);
+  }, [alumnos, search, selNivel, selCarrera]);
+
+  // EFECTO: Limpiar selección de alumnos que desaparecieron por filtros de seguridad
+  useEffect(() => {
+    const visibleIds = filteredAlumnos.map(a => a.id);
+    setSelectedIds(prev => prev.filter(id => visibleIds.includes(id)));
+  }, [filteredAlumnos]);
 
   const toggleSelectAll = () => {
     if (selectedIds.length === filteredAlumnos.length) {
@@ -115,7 +131,7 @@ export default function InscripcionAlumnos() {
       setSelectedIds([]);
       fetchData();
     } else {
-      toast({ variant: "destructive", title: "Error", description: res.error || "Asegúrate de ejecutar el SQL para crear la columna grupo_id." });
+      toast({ variant: "destructive", title: "Error", description: res.error || "Error al asignar." });
     }
     setSaving(false);
   };
@@ -184,6 +200,11 @@ export default function InscripcionAlumnos() {
                 {selectedIds.length} SELECCIONADOS
               </Badge>
             )}
+            {(selNivel || selCarrera) && (
+              <div className="flex items-center gap-1 text-[9px] font-black text-blue-600 ml-auto uppercase animate-pulse">
+                <Filter size={10} /> Filtros de destino activos
+              </div>
+            )}
           </div>
 
           <ScrollArea className="flex-1 h-[500px]">
@@ -195,7 +216,7 @@ export default function InscripcionAlumnos() {
                 </div>
               ) : filteredAlumnos.length === 0 ? (
                 <div className="text-center py-20 text-muted-foreground italic border-2 border-dashed rounded-3xl p-10">
-                  No se encontraron alumnos vigentes para inscribir.
+                  { (selNivel || selCarrera) ? "No hay alumnos vigentes que coincidan con el destino seleccionado." : "No se encontraron alumnos vigentes." }
                 </div>
               ) : (
                 filteredAlumnos.map((alum) => (
@@ -211,9 +232,14 @@ export default function InscripcionAlumnos() {
                   >
                     <Checkbox checked={selectedIds.includes(alum.id)} className="pointer-events-none" />
                     <div className="flex-1 flex flex-col">
-                      <span className="font-black text-sm text-slate-800 uppercase leading-none group-hover:text-primary transition-colors">
-                        {alum.nombre} {alum.apellidos}
-                      </span>
+                      <div className="flex items-center justify-between">
+                        <span className="font-black text-sm text-slate-800 uppercase leading-none group-hover:text-primary transition-colors">
+                          {alum.nombre} {alum.apellidos}
+                        </span>
+                        <Badge variant="outline" className="text-[8px] font-black bg-primary/5 text-primary border-primary/20">
+                          {alum.carreras?.niveles?.nombre || 'NIVEL NO DEF.'}
+                        </Badge>
+                      </div>
                       <div className="flex items-center gap-2 mt-1.5">
                         <span className="text-[10px] font-mono text-muted-foreground">{alum.matricula || 'SIN MATRÍCULA'}</span>
                         <Separator orientation="vertical" className="h-2" />

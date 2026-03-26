@@ -22,7 +22,7 @@ const prepareForUpsert = (data: any) => {
     delete cleanData.id;
   }
 
-  // Lista negra extendida para eliminar relaciones de Supabase (objetos anidados)
+  // Eliminar agresivamente objetos de relación que Supabase no aceptará en un UPDATE/INSERT
   const blacklist = [
     'niveles', 
     'carreras', 
@@ -253,21 +253,20 @@ export async function getAlumnosVigentes() {
   try {
     const hoy = new Date().toISOString().split('T')[0];
     
-    // CONSULTA NIVEL 1: Intento estándar
+    // Intento con todas las relaciones (incluyendo nivel vía carrera)
     const { data, error } = await supabaseAdmin
       .from('profiles')
-      .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id, grupo_id, carreras(nombre)')
+      .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id, grupo_id, carreras(nombre, nivel_id, niveles(nombre))')
       .eq('rol', 'alumno')
       .eq('estatus', 'activo')
       .gte('fecha_expiracion', hoy)
       .order('nombre');
 
     if (error) {
-      // SI FALLA (PGRST200 o PGRST204): Significa que la columna aún no se crea o no hay relación
-      console.warn("Columna grupo_id no detectada, realizando fallback...");
+      console.warn("Fallo en consulta compleja de alumnos, intentando fallback básico...", error);
       const { data: fallback, error: fallbackError } = await supabaseAdmin
         .from('profiles')
-        .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id, carreras(nombre)')
+        .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id')
         .eq('rol', 'alumno')
         .eq('estatus', 'activo')
         .gte('fecha_expiracion', hoy)
