@@ -86,16 +86,24 @@ export default function ProfesorDashboard() {
   const handleSave = async () => {
     let result;
     const d = dialog.data;
-    if (dialog.type === 'unidad') result = await upsertUnidad({...d, materia_id: selectedMateria.id});
-    if (dialog.type === 'tema') result = await upsertTema({...d, unidad_id: selectedUnidad.id});
-    if (dialog.type === 'ejercicio') result = await upsertEjercicio({...d, tema_id: selectedTema.id});
+    if (!selectedMateria?.id && dialog.type === 'unidad') return;
+    
+    try {
+      if (dialog.type === 'unidad') result = await upsertUnidad({...d, materia_id: selectedMateria.id});
+      if (dialog.type === 'tema') result = await upsertTema({...d, unidad_id: selectedUnidad.id});
+      if (dialog.type === 'ejercicio') result = await upsertEjercicio({...d, tema_id: selectedTema.id});
 
-    if (result && !result.error) {
-      toast({ title: "Guardado con éxito" });
-      setDialog({ ...dialog, open: false });
-      if (dialog.type === 'unidad') fetchUnidades(selectedMateria.id);
-      if (dialog.type === 'tema') fetchTemas(selectedUnidad.id);
-      if (dialog.type === 'ejercicio') fetchEjercicios(selectedTema.id);
+      if (result && !result.error) {
+        toast({ title: "Guardado con éxito" });
+        setDialog({ ...dialog, open: false });
+        if (dialog.type === 'unidad') fetchUnidades(selectedMateria.id);
+        if (dialog.type === 'tema') fetchTemas(selectedUnidad.id);
+        if (dialog.type === 'ejercicio') fetchEjercicios(selectedTema.id);
+      } else {
+        toast({ variant: "destructive", title: "Error", description: result?.error?.message || "No se pudo guardar." });
+      }
+    } catch (e) {
+      console.error(e);
     }
   };
 
