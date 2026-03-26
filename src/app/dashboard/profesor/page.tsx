@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useState, useCallback } from 'react';
@@ -99,17 +100,18 @@ export default function ProfesorDashboard() {
 
   const fetchSlides = async (tId: string) => {
     const { data } = await getSlides(tId);
-    if (data) setSlides(data);
+    if (data) setSlides(data || []);
   };
 
   const handleSave = async () => {
     let result;
     const d = dialog.data;
+    const { data: { user } } = await supabase.auth.getUser();
     
     try {
-      if (dialog.type === 'unidad') result = await upsertUnidad({...d, materia_id: selectedMateria.id});
-      if (dialog.type === 'tema') result = await upsertTema({...d, unidad_id: selectedUnidad.id});
-      if (dialog.type === 'ejercicio') result = await upsertEjercicio({...d, tema_id: selectedTema.id});
+      if (dialog.type === 'unidad') result = await upsertUnidad({...d, materia_id: selectedMateria.id, created_by: user?.id});
+      if (dialog.type === 'tema') result = await upsertTema({...d, unidad_id: selectedUnidad.id, created_by: user?.id});
+      if (dialog.type === 'ejercicio') result = await upsertEjercicio({...d, tema_id: selectedTema.id, created_by: user?.id});
 
       if (result && !result.error) {
         toast({ title: "Guardado con éxito" });
@@ -155,7 +157,11 @@ export default function ProfesorDashboard() {
       orden: slides.length + 1,
       created_by: user?.id
     };
-    const { data } = await upsertSlide(newSlide);
+    const { data, error } = await upsertSlide(newSlide);
+    if (error) {
+      toast({ variant: "destructive", title: "Error", description: error.message });
+      return;
+    }
     if (data) {
       setSlides([...slides, data]);
       setActiveSlideIndex(slides.length);
@@ -210,10 +216,8 @@ export default function ProfesorDashboard() {
     const slide = slides[activeSlideIndex];
     return (
       <div className="fixed inset-0 bg-slate-900 z-[100] flex flex-col text-white overflow-hidden animate-in fade-in duration-500">
-        {/* Progress Bar */}
         <div className="absolute top-0 left-0 h-1.5 bg-blue-500 transition-all duration-300 z-50" style={{ width: `${((activeSlideIndex + 1) / slides.length) * 100}%` }} />
         
-        {/* Slide Content */}
         <div className="flex-1 flex flex-col md:flex-row p-12 md:p-24 items-center justify-center gap-12">
           <div className="flex-1 max-w-2xl">
             <h1 className="text-5xl md:text-7xl font-black text-blue-400 mb-8 leading-tight animate-in slide-in-from-left-8 duration-700">
@@ -239,7 +243,6 @@ export default function ProfesorDashboard() {
           </div>
         </div>
 
-        {/* Controls */}
         <div className="p-8 flex items-center justify-between bg-slate-900/80 backdrop-blur-md border-t border-slate-800">
           <div className="flex gap-4">
             <Button variant="ghost" className="h-14 w-14 rounded-full text-white hover:bg-slate-800" onClick={() => setActiveSlideIndex(Math.max(0, activeSlideIndex - 1))} disabled={activeSlideIndex === 0}>

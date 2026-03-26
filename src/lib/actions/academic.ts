@@ -1,3 +1,4 @@
+
 'use server';
 
 import { createClient } from '@supabase/supabase-js';
@@ -312,6 +313,8 @@ export async function replaceProfesorInAssignments(oldProfesorId: string, newPro
 export async function getAlumnosVigentes() {
   try {
     const hoy = new Date().toISOString().split('T')[0];
+    
+    // Intento 1: Con relación completa
     const { data, error } = await supabaseAdmin
       .from('profiles')
       .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id, grupo_id, carreras(nombre, nivel_id, niveles(nombre))')
@@ -321,7 +324,7 @@ export async function getAlumnosVigentes() {
       .order('nombre');
 
     if (error) {
-      // Fallback si falla la relación de grupo_id
+      // Intento 2: Fallback si falla la relación de grupo_id o niveles
       const { data: fb, error: err2 } = await supabaseAdmin
         .from('profiles')
         .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id, carreras(nombre, nivel_id, niveles(nombre))')
@@ -329,7 +332,19 @@ export async function getAlumnosVigentes() {
         .eq('estatus', 'activo')
         .gte('fecha_expiracion', hoy)
         .order('nombre');
-      if (err2) throw err2;
+      
+      if (err2) {
+        // Intento 3: Solo datos básicos de perfil
+        const { data: fb2, error: err3 } = await supabaseAdmin
+          .from('profiles')
+          .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol')
+          .eq('rol', 'alumno')
+          .eq('estatus', 'activo')
+          .gte('fecha_expiracion', hoy)
+          .order('nombre');
+        if (err3) throw err3;
+        return { data: fb2, error: null };
+      }
       return { data: fb, error: null };
     }
 
