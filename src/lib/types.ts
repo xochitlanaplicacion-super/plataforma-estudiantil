@@ -18,12 +18,16 @@ export interface User {
   numero_empleado?: string;
   password_plain?: string;
   carrera_id?: string;
+  grupo_id?: string; // Campo para vinculación de inscripción
   doc_acta_nacimiento?: boolean;
   doc_certificado_estudios?: boolean;
   doc_curp?: boolean;
   doc_ine?: boolean;
   created_at?: string;
   updated_at?: string;
+  // Relaciones cargadas vía JOIN
+  carreras?: { nombre: string };
+  groups?: { nombre: string; turno: string };
 }
 
 export interface Aspirante {
@@ -56,6 +60,7 @@ export interface Career {
   clave?: string;
   activo: boolean;
   created_at?: string;
+  niveles?: { nombre: string };
 }
 
 export interface Grade {
@@ -74,6 +79,7 @@ export interface Group {
   turno?: string;
   activo: boolean;
   created_at?: string;
+  grados?: { nombre: string };
 }
 
 export interface Subject {

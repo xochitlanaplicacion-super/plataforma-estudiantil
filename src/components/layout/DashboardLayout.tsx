@@ -33,7 +33,8 @@ import {
   ShieldAlert,
   MessageSquare,
   ClipboardList,
-  UserCog
+  UserCog,
+  UserPlus
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -84,6 +85,7 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
         { icon: Layers, label: 'Grados y Grupos', href: '/dashboard/admin/grupos' },
         { icon: BookOpen, label: 'Materias y Unidades', href: '/dashboard/admin/materias' },
         { icon: UserCog, label: 'Asignación Profesores', href: '/dashboard/admin/profesores' },
+        { icon: UserPlus, label: 'Inscripción Alumnos', href: '/dashboard/admin/inscripciones' },
       ]},
       { group: "Módulo 10: Reportes", items: [
         { icon: Clock, label: 'Control de Vigencia', href: '/dashboard/admin/vigencias' },
@@ -99,6 +101,7 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
         { icon: LayoutDashboard, label: 'Dashboard Admin', href: '/dashboard/admin' },
         { icon: Users, label: 'Soporte Usuarios', href: '/dashboard/admin/usuarios' },
         { icon: UserCog, label: 'Asignar Profesores', href: '/dashboard/admin/profesores' },
+        { icon: UserPlus, label: 'Inscribir Alumnos', href: '/dashboard/admin/inscripciones' },
       ]}
     ],
     profesor: [

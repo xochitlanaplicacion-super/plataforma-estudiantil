@@ -5,7 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
 
 const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cuuohbztrxxneozagecr.supabase.co',
   process.env.SUPABASE_SERVICE_ROLE_KEY || '',
   {
     auth: {
@@ -15,13 +15,6 @@ const supabaseAdmin = createClient(
   }
 );
 
-/**
- * Prepara los datos para ser guardados en la base de datos.
- * 1. Maneja IDs nuevos.
- * 2. Convierte vacíos en nulos.
- * 3. ELIMINA CAMPOS DE RELACIÓN: Imprescindible para evitar errores PGRST204.
- *    Elimina campos como 'grados', 'niveles', etc., que vienen de JOINS.
- */
 const prepareForUpsert = (data: any) => {
   const cleanData = { ...data };
   
@@ -29,34 +22,28 @@ const prepareForUpsert = (data: any) => {
     delete cleanData.id;
   }
 
-  // Lista negra de campos que sabemos que son de relaciones y no columnas reales
   const blacklist = [
     'niveles', 
     'carreras', 
     'grados', 
+    'groups',
     'materias', 
     'profiles', 
     'unidades', 
     'temas', 
     'ejercicios',
-    'created_at' // Evitamos enviar la fecha de creación para que la DB la gestione
+    'created_at'
   ];
 
   Object.keys(cleanData).forEach(key => {
-    // 1. Eliminar si está en la lista negra (campos de relación)
     if (blacklist.includes(key)) {
       delete cleanData[key];
       return;
     }
-
-    // 2. Eliminar si el valor es un objeto (y no es null ni una fecha)
-    // Esto captura relaciones anidadas que no estén en la blacklist
     if (cleanData[key] !== null && typeof cleanData[key] === 'object' && !(cleanData[key] instanceof Date)) {
       delete cleanData[key];
       return;
     }
-
-    // 3. Convertir strings vacíos o undefined en null para la DB
     if (cleanData[key] === '' || cleanData[key] === undefined) {
       cleanData[key] = null;
     }
@@ -96,7 +83,6 @@ export async function upsertCarrera(carrera: any) {
   const cleanData = prepareForUpsert(carrera);
   const { data, error } = await supabaseAdmin.from('carreras').upsert(cleanData).select().single();
   revalidatePath('/dashboard/admin/estructura');
-  revalidatePath('/dashboard/admin/grupos');
   return { data, error };
 }
 
@@ -172,13 +158,11 @@ export async function getUnidades(materiaId: string) {
 export async function upsertUnidad(unidad: any) {
   const cleanData = prepareForUpsert(unidad);
   const { data, error } = await supabaseAdmin.from('unidades').upsert(cleanData).select().single();
-  revalidatePath('/dashboard/admin/materias');
   return { data, error };
 }
 
 export async function deleteUnidad(id: string) {
   const { error } = await supabaseAdmin.from('unidades').delete().eq('id', id);
-  revalidatePath('/dashboard/admin/materias');
   return { error };
 }
 
@@ -191,13 +175,11 @@ export async function getTemas(unidadId: string) {
 export async function upsertTema(tema: any) {
   const cleanData = prepareForUpsert(tema);
   const { data, error } = await supabaseAdmin.from('temas').upsert(cleanData).select().single();
-  revalidatePath('/dashboard/admin/materias');
   return { data, error };
 }
 
 export async function deleteTema(id: string) {
   const { error } = await supabaseAdmin.from('temas').delete().eq('id', id);
-  revalidatePath('/dashboard/admin/materias');
   return { error };
 }
 
@@ -210,13 +192,11 @@ export async function getEjercicios(temaId: string) {
 export async function upsertEjercicio(ejercicio: any) {
   const cleanData = prepareForUpsert(ejercicio);
   const { data, error } = await supabaseAdmin.from('ejercicios').upsert(cleanData).select().single();
-  revalidatePath('/dashboard/admin/materias');
   return { data, error };
 }
 
 export async function deleteEjercicio(id: string) {
   const { error } = await supabaseAdmin.from('ejercicios').delete().eq('id', id);
-  revalidatePath('/dashboard/admin/materias');
   return { error };
 }
 
@@ -251,23 +231,71 @@ export async function deleteAsignacionProfesor(id: string) {
   return { error };
 }
 
-/**
- * Reemplaza un profesor por otro en todas sus asignaciones académicas.
- */
 export async function replaceProfesorInAssignments(oldProfesorId: string, newProfesorId: string) {
   try {
     const { error } = await supabaseAdmin
       .from('asignaciones_profesor')
       .update({ profesor_id: newProfesorId })
       .eq('profesor_id', oldProfesorId);
-
     if (error) throw error;
-
     revalidatePath('/dashboard/admin/profesores');
-    revalidatePath('/dashboard/admin/usuarios');
     return { success: true };
   } catch (error: any) {
-    console.error("Error replacing profesor:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+// --- INSCRIPCIONES MASIVAS ---
+export async function getAlumnosVigentes() {
+  try {
+    const hoy = new Date().toISOString().split('T')[0];
+    
+    // Consultamos los alumnos activos y vigentes
+    // Usamos el cliente administrativo para asegurar visibilidad total
+    let query = supabaseAdmin
+      .from('profiles')
+      .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id, grupo_id, carreras(nombre), groups:grupo_id(nombre, turno)')
+      .eq('rol', 'alumno')
+      .eq('estatus', 'activo')
+      .gte('fecha_expiracion', hoy);
+
+    const { data, error } = await query.order('nombre');
+    
+    if (error) {
+      // Fallback si grupo_id no existe en la tabla aún
+      if (error.code === 'PGRST204') {
+        const fallback = await supabaseAdmin
+          .from('profiles')
+          .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id, carreras(nombre)')
+          .eq('rol', 'alumno')
+          .eq('estatus', 'activo')
+          .gte('fecha_expiracion', hoy)
+          .order('nombre');
+        return { data: fallback.data, error: fallback.error };
+      }
+      throw error;
+    }
+    
+    return { data, error };
+  } catch (error: any) {
+    console.error("Error getAlumnosVigentes:", error);
+    return { data: null, error };
+  }
+}
+
+export async function bulkAssignGroup(userIds: string[], groupId: string | null) {
+  try {
+    const { error } = await supabaseAdmin
+      .from('profiles')
+      .update({ grupo_id: groupId })
+      .in('id', userIds);
+
+    if (error) throw error;
+    
+    revalidatePath('/dashboard/admin/inscripciones');
+    return { success: true };
+  } catch (error: any) {
+    console.error("Error bulkAssignGroup:", error);
     return { success: false, error: error.message };
   }
 }
