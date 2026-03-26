@@ -22,12 +22,13 @@ const prepareForUpsert = (data: any) => {
     delete cleanData.id;
   }
 
-  // Lista negra de campos que son relaciones o metadatos de Supabase
+  // Lista negra extendida para eliminar relaciones de Supabase (objetos anidados)
   const blacklist = [
     'niveles', 
     'carreras', 
     'grados', 
     'groups',
+    'grupos',
     'materias', 
     'profiles', 
     'unidades', 
@@ -41,7 +42,7 @@ const prepareForUpsert = (data: any) => {
       delete cleanData[key];
       return;
     }
-    // Eliminar cualquier objeto anidado que no sea una fecha
+    // Eliminar cualquier objeto anidado (relaciones de consulta)
     if (cleanData[key] !== null && typeof cleanData[key] === 'object' && !(cleanData[key] instanceof Date)) {
       delete cleanData[key];
       return;
@@ -252,7 +253,7 @@ export async function getAlumnosVigentes() {
   try {
     const hoy = new Date().toISOString().split('T')[0];
     
-    // CONSULTA NIVEL 1: Intentamos traer todo incluyendo grupos (Asumiendo que grupo_id existe)
+    // CONSULTA NIVEL 1: Intento estándar
     const { data, error } = await supabaseAdmin
       .from('profiles')
       .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id, grupo_id, carreras(nombre)')
@@ -262,8 +263,8 @@ export async function getAlumnosVigentes() {
       .order('nombre');
 
     if (error) {
-      // SI FALLA (PGRST200 o PGRST204): Significa que grupo_id no existe en la tabla profiles
-      console.warn("Relación grupo_id no encontrada, intentando fallback sin grupos...");
+      // SI FALLA (PGRST200 o PGRST204): Significa que la columna aún no se crea o no hay relación
+      console.warn("Columna grupo_id no detectada, realizando fallback...");
       const { data: fallback, error: fallbackError } = await supabaseAdmin
         .from('profiles')
         .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id, carreras(nombre)')

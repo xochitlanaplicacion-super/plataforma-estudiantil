@@ -115,7 +115,7 @@ export default function InscripcionAlumnos() {
       setSelectedIds([]);
       fetchData();
     } else {
-      toast({ variant: "destructive", title: "Error", description: res.error || "Asegúrate de que la columna grupo_id exista en la tabla profiles." });
+      toast({ variant: "destructive", title: "Error", description: res.error || "Asegúrate de ejecutar el SQL para crear la columna grupo_id." });
     }
     setSaving(false);
   };
