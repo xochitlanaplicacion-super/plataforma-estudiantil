@@ -50,6 +50,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
+const LOGO_URL = '/images/logo_zapata.png';
+
 export default function ProfesorDashboard() {
   const { toast } = useToast();
   const supabase = createClient();
@@ -214,9 +216,10 @@ export default function ProfesorDashboard() {
     );
   }
 
-  // Helper para renderizar múltiples imágenes
+  // Helper para renderizar múltiples imágenes con soporte para Base64
   const ImageGrid = ({ urls }: { urls: string }) => {
-    const list = urls.split(',').map(u => u.trim()).filter(Boolean);
+    // Regex inteligente: Divide por coma solo si el siguiente texto empieza con http o data: (para no romper Base64)
+    const list = urls.split(/,(?=http|data:)/).map(u => u.trim()).filter(Boolean);
     if (list.length === 0) return null;
     
     return (
@@ -284,7 +287,7 @@ export default function ProfesorDashboard() {
           </div>
         </div>
 
-        {/* Barra de Navegación Inferior - SIEMPRE VISIBLE */}
+        {/* Barra de Navegación Inferior */}
         <div className="p-6 md:p-8 flex items-center justify-between bg-black/20 backdrop-blur-xl border-t border-white/5 z-[110]">
           <div className="flex gap-4">
             <Button 
@@ -308,8 +311,11 @@ export default function ProfesorDashboard() {
             </Button>
           </div>
           
-          <div className="flex items-center gap-4">
-            <span className="hidden lg:block text-[10px] font-black uppercase tracking-[0.3em] opacity-30">IEEZ Plataforma de Enseñanza</span>
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-3">
+              <img src={LOGO_URL} alt="Logo IEEZ" className="h-10 w-auto object-contain drop-shadow-md" />
+              <span className="hidden lg:block text-[10px] font-black uppercase tracking-[0.3em] text-white/40">IEEZ Plataforma de Enseñanza</span>
+            </div>
             <Button 
               variant="outline" 
               className="h-12 px-8 rounded-xl font-black uppercase tracking-widest bg-red-600/20 border-red-600/30 text-red-100 hover:bg-red-600 hover:text-white transition-all shadow-lg" 
@@ -614,7 +620,7 @@ export default function ProfesorDashboard() {
         </DialogContent>
       </Dialog>
 
-      {/* SLIDE EDITOR DIALOG - MEJORADO */}
+      {/* SLIDE EDITOR DIALOG */}
       <Dialog open={slideDialogOpen} onOpenChange={setSlideDialogOpne}>
         <DialogContent className="max-w-[95vw] w-[1300px] h-[90vh] flex flex-col p-0 rounded-3xl overflow-hidden shadow-2xl border-none">
           <DialogHeader className="p-6 bg-slate-900 border-b border-white/5 flex flex-row justify-between items-center space-y-0 shrink-0">
@@ -727,15 +733,16 @@ export default function ProfesorDashboard() {
                       </label>
                       <textarea 
                         className="w-full p-4 bg-slate-900 border-white/10 rounded-2xl text-white text-sm focus:ring-blue-500/50 outline-none min-h-[80px]"
-                        placeholder="https://img1.jpg, https://img2.jpg"
+                        placeholder="https://img1.jpg, https://img2.jpg o data:image/..."
                         value={slides[activeSlideIndex]?.imagen_url || ''}
                         onChange={(e) => handleUpdateSlide(slides[activeSlideIndex].id, { imagen_url: e.target.value })}
                       />
-                      <p className="text-[10px] text-slate-500 font-bold uppercase italic">Puedes agregar hasta 4 imágenes por diapositiva separadas por comas.</p>
+                      <p className="text-[10px] text-slate-500 font-bold uppercase italic">Puedes agregar hasta 4 imágenes por diapositiva separadas por comas. El formato Base64 es compatible.</p>
                     </div>
                     
                     <div className="h-48 grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {slides[activeSlideIndex]?.imagen_url?.split(',').filter(Boolean).map((url: string, i: number) => (
+                      {/* Split inteligente por regex para no romper Base64 */}
+                      {slides[activeSlideIndex]?.imagen_url?.split(/,(?=http|data:)/).filter(Boolean).map((url: string, i: number) => (
                         <div key={i} className="relative group rounded-xl overflow-hidden border border-white/10">
                           <img src={url.trim()} alt="Pre" className="w-full h-full object-cover" />
                         </div>
