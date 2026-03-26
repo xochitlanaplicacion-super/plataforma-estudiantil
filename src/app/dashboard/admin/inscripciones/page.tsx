@@ -17,7 +17,8 @@ import {
   School, 
   Info,
   XCircle,
-  Filter
+  Filter,
+  RotateCcw
 } from 'lucide-react';
 import { 
   getNiveles, 
@@ -88,6 +89,13 @@ export default function InscripcionAlumnos() {
     }
   }, [selCarrera]);
 
+  const clearFilters = () => {
+    setSelNivel('');
+    setSelCarrera('');
+    setSelGrado('all');
+    setSelGrupo('');
+  };
+
   // FILTRADO DINÁMICO E INTELIGENTE
   const filteredAlumnos = useMemo(() => {
     return alumnos.filter(a => {
@@ -129,6 +137,7 @@ export default function InscripcionAlumnos() {
     if (res.success) {
       toast({ title: "Inscripción Exitosa", description: `${selectedIds.length} alumnos asignados al grupo.` });
       setSelectedIds([]);
+      clearFilters(); // Limpiar filtros automáticamente al éxito
       fetchData();
     } else {
       toast({ variant: "destructive", title: "Error", description: res.error || "Error al asignar." });
@@ -263,11 +272,21 @@ export default function InscripcionAlumnos() {
         {/* PANEL DERECHO: DESTINO Y VISTA DE GRUPO */}
         <div className="lg:col-span-5 space-y-6">
           <Card className="border-muted/60 shadow-xl rounded-[32px] overflow-hidden border-t-4 border-t-primary">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <School className="text-primary" size={20} /> Destino de Inscripción
-              </CardTitle>
-              <CardDescription>Selecciona a dónde quieres mover a los alumnos.</CardDescription>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-lg flex items-center gap-2">
+                  <School className="text-primary" size={20} /> Destino de Inscripción
+                </CardTitle>
+                <CardDescription>Selecciona a dónde quieres mover a los alumnos.</CardDescription>
+              </div>
+              <Button 
+                variant="ghost" 
+                size="sm" 
+                onClick={clearFilters}
+                className="gap-1 text-[10px] font-black uppercase text-muted-foreground hover:text-primary"
+              >
+                <RotateCcw size={12} /> Limpiar Filtros
+              </Button>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
