@@ -1,4 +1,3 @@
-
 'use server';
 
 import { createClient } from '@supabase/supabase-js';
@@ -268,6 +267,7 @@ export async function replaceProfesorInAssignments(oldProfesorId: string, newPro
 export async function getAlumnosVigentes() {
   try {
     const hoy = new Date().toISOString().split('T')[0];
+    // Intento 1: Relación completa
     const { data, error } = await supabaseAdmin
       .from('profiles')
       .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id, grupo_id, carreras(nombre, nivel_id, niveles(nombre))')
@@ -278,6 +278,7 @@ export async function getAlumnosVigentes() {
 
     if (!error) return { data, error: null };
 
+    // Intento 2: Fallback sin grupo_id (Error PGRST200)
     const { data: fb1, error: err1 } = await supabaseAdmin
       .from('profiles')
       .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id, carreras(nombre, nivel_id, niveles(nombre))')
@@ -288,6 +289,7 @@ export async function getAlumnosVigentes() {
 
     if (!err1) return { data: fb1, error: null };
 
+    // Intento 3: Solo datos base
     const { data: fb2, error: err2 } = await supabaseAdmin
       .from('profiles')
       .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id')
