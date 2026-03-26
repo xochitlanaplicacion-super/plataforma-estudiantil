@@ -167,11 +167,13 @@ export async function getUnidades(materiaId: string) {
 export async function upsertUnidad(unidad: any) {
   const cleanData = prepareForUpsert(unidad);
   const { data, error } = await supabaseAdmin.from('unidades').upsert(cleanData).select().single();
+  revalidatePath('/dashboard/profesor');
   return { data, error };
 }
 
 export async function deleteUnidad(id: string) {
   const { error } = await supabaseAdmin.from('unidades').delete().eq('id', id);
+  revalidatePath('/dashboard/profesor');
   return { error };
 }
 
@@ -184,11 +186,13 @@ export async function getTemas(unidadId: string) {
 export async function upsertTema(tema: any) {
   const cleanData = prepareForUpsert(tema);
   const { data, error } = await supabaseAdmin.from('temas').upsert(cleanData).select().single();
+  revalidatePath('/dashboard/profesor');
   return { data, error };
 }
 
 export async function deleteTema(id: string) {
   const { error } = await supabaseAdmin.from('temas').delete().eq('id', id);
+  revalidatePath('/dashboard/profesor');
   return { error };
 }
 
@@ -201,11 +205,13 @@ export async function getEjercicios(temaId: string) {
 export async function upsertEjercicio(ejercicio: any) {
   const cleanData = prepareForUpsert(ejercicio);
   const { data, error } = await supabaseAdmin.from('ejercicios').upsert(cleanData).select().single();
+  revalidatePath('/dashboard/profesor');
   return { data, error };
 }
 
 export async function deleteEjercicio(id: string) {
   const { error } = await supabaseAdmin.from('ejercicios').delete().eq('id', id);
+  revalidatePath('/dashboard/profesor');
   return { error };
 }
 
@@ -222,11 +228,13 @@ export async function getSlides(temaId: string) {
 export async function upsertSlide(slide: any) {
   const cleanData = prepareForUpsert(slide);
   const { data, error } = await supabaseAdmin.from('slides').upsert(cleanData).select().single();
+  revalidatePath('/dashboard/profesor');
   return { data, error };
 }
 
 export async function deleteSlide(id: string) {
   const { error } = await supabaseAdmin.from('slides').delete().eq('id', id);
+  revalidatePath('/dashboard/profesor');
   return { error };
 }
 
@@ -262,34 +270,48 @@ export async function upsertAsignacionProfesor(asignacion: any) {
   const cleanData = prepareForUpsert(asignacion);
   const { data, error } = await supabaseAdmin.from('asignaciones_profesor').upsert(cleanData).select().single();
   revalidatePath('/dashboard/admin/profesores');
+  revalidatePath('/dashboard/profesor');
   return { data, error };
 }
 
 export async function deleteAsignacionProfesor(id: string) {
   const { error } = await supabaseAdmin.from('asignaciones_profesor').delete().eq('id', id);
   revalidatePath('/dashboard/admin/profesores');
+  revalidatePath('/dashboard/profesor');
   return { error };
 }
 
 export async function replaceProfesorInAssignments(oldProfesorId: string, newProfesorId: string) {
   try {
-    const { error } = await supabaseAdmin
+    // 1. Transferir asignaciones de grupos y materias
+    const { error: errorAsig } = await supabaseAdmin
       .from('asignaciones_profesor')
       .update({ profesor_id: newProfesorId })
       .eq('profesor_id', oldProfesorId);
-    if (error) throw error;
+    
+    if (errorAsig) throw errorAsig;
+
+    // 2. Transferir propiedad del contenido (Opcional pero recomendado para consistencia)
+    // Esto asegura que el nuevo profesor "sea dueño" de las diapositivas y temas
+    await Promise.all([
+      supabaseAdmin.from('unidades').update({ created_by: newProfesorId }).eq('created_by', oldProfesorId),
+      supabaseAdmin.from('temas').update({ created_by: newProfesorId }).eq('created_by', oldProfesorId),
+      supabaseAdmin.from('ejercicios').update({ created_by: newProfesorId }).eq('created_by', oldProfesorId),
+      supabaseAdmin.from('slides').update({ created_by: newProfesorId }).eq('created_by', oldProfesorId)
+    ]);
+
     revalidatePath('/dashboard/admin/profesores');
+    revalidatePath('/dashboard/profesor');
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
 }
 
-// --- INSCRIPCIONES MASIVAS (ULTRA ROBUSTO) ---
+// --- INSCRIPCIONES MASIVAS ---
 export async function getAlumnosVigentes() {
   try {
     const hoy = new Date().toISOString().split('T')[0];
-    // Intento 1: Relación completa
     const { data, error } = await supabaseAdmin
       .from('profiles')
       .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id, grupo_id, carreras(nombre, nivel_id, niveles(nombre))')
@@ -298,31 +320,20 @@ export async function getAlumnosVigentes() {
       .gte('fecha_expiracion', hoy)
       .order('nombre');
 
-    if (!error) return { data, error: null };
+    if (error) {
+      // Fallback si falla la relación de grupo_id
+      const { data: fb, error: err2 } = await supabaseAdmin
+        .from('profiles')
+        .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id, carreras(nombre, nivel_id, niveles(nombre))')
+        .eq('rol', 'alumno')
+        .eq('estatus', 'activo')
+        .gte('fecha_expiracion', hoy)
+        .order('nombre');
+      if (err2) throw err2;
+      return { data: fb, error: null };
+    }
 
-    // Intento 2: Fallback sin grupo_id (Error PGRST200)
-    const { data: fb1, error: err1 } = await supabaseAdmin
-      .from('profiles')
-      .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id, carreras(nombre, nivel_id, niveles(nombre))')
-      .eq('rol', 'alumno')
-      .eq('estatus', 'activo')
-      .gte('fecha_expiracion', hoy)
-      .order('nombre');
-
-    if (!err1) return { data: fb1, error: null };
-
-    // Intento 3: Solo datos base
-    const { data: fb2, error: err2 } = await supabaseAdmin
-      .from('profiles')
-      .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id')
-      .eq('rol', 'alumno')
-      .eq('estatus', 'activo')
-      .gte('fecha_expiracion', hoy)
-      .order('nombre');
-    
-    if (err2) throw err2;
-    return { data: fb2, error: null };
-
+    return { data, error: null };
   } catch (error: any) {
     return { data: null, error: error.message };
   }
@@ -335,13 +346,7 @@ export async function bulkAssignGroup(userIds: string[], groupId: string | null)
       .update({ grupo_id: groupId })
       .in('id', userIds);
 
-    if (error) {
-      if (error.code === '42703') {
-        throw new Error("La columna 'grupo_id' no existe en la tabla profiles.");
-      }
-      throw error;
-    }
-    
+    if (error) throw error;
     revalidatePath('/dashboard/admin/inscripciones');
     return { success: true };
   } catch (error: any) {

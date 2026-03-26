@@ -147,11 +147,13 @@ export default function ProfesorDashboard() {
   };
 
   const handleAddSlide = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
     const newSlide = {
       tema_id: selectedTema.id,
       titulo: 'Nueva Diapositiva',
       contenido: 'Contenido de la diapositiva...',
-      orden: slides.length + 1
+      orden: slides.length + 1,
+      created_by: user?.id
     };
     const { data } = await upsertSlide(newSlide);
     if (data) {
