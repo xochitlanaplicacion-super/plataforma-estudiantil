@@ -218,7 +218,6 @@ export default function ProfesorDashboard() {
 
   // Helper para renderizar múltiples imágenes con soporte para Base64
   const ImageGrid = ({ urls }: { urls: string }) => {
-    // Regex inteligente: Divide por coma solo si el siguiente texto empieza con http o data: (para no romper Base64)
     const list = urls.split(/,(?=http|data:)/).map(u => u.trim()).filter(Boolean);
     if (list.length === 0) return null;
     
@@ -287,41 +286,42 @@ export default function ProfesorDashboard() {
           </div>
         </div>
 
-        {/* Barra de Navegación Inferior */}
-        <div className="p-6 md:p-8 flex items-center justify-between bg-black/20 backdrop-blur-xl border-t border-white/5 z-[110]">
+        {/* Barra de Navegación Inferior (Más delgada) */}
+        <div className="py-3 px-6 md:px-10 flex items-center justify-between bg-black/30 backdrop-blur-2xl border-t border-white/5 z-[110]">
           <div className="flex gap-4">
             <Button 
               variant="ghost" 
-              className="h-14 w-14 rounded-full text-white hover:bg-white/10" 
+              className="h-12 w-12 rounded-full text-white hover:bg-white/10" 
               onClick={() => setActiveSlideIndex(Math.max(0, activeSlideIndex - 1))} 
               disabled={activeSlideIndex === 0}
             >
-              <ChevronLeft size={36} />
+              <ChevronLeft size={32} />
             </Button>
-            <div className="flex items-center px-6 text-xl font-black tabular-nums tracking-widest text-white/40">
+            <div className="flex items-center px-4 text-xl font-black tabular-nums tracking-widest text-white/40">
               <span className="text-white">{activeSlideIndex + 1}</span> / {slides.length}
             </div>
             <Button 
               variant="ghost" 
-              className="h-14 w-14 rounded-full text-white hover:bg-white/10" 
+              className="h-12 w-12 rounded-full text-white hover:bg-white/10" 
               onClick={() => setActiveSlideIndex(Math.min(activeSlideIndex + 1, slides.length - 1))} 
               disabled={activeSlideIndex === slides.length - 1}
             >
-              <ChevronRight size={36} />
+              <ChevronRight size={32} />
             </Button>
           </div>
           
-          <div className="flex items-center gap-6">
-            <div className="flex items-center gap-3">
-              <img src={LOGO_URL} alt="Logo IEEZ" className="h-10 w-auto object-contain drop-shadow-md" />
+          <div className="flex items-center gap-8">
+            <div className="flex items-center gap-4">
+              {/* Logo 2 veces más grande (h-20) */}
+              <img src={LOGO_URL} alt="Logo IEEZ" className="h-20 w-auto object-contain drop-shadow-2xl" />
               <span className="hidden lg:block text-[10px] font-black uppercase tracking-[0.3em] text-white/40">IEEZ Plataforma de Enseñanza</span>
             </div>
             <Button 
               variant="outline" 
-              className="h-12 px-8 rounded-xl font-black uppercase tracking-widest bg-red-600/20 border-red-600/30 text-red-100 hover:bg-red-600 hover:text-white transition-all shadow-lg" 
+              className="h-10 px-6 rounded-xl font-black uppercase tracking-widest bg-red-600/20 border-red-600/30 text-red-100 hover:bg-red-600 hover:text-white transition-all shadow-lg" 
               onClick={() => setPresentationMode(false)}
             >
-              <X size={20} className="mr-2" /> Salir (Esc)
+              <X size={18} className="mr-2" /> Salir (Esc)
             </Button>
           </div>
         </div>
