@@ -202,10 +202,38 @@ export default function ProfesorDashboard() {
     }
   }, [presentationMode, slides.length]);
 
+  // Manejo de Fullscreen API
   useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        setPresentationMode(false);
+      }
+    };
+
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
   }, [handleKeyDown]);
+
+  useEffect(() => {
+    if (presentationMode) {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch((err) => {
+          console.warn(`Error al intentar entrar en pantalla completa: ${err.message}`);
+        });
+      }
+    } else {
+      if (document.fullscreenElement) {
+        document.exitFullscreen().catch((err) => {
+          console.warn(`Error al intentar salir de pantalla completa: ${err.message}`);
+        });
+      }
+    }
+  }, [presentationMode]);
 
   if (loading) {
     return (
@@ -286,7 +314,7 @@ export default function ProfesorDashboard() {
           </div>
         </div>
 
-        {/* Barra de Navegación Inferior (Más delgada) */}
+        {/* Barra de Navegación Inferior */}
         <div className="py-3 px-6 md:px-10 flex items-center justify-between bg-black/30 backdrop-blur-2xl border-t border-white/5 z-[110]">
           <div className="flex gap-4">
             <Button 
@@ -312,7 +340,6 @@ export default function ProfesorDashboard() {
           
           <div className="flex items-center gap-8">
             <div className="flex items-center gap-4">
-              {/* Logo 2 veces más grande (h-20) */}
               <img src={LOGO_URL} alt="Logo IEEZ" className="h-20 w-auto object-contain drop-shadow-2xl" />
               <span className="hidden lg:block text-[10px] font-black uppercase tracking-[0.3em] text-white/40">IEEZ Plataforma de Enseñanza</span>
             </div>
@@ -741,7 +768,6 @@ export default function ProfesorDashboard() {
                     </div>
                     
                     <div className="h-48 grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {/* Split inteligente por regex para no romper Base64 */}
                       {slides[activeSlideIndex]?.imagen_url?.split(/,(?=http|data:)/).filter(Boolean).map((url: string, i: number) => (
                         <div key={i} className="relative group rounded-xl overflow-hidden border border-white/10">
                           <img src={url.trim()} alt="Pre" className="w-full h-full object-cover" />
