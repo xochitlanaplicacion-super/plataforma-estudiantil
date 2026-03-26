@@ -32,6 +32,7 @@ const prepareForUpsert = (data: any) => {
     'unidades', 
     'temas', 
     'ejercicios',
+    'slides',
     'created_at'
   ];
 
@@ -205,6 +206,27 @@ export async function upsertEjercicio(ejercicio: any) {
 
 export async function deleteEjercicio(id: string) {
   const { error } = await supabaseAdmin.from('ejercicios').delete().eq('id', id);
+  return { error };
+}
+
+// --- SLIDES (PRESENTACIONES) ---
+export async function getSlides(temaId: string) {
+  const { data, error } = await supabaseAdmin
+    .from('slides')
+    .select('*')
+    .eq('tema_id', temaId)
+    .order('orden');
+  return { data, error };
+}
+
+export async function upsertSlide(slide: any) {
+  const cleanData = prepareForUpsert(slide);
+  const { data, error } = await supabaseAdmin.from('slides').upsert(cleanData).select().single();
+  return { data, error };
+}
+
+export async function deleteSlide(id: string) {
+  const { error } = await supabaseAdmin.from('slides').delete().eq('id', id);
   return { error };
 }
 

@@ -1,28 +1,27 @@
+-- 1. Vincular Alumnos a Grupos
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS grupo_id UUID REFERENCES groups(id) ON DELETE SET NULL;
 
--- EJECUTAR ESTO EN EL SQL EDITOR DE SUPABASE --
+-- 2. Crear tabla de Diapositivas para Presentaciones Multimedia
+CREATE TABLE IF NOT EXISTS slides (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tema_id UUID REFERENCES temas(id) ON DELETE CASCADE,
+  titulo TEXT,
+  contenido TEXT,
+  imagen_url TEXT,
+  orden INTEGER DEFAULT 1,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())
+);
 
--- 1. Agregar columna grupo_id a profiles si no existe
-DO $$ 
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'profiles' AND column_name = 'grupo_id') THEN
-        ALTER TABLE profiles ADD COLUMN grupo_id UUID;
-    END IF;
-END $$;
+-- Habilitar RLS en Slides
+ALTER TABLE slides ENABLE ROW LEVEL SECURITY;
 
--- 2. Crear la relación de clave foránea con la tabla grupos
-DO $$ 
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'profiles_grupo_id_fkey') THEN
-        ALTER TABLE profiles 
-        ADD CONSTRAINT profiles_grupo_id_fkey 
-        FOREIGN KEY (grupo_id) 
-        REFERENCES grupos(id) 
-        ON DELETE SET NULL;
-    END IF;
-END $$;
+-- Políticas de Slides
+DROP POLICY IF EXISTS "Permitir lectura de slides a todos" ON slides;
+CREATE POLICY "Permitir lectura de slides a todos" ON slides FOR SELECT USING (true);
 
--- 3. Crear índice para mejorar el rendimiento de consultas por grupo
-CREATE INDEX IF NOT EXISTS idx_profiles_grupo_id ON profiles(grupo_id);
+DROP POLICY IF EXISTS "Permitir gestión de slides a usuarios autenticados" ON slides;
+CREATE POLICY "Permitir gestión de slides a usuarios autenticados" ON slides FOR ALL USING (auth.role() = 'authenticated');
 
--- 4. Notificar a PostgREST que el esquema ha cambiado (opcional pero recomendado)
-NOTIFY pgrst, 'reload schema';
+-- Comentarios de documentación
+COMMENT ON COLUMN slides.imagen_url IS 'URL de imagen de internet para la diapositiva';
+COMMENT ON COLUMN slides.contenido IS 'Texto largo o explicación de la diapositiva';
