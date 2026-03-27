@@ -53,7 +53,7 @@
   }
 
   .theme-beige {
-    --primary: 46 65% 35%; /* Ajustado para ser Oro/Beige y no Guinda */
+    --primary: 46 65% 35%;
     --sidebar-background: 37 51% 82%;
     --sidebar-foreground: 342 61% 10%;
     --sidebar-primary: 46 65% 35%;
@@ -96,10 +96,10 @@
   }
 }
 
-/* Custom Scrollbar for better visibility */
+/* Custom Scrollbar VISIBLE para Diálogos */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
@@ -108,15 +108,14 @@
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.3); /* Color más oscuro para visibilidad */
   border-radius: 10px;
-  border: 2px solid transparent;
+  border: 2px solid rgba(255, 255, 255, 0.8);
   background-clip: padding-box;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.3);
-  background-clip: padding-box;
+  background: rgba(0, 0, 0, 0.5);
 }
 
 .dark .custom-scrollbar::-webkit-scrollbar-track {
@@ -124,7 +123,7 @@
 }
 
 .dark .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.3);
 }
 
 @keyframes login-morph {
@@ -154,10 +153,4 @@
   animation: login-morph 45s ease-in-out infinite;
   border: none !important;
   transition: all 2s ease-in-out;
-}
-
-.animate-login-morph h1, 
-.animate-login-morph p,
-.animate-login-morph span {
-  color: inherit;
 }

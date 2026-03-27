@@ -163,7 +163,6 @@ export default function ProfesorDashboard() {
     }
   };
 
-  // SLIDE ACTIONS
   const handleOpenSlideEditor = (tema: any) => {
     setSelectedTema(tema);
     fetchSlides(tema.id);
@@ -182,7 +181,7 @@ export default function ProfesorDashboard() {
     };
     const { data, error } = await upsertSlide(newSlide);
     if (error) {
-      toast({ variant: "destructive", title: "Error", description: "Verifica que la tabla slides tenga las columnas created_by y estilo." });
+      toast({ variant: "destructive", title: "Error", description: "Ocurrió un problema al crear la diapositiva." });
       return;
     }
     if (data) {
@@ -208,7 +207,6 @@ export default function ProfesorDashboard() {
     }
   };
 
-  // RESOURCE ACTIONS
   const handleOpenResourceDialog = (tema: any) => {
     setSelectedTema(tema);
     fetchResources(tema.id);
@@ -443,8 +441,8 @@ export default function ProfesorDashboard() {
           </TabsContent>
 
           <TabsContent value="unidades" className="mt-0">
-            <Card className="rounded-[32px] border-muted/60 shadow-xl overflow-hidden">
-              <CardHeader className="bg-slate-50/50 pb-6 border-b">
+            <Card className="rounded-[32px] border-muted/60 shadow-xl overflow-hidden h-[70vh] flex flex-col">
+              <CardHeader className="bg-slate-50/50 pb-6 border-b shrink-0">
                 <div className="flex flex-row items-center justify-between">
                   <div>
                     <Button variant="ghost" size="sm" onClick={() => setCurrentTab('materias')} className="mb-2 -ml-2 text-primary font-black uppercase text-[10px] tracking-widest hover:bg-primary/5"><ArrowLeft size={14} className="mr-1" /> Volver a Materias</Button>
@@ -454,7 +452,7 @@ export default function ProfesorDashboard() {
                   <Button size="lg" className="rounded-2xl bg-primary text-white font-black uppercase tracking-widest gap-2 shadow-lg" onClick={() => setDialog({ open: true, type: 'unidad', data: { titulo: '', orden: unidades.length + 1 } })}><Plus size={18} /> Nueva Unidad</Button>
                 </div>
               </CardHeader>
-              <CardContent className="p-6">
+              <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                 <div className="space-y-4">
                   {unidades.length === 0 ? <div className="py-20 text-center text-muted-foreground italic bg-slate-50 rounded-3xl border-2 border-dashed">No has creado unidades para esta materia aún.</div> : unidades.map((u) => (
                     <div key={u.id} onClick={() => { setSelectedUnidad(u); fetchTemas(u.id); setCurrentTab('temas'); }} className={`p-6 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all duration-300 group ${selectedUnidad?.id === u.id ? 'bg-primary/5 border-primary shadow-md' : 'border-slate-50 hover:border-primary/20 hover:bg-white hover:shadow-lg'}`}>
@@ -472,13 +470,13 @@ export default function ProfesorDashboard() {
                     </div>
                   ))}
                 </div>
-              </CardContent>
+              </div>
             </Card>
           </TabsContent>
 
           <TabsContent value="temas" className="mt-0">
-             <Card className="rounded-[32px] border-muted/60 shadow-xl overflow-hidden">
-               <CardHeader className="bg-slate-50/50 pb-6 border-b">
+             <Card className="rounded-[32px] border-muted/60 shadow-xl overflow-hidden h-[70vh] flex flex-col">
+               <CardHeader className="bg-slate-50/50 pb-6 border-b shrink-0">
                  <div className="flex flex-row items-center justify-between">
                    <div>
                      <Button variant="ghost" size="sm" onClick={() => setCurrentTab('unidades')} className="mb-2 -ml-2 text-primary font-black uppercase text-[10px] tracking-widest hover:bg-primary/5"><ArrowLeft size={14} className="mr-1" /> Volver a Unidades</Button>
@@ -488,7 +486,7 @@ export default function ProfesorDashboard() {
                    <Button size="lg" className="rounded-2xl bg-primary text-white font-black uppercase tracking-widest gap-2 shadow-lg" onClick={() => setDialog({ open: true, type: 'tema', data: { titulo: '', contenido: '', orden: temas.length + 1 } })}><Plus size={18} /> Nuevo Tema</Button>
                  </div>
                </CardHeader>
-               <CardContent className="p-6">
+               <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                    {temas.length === 0 ? <div className="md:col-span-2 py-20 text-center text-muted-foreground italic bg-slate-50 rounded-3xl border-2 border-dashed">Esta unidad aún no tiene temas publicados.</div> : temas.map((t) => (
                      <div key={t.id} onClick={() => { setSelectedTema(t); fetchEjercicios(t.id); setCurrentTab('ejercicios'); }} className="p-6 border-2 border-slate-50 rounded-[24px] flex flex-col gap-4 cursor-pointer hover:bg-white hover:shadow-xl hover:border-primary/20 transition-all group">
@@ -508,13 +506,13 @@ export default function ProfesorDashboard() {
                      </div>
                    ))}
                  </div>
-               </CardContent>
+               </div>
              </Card>
           </TabsContent>
 
           <TabsContent value="ejercicios" className="mt-0">
-             <Card className="rounded-[32px] border-muted/60 shadow-xl overflow-hidden">
-               <CardHeader className="bg-slate-50/50 pb-6 border-b">
+             <Card className="rounded-[32px] border-muted/60 shadow-xl overflow-hidden h-[70vh] flex flex-col">
+               <CardHeader className="bg-slate-50/50 pb-6 border-b shrink-0">
                  <div className="flex flex-row items-center justify-between">
                    <div>
                      <Button variant="ghost" size="sm" onClick={() => setCurrentTab('temas')} className="mb-2 -ml-2 text-primary font-black uppercase text-[10px] tracking-widest hover:bg-primary/5"><ArrowLeft size={14} className="mr-1" /> Volver a Temas</Button>
@@ -524,7 +522,7 @@ export default function ProfesorDashboard() {
                    <Button size="lg" className="rounded-2xl bg-amber-500 text-white font-black uppercase tracking-widest gap-2 shadow-lg hover:bg-amber-600" onClick={() => setDialog({ open: true, type: 'ejercicio', data: { titulo: '', descripcion: '', orden: ejercicios.length + 1 } })}><Plus size={18} /> Nueva Actividad</Button>
                  </div>
                </CardHeader>
-               <CardContent className="p-6">
+               <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                  <Table>
                    <TableHeader className="bg-slate-50/50"><TableRow><TableHead className="font-black uppercase text-[10px] text-slate-500">Orden</TableHead><TableHead className="font-black uppercase text-[10px] text-slate-500">Descripción de la Actividad</TableHead><TableHead className="text-right font-black uppercase text-[10px] text-slate-500">Acciones</TableHead></TableRow></TableHeader>
                    <TableBody>
@@ -537,7 +535,7 @@ export default function ProfesorDashboard() {
                      ))}
                    </TableBody>
                  </Table>
-               </CardContent>
+               </div>
              </Card>
           </TabsContent>
         </Tabs>
@@ -555,7 +553,7 @@ export default function ProfesorDashboard() {
             </DialogDescription>
           </DialogHeader>
           
-          <ScrollArea className="flex-1 px-6 py-4 custom-scrollbar">
+          <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
             <div className="space-y-6">
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Título del Contenido</label>
@@ -572,7 +570,7 @@ export default function ProfesorDashboard() {
                 </div>
               )}
             </div>
-          </ScrollArea>
+          </div>
 
           <DialogFooter className="p-6 pt-2 shrink-0 border-t bg-slate-50/50 gap-2">
             {dialog.data.id && (
@@ -619,23 +617,21 @@ export default function ProfesorDashboard() {
                   <Plus size={14} /> Nueva Diapositiva
                 </Button>
               </div>
-              <ScrollArea className="flex-1 custom-scrollbar">
-                <div className="p-3 space-y-2">
-                  {slides.map((s, idx) => (
-                    <div key={s.id} onClick={() => setActiveSlideIndex(idx)} className={cn("p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-3 relative group", activeSlideIndex === idx ? "bg-blue-600/10 border-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.2)]" : "border-transparent hover:bg-white/5")}>
-                      <span className="text-xs font-black text-slate-500">{idx + 1}</span>
-                      <div className="flex-1 truncate">
-                        <p className={cn("text-[11px] font-bold uppercase truncate", activeSlideIndex === idx ? "text-blue-400" : "text-slate-300")}>
-                          {s.titulo || 'Sin Título'}
-                        </p>
-                      </div>
-                      <button className="opacity-0 group-hover:opacity-100 h-7 w-7 rounded-lg bg-red-500/10 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shrink-0" onClick={(e) => { e.stopPropagation(); handleDeleteSlide(s.id); }}>
-                        <Trash2 size={14} />
-                      </button>
+              <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+                {slides.map((s, idx) => (
+                  <div key={s.id} onClick={() => setActiveSlideIndex(idx)} className={cn("p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-3 relative group", activeSlideIndex === idx ? "bg-blue-600/10 border-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.2)]" : "border-transparent hover:bg-white/5")}>
+                    <span className="text-xs font-black text-slate-500">{idx + 1}</span>
+                    <div className="flex-1 truncate">
+                      <p className={cn("text-[11px] font-bold uppercase truncate", activeSlideIndex === idx ? "text-blue-400" : "text-slate-300")}>
+                        {s.titulo || 'Sin Título'}
+                      </p>
                     </div>
-                  ))}
-                </div>
-              </ScrollArea>
+                    <button className="opacity-0 group-hover:opacity-100 h-7 w-7 rounded-lg bg-red-500/10 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shrink-0" onClick={(e) => { e.stopPropagation(); handleDeleteSlide(s.id); }}>
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
             </aside>
             <main className="flex-1 bg-slate-950 p-6 md:p-10 overflow-y-auto custom-scrollbar">
               {slides.length > 0 ? (
@@ -707,7 +703,7 @@ export default function ProfesorDashboard() {
             </div>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 p-6 md:p-8 custom-scrollbar">
+          <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
             <div className="space-y-8 pr-2">
               {/* Upload Section */}
               <div className="border-2 border-dashed border-slate-200 rounded-[24px] p-6 md:p-10 text-center hover:border-emerald-400 transition-colors bg-slate-50/50 group">
@@ -725,7 +721,7 @@ export default function ProfesorDashboard() {
                 </label>
               </div>
 
-              {/* List Section */}
+              {/* List Section (Historial) */}
               <div className="space-y-4">
                 <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] flex items-center gap-2">
                   <File size={12} /> Archivos actuales ({resources.length})
@@ -771,7 +767,7 @@ export default function ProfesorDashboard() {
                 )}
               </div>
             </div>
-          </ScrollArea>
+          </div>
 
           <DialogFooter className="p-6 bg-slate-50 border-t shrink-0">
             <Button variant="outline" className="rounded-xl px-8 font-bold uppercase text-[10px] tracking-widest w-full md:w-auto" onClick={() => setIsResourceDialogOpen(false)}>
