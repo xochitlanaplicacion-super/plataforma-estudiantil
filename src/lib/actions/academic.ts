@@ -34,6 +34,7 @@ const prepareForUpsert = (data: any) => {
     'temas', 
     'ejercicios',
     'slides',
+    'resources',
     'created_at',
     'updated_at'
   ];
@@ -234,9 +235,10 @@ export async function upsertSlide(slide: any) {
     
     // Manejo especial de error si la columna no existe en el DB
     if (error && error.code === 'PGRST204') {
-      console.warn("La columna created_by no existe en slides. Reintentando sin ella...");
+      console.warn("La columna created_by o estilo no existe en slides. Reintentando sin ellas...");
       const fallbackData = { ...cleanData };
       delete fallbackData.created_by;
+      delete fallbackData.estilo;
       return await supabaseAdmin.from('slides').upsert(fallbackData).select().single();
     }
 
@@ -249,6 +251,29 @@ export async function upsertSlide(slide: any) {
 
 export async function deleteSlide(id: string) {
   const { error } = await supabaseAdmin.from('slides').delete().eq('id', id);
+  revalidatePath('/dashboard/profesor');
+  return { error };
+}
+
+// --- RECURSOS (FILES) ---
+export async function getResources(temaId: string) {
+  const { data, error } = await supabaseAdmin
+    .from('resources')
+    .select('*')
+    .eq('tema_id', temaId)
+    .order('created_at', { ascending: false });
+  return { data, error };
+}
+
+export async function upsertResource(resource: any) {
+  const cleanData = prepareForUpsert(resource);
+  const { data, error } = await supabaseAdmin.from('resources').upsert(cleanData).select().single();
+  revalidatePath('/dashboard/profesor');
+  return { data, error };
+}
+
+export async function deleteResourceRecord(id: string) {
+  const { error } = await supabaseAdmin.from('resources').delete().eq('id', id);
   revalidatePath('/dashboard/profesor');
   return { error };
 }
@@ -307,14 +332,13 @@ export async function replaceProfesorInAssignments(oldProfesorId: string, newPro
     if (errorAsig) throw errorAsig;
 
     // 2. Transferir propiedad del contenido
-    // Intentamos actualizar created_by en todas las tablas. 
-    // Usamos catch para ignorar errores si las columnas aún no existen físicamente.
     try {
       await Promise.all([
         supabaseAdmin.from('unidades').update({ created_by: newProfesorId }).eq('created_by', oldProfesorId),
         supabaseAdmin.from('temas').update({ created_by: newProfesorId }).eq('created_by', oldProfesorId),
         supabaseAdmin.from('ejercicios').update({ created_by: newProfesorId }).eq('created_by', oldProfesorId),
-        supabaseAdmin.from('slides').update({ created_by: newProfesorId }).eq('created_by', oldProfesorId)
+        supabaseAdmin.from('slides').update({ created_by: newProfesorId }).eq('created_by', oldProfesorId),
+        supabaseAdmin.from('resources').update({ created_by: newProfesorId }).eq('created_by', oldProfesorId)
       ]);
     } catch (e) {
       console.warn("Algunas tablas no tienen la columna created_by aún. Traspaso parcial completado.");
