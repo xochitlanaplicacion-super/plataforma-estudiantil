@@ -131,9 +131,29 @@ export default function ProfesorDashboard() {
     const { data: { user } } = await supabase.auth.getUser();
     
     try {
-      if (dialog.type === 'unidad') result = await upsertUnidad({...d, materia_id: selectedMateria.id, created_by: user?.id});
-      if (dialog.type === 'tema') result = await upsertTema({...d, unidad_id: selectedUnidad.id, created_by: user?.id});
-      if (dialog.type === 'ejercicio') result = await upsertEjercicio({...d, tema_id: selectedTema.id, created_by: user?.id});
+      if (dialog.type === 'unidad') {
+        if (!selectedMateria?.id) {
+          toast({ variant: "destructive", title: "Error", description: "No hay una materia seleccionada." });
+          return;
+        }
+        result = await upsertUnidad({...d, materia_id: selectedMateria.id, created_by: user?.id});
+      }
+      
+      if (dialog.type === 'tema') {
+        if (!selectedUnidad?.id) {
+          toast({ variant: "destructive", title: "Error", description: "No hay una unidad seleccionada." });
+          return;
+        }
+        result = await upsertTema({...d, unidad_id: selectedUnidad.id, created_by: user?.id});
+      }
+      
+      if (dialog.type === 'ejercicio') {
+        if (!selectedTema?.id) {
+          toast({ variant: "destructive", title: "Error", description: "No hay un tema seleccionado." });
+          return;
+        }
+        result = await upsertEjercicio({...d, tema_id: selectedTema.id, created_by: user?.id});
+      }
 
       if (result && !result.error) {
         toast({ title: "Guardado con éxito" });
@@ -141,8 +161,8 @@ export default function ProfesorDashboard() {
         if (dialog.type === 'unidad') fetchUnidades(selectedMateria.id);
         if (dialog.type === 'tema') fetchTemas(selectedUnidad.id);
         if (dialog.type === 'ejercicio') fetchEjercicios(selectedTema.id);
-      } else {
-        toast({ variant: "destructive", title: "Error", description: result?.error?.message || "No se pudo guardar." });
+      } else if (result) {
+        toast({ variant: "destructive", title: "Error", description: result.error?.message || "No se pudo guardar." });
       }
     } catch (e) {
       console.error(e);
@@ -329,8 +349,13 @@ export default function ProfesorDashboard() {
     );
   }
 
+  const splitImageUrls = (urls: string) => {
+    if (!urls) return [];
+    return urls.split(/,(?=http|data:)/).map(u => u.trim()).filter(Boolean);
+  };
+
   const ImageGrid = ({ urls }: { urls: string }) => {
-    const list = urls.split(/,(?=http|data:)/).map(u => u.trim()).filter(Boolean);
+    const list = splitImageUrls(urls);
     if (list.length === 0) return null;
     
     return (
@@ -422,7 +447,15 @@ export default function ProfesorDashboard() {
           <TabsContent value="materias" className="mt-0">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {asignaciones.map((asig) => (
-                <Card key={asig.id} onClick={() => { setSelectedMateria(asig.materias); fetchUnidades(asig.materia_id); setCurrentTab('unidades'); }} className="cursor-pointer hover:shadow-2xl transition-all duration-300 border-2 border-slate-100 hover:border-primary/40 group relative overflow-hidden bg-white rounded-3xl">
+                <Card 
+                  key={asig.id} 
+                  onClick={() => { 
+                    setSelectedMateria({ ...asig.materias, id: asig.materia_id }); 
+                    fetchUnidades(asig.materia_id); 
+                    setCurrentTab('unidades'); 
+                  }} 
+                  className="cursor-pointer hover:shadow-2xl transition-all duration-300 border-2 border-slate-100 hover:border-primary/40 group relative overflow-hidden bg-white rounded-3xl"
+                >
                   <div className="h-2 bg-primary/20 group-hover:bg-primary transition-colors" />
                   <CardHeader className="p-6">
                     <div className="flex justify-between items-start mb-4">
@@ -665,7 +698,7 @@ export default function ProfesorDashboard() {
                       <p className="text-[10px] text-slate-500 font-bold uppercase italic">Puedes agregar hasta 4 imágenes por diapositiva separadas por comas. El formato Base64 es compatible.</p>
                     </div>
                     <div className="h-48 grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {slides[activeSlideIndex]?.imagen_url?.split(/,(?=http|data:)/).filter(Boolean).map((url: string, i: number) => (
+                      {splitImageUrls(slides[activeSlideIndex]?.imagen_url).map((url: string, i: number) => (
                         <div key={i} className="relative group rounded-xl overflow-hidden border border-white/10">
                           <img src={url.trim()} alt="Pre" className="w-full h-full object-cover" />
                         </div>
