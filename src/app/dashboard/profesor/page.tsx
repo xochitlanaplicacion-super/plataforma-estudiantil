@@ -555,7 +555,7 @@ export default function ProfesorDashboard() {
             </DialogDescription>
           </DialogHeader>
           
-          <ScrollArea className="flex-1 px-6 py-4">
+          <ScrollArea className="flex-1 px-6 py-4 custom-scrollbar">
             <div className="space-y-6">
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Título del Contenido</label>
@@ -619,7 +619,7 @@ export default function ProfesorDashboard() {
                   <Plus size={14} /> Nueva Diapositiva
                 </Button>
               </div>
-              <ScrollArea className="flex-1">
+              <ScrollArea className="flex-1 custom-scrollbar">
                 <div className="p-3 space-y-2">
                   {slides.map((s, idx) => (
                     <div key={s.id} onClick={() => setActiveSlideIndex(idx)} className={cn("p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-3 relative group", activeSlideIndex === idx ? "bg-blue-600/10 border-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.2)]" : "border-transparent hover:bg-white/5")}>
@@ -707,8 +707,8 @@ export default function ProfesorDashboard() {
             </div>
           </DialogHeader>
 
-          <ScrollArea className="flex-1 p-6 md:p-8">
-            <div className="space-y-8">
+          <ScrollArea className="flex-1 p-6 md:p-8 custom-scrollbar">
+            <div className="space-y-8 pr-2">
               {/* Upload Section */}
               <div className="border-2 border-dashed border-slate-200 rounded-[24px] p-6 md:p-10 text-center hover:border-emerald-400 transition-colors bg-slate-50/50 group">
                 <label className="cursor-pointer flex flex-col items-center gap-4">
