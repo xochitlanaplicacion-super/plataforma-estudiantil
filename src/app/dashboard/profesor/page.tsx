@@ -634,7 +634,7 @@ export default function ProfesorDashboard() {
               </div>
             </aside>
             <main className="flex-1 bg-slate-950 p-6 md:p-10 overflow-y-auto custom-scrollbar">
-              {slides.length > 0 ? (
+              {slides.length > 0 && slides[activeSlideIndex] ? (
                 <div className="max-w-4xl mx-auto space-y-10">
                   <div className="space-y-4">
                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] flex items-center gap-2">
