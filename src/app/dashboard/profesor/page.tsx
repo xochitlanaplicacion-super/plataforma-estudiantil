@@ -545,60 +545,192 @@ export default function ProfesorDashboard() {
 
       {/* PROFESSOR ACADEMIC DIALOG */}
       <Dialog open={dialog.open} onOpenChange={o => setDialog({...dialog, open: o})}>
-        <DialogContent className="max-w-xl rounded-[32px]">
-          <DialogHeader><DialogTitle className="capitalize font-black text-2xl uppercase tracking-tight text-primary">{dialog.data.id ? 'Editar' : 'Nueva'} {dialog.type}</DialogTitle><DialogDescription className="text-xs uppercase font-bold text-slate-400">Completa la información técnica del contenido.</DialogDescription></DialogHeader>
-          <div className="space-y-6 py-6"><div className="space-y-2"><label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Título del Contenido</label><Input placeholder="EJ. INTRODUCCIÓN A LA LÓGICA" className="h-12 rounded-xl bg-slate-50 border-slate-200 focus:ring-primary/20 uppercase font-bold" value={dialog.data.titulo || ''} onChange={e => setDialog({...dialog, data: {...dialog.data, titulo: e.target.value.toUpperCase()}})} /></div><div className="space-y-2"><label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Orden en el Programa</label><Input type="number" className="h-12 rounded-xl bg-slate-50 border-slate-200" value={dialog.data.orden || 1} onChange={e => setDialog({...dialog, data: {...dialog.data, orden: parseInt(e.target.value)}})} /></div>{dialog.type === 'tema' && (<div className="space-y-2"><label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Contenido / Descripción</label><textarea rows={6} className="w-full p-4 rounded-xl bg-slate-50 border-slate-200 text-sm focus:ring-primary/20 outline-none" placeholder="Redacta aquí el contenido del tema..." value={dialog.data.contenido || ''} onChange={e => setDialog({...dialog, data: {...dialog.data, contenido: e.target.value}})} /></div>)}</div>
-          <DialogFooter className="gap-2">{dialog.data.id && (<Button variant="ghost" className="text-destructive font-black uppercase text-xs mr-auto hover:bg-red-50" onClick={() => { handleDelete(dialog.type, dialog.data.id); setDialog({...dialog, open: false}); }}>Eliminar {dialog.type}</Button>)}<Button variant="outline" className="rounded-xl px-6 font-bold" onClick={() => setDialog({ ...dialog, open: false })}>Cancelar</Button><Button className="bg-primary px-8 rounded-xl font-black uppercase tracking-widest shadow-lg" onClick={handleSave}>Guardar Cambios</Button></DialogFooter>
+        <DialogContent className="max-w-xl w-[95vw] max-h-[90vh] flex flex-col p-0 rounded-[32px] overflow-hidden">
+          <DialogHeader className="p-6 pb-2 shrink-0">
+            <DialogTitle className="capitalize font-black text-2xl uppercase tracking-tight text-primary">
+              {dialog.data.id ? 'Editar' : 'Nueva'} {dialog.type}
+            </DialogTitle>
+            <DialogDescription className="text-xs uppercase font-bold text-slate-400">
+              Completa la información técnica del contenido.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <ScrollArea className="flex-1 px-6 py-4">
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Título del Contenido</label>
+                <Input placeholder="EJ. INTRODUCCIÓN A LA LÓGICA" className="h-12 rounded-xl bg-slate-50 border-slate-200 focus:ring-primary/20 uppercase font-bold" value={dialog.data.titulo || ''} onChange={e => setDialog({...dialog, data: {...dialog.data, titulo: e.target.value.toUpperCase()}})} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Orden en el Programa</label>
+                <Input type="number" className="h-12 rounded-xl bg-slate-50 border-slate-200" value={dialog.data.orden || 1} onChange={e => setDialog({...dialog, data: {...dialog.data, orden: parseInt(e.target.value)}})} />
+              </div>
+              {dialog.type === 'tema' && (
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Contenido / Descripción</label>
+                  <textarea rows={6} className="w-full p-4 rounded-xl bg-slate-50 border-slate-200 text-sm focus:ring-primary/20 outline-none" placeholder="Redacta aquí el contenido del tema..." value={dialog.data.contenido || ''} onChange={e => setDialog({...dialog, data: {...dialog.data, contenido: e.target.value}})} />
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+
+          <DialogFooter className="p-6 pt-2 shrink-0 border-t bg-slate-50/50 gap-2">
+            {dialog.data.id && (
+              <Button variant="ghost" className="text-destructive font-black uppercase text-xs mr-auto hover:bg-red-50" onClick={() => { handleDelete(dialog.type, dialog.data.id); setDialog({...dialog, open: false}); }}>
+                Eliminar {dialog.type}
+              </Button>
+            )}
+            <Button variant="outline" className="rounded-xl px-6 font-bold" onClick={() => setDialog({ ...dialog, open: false })}>
+              Cancelar
+            </Button>
+            <Button className="bg-primary px-8 rounded-xl font-black uppercase tracking-widest shadow-lg" onClick={handleSave}>
+              Guardar Cambios
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* SLIDE EDITOR DIALOG */}
       <Dialog open={slideDialogOpen} onOpenChange={setSlideDialogOpne}>
         <DialogContent className="max-w-[95vw] w-[1300px] h-[90vh] flex flex-col p-0 rounded-3xl overflow-hidden shadow-2xl border-none">
-          <DialogHeader className="p-6 bg-slate-900 border-b border-white/5 flex flex-row justify-between items-center space-y-0 shrink-0"><div><DialogTitle className="text-2xl font-black uppercase tracking-tight text-white flex items-center gap-3"><Presentation className="text-blue-400" /> Diseño de Clase: {selectedTema?.titulo}</DialogTitle><DialogDescription className="text-xs font-bold text-slate-400 uppercase">Organiza tus diapositivas y elige estilos visuales.</DialogDescription></div><div className="flex gap-3"><Button variant="default" className="bg-blue-600 hover:bg-blue-700 rounded-xl font-black uppercase tracking-widest gap-2 shadow-lg h-12 px-6" onClick={() => setPresentationMode(true)} disabled={slides.length === 0}><Play size={18} fill="currentColor" /> Presentar</Button><Button variant="ghost" className="rounded-xl font-bold text-white hover:bg-white/5 h-12 px-6 border border-white/10" onClick={() => setSlideDialogOpne(false)}>Cerrar</Button></div></DialogHeader>
-          <div className="flex-1 flex overflow-hidden bg-slate-950"><aside className="w-72 bg-slate-900 border-r border-white/5 flex flex-col shrink-0"><div className="p-4 border-b border-white/5"><Button className="w-full gap-2 rounded-xl bg-blue-600 font-black uppercase text-[10px] tracking-widest h-12" onClick={handleAddSlide}><Plus size={14} /> Nueva Diapositiva</Button></div><ScrollArea className="flex-1"><div className="p-3 space-y-2">{slides.map((s, idx) => (<div key={s.id} onClick={() => setActiveSlideIndex(idx)} className={cn("p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-3 relative group", activeSlideIndex === idx ? "bg-blue-600/10 border-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.2)]" : "border-transparent hover:bg-white/5")}><span className="text-xs font-black text-slate-500">{idx + 1}</span><div className="flex-1 truncate"><p className={cn("text-[11px] font-bold uppercase truncate", activeSlideIndex === idx ? "text-blue-400" : "text-slate-300")}>{s.titulo || 'Sin Título'}</p></div><button className="opacity-0 group-hover:opacity-100 h-7 w-7 rounded-lg bg-red-500/10 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shrink-0" onClick={(e) => { e.stopPropagation(); handleDeleteSlide(s.id); }}><Trash2 size={14} /></button></div>))}</div></ScrollArea></aside><main className="flex-1 bg-slate-950 p-10 overflow-y-auto custom-scrollbar">{slides.length > 0 ? (<div className="max-w-4xl mx-auto space-y-10"><div className="space-y-4"><label className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] flex items-center gap-2"><Palette size={14} /> Estilo Visual de la Diapositiva</label><div className="grid grid-cols-4 gap-4">{['azul', 'vino', 'verde', 'oscuro'].map((est) => (<button key={est} onClick={() => handleUpdateSlide(slides[activeSlideIndex].id, { estilo: est })} className={cn("h-12 rounded-xl font-black text-[10px] uppercase transition-all border-2", slides[activeSlideIndex].estilo === est ? "border-blue-500 scale-105 shadow-lg" : "border-white/5 opacity-50 hover:opacity-100", est === 'azul' ? 'bg-blue-900 text-white' : est === 'vino' ? 'bg-rose-900 text-white' : est === 'verde' ? 'bg-emerald-900 text-white' : 'bg-slate-800 text-white')}>{est}</button>))}</div></div><div className="space-y-4"><label className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Título Principal</label><Input className="text-2xl h-16 font-black uppercase border-none bg-white/5 text-white focus:bg-white/10 focus:ring-blue-500/50 rounded-2xl px-6 transition-all" placeholder="ESCRIBE EL TÍTULO AQUÍ..." value={slides[activeSlideIndex]?.titulo || ''} onChange={(e) => handleUpdateSlide(slides[activeSlideIndex].id, { titulo: e.target.value.toUpperCase() })} /></div><div className="space-y-4"><label className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Cuerpo de Texto</label><textarea className="w-full p-6 text-lg min-h-[200px] font-medium leading-relaxed bg-white/5 border-none text-slate-200 focus:bg-white/10 focus:ring-blue-500/50 rounded-3xl outline-none resize-none transition-all" placeholder="Redacta los puntos clave de esta diapositiva..." value={slides[activeSlideIndex]?.contenido || ''} onChange={(e) => handleUpdateSlide(slides[activeSlideIndex].id, { contenido: e.target.value })} /></div><div className="bg-blue-600/5 p-8 rounded-3xl border border-white/5 flex flex-col gap-6"><div className="space-y-4"><label className="text-[10px] font-black uppercase text-blue-400 tracking-[0.2em] flex items-center gap-2"><ImageIcon size={14} /> Enlaces de Imágenes (Separados por coma)</label><textarea className="w-full p-4 bg-slate-900 border-white/10 rounded-2xl text-white text-sm focus:ring-blue-500/50 outline-none min-h-[80px]" placeholder="https://img1.jpg, https://img2.jpg o data:image/..." value={slides[activeSlideIndex]?.imagen_url || ''} onChange={(e) => handleUpdateSlide(slides[activeSlideIndex].id, { imagen_url: e.target.value })} /><p className="text-[10px] text-slate-500 font-bold uppercase italic">Puedes agregar hasta 4 imágenes por diapositiva separadas por comas. El formato Base64 es compatible.</p></div><div className="h-48 grid grid-cols-2 md:grid-cols-4 gap-4">{slides[activeSlideIndex]?.imagen_url?.split(/,(?=http|data:)/).filter(Boolean).map((url: string, i: number) => (<div key={i} className="relative group rounded-xl overflow-hidden border border-white/10"><img src={url.trim()} alt="Pre" className="w-full h-full object-cover" /></div>))}<div className="border-2 border-dashed border-white/10 rounded-xl flex items-center justify-center text-slate-600"><Plus size={24} /></div></div></div></div>) : (<div className="h-full flex flex-col items-center justify-center text-center p-12 opacity-20"><Presentation size={100} className="mb-6 text-white" /><h3 className="text-3xl font-black uppercase text-white">Laboratorio Creativo</h3><p className="max-w-xs mt-4 text-slate-400">Haz clic en "+ Nueva Diapositiva" para comenzar a diseñar tu material educativo.</p></div>)}</main></div>
+          <DialogHeader className="p-6 bg-slate-900 border-b border-white/5 flex flex-row justify-between items-center space-y-0 shrink-0">
+            <div>
+              <DialogTitle className="text-2xl font-black uppercase tracking-tight text-white flex items-center gap-3">
+                <Presentation className="text-blue-400" /> Diseño de Clase: {selectedTema?.titulo}
+              </DialogTitle>
+              <DialogDescription className="text-xs font-bold text-slate-400 uppercase">
+                Organiza tus diapositivas y elige estilos visuales.
+              </DialogDescription>
+            </div>
+            <div className="flex gap-3">
+              <Button variant="default" className="bg-blue-600 hover:bg-blue-700 rounded-xl font-black uppercase tracking-widest gap-2 shadow-lg h-12 px-6" onClick={() => setPresentationMode(true)} disabled={slides.length === 0}>
+                <Play size={18} fill="currentColor" /> Presentar
+              </Button>
+              <Button variant="ghost" className="rounded-xl font-bold text-white hover:bg-white/5 h-12 px-6 border border-white/10" onClick={() => setSlideDialogOpne(false)}>
+                Cerrar
+              </Button>
+            </div>
+          </DialogHeader>
+          
+          <div className="flex-1 flex overflow-hidden bg-slate-950">
+            <aside className="w-72 bg-slate-900 border-r border-white/5 flex flex-col shrink-0">
+              <div className="p-4 border-b border-white/5">
+                <Button className="w-full gap-2 rounded-xl bg-blue-600 font-black uppercase text-[10px] tracking-widest h-12" onClick={handleAddSlide}>
+                  <Plus size={14} /> Nueva Diapositiva
+                </Button>
+              </div>
+              <ScrollArea className="flex-1">
+                <div className="p-3 space-y-2">
+                  {slides.map((s, idx) => (
+                    <div key={s.id} onClick={() => setActiveSlideIndex(idx)} className={cn("p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-3 relative group", activeSlideIndex === idx ? "bg-blue-600/10 border-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.2)]" : "border-transparent hover:bg-white/5")}>
+                      <span className="text-xs font-black text-slate-500">{idx + 1}</span>
+                      <div className="flex-1 truncate">
+                        <p className={cn("text-[11px] font-bold uppercase truncate", activeSlideIndex === idx ? "text-blue-400" : "text-slate-300")}>
+                          {s.titulo || 'Sin Título'}
+                        </p>
+                      </div>
+                      <button className="opacity-0 group-hover:opacity-100 h-7 w-7 rounded-lg bg-red-500/10 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shrink-0" onClick={(e) => { e.stopPropagation(); handleDeleteSlide(s.id); }}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </ScrollArea>
+            </aside>
+            <main className="flex-1 bg-slate-950 p-6 md:p-10 overflow-y-auto custom-scrollbar">
+              {slides.length > 0 ? (
+                <div className="max-w-4xl mx-auto space-y-10">
+                  <div className="space-y-4">
+                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] flex items-center gap-2">
+                      <Palette size={14} /> Estilo Visual de la Diapositiva
+                    </label>
+                    <div className="grid grid-cols-4 gap-4">
+                      {['azul', 'vino', 'verde', 'oscuro'].map((est) => (
+                        <button key={est} onClick={() => handleUpdateSlide(slides[activeSlideIndex].id, { estilo: est })} className={cn("h-12 rounded-xl font-black text-[10px] uppercase transition-all border-2", slides[activeSlideIndex].estilo === est ? "border-blue-500 scale-105 shadow-lg" : "border-white/5 opacity-50 hover:opacity-100", est === 'azul' ? 'bg-blue-900 text-white' : est === 'vino' ? 'bg-rose-900 text-white' : est === 'verde' ? 'bg-emerald-900 text-white' : 'bg-slate-800 text-white')}>
+                          {est}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Título Principal</label>
+                    <Input className="text-2xl h-16 font-black uppercase border-none bg-white/5 text-white focus:bg-white/10 focus:ring-blue-500/50 rounded-2xl px-6 transition-all" placeholder="ESCRIBE EL TÍTULO AQUÍ..." value={slides[activeSlideIndex]?.titulo || ''} onChange={(e) => handleUpdateSlide(slides[activeSlideIndex].id, { titulo: e.target.value.toUpperCase() })} />
+                  </div>
+                  <div className="space-y-4">
+                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Cuerpo de Texto</label>
+                    <textarea className="w-full p-6 text-lg min-h-[200px] font-medium leading-relaxed bg-white/5 border-none text-slate-200 focus:bg-white/10 focus:ring-blue-500/50 rounded-3xl outline-none resize-none transition-all" placeholder="Redacta los puntos clave de esta diapositiva..." value={slides[activeSlideIndex]?.contenido || ''} onChange={(e) => handleUpdateSlide(slides[activeSlideIndex].id, { contenido: e.target.value })} />
+                  </div>
+                  <div className="bg-blue-600/5 p-8 rounded-3xl border border-white/5 flex flex-col gap-6">
+                    <div className="space-y-4">
+                      <label className="text-[10px] font-black uppercase text-blue-400 tracking-[0.2em] flex items-center gap-2">
+                        <ImageIcon size={14} /> Enlaces de Imágenes (Separados por coma)
+                      </label>
+                      <textarea className="w-full p-4 bg-slate-900 border-white/10 rounded-2xl text-white text-sm focus:ring-blue-500/50 outline-none min-h-[80px]" placeholder="https://img1.jpg, https://img2.jpg o data:image/..." value={slides[activeSlideIndex]?.imagen_url || ''} onChange={(e) => handleUpdateSlide(slides[activeSlideIndex].id, { imagen_url: e.target.value })} />
+                      <p className="text-[10px] text-slate-500 font-bold uppercase italic">Puedes agregar hasta 4 imágenes por diapositiva separadas por comas. El formato Base64 es compatible.</p>
+                    </div>
+                    <div className="h-48 grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {slides[activeSlideIndex]?.imagen_url?.split(/,(?=http|data:)/).filter(Boolean).map((url: string, i: number) => (
+                        <div key={i} className="relative group rounded-xl overflow-hidden border border-white/10">
+                          <img src={url.trim()} alt="Pre" className="w-full h-full object-cover" />
+                        </div>
+                      ))}
+                      <div className="border-2 border-dashed border-white/10 rounded-xl flex items-center justify-center text-slate-600">
+                        <Plus size={24} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center text-center p-12 opacity-20">
+                  <Presentation size={100} className="mb-6 text-white" />
+                  <h3 className="text-3xl font-black uppercase text-white">Laboratorio Creativo</h3>
+                  <p className="max-w-xs mt-4 text-slate-400">Haz clic en "+ Nueva Diapositiva" para comenzar a diseñar tu material educativo.</p>
+                </div>
+              )}
+            </main>
+          </div>
         </DialogContent>
       </Dialog>
 
       {/* RESOURCE MANAGEMENT DIALOG */}
       <Dialog open={isResourceDialogOpen} onOpenChange={setIsResourceDialogOpen}>
-        <DialogContent className="max-w-2xl rounded-[32px] overflow-hidden p-0">
-          <DialogHeader className="p-8 bg-slate-50 border-b">
+        <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] flex flex-col p-0 rounded-[32px] overflow-hidden shadow-2xl">
+          <DialogHeader className="p-6 md:p-8 bg-slate-50 border-b shrink-0">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-emerald-100 text-emerald-600 rounded-2xl">
                 <Paperclip size={24} />
               </div>
               <div>
-                <DialogTitle className="text-2xl font-black uppercase tracking-tight text-slate-800">Recursos de {selectedTema?.titulo}</DialogTitle>
+                <DialogTitle className="text-xl md:text-2xl font-black uppercase tracking-tight text-slate-800">Recursos de {selectedTema?.titulo}</DialogTitle>
                 <DialogDescription className="text-xs font-bold text-slate-500 uppercase">Gestiona materiales descargables para tus alumnos.</DialogDescription>
               </div>
             </div>
           </DialogHeader>
 
-          <div className="p-8 space-y-8">
-            {/* Upload Section */}
-            <div className="border-2 border-dashed border-slate-200 rounded-[24px] p-10 text-center hover:border-emerald-400 transition-colors bg-slate-50/50 group">
-              <label className="cursor-pointer flex flex-col items-center gap-4">
-                <div className="h-16 w-16 rounded-full bg-white shadow-md flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
-                  {uploading ? <Loader2 className="animate-spin" size={32} /> : <FileUp size={32} />}
-                </div>
-                <div>
-                  <p className="font-black text-slate-700 uppercase tracking-widest text-sm">
-                    {uploading ? "Subiendo archivo..." : "Haz clic para subir un recurso"}
-                  </p>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase mt-2 tracking-tighter">PDF, WORD, EXCEL, PPTX o CSV (Máx. 3MB)</p>
-                </div>
-                <input type="file" className="hidden" onChange={handleFileUpload} disabled={uploading} accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv" />
-              </label>
-            </div>
+          <ScrollArea className="flex-1 p-6 md:p-8">
+            <div className="space-y-8">
+              {/* Upload Section */}
+              <div className="border-2 border-dashed border-slate-200 rounded-[24px] p-6 md:p-10 text-center hover:border-emerald-400 transition-colors bg-slate-50/50 group">
+                <label className="cursor-pointer flex flex-col items-center gap-4">
+                  <div className="h-16 w-16 rounded-full bg-white shadow-md flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
+                    {uploading ? <Loader2 className="animate-spin" size={32} /> : <FileUp size={32} />}
+                  </div>
+                  <div>
+                    <p className="font-black text-slate-700 uppercase tracking-widest text-sm">
+                      {uploading ? "Subiendo archivo..." : "Haz clic para subir un recurso"}
+                    </p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase mt-2 tracking-tighter">PDF, WORD, EXCEL, PPTX o CSV (Máx. 3MB)</p>
+                  </div>
+                  <input type="file" className="hidden" onChange={handleFileUpload} disabled={uploading} accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv" />
+                </label>
+              </div>
 
-            {/* List Section */}
-            <div className="space-y-4">
-              <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] flex items-center gap-2">
-                <File size={12} /> Archivos actuales ({resources.length})
-              </h4>
-              
-              <ScrollArea className="h-[250px] pr-4">
+              {/* List Section */}
+              <div className="space-y-4">
+                <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] flex items-center gap-2">
+                  <File size={12} /> Archivos actuales ({resources.length})
+                </h4>
+                
                 {resources.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-10 opacity-30 italic">
                     <Info size={32} className="mb-2" />
@@ -619,7 +751,7 @@ export default function ProfesorDashboard() {
                             {res.tipo}
                           </div>
                           <div className="flex flex-col">
-                            <span className="font-bold text-slate-700 uppercase text-xs truncate max-w-[250px]">{res.titulo}</span>
+                            <span className="font-bold text-slate-700 uppercase text-xs truncate max-w-[150px] md:max-w-[250px]">{res.titulo}</span>
                             <span className="text-[9px] text-slate-400 font-bold uppercase">{new Date(res.created_at).toLocaleDateString()}</span>
                           </div>
                         </div>
@@ -637,12 +769,14 @@ export default function ProfesorDashboard() {
                     ))}
                   </div>
                 )}
-              </ScrollArea>
+              </div>
             </div>
-          </div>
+          </ScrollArea>
 
-          <DialogFooter className="p-6 bg-slate-50 border-t">
-            <Button variant="outline" className="rounded-xl px-8 font-bold uppercase text-[10px] tracking-widest" onClick={() => setIsResourceDialogOpen(false)}>Cerrar</Button>
+          <DialogFooter className="p-6 bg-slate-50 border-t shrink-0">
+            <Button variant="outline" className="rounded-xl px-8 font-bold uppercase text-[10px] tracking-widest w-full md:w-auto" onClick={() => setIsResourceDialogOpen(false)}>
+              Cerrar
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
