@@ -41,7 +41,10 @@ import {
   Eye,
   FileSearch,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  RotateCcw,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import { 
   getMyAsignaciones, 
@@ -436,24 +439,32 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
   const [currentStep, setCurrentStep] = useState(0);
   const [score, setScore] = useState(0);
   const [finished, setSuccess] = useState(false);
-  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const [selectedOption, setSelectedOption] = useState<any>(null);
   const [shuffledItems, setShuffledItems] = useState<any[]>([]);
+  const [sequenceItems, setSequenceItems] = useState<string[]>([]);
+  const [matchedPairs, setMatchedPairs] = useState<Record<string, string>>({});
+  const [currentLeft, setCurrentLeft] = useState<string | null>(null);
+  const [isFlipped, setIsFlipped] = useState(false);
+  const [fillAnswers, setFillAnswers] = useState<Record<number, string>>({});
 
   const content = useMemo(() => {
     return typeof exercise.contenido === 'string' ? JSON.parse(exercise.contenido || '{}') : exercise.contenido;
   }, [exercise]);
 
   useEffect(() => {
-    if (content.items) {
-      setShuffledItems([...content.items].sort(() => Math.random() - 0.5));
+    if (exercise.tipo === 'opcion_multiple' || exercise.tipo === 'verdadero_falso' || exercise.tipo === 'flashcards') {
+      if (content.items) setShuffledItems([...content.items].sort(() => Math.random() - 0.5));
+    } else if (exercise.tipo === 'ordenar_secuencia' && content.items) {
+      setSequenceItems([...content.items].sort(() => Math.random() - 0.5));
     }
-  }, [content]);
+  }, [content, exercise.tipo]);
 
   const handleNext = (isCorrect: boolean) => {
     if (isCorrect) setScore(s => s + 1);
     if (currentStep + 1 < (shuffledItems.length || 1)) {
       setCurrentStep(s => s + 1);
       setSelectedOption(null);
+      setIsFlipped(false);
     } else {
       setSuccess(true);
     }
@@ -506,6 +517,194 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
       );
     }
 
+    if (exercise.tipo === 'verdadero_falso' && shuffledItems.length > 0) {
+      const q = shuffledItems[currentStep];
+      return (
+        <div className="max-w-2xl mx-auto space-y-8 py-10">
+          <div className="flex justify-between items-center px-4">
+            <Badge className="bg-emerald-600 text-white px-4 py-1">AFIRMACIÓN {currentStep + 1} / {shuffledItems.length}</Badge>
+            <span className="text-xs font-black text-slate-400">ACIERTOS: {score}</span>
+          </div>
+          <div className="bg-white p-10 rounded-[40px] border-2 border-slate-100 shadow-xl text-center">
+            <h3 className="text-2xl font-black text-slate-800 uppercase leading-relaxed">{q.statement}</h3>
+          </div>
+          <div className="grid grid-cols-2 gap-6">
+            <button onClick={() => setSelectedOption(true)} className={cn("p-8 rounded-[32px] border-2 font-black uppercase text-xl transition-all", selectedOption === true ? "bg-emerald-600 border-emerald-600 text-white shadow-xl scale-[1.05]" : "bg-white border-slate-100 hover:border-emerald-200 text-emerald-600")}>VERDADERO</button>
+            <button onClick={() => setSelectedOption(false)} className={cn("p-8 rounded-[32px] border-2 font-black uppercase text-xl transition-all", selectedOption === false ? "bg-red-600 border-red-600 text-white shadow-xl scale-[1.05]" : "bg-white border-slate-100 hover:border-red-200 text-red-600")}>FALSO</button>
+          </div>
+          <Button disabled={selectedOption === null} onClick={() => handleNext(selectedOption === q.correct)} className="w-full h-16 rounded-[32px] bg-slate-800 text-white font-black uppercase text-lg tracking-widest shadow-xl">Confirmar Respuesta</Button>
+        </div>
+      );
+    }
+
+    if (exercise.tipo === 'emparejamiento' && content.items) {
+      const leftItems = content.items.map((i: any) => i.left);
+      const rightItems = [...content.items.map((i: any) => i.right)].sort(() => Math.random() - 0.5);
+      
+      const isComplete = Object.keys(matchedPairs).length === leftItems.length;
+
+      const handleMatch = (right: string) => {
+        if (!currentLeft) return;
+        setMatchedPairs({ ...matchedPairs, [currentLeft]: right });
+        setCurrentLeft(null);
+      };
+
+      return (
+        <div className="max-w-4xl mx-auto space-y-8 py-10">
+          <div className="text-center space-y-2">
+            <h3 className="text-2xl font-black text-slate-800 uppercase">Relación de Columnas</h3>
+            <p className="text-slate-500 font-bold uppercase text-xs">Selecciona un concepto de la izquierda y luego su definición a la derecha.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-10">
+            <div className="space-y-4">
+              {leftItems.map((left: string, i: number) => (
+                <button key={i} onClick={() => setCurrentLeft(left)} disabled={!!matchedPairs[left]} className={cn("w-full p-5 rounded-2xl border-2 text-left font-bold transition-all", matchedPairs[left] ? "bg-slate-100 border-slate-200 opacity-50" : currentLeft === left ? "border-purple-600 bg-purple-50 text-purple-700 ring-2 ring-purple-200 shadow-lg" : "bg-white border-slate-100 hover:border-purple-200")}>
+                  {left}
+                </button>
+              ))}
+            </div>
+            <div className="space-y-4">
+              {rightItems.map((right: string, i: number) => {
+                const matchedWith = Object.entries(matchedPairs).find(([l, r]) => r === right)?.[0];
+                return (
+                  <button key={i} onClick={() => handleMatch(right)} disabled={!currentLeft || !!matchedWith} className={cn("w-full p-5 rounded-2xl border-2 text-left font-bold transition-all h-full min-h-[60px]", matchedWith ? "bg-purple-600 border-purple-600 text-white shadow-md" : !currentLeft ? "bg-slate-50 border-transparent opacity-40" : "bg-white border-slate-100 hover:border-purple-400 shadow-sm")}>
+                    {right}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          {isComplete && (
+            <Button onClick={() => setSuccess(true)} className="w-full h-16 rounded-[32px] bg-purple-600 text-white font-black uppercase text-lg tracking-widest shadow-xl">Finalizar Ejercicio</Button>
+          )}
+        </div>
+      );
+    }
+
+    if (exercise.tipo === 'ordenar_secuencia' && sequenceItems.length > 0) {
+      const move = (idx: number, dir: number) => {
+        const newItems = [...sequenceItems];
+        const targetIdx = idx + dir;
+        if (targetIdx < 0 || targetIdx >= newItems.length) return;
+        [newItems[idx], newItems[targetIdx]] = [newItems[targetIdx], newItems[idx]];
+        setSequenceItems(newItems);
+      };
+
+      return (
+        <div className="max-w-2xl mx-auto space-y-8 py-10">
+          <div className="text-center">
+            <h3 className="text-2xl font-black text-slate-800 uppercase">Ordenar Pasos</h3>
+            <p className="text-xs font-bold text-slate-400 uppercase mt-2">Usa las flechas para organizar la secuencia correctamente.</p>
+          </div>
+          <div className="space-y-3">
+            {sequenceItems.map((item, i) => (
+              <div key={i} className="flex items-center gap-4 p-5 bg-white border-2 border-slate-100 rounded-3xl shadow-sm group hover:border-orange-400 transition-colors">
+                <span className="h-10 w-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-black">{i + 1}</span>
+                <span className="flex-1 font-bold text-slate-700 uppercase text-sm">{item}</span>
+                <div className="flex flex-col gap-1">
+                  <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-orange-50 text-orange-600" onClick={() => move(i, -1)} disabled={i === 0}><ArrowUp size={16} /></Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-orange-50 text-orange-600" onClick={() => move(i, 1)} disabled={i === sequenceItems.length - 1}><ArrowDown size={16} /></Button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <Button onClick={() => setSuccess(true)} className="w-full h-16 rounded-[32px] bg-orange-500 text-white font-black uppercase text-lg tracking-widest shadow-xl">Verificar Orden</Button>
+        </div>
+      );
+    }
+
+    if (exercise.tipo === 'completar_espacios' && content.text) {
+      const parts = content.text.split(/\[\[(.*?)\]\]/);
+      return (
+        <div className="max-w-3xl mx-auto space-y-10 py-10">
+          <div className="text-center">
+            <h3 className="text-2xl font-black text-slate-800 uppercase">Completar el Texto</h3>
+          </div>
+          <div className="bg-white p-12 rounded-[40px] border-2 border-slate-100 shadow-xl leading-[3.5] text-lg font-medium text-slate-700">
+            {parts.map((part: string, i: number) => (
+              i % 2 === 0 ? <span key={i}>{part}</span> : (
+                <input key={i} type="text" value={fillAnswers[i] || ''} onChange={(e) => setFillAnswers({ ...fillAnswers, [i]: e.target.value })} className="inline-block border-b-4 border-pink-300 focus:border-pink-500 outline-none px-4 min-w-[150px] text-center font-black text-pink-600 bg-pink-50/30 rounded-t-lg transition-all mx-2" placeholder="..." />
+              )
+            ))}
+          </div>
+          <Button onClick={() => setSuccess(true)} className="w-full h-16 rounded-[32px] bg-pink-500 text-white font-black uppercase text-lg tracking-widest shadow-xl">Enviar Respuestas</Button>
+        </div>
+      );
+    }
+
+    if (exercise.tipo === 'flashcards' && shuffledItems.length > 0) {
+      const card = shuffledItems[currentStep];
+      return (
+        <div className="max-w-2xl mx-auto space-y-8 py-10">
+          <div className="flex justify-between items-center px-4">
+            <Badge className="bg-amber-500 text-white px-4 py-1">TARJETA {currentStep + 1} / {shuffledItems.length}</Badge>
+          </div>
+          <div className="perspective-1000 h-[400px]">
+            <div onClick={() => setIsFlipped(!isFlipped)} className={cn("relative w-full h-full transition-all duration-500 transform-style-3d cursor-pointer", isFlipped && "rotate-y-180")}>
+              {/* Frente */}
+              <div className="absolute inset-0 w-full h-full backface-hidden bg-white border-4 border-amber-100 rounded-[50px] flex flex-col items-center justify-center p-10 text-center shadow-xl">
+                <span className="text-[10px] font-black uppercase text-amber-400 tracking-[0.3em] mb-6">Término / Concepto</span>
+                <h3 className="text-3xl font-black text-slate-800 uppercase leading-tight">{card.front}</h3>
+                <p className="mt-10 text-[10px] font-black text-slate-300 uppercase animate-pulse">Haz clic para voltear</p>
+              </div>
+              {/* Reverso */}
+              <div className="absolute inset-0 w-full h-full backface-hidden rotate-y-180 bg-amber-500 border-4 border-amber-400 rounded-[50px] flex flex-col items-center justify-center p-10 text-center shadow-xl text-white">
+                <span className="text-[10px] font-black uppercase text-amber-200 tracking-[0.3em] mb-6">Definición / Respuesta</span>
+                <p className="text-2xl font-bold leading-relaxed">{card.back}</p>
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-4">
+            <Button onClick={() => handleNext(true)} className="flex-1 h-16 rounded-[32px] bg-emerald-600 text-white font-black uppercase text-lg tracking-widest shadow-xl">Lo sé</Button>
+            <Button onClick={() => handleNext(false)} className="flex-1 h-16 rounded-[32px] bg-slate-800 text-white font-black uppercase text-lg tracking-widest shadow-xl">Repasar</Button>
+          </div>
+        </div>
+      );
+    }
+
+    if (exercise.tipo === 'sopa_letras' && content.words) {
+      return (
+        <div className="max-w-4xl mx-auto space-y-10 py-10">
+          <div className="text-center">
+            <h3 className="text-2xl font-black text-slate-800 uppercase">Sopa de Letras</h3>
+            <p className="text-slate-500 font-bold uppercase text-xs">Encuentra las siguientes palabras ocultas en la cuadrícula.</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+            <div className="bg-white p-8 rounded-[40px] border-2 border-slate-100 shadow-xl flex flex-wrap gap-2 justify-center content-center">
+              {/* Simulación visual de cuadrícula */}
+              {Array.from({ length: 144 }).map((_, i) => (
+                <div key={i} className="h-8 w-8 rounded bg-slate-50 flex items-center justify-center text-[10px] font-black text-slate-400">
+                  {String.fromCharCode(65 + Math.floor(Math.random() * 26))}
+                </div>
+              ))}
+            </div>
+            <div className="space-y-6">
+              <div className="bg-indigo-50 p-6 rounded-3xl border-2 border-indigo-100">
+                <h4 className="text-[10px] font-black uppercase text-indigo-600 tracking-widest mb-4">Lista de Palabras</h4>
+                <ul className="space-y-2">
+                  {content.words.map((w: string, i: number) => (
+                    <li key={i} className="flex items-center gap-3">
+                      <div className="h-2 w-2 rounded-full bg-indigo-400" />
+                      <span className="font-black text-slate-700 uppercase text-sm">{w}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="bg-slate-50 p-6 rounded-3xl border-2 border-slate-100">
+                <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">Pistas</h4>
+                <ul className="space-y-3">
+                  {content.clues?.map((c: string, i: number) => (
+                    <li key={i} className="text-xs font-bold text-slate-600 uppercase italic">"{c}"</li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          </div>
+          <Button onClick={() => setSuccess(true)} className="w-full h-16 rounded-[32px] bg-indigo-600 text-white font-black uppercase text-lg tracking-widest shadow-xl">Finalizar Actividad</Button>
+        </div>
+      );
+    }
+
     return <div className="p-20 text-center opacity-20 italic">Vista previa en desarrollo para este tipo de ejercicio.</div>;
   };
 
@@ -532,7 +731,7 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
               </div>
               <div className="space-y-2">
                 <h2 className="text-4xl font-black text-slate-800 uppercase">¡Ejercicio Completado!</h2>
-                <p className="text-xl text-slate-500 font-bold uppercase">Resultado Final: {score} de {shuffledItems.length || 1}</p>
+                <p className="text-xl text-slate-500 font-bold uppercase">Resultado Final Simulado: {score} de {shuffledItems.length || (exercise.tipo === 'ordenar_secuencia' ? content.items?.length : 1)}</p>
               </div>
               <Button onClick={onClose} className="rounded-3xl px-12 h-16 bg-emerald-600 text-white font-black uppercase text-lg tracking-widest shadow-2xl hover:scale-105 transition-transform">Volver al Panel</Button>
             </div>
@@ -806,6 +1005,10 @@ export default function ProfesorDashboard() {
 
   if (presentationMode && slides.length > 0) {
     const slide = slides[activeSlideIndex];
+    if (!slide) {
+      setPresentationMode(false);
+      return null;
+    }
     const styleMap: any = {
       'azul': 'bg-slate-900 from-slate-900 to-blue-900 text-white',
       'vino': 'bg-[#4c0519] from-[#4c0519] to-[#8B2332] text-white',
@@ -1109,6 +1312,15 @@ export default function ProfesorDashboard() {
                   <textarea className="w-full p-6 text-lg min-h-[200px] font-medium bg-white/5 border-none text-slate-200 focus:bg-white/10 rounded-3xl outline-none resize-none" value={slides[activeSlideIndex]?.contenido || ''} onChange={(e) => handleUpdateSlide(slides[activeSlideIndex].id, { contenido: e.target.value })} />
                   <div className="bg-blue-600/5 p-8 rounded-3xl border border-white/5 space-y-4">
                     <label className="text-[10px] font-black uppercase text-blue-400 tracking-[0.2em] flex items-center gap-2"><ImageIcon size={14} /> Imágenes</label>
+                    {slides[activeSlideIndex]?.imagen_url && (
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        {splitImageUrls(slides[activeSlideIndex].imagen_url).map((url, i) => (
+                          <div key={i} className="relative aspect-video rounded-xl overflow-hidden border border-white/10">
+                            <img src={url} alt="Preview" className="w-full h-full object-cover" />
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <textarea className="w-full p-4 bg-slate-900 border-white/10 rounded-2xl text-white text-sm outline-none min-h-[80px]" value={slides[activeSlideIndex]?.imagen_url || ''} onChange={(e) => handleUpdateSlide(slides[activeSlideIndex].id, { imagen_url: e.target.value })} />
                   </div>
                 </div>
