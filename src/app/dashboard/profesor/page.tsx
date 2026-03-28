@@ -77,6 +77,302 @@ const ACTIVITY_TEMPLATES = [
   { id: 'flashcards', label: 'Flashcards', icon: <Sparkles size={16} />, color: 'bg-amber-500' },
 ];
 
+// Helper para inicializar el contenido de una actividad según su tipo
+const initActivityContent = (type: string) => {
+  switch(type) {
+    case 'opcion_multiple': return { items: [{ question: '', options: [{id: '1', text: ''}], correctId: '1', feedback: '' }] };
+    case 'verdadero_falso': return { items: [{ statement: '', correct: true, feedback: '' }] };
+    case 'emparejamiento': return { items: [{ left: '', right: '' }] };
+    case 'ordenar_secuencia': return { items: [''] };
+    case 'completar_espacios': return { text: '', bank: [] };
+    case 'sopa_letras': return { words: [''], clues: [''], size: 12 };
+    case 'flashcards': return { items: [{ front: '', back: '' }] };
+    default: return {};
+  }
+};
+
+// COMPONENTE SEPARADO PARA EVITAR RE-RENDERS QUE CAUSAN PÉRDIDA DE FOCO
+const TemplateEditor = ({ type, content, updateContent }: { type: string, content: any, updateContent: (newContent: any) => void }) => {
+  if (!type) return <div className="p-8 text-center opacity-30 italic">Selecciona una plantilla para comenzar.</div>;
+
+  if (type === 'opcion_multiple') {
+    return (
+      <div className="space-y-6">
+        {content.items?.map((item: any, qIdx: number) => (
+          <div key={qIdx} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-4">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-black text-primary uppercase">Pregunta {qIdx + 1}</span>
+              {content.items.length > 1 && (
+                <Button variant="ghost" size="sm" className="text-destructive h-6" onClick={() => {
+                  const newItems = [...content.items];
+                  newItems.splice(qIdx, 1);
+                  updateContent({ ...content, items: newItems });
+                }}><Trash2 size={14} /></Button>
+              )}
+            </div>
+            <Input 
+              placeholder="Enunciado de la pregunta..." 
+              value={item.question} 
+              onChange={(e) => {
+                const newItems = [...content.items];
+                newItems[qIdx].question = e.target.value;
+                updateContent({ ...content, items: newItems });
+              }} 
+            />
+            <div className="space-y-2">
+              {item.options?.map((opt: any, oIdx: number) => (
+                <div key={oIdx} className="flex gap-2 items-center">
+                  <input type="radio" checked={item.correctId === opt.id} onChange={() => {
+                    const newItems = [...content.items];
+                    newItems[qIdx].correctId = opt.id;
+                    updateContent({ ...content, items: newItems });
+                  }} />
+                  <Input 
+                    placeholder={`Opción ${oIdx + 1}`} 
+                    value={opt.text} 
+                    onChange={(e) => {
+                      const newItems = [...content.items];
+                      newItems[qIdx].options[oIdx].text = e.target.value;
+                      updateContent({ ...content, items: newItems });
+                    }} 
+                  />
+                  <Button variant="ghost" size="sm" onClick={() => {
+                    const newItems = [...content.items];
+                    newItems[qIdx].options.splice(oIdx, 1);
+                    updateContent({ ...content, items: newItems });
+                  }}><X size={14} /></Button>
+                </div>
+              ))}
+              <Button variant="outline" size="sm" className="w-full text-[10px] uppercase font-bold" onClick={() => {
+                const newItems = [...content.items];
+                if (!newItems[qIdx].options) newItems[qIdx].options = [];
+                newItems[qIdx].options.push({ id: Math.random().toString(), text: '' });
+                updateContent({ ...content, items: newItems });
+              }}>+ Añadir Opción</Button>
+            </div>
+          </div>
+        ))}
+        <Button className="w-full bg-primary/10 text-primary border-none font-black text-xs uppercase" onClick={() => {
+          const newItems = content.items ? [...content.items] : [];
+          updateContent({ ...content, items: [...newItems, { question: '', options: [{id: '1', text: ''}], correctId: '1', feedback: '' }] });
+        }}>+ Añadir Pregunta</Button>
+      </div>
+    );
+  }
+
+  if (type === 'verdadero_falso') {
+    return (
+      <div className="space-y-4">
+        {content.items?.map((item: any, idx: number) => (
+          <div key={idx} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-center gap-4">
+            <Input 
+              placeholder="Afirmación..." 
+              value={item.statement} 
+              className="flex-1" 
+              onChange={(e) => {
+                const newItems = [...content.items];
+                newItems[idx].statement = e.target.value;
+                updateContent({ ...content, items: newItems });
+              }} 
+            />
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-[10px] font-black uppercase">{item.correct ? 'Verdadero' : 'Falso'}</span>
+              <Switch checked={item.correct} onCheckedChange={(val) => {
+                const newItems = [...content.items];
+                newItems[idx].correct = val;
+                updateContent({ ...content, items: newItems });
+              }} />
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => {
+              const newItems = [...content.items];
+              newItems.splice(idx, 1);
+              updateContent({ ...content, items: newItems });
+            }}><X size={14} /></Button>
+          </div>
+        ))}
+        <Button variant="outline" className="w-full text-xs font-black uppercase" onClick={() => {
+          const newItems = content.items ? [...content.items] : [];
+          updateContent({ ...content, items: [...newItems, { statement: '', correct: true, feedback: '' }] });
+        }}>+ Nueva Afirmación</Button>
+      </div>
+    );
+  }
+
+  if (type === 'emparejamiento') {
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4 px-4 text-[10px] font-black uppercase text-slate-400">
+          <span>Concepto (Izq)</span>
+          <span>Relación (Der)</span>
+        </div>
+        {content.items?.map((item: any, idx: number) => (
+          <div key={idx} className="flex gap-2 items-center">
+            <Input placeholder="Concepto..." value={item.left} onChange={(e) => {
+              const newItems = [...content.items];
+              newItems[idx].left = e.target.value;
+              updateContent({ ...content, items: newItems });
+            }} />
+            <Input placeholder="Definición..." value={item.right} onChange={(e) => {
+              const newItems = [...content.items];
+              newItems[idx].right = e.target.value;
+              updateContent({ ...content, items: newItems });
+            }} />
+            <Button variant="ghost" size="sm" className="text-destructive" onClick={() => {
+              const newItems = [...content.items];
+              newItems.splice(idx, 1);
+              updateContent({ ...content, items: newItems });
+            }}><Trash2 size={14} /></Button>
+          </div>
+        ))}
+        <Button variant="outline" className="w-full text-xs font-black uppercase" onClick={() => {
+          const newItems = content.items ? [...content.items] : [];
+          updateContent({ ...content, items: [...newItems, { left: '', right: '' }] });
+        }}>+ Añadir Par</Button>
+      </div>
+    );
+  }
+
+  if (type === 'ordenar_secuencia') {
+    return (
+      <div className="space-y-4">
+        <p className="text-[10px] font-bold text-slate-400 uppercase italic">Ingresa los pasos en el orden correcto. El sistema los mezclará automáticamente.</p>
+        {content.items?.map((item: string, idx: number) => (
+          <div key={idx} className="flex gap-2 items-center">
+            <span className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center font-black text-xs">{idx + 1}</span>
+            <Input placeholder="Describe el paso..." value={item} onChange={(e) => {
+              const newItems = [...content.items];
+              newItems[idx] = e.target.value;
+              updateContent({ ...content, items: newItems });
+            }} />
+            <Button variant="ghost" size="sm" onClick={() => {
+              const newItems = [...content.items];
+              newItems.splice(idx, 1);
+              updateContent({ ...content, items: newItems });
+            }}><X size={14} /></Button>
+          </div>
+        ))}
+        <Button variant="outline" className="w-full text-xs font-black uppercase" onClick={() => {
+          const newItems = content.items ? [...content.items] : [];
+          updateContent({ ...content, items: [...newItems, ''] });
+        }}>+ Añadir Paso</Button>
+      </div>
+    );
+  }
+
+  if (type === 'completar_espacios') {
+    return (
+      <div className="space-y-4">
+        <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl text-[11px] text-amber-800 leading-relaxed">
+          <strong>Instrucciones:</strong> Escribe tu texto y encierra entre corchetes dobles <code>[[ ]]</code> las palabras a completar.
+          <br/><br/>
+          <em>Ejemplo: La célula es la [[unidad básica]] de los seres vivos.</em>
+        </div>
+        <textarea 
+          rows={8} 
+          className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 text-sm focus:ring-primary/20 outline-none" 
+          placeholder="Redacta el texto aquí..." 
+          value={content.text || ''} 
+          onChange={(e) => updateContent({ ...content, text: e.target.value })} 
+        />
+      </div>
+    );
+  }
+
+  if (type === 'flashcards') {
+    return (
+      <div className="space-y-6">
+        {content.items?.map((item: any, idx: number) => (
+          <div key={idx} className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-200 relative group">
+            <div className="space-y-2">
+              <label className="text-[9px] font-black uppercase text-slate-400">Frente (Término)</label>
+              <textarea 
+                rows={3} 
+                className="w-full p-3 rounded-xl border-slate-200 text-sm outline-none" 
+                value={item.front} 
+                onChange={(e) => {
+                  const newItems = [...content.items];
+                  newItems[idx].front = e.target.value;
+                  updateContent({ ...content, items: newItems });
+                }} 
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[9px] font-black uppercase text-slate-400">Reverso (Definición)</label>
+              <textarea 
+                rows={3} 
+                className="w-full p-3 rounded-xl border-slate-200 text-sm outline-none" 
+                value={item.back} 
+                onChange={(e) => {
+                  const newItems = [...content.items];
+                  newItems[idx].back = e.target.value;
+                  updateContent({ ...content, items: newItems });
+                }} 
+              />
+            </div>
+            <button className="absolute -top-2 -right-2 bg-white shadow-md rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity text-destructive" onClick={() => {
+              const newItems = [...content.items];
+              newItems.splice(idx, 1);
+              updateContent({ ...content, items: newItems });
+            }}><X size={16} /></button>
+          </div>
+        ))}
+        <Button variant="outline" className="w-full text-xs font-black uppercase" onClick={() => {
+          const newItems = content.items ? [...content.items] : [];
+          updateContent({ ...content, items: [...newItems, { front: '', back: '' }] });
+        }}>+ Nueva Tarjeta</Button>
+      </div>
+    );
+  }
+
+  if (type === 'sopa_letras') {
+    return (
+      <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-4 px-4 text-[10px] font-black uppercase text-slate-400">
+          <span>Palabra</span>
+          <span>Pista (Opcional)</span>
+        </div>
+        {content.words?.map((word: string, idx: number) => (
+          <div key={idx} className="flex gap-2 items-center">
+            <Input 
+              placeholder="PALABRA" 
+              className="uppercase"
+              value={word} 
+              onChange={(e) => {
+                const newWords = [...content.words];
+                newWords[idx] = e.target.value.toUpperCase();
+                updateContent({ ...content, words: newWords });
+              }} 
+            />
+            <Input 
+              placeholder="PISTA" 
+              value={content.clues?.[idx] || ''} 
+              onChange={(e) => {
+                const newClues = content.clues ? [...content.clues] : [];
+                newClues[idx] = e.target.value;
+                updateContent({ ...content, clues: newClues });
+              }} 
+            />
+            <Button variant="ghost" size="sm" onClick={() => {
+              const newWords = [...content.words];
+              newWords.splice(idx, 1);
+              const newClues = content.clues ? [...content.clues] : [];
+              newClues.splice(idx, 1);
+              updateContent({ ...content, words: newWords, clues: newClues });
+            }}><X size={14} /></Button>
+          </div>
+        ))}
+        <Button variant="outline" className="w-full text-xs font-black uppercase" onClick={() => {
+          const newWords = content.words ? [...content.words] : [];
+          const newClues = content.clues ? [...content.clues] : [];
+          updateContent({ ...content, words: [...newWords, ''], clues: [...newClues, ''] });
+        }}>+ Añadir Palabra</Button>
+      </div>
+    );
+  }
+
+  return <div className="p-8 text-center opacity-30 italic">Configura los reactivos de esta actividad.</div>;
+};
+
 export default function ProfesorDashboard() {
   const { toast } = useToast();
   const supabase = createClient();
@@ -381,230 +677,6 @@ export default function ProfesorDashboard() {
     );
   };
 
-  // Helper para inicializar el contenido de una actividad según su tipo
-  const initActivityContent = (type: string) => {
-    switch(type) {
-      case 'opcion_multiple': return { items: [{ question: '', options: [{id: '1', text: ''}], correctId: '1', feedback: '' }] };
-      case 'verdadero_falso': return { items: [{ statement: '', correct: true, feedback: '' }] };
-      case 'emparejamiento': return { items: [{ left: '', right: '' }] };
-      case 'ordenar_secuencia': return { items: [''] };
-      case 'completar_espacios': return { text: '', bank: [] };
-      case 'sopa_letras': return { words: [''], clues: [''], size: 12 };
-      case 'flashcards': return { items: [{ front: '', back: '' }] };
-      default: return {};
-    }
-  };
-
-  // Renderizador del editor de plantillas
-  const TemplateEditor = () => {
-    const type = dialog.data.tipo;
-    const content = dialog.data.contenido || initActivityContent(type);
-
-    const updateContent = (newContent: any) => {
-      setDialog({ ...dialog, data: { ...dialog.data, contenido: newContent } });
-    };
-
-    if (type === 'opcion_multiple') {
-      return (
-        <div className="space-y-6">
-          {content.items.map((item: any, qIdx: number) => (
-            <div key={qIdx} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-xs font-black text-primary uppercase">Pregunta {qIdx + 1}</span>
-                {content.items.length > 1 && (
-                  <Button variant="ghost" size="sm" className="text-destructive h-6" onClick={() => {
-                    const newItems = [...content.items];
-                    newItems.splice(qIdx, 1);
-                    updateContent({ ...content, items: newItems });
-                  }}><Trash2 size={14} /></Button>
-                )}
-              </div>
-              <Input placeholder="Enunciado de la pregunta..." value={item.question} onChange={(e) => {
-                const newItems = [...content.items];
-                newItems[qIdx].question = e.target.value;
-                updateContent({ ...content, items: newItems });
-              }} />
-              <div className="space-y-2">
-                {item.options.map((opt: any, oIdx: number) => (
-                  <div key={oIdx} className="flex gap-2 items-center">
-                    <input type="radio" checked={item.correctId === opt.id} onChange={() => {
-                      const newItems = [...content.items];
-                      newItems[qIdx].correctId = opt.id;
-                      updateContent({ ...content, items: newItems });
-                    }} />
-                    <Input placeholder={`Opción ${oIdx + 1}`} value={opt.text} onChange={(e) => {
-                      const newItems = [...content.items];
-                      newItems[qIdx].options[oIdx].text = e.target.value;
-                      updateContent({ ...content, items: newItems });
-                    }} />
-                    <Button variant="ghost" size="sm" onClick={() => {
-                      const newItems = [...content.items];
-                      newItems[qIdx].options.splice(oIdx, 1);
-                      updateContent({ ...content, items: newItems });
-                    }}><X size={14} /></Button>
-                  </div>
-                ))}
-                <Button variant="outline" size="sm" className="w-full text-[10px] uppercase font-bold" onClick={() => {
-                  const newItems = [...content.items];
-                  newItems[qIdx].options.push({ id: Math.random().toString(), text: '' });
-                  updateContent({ ...content, items: newItems });
-                }}>+ Añadir Opción</Button>
-              </div>
-            </div>
-          ))}
-          <Button className="w-full bg-primary/10 text-primary border-none font-black text-xs uppercase" onClick={() => {
-            updateContent({ ...content, items: [...content.items, { question: '', options: [{id: '1', text: ''}], correctId: '1', feedback: '' }] });
-          }}>+ Añadir Pregunta</Button>
-        </div>
-      );
-    }
-
-    if (type === 'verdadero_falso') {
-      return (
-        <div className="space-y-4">
-          {content.items.map((item: any, idx: number) => (
-            <div key={idx} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-center gap-4">
-              <Input placeholder="Afirmación..." value={item.statement} className="flex-1" onChange={(e) => {
-                const newItems = [...content.items];
-                newItems[idx].statement = e.target.value;
-                updateContent({ ...content, items: newItems });
-              }} />
-              <div className="flex flex-col items-center gap-1">
-                <span className="text-[10px] font-black uppercase">{item.correct ? 'Verdadero' : 'Falso'}</span>
-                <Switch checked={item.correct} onCheckedChange={(val) => {
-                  const newItems = [...content.items];
-                  newItems[idx].correct = val;
-                  updateContent({ ...content, items: newItems });
-                }} />
-              </div>
-              <Button variant="ghost" size="sm" onClick={() => {
-                const newItems = [...content.items];
-                newItems.splice(idx, 1);
-                updateContent({ ...content, items: newItems });
-              }}><X size={14} /></Button>
-            </div>
-          ))}
-          <Button variant="outline" className="w-full text-xs font-black uppercase" onClick={() => {
-            updateContent({ ...content, items: [...content.items, { statement: '', correct: true, feedback: '' }] });
-          }}>+ Nueva Afirmación</Button>
-        </div>
-      );
-    }
-
-    if (type === 'emparejamiento') {
-      return (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4 px-4 text-[10px] font-black uppercase text-slate-400">
-            <span>Concepto (Izq)</span>
-            <span>Relación (Der)</span>
-          </div>
-          {content.items.map((item: any, idx: number) => (
-            <div key={idx} className="flex gap-2 items-center">
-              <Input placeholder="Concepto..." value={item.left} onChange={(e) => {
-                const newItems = [...content.items];
-                newItems[idx].left = e.target.value;
-                updateContent({ ...content, items: newItems });
-              }} />
-              <Input placeholder="Definición..." value={item.right} onChange={(e) => {
-                const newItems = [...content.items];
-                newItems[idx].right = e.target.value;
-                updateContent({ ...content, items: newItems });
-              }} />
-              <Button variant="ghost" size="sm" className="text-destructive" onClick={() => {
-                const newItems = [...content.items];
-                newItems.splice(idx, 1);
-                updateContent({ ...content, items: newItems });
-              }}><Trash2 size={14} /></Button>
-            </div>
-          ))}
-          <Button variant="outline" className="w-full text-xs font-black uppercase" onClick={() => {
-            updateContent({ ...content, items: [...content.items, { left: '', right: '' }] });
-          }}>+ Añadir Par</Button>
-        </div>
-      );
-    }
-
-    if (type === 'ordenar_secuencia') {
-      return (
-        <div className="space-y-4">
-          <p className="text-[10px] font-bold text-slate-400 uppercase italic">Ingresa los pasos en el orden correcto. El sistema los mezclará automáticamente para el alumno.</p>
-          {content.items.map((item: string, idx: number) => (
-            <div key={idx} className="flex gap-2 items-center">
-              <span className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center font-black text-xs">{idx + 1}</span>
-              <Input placeholder="Describe el paso..." value={item} onChange={(e) => {
-                const newItems = [...content.items];
-                newItems[idx] = e.target.value;
-                updateContent({ ...content, items: newItems });
-              }} />
-              <Button variant="ghost" size="sm" onClick={() => {
-                const newItems = [...content.items];
-                newItems.splice(idx, 1);
-                updateContent({ ...content, items: newItems });
-              }}><X size={14} /></Button>
-            </div>
-          ))}
-          <Button variant="outline" className="w-full text-xs font-black uppercase" onClick={() => {
-            updateContent({ ...content, items: [...content.items, ''] });
-          }}>+ Añadir Paso</Button>
-        </div>
-      );
-    }
-
-    if (type === 'completar_espacios') {
-      return (
-        <div className="space-y-4">
-          <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl text-[11px] text-amber-800 leading-relaxed">
-            <strong>Instrucciones:</strong> Escribe tu texto normal y encierra entre corchetes dobles <code>[[ ]]</code> las palabras que quieres que el alumno complete.
-            <br/><br/>
-            <em>Ejemplo: La célula es la [[unidad básica]] de los seres vivos.</em>
-          </div>
-          <textarea rows={8} className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 text-sm focus:ring-primary/20 outline-none" placeholder="Redacta el texto aquí..." value={content.text} onChange={(e) => updateContent({ ...content, text: e.target.value })} />
-        </div>
-      );
-    }
-
-    if (type === 'flashcards') {
-      return (
-        <div className="space-y-6">
-          {content.items.map((item: any, idx: number) => (
-            <div key={idx} className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-200 relative group">
-              <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase text-slate-400">Frente (Término)</label>
-                <textarea rows={3} className="w-full p-3 rounded-xl border-slate-200 text-sm outline-none" value={item.front} onChange={(e) => {
-                  const newItems = [...content.items];
-                  newItems[idx].front = e.target.value;
-                  updateContent({ ...content, items: newItems });
-                }} />
-              </div>
-              <div className="space-y-2">
-                <label className="text-[9px] font-black uppercase text-slate-400">Reverso (Definición)</label>
-                <textarea rows={3} className="w-full p-3 rounded-xl border-slate-200 text-sm outline-none" value={item.back} onChange={(e) => {
-                  const newItems = [...content.items];
-                  newItems[idx].back = e.target.value;
-                  updateContent({ ...content, items: newItems });
-                }} />
-              </div>
-              <button className="absolute -top-2 -right-2 bg-white shadow-md rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity text-destructive" onClick={() => {
-                const newItems = [...content.items];
-                newItems.splice(idx, 1);
-                updateContent({ ...content, items: newItems });
-              }}><X size={16} /></button>
-            </div>
-          ))}
-          <Button variant="outline" className="w-full text-xs font-black uppercase" onClick={() => {
-            updateContent({ ...content, items: [...content.items, { front: '', back: '' }] });
-          }}>+ Nueva Tarjeta</Button>
-        </div>
-      );
-    }
-
-    return (
-      <div className="p-8 text-center opacity-30 italic">
-        Configura los parámetros de esta plantilla.
-      </div>
-    );
-  };
-
   if (presentationMode && slides.length > 0) {
     const slide = slides[activeSlideIndex];
     const styleMap: any = {
@@ -859,18 +931,34 @@ export default function ProfesorDashboard() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Título Principal</label>
-                  <Input placeholder="EJ. EVALUACIÓN DE CONCEPTOS" className="h-12 rounded-xl bg-white border-slate-200 focus:ring-primary/20 uppercase font-bold" value={dialog.data.titulo || ''} onChange={e => setDialog({...dialog, data: {...dialog.data, titulo: e.target.value.toUpperCase()}})} />
+                  <Input 
+                    placeholder="EJ. EVALUACIÓN DE CONCEPTOS" 
+                    className="h-12 rounded-xl bg-white border-slate-200 focus:ring-primary/20 uppercase font-bold" 
+                    value={dialog.data.titulo || ''} 
+                    onChange={e => setDialog({...dialog, data: {...dialog.data, titulo: e.target.value.toUpperCase()}})} 
+                  />
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Orden</label>
-                  <Input type="number" className="h-12 rounded-xl bg-white border-slate-200" value={dialog.data.orden || 1} onChange={e => setDialog({...dialog, data: {...dialog.data, orden: parseInt(e.target.value)}})} />
+                  <Input 
+                    type="number" 
+                    className="h-12 rounded-xl bg-white border-slate-200" 
+                    value={dialog.data.orden || 1} 
+                    onChange={e => setDialog({...dialog, data: {...dialog.data, orden: parseInt(e.target.value)}})} 
+                  />
                 </div>
               </div>
 
               {dialog.type === 'tema' && (
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Contenido / Descripción</label>
-                  <textarea rows={6} className="w-full p-4 rounded-xl bg-slate-50 border-slate-200 text-sm focus:ring-primary/20 outline-none" placeholder="Redacta aquí el contenido del tema..." value={dialog.data.contenido || ''} onChange={e => setDialog({...dialog, data: {...dialog.data, contenido: e.target.value}})} />
+                  <textarea 
+                    rows={6} 
+                    className="w-full p-4 rounded-xl bg-slate-50 border-slate-200 text-sm focus:ring-primary/20 outline-none" 
+                    placeholder="Redacta aquí el contenido del tema..." 
+                    value={dialog.data.contenido || ''} 
+                    onChange={e => setDialog({...dialog, data: {...dialog.data, contenido: e.target.value}})} 
+                  />
                 </div>
               )}
 
@@ -924,7 +1012,11 @@ export default function ProfesorDashboard() {
                     <label className="text-[10px] font-black uppercase text-amber-600 tracking-[0.2em] flex items-center gap-2">
                       <Edit size={14} /> Configuración de Reactivos
                     </label>
-                    <TemplateEditor />
+                    <TemplateEditor 
+                      type={dialog.data.tipo} 
+                      content={dialog.data.contenido || {}} 
+                      updateContent={(newContent) => setDialog({ ...dialog, data: { ...dialog.data, contenido: newContent } })} 
+                    />
                   </div>
                 </div>
               )}
