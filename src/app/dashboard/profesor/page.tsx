@@ -1,4 +1,3 @@
-
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
@@ -77,7 +76,6 @@ const ACTIVITY_TEMPLATES = [
   { id: 'flashcards', label: 'Flashcards', icon: <Sparkles size={16} />, color: 'bg-amber-500' },
 ];
 
-// Helper para inicializar el contenido de una actividad según su tipo
 const initActivityContent = (type: string) => {
   switch(type) {
     case 'opcion_multiple': return { items: [{ question: '', options: [{id: '1', text: ''}], correctId: '1', feedback: '' }] };
@@ -91,7 +89,6 @@ const initActivityContent = (type: string) => {
   }
 };
 
-// COMPONENTE SEPARADO PARA EVITAR RE-RENDERS QUE CAUSAN PÉRDIDA DE FOCO
 const TemplateEditor = ({ type, content, updateContent }: { type: string, content: any, updateContent: (newContent: any) => void }) => {
   if (!type) return <div className="p-8 text-center opacity-30 italic">Selecciona una plantilla para comenzar.</div>;
 
@@ -440,10 +437,16 @@ export default function ProfesorDashboard() {
     const d = dialog.data;
     const { data: { user } } = await supabase.auth.getUser();
     
+    // VALIDACIÓN DE TÍTULO OBLIGATORIO
+    if (!d.titulo || d.titulo.trim() === '') {
+      toast({ variant: "destructive", title: "Campo requerido", description: "El título principal es obligatorio para guardar." });
+      return;
+    }
+
     try {
       if (dialog.type === 'unidad') {
         if (!selectedMateria?.id) {
-          toast({ variant: "destructive", title: "Error", description: "No hay una materia seleccionada." });
+          toast({ variant: "destructive", title: "Error de selección", description: "No hay una materia vinculada. Por favor selecciona una materia primero." });
           return;
         }
         result = await upsertUnidad({...d, materia_id: selectedMateria.id, created_by: user?.id});
@@ -451,7 +454,7 @@ export default function ProfesorDashboard() {
       
       if (dialog.type === 'tema') {
         if (!selectedUnidad?.id) {
-          toast({ variant: "destructive", title: "Error", description: "No hay una unidad seleccionada." });
+          toast({ variant: "destructive", title: "Error de selección", description: "No hay una unidad vinculada. Por favor selecciona una unidad primero." });
           return;
         }
         result = await upsertTema({...d, unidad_id: selectedUnidad.id, created_by: user?.id});
@@ -459,10 +462,9 @@ export default function ProfesorDashboard() {
       
       if (dialog.type === 'ejercicio') {
         if (!selectedTema?.id) {
-          toast({ variant: "destructive", title: "Error", description: "No hay un tema seleccionado." });
+          toast({ variant: "destructive", title: "Error de selección", description: "No hay un tema vinculado. Por favor selecciona un tema primero." });
           return;
         }
-        // Asegurar que el contenido sea un objeto serializable
         const finalContent = typeof d.contenido === 'string' ? d.contenido : JSON.stringify(d.contenido || {});
         result = await upsertEjercicio({...d, contenido: finalContent, tema_id: selectedTema.id, created_by: user?.id});
       }
@@ -474,7 +476,7 @@ export default function ProfesorDashboard() {
         if (dialog.type === 'tema') fetchTemas(selectedUnidad.id);
         if (dialog.type === 'ejercicio') fetchEjercicios(selectedTema.id);
       } else if (result) {
-        toast({ variant: "destructive", title: "Error", description: result.error?.message || "No se pudo guardar." });
+        toast({ variant: "destructive", title: "Error de base de datos", description: result.error?.message || "No se pudo guardar la información." });
       }
     } catch (e) {
       console.error(e);
@@ -864,7 +866,6 @@ export default function ProfesorDashboard() {
                    <TableBody>
                      {ejercicios.length === 0 ? <TableRow><TableCell colSpan={4} className="text-center py-10 text-muted-foreground italic">Sin actividades registradas.</TableCell></TableRow> : ejercicios.map((e) => {
                        const template = ACTIVITY_TEMPLATES.find(t => t.id === e.tipo);
-                       // Parsear contenido si es string
                        const safeContent = typeof e.contenido === 'string' ? JSON.parse(e.contenido || '{}') : e.contenido;
                        
                        return (
@@ -930,7 +931,7 @@ export default function ProfesorDashboard() {
             <div className="space-y-8">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Título Principal</label>
+                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Título Principal *</label>
                   <Input 
                     placeholder="EJ. EVALUACIÓN DE CONCEPTOS" 
                     className="h-12 rounded-xl bg-white border-slate-200 focus:ring-primary/20 uppercase font-bold" 
