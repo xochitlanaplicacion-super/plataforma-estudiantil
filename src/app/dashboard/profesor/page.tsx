@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { useEffect, useState, useCallback, useMemo } from 'react';
@@ -36,7 +37,11 @@ import {
   Hash,
   Type,
   AlignLeft,
-  Layout
+  Layout,
+  Eye,
+  FileSearch,
+  CheckCircle,
+  AlertCircle
 } from 'lucide-react';
 import { 
   getMyAsignaciones, 
@@ -58,7 +63,7 @@ import {
 } from '@/lib/actions/academic';
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -67,6 +72,7 @@ import { cn } from '@/lib/utils';
 const LOGO_URL = '/images/logo_zapata.png';
 
 const ACTIVITY_TEMPLATES = [
+  { id: 'actividad_descriptiva', label: 'Actividad Descriptiva', icon: <FileSearch size={16} />, color: 'bg-slate-700' },
   { id: 'opcion_multiple', label: 'Opción Múltiple', icon: <CheckCircle2 size={16} />, color: 'bg-blue-500' },
   { id: 'verdadero_falso', label: 'Verdadero / Falso', icon: <HelpCircle size={16} />, color: 'bg-emerald-500' },
   { id: 'emparejamiento', label: 'Emparejamiento', icon: <Layout size={16} />, color: 'bg-purple-500' },
@@ -78,6 +84,7 @@ const ACTIVITY_TEMPLATES = [
 
 const initActivityContent = (type: string) => {
   switch(type) {
+    case 'actividad_descriptiva': return { fileUrl: '', fileName: '' };
     case 'opcion_multiple': return { items: [{ question: '', options: [{id: '1', text: ''}], correctId: '1', feedback: '' }] };
     case 'verdadero_falso': return { items: [{ statement: '', correct: true, feedback: '' }] };
     case 'emparejamiento': return { items: [{ left: '', right: '' }] };
@@ -90,7 +97,62 @@ const initActivityContent = (type: string) => {
 };
 
 const TemplateEditor = ({ type, content, updateContent }: { type: string, content: any, updateContent: (newContent: any) => void }) => {
+  const supabase = createClient();
+  const { toast } = useToast();
+  const [uploading, setUploading] = useState(false);
+
   if (!type) return <div className="p-8 text-center opacity-30 italic">Selecciona una plantilla para comenzar.</div>;
+
+  if (type === 'actividad_descriptiva') {
+    const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (file.size > 3 * 1024 * 1024) {
+        toast({ variant: "destructive", title: "Archivo demasiado grande", description: "Máximo 3MB" });
+        return;
+      }
+      setUploading(true);
+      try {
+        const filePath = `actividades-guia/${Date.now()}_${file.name}`;
+        const { error } = await supabase.storage.from('recursos-educativos').upload(filePath, file);
+        if (error) throw error;
+        const { data: { publicUrl } } = supabase.storage.from('recursos-educativos').getPublicUrl(filePath);
+        updateContent({ ...content, fileUrl: publicUrl, fileName: file.name });
+        toast({ title: "Guía cargada" });
+      } catch (err: any) {
+        toast({ variant: "destructive", title: "Error", description: err.message });
+      } finally {
+        setUploading(false);
+      }
+    };
+
+    return (
+      <div className="space-y-6">
+        <div className="p-6 bg-slate-50 border-2 border-dashed rounded-3xl text-center">
+          <label className="cursor-pointer flex flex-col items-center gap-3">
+            <div className="h-12 w-12 rounded-full bg-white shadow-sm flex items-center justify-center text-slate-600">
+              {uploading ? <Loader2 className="animate-spin" /> : <FileUp size={24} />}
+            </div>
+            <div className="space-y-1">
+              <p className="font-black uppercase text-xs tracking-widest text-slate-700">Subir Documento Guía (Opcional)</p>
+              <p className="text-[10px] text-slate-400 font-bold uppercase">PDF, Word o Excel (Máx. 3MB)</p>
+            </div>
+            <input type="file" className="hidden" onChange={handleFile} disabled={uploading} />
+          </label>
+          {content.fileName && (
+            <div className="mt-4 p-3 bg-white rounded-xl border flex items-center justify-between">
+              <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
+                <File size={14} className="text-primary" /> {content.fileName}
+              </div>
+              <Button variant="ghost" size="sm" className="h-6 w-6 text-destructive" onClick={() => updateContent({...content, fileUrl: '', fileName: ''})}>
+                <X size={14} />
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (type === 'opcion_multiple') {
     return (
@@ -110,9 +172,10 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
             <Input 
               placeholder="Enunciado de la pregunta..." 
               value={item.question} 
+              className="uppercase font-bold"
               onChange={(e) => {
                 const newItems = [...content.items];
-                newItems[qIdx].question = e.target.value;
+                newItems[qIdx].question = e.target.value.toUpperCase();
                 updateContent({ ...content, items: newItems });
               }} 
             />
@@ -141,7 +204,7 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
                 </div>
               ))}
               <Button variant="outline" size="sm" className="w-full text-[10px] uppercase font-bold" onClick={() => {
-                const newItems = [...content.items];
+                const newItems = content.items ? [...content.items] : [];
                 if (!newItems[qIdx].options) newItems[qIdx].options = [];
                 newItems[qIdx].options.push({ id: Math.random().toString(), text: '' });
                 updateContent({ ...content, items: newItems });
@@ -165,10 +228,10 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
             <Input 
               placeholder="Afirmación..." 
               value={item.statement} 
-              className="flex-1" 
+              className="flex-1 uppercase font-bold text-xs" 
               onChange={(e) => {
                 const newItems = [...content.items];
-                newItems[idx].statement = e.target.value;
+                newItems[idx].statement = e.target.value.toUpperCase();
                 updateContent({ ...content, items: newItems });
               }} 
             />
@@ -232,7 +295,7 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
   if (type === 'ordenar_secuencia') {
     return (
       <div className="space-y-4">
-        <p className="text-[10px] font-bold text-slate-400 uppercase italic">Ingresa los pasos en el orden correcto. El sistema los mezclará automáticamente.</p>
+        <p className="text-[10px] font-bold text-slate-400 uppercase italic">Ingresa los pasos en el orden correcto.</p>
         {content.items?.map((item: string, idx: number) => (
           <div key={idx} className="flex gap-2 items-center">
             <span className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center font-black text-xs">{idx + 1}</span>
@@ -261,13 +324,11 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
       <div className="space-y-4">
         <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl text-[11px] text-amber-800 leading-relaxed">
           <strong>Instrucciones:</strong> Escribe tu texto y encierra entre corchetes dobles <code>[[ ]]</code> las palabras a completar.
-          <br/><br/>
-          <em>Ejemplo: La célula es la [[unidad básica]] de los seres vivos.</em>
         </div>
         <textarea 
           rows={8} 
           className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 text-sm focus:ring-primary/20 outline-none" 
-          placeholder="Redacta el texto aquí..." 
+          placeholder="La célula es la [[unidad básica]] de los seres vivos." 
           value={content.text || ''} 
           onChange={(e) => updateContent({ ...content, text: e.target.value })} 
         />
@@ -326,7 +387,7 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-4 px-4 text-[10px] font-black uppercase text-slate-400">
           <span>Palabra</span>
-          <span>Pista (Opcional)</span>
+          <span>Pista</span>
         </div>
         {content.words?.map((word: string, idx: number) => (
           <div key={idx} className="flex gap-2 items-center">
@@ -367,7 +428,119 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
     );
   }
 
-  return <div className="p-8 text-center opacity-30 italic">Configura los reactivos de esta actividad.</div>;
+  return null;
+};
+
+// COMPONENTE DE PREVISUALIZACIÓN DE ALUMNO
+const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => void }) => {
+  const [currentStep, setCurrentStep] = useState(0);
+  const [score, setScore] = useState(0);
+  const [finished, setSuccess] = useState(false);
+  const [selectedOption, setSelectedOption] = useState<string | null>(null);
+  const [shuffledItems, setShuffledItems] = useState<any[]>([]);
+
+  const content = useMemo(() => {
+    return typeof exercise.contenido === 'string' ? JSON.parse(exercise.contenido || '{}') : exercise.contenido;
+  }, [exercise]);
+
+  useEffect(() => {
+    if (content.items) {
+      setShuffledItems([...content.items].sort(() => Math.random() - 0.5));
+    }
+  }, [content]);
+
+  const handleNext = (isCorrect: boolean) => {
+    if (isCorrect) setScore(s => s + 1);
+    if (currentStep + 1 < (shuffledItems.length || 1)) {
+      setCurrentStep(s => s + 1);
+      setSelectedOption(null);
+    } else {
+      setSuccess(true);
+    }
+  };
+
+  const renderContent = () => {
+    if (exercise.tipo === 'actividad_descriptiva') {
+      return (
+        <div className="space-y-8 text-center py-10">
+          <div className="max-w-2xl mx-auto space-y-4">
+            <h2 className="text-3xl font-black text-slate-800 uppercase">{exercise.titulo}</h2>
+            <p className="text-lg text-slate-600 leading-relaxed">{exercise.descripcion || 'Sin descripción adicional.'}</p>
+          </div>
+          {content.fileUrl && (
+            <div className="inline-block p-8 bg-blue-50 border-2 border-blue-100 rounded-[40px] space-y-4 shadow-xl">
+              <div className="h-20 w-20 bg-blue-600 text-white rounded-full flex items-center justify-center mx-auto shadow-lg">
+                <FileText size={40} />
+              </div>
+              <p className="font-black text-blue-800 uppercase tracking-widest text-sm">{content.fileName}</p>
+              <a href={content.fileUrl} target="_blank" rel="noopener noreferrer" className="block px-8 py-4 bg-blue-600 text-white font-black rounded-2xl hover:bg-blue-700 transition-all uppercase tracking-widest shadow-lg">
+                Descargar Guía de Trabajo
+              </a>
+            </div>
+          )}
+          <div className="pt-10">
+            <Button onClick={onClose} className="rounded-2xl px-10 h-14 bg-slate-800 font-black uppercase tracking-widest">Finalizar Revisión</Button>
+          </div>
+        </div>
+      );
+    }
+
+    if (exercise.tipo === 'opcion_multiple' && shuffledItems.length > 0) {
+      const q = shuffledItems[currentStep];
+      return (
+        <div className="max-w-2xl mx-auto space-y-8 py-10">
+          <div className="flex justify-between items-center px-4">
+            <Badge className="bg-blue-600 text-white px-4 py-1">PREGUNTA {currentStep + 1} / {shuffledItems.length}</Badge>
+            <span className="text-xs font-black text-slate-400">ACIERTOS: {score}</span>
+          </div>
+          <h3 className="text-2xl font-black text-slate-800 text-center uppercase">{q.question}</h3>
+          <div className="grid grid-cols-1 gap-4">
+            {q.options?.map((opt: any) => (
+              <button key={opt.id} onClick={() => setSelectedOption(opt.id)} className={cn("p-6 rounded-3xl border-2 text-left font-bold transition-all", selectedOption === opt.id ? "bg-blue-600 border-blue-600 text-white shadow-xl scale-[1.02]" : "bg-white border-slate-100 hover:border-blue-200")}>
+                {opt.text}
+              </button>
+            ))}
+          </div>
+          <Button disabled={!selectedOption} onClick={() => handleNext(selectedOption === q.correctId)} className="w-full h-16 rounded-3xl bg-blue-600 text-white font-black uppercase text-lg tracking-widest shadow-xl">Siguiente</Button>
+        </div>
+      );
+    }
+
+    return <div className="p-20 text-center opacity-20 italic">Vista previa en desarrollo para este tipo de ejercicio.</div>;
+  };
+
+  return (
+    <div className="fixed inset-0 z-[100] bg-white flex flex-col overflow-hidden animate-in fade-in duration-300">
+      <header className="h-20 border-b flex items-center justify-between px-10 shrink-0">
+        <div className="flex items-center gap-4">
+          <div className="p-3 bg-amber-500 text-white rounded-2xl shadow-lg"><Eye size={24} /></div>
+          <div>
+            <h4 className="font-black text-slate-800 uppercase tracking-tight">Modo Previsualización: Estudiante</h4>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Plataforma Emiliano Zapata</p>
+          </div>
+        </div>
+        <Button variant="outline" className="rounded-xl border-slate-200 font-black uppercase text-[10px] tracking-widest h-12 px-6" onClick={onClose}>
+          <X size={18} className="mr-2" /> Salir de la Vista Previa
+        </Button>
+      </header>
+      <main className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50/50">
+        <div className="container mx-auto max-w-5xl px-6">
+          {finished ? (
+            <div className="h-full flex flex-col items-center justify-center py-20 text-center space-y-8">
+              <div className="h-32 w-32 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center shadow-inner animate-bounce">
+                <CheckCircle size={80} />
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-4xl font-black text-slate-800 uppercase">¡Ejercicio Completado!</h2>
+                <p className="text-xl text-slate-500 font-bold uppercase">Resultado Final: {score} de {shuffledItems.length || 1}</p>
+              </div>
+              <Button onClick={onClose} className="rounded-3xl px-12 h-16 bg-emerald-600 text-white font-black uppercase text-lg tracking-widest shadow-2xl hover:scale-105 transition-transform">Volver al Panel</Button>
+            </div>
+          ) : renderContent()}
+        </div>
+      </main>
+    </div>
+  );
 };
 
 export default function ProfesorDashboard() {
@@ -394,6 +567,8 @@ export default function ProfesorDashboard() {
 
   const [currentTab, setCurrentTab] = useState('materias');
   const [dialog, setDialog] = useState<any>({ open: false, type: '', data: {} });
+  
+  const [previewActivity, setPreviewActivity] = useState<any | null>(null);
 
   const fetchInitialData = async () => {
     setLoading(true);
@@ -437,7 +612,6 @@ export default function ProfesorDashboard() {
     const d = dialog.data;
     const { data: { user } } = await supabase.auth.getUser();
     
-    // VALIDACIÓN DE TÍTULO OBLIGATORIO
     if (!d.titulo || d.titulo.trim() === '') {
       toast({ variant: "destructive", title: "Campo requerido", description: "El título principal es obligatorio para guardar." });
       return;
@@ -446,7 +620,7 @@ export default function ProfesorDashboard() {
     try {
       if (dialog.type === 'unidad') {
         if (!selectedMateria?.id) {
-          toast({ variant: "destructive", title: "Error de selección", description: "No hay una materia vinculada. Por favor selecciona una materia primero." });
+          toast({ variant: "destructive", title: "Error de selección", description: "No hay una materia vinculada." });
           return;
         }
         result = await upsertUnidad({...d, materia_id: selectedMateria.id, created_by: user?.id});
@@ -454,7 +628,7 @@ export default function ProfesorDashboard() {
       
       if (dialog.type === 'tema') {
         if (!selectedUnidad?.id) {
-          toast({ variant: "destructive", title: "Error de selección", description: "No hay una unidad vinculada. Por favor selecciona una unidad primero." });
+          toast({ variant: "destructive", title: "Error de selección", description: "No hay una unidad vinculada." });
           return;
         }
         result = await upsertTema({...d, unidad_id: selectedUnidad.id, created_by: user?.id});
@@ -462,7 +636,7 @@ export default function ProfesorDashboard() {
       
       if (dialog.type === 'ejercicio') {
         if (!selectedTema?.id) {
-          toast({ variant: "destructive", title: "Error de selección", description: "No hay un tema vinculado. Por favor selecciona un tema primero." });
+          toast({ variant: "destructive", title: "Error de selección", description: "No hay un tema vinculado." });
           return;
         }
         const finalContent = typeof d.contenido === 'string' ? d.contenido : JSON.stringify(d.contenido || {});
@@ -476,7 +650,7 @@ export default function ProfesorDashboard() {
         if (dialog.type === 'tema') fetchTemas(selectedUnidad.id);
         if (dialog.type === 'ejercicio') fetchEjercicios(selectedTema.id);
       } else if (result) {
-        toast({ variant: "destructive", title: "Error de base de datos", description: result.error?.message || "No se pudo guardar la información." });
+        toast({ variant: "destructive", title: "Error", description: result.error?.message || "No se pudo guardar." });
       }
     } catch (e) {
       console.error(e);
@@ -515,7 +689,7 @@ export default function ProfesorDashboard() {
     };
     const { data, error } = await upsertSlide(newSlide);
     if (error) {
-      toast({ variant: "destructive", title: "Error", description: "Ocurrió un problema al crear la diapositiva." });
+      toast({ variant: "destructive", title: "Error", description: "Problema al crear diapositiva." });
       return;
     }
     if (data) {
@@ -550,31 +724,20 @@ export default function ProfesorDashboard() {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     if (file.size > 3 * 1024 * 1024) {
-      toast({ variant: "destructive", title: "Archivo demasiado grande", description: "El límite es de 3MB por archivo." });
+      toast({ variant: "destructive", title: "Archivo demasiado grande", description: "Límite 3MB" });
       return;
     }
-
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
-
     setUploading(true);
     try {
       const fileExt = file.name.split('.').pop();
       const fileName = `${selectedTema.id}/${Date.now()}.${fileExt}`;
       const filePath = `recursos/${fileName}`;
-
-      const { error: uploadError } = await supabase.storage
-        .from('recursos-educativos')
-        .upload(filePath, file);
-
+      const { error: uploadError } = await supabase.storage.from('recursos-educativos').upload(filePath, file);
       if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('recursos-educativos')
-        .getPublicUrl(filePath);
-
+      const { data: { publicUrl } } = supabase.storage.from('recursos-educativos').getPublicUrl(filePath);
       const newResource = {
         tema_id: selectedTema.id,
         titulo: file.name,
@@ -583,14 +746,12 @@ export default function ProfesorDashboard() {
         tipo: fileExt?.toLowerCase(),
         created_by: user.id
       };
-
       const { error: dbError } = await upsertResource(newResource);
       if (dbError) throw dbError;
-
-      toast({ title: "Archivo cargado", description: "El recurso está disponible para los alumnos." });
+      toast({ title: "Archivo cargado" });
       fetchResources(selectedTema.id);
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Error al cargar", description: err.message });
+      toast({ variant: "destructive", title: "Error", description: err.message });
     } finally {
       setUploading(false);
     }
@@ -598,15 +759,9 @@ export default function ProfesorDashboard() {
 
   const handleDeleteResource = async (resource: any) => {
     try {
-      const { error: storageError } = await supabase.storage
-        .from('recursos-educativos')
-        .remove([resource.file_path]);
-
-      if (storageError) console.warn("Error al borrar de Storage:", storageError);
-
+      await supabase.storage.from('recursos-educativos').remove([resource.file_path]);
       const { error: dbError } = await deleteResourceRecord(resource.id);
       if (dbError) throw dbError;
-
       toast({ title: "Recurso eliminado" });
       setResources(resources.filter(r => r.id !== resource.id));
     } catch (err: any) {
@@ -627,9 +782,7 @@ export default function ProfesorDashboard() {
   }, [presentationMode, slides.length]);
 
   useEffect(() => {
-    const handleFullscreenChange = () => {
-      if (!document.fullscreenElement) setPresentationMode(false);
-    };
+    const handleFullscreenChange = () => { if (!document.fullscreenElement) setPresentationMode(false); };
     document.addEventListener('fullscreenchange', handleFullscreenChange);
     window.addEventListener('keydown', handleKeyDown);
     return () => {
@@ -640,43 +793,15 @@ export default function ProfesorDashboard() {
 
   useEffect(() => {
     if (presentationMode) {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().catch((err) => {
-          console.warn(`Error al intentar entrar en pantalla completa: ${err.message}`);
-        });
-      }
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
     } else {
-      if (document.fullscreenElement) {
-        document.exitFullscreen().catch((err) => {
-          console.warn(`Error al intentar salir de pantalla completa: ${err.message}`);
-        });
-      }
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     }
   }, [presentationMode]);
 
   const splitImageUrls = (urls: string) => {
     if (!urls) return [];
     return urls.split(/,(?=http|data:)/).map(u => u.trim()).filter(Boolean);
-  };
-
-  const ImageGrid = ({ urls }: { urls: string }) => {
-    const list = splitImageUrls(urls);
-    if (list.length === 0) return null;
-    
-    return (
-      <div className={cn(
-        "grid gap-4 w-full h-full p-4",
-        list.length === 1 ? "grid-cols-1" : 
-        list.length === 2 ? "grid-cols-2" : 
-        list.length >= 3 ? "grid-cols-2 grid-rows-2" : ""
-      )}>
-        {list.map((url, i) => (
-          <div key={i} className="relative w-full h-full overflow-hidden rounded-2xl shadow-2xl border border-white/10">
-            <img src={url} alt="Slide content" className="w-full h-full object-cover" />
-          </div>
-        ))}
-      </div>
-    );
   };
 
   if (presentationMode && slides.length > 0) {
@@ -689,25 +814,30 @@ export default function ProfesorDashboard() {
     };
 
     return (
-      <div className={cn(
-        "fixed inset-0 z-[100] grid grid-rows-[1fr_auto] overflow-hidden animate-in fade-in duration-500 bg-gradient-to-br",
-        styleMap[slide.estilo || 'azul']
-      )}>
+      <div className={cn("fixed inset-0 z-[100] grid grid-rows-[1fr_auto] overflow-hidden bg-gradient-to-br", styleMap[slide.estilo || 'azul'])}>
         <div className="absolute top-0 left-0 h-1.5 bg-blue-400/50 w-full z-50">
           <div className="h-full bg-blue-400 transition-all duration-500 shadow-[0_0_15px_rgba(96,165,250,0.8)]" style={{ width: `${((activeSlideIndex + 1) / slides.length) * 100}%` }} />
         </div>
         <div className="relative flex flex-col md:flex-row items-center justify-center gap-8 p-10 md:p-20 overflow-hidden">
           <div className="flex-1 flex flex-col justify-center max-w-full overflow-hidden">
-            <h1 className="font-black uppercase tracking-tight mb-6 leading-tight animate-in slide-in-from-left-8 duration-700" style={{ fontSize: 'clamp(2rem, 8vw, 5rem)' }}>{slide.titulo || 'Sin Título'}</h1>
+            <h1 className="font-black uppercase tracking-tight mb-6 leading-tight" style={{ fontSize: 'clamp(2rem, 8vw, 5rem)' }}>{slide.titulo}</h1>
             <div className="overflow-y-auto max-h-[50vh] pr-4 custom-scrollbar">
-              <p className="font-medium leading-relaxed opacity-90 animate-in slide-in-from-bottom-8 duration-700 delay-200" style={{ fontSize: 'clamp(1rem, 2.5vw, 2.2rem)' }}>{slide.contenido || ''}</p>
+              <p className="font-medium leading-relaxed opacity-90" style={{ fontSize: 'clamp(1rem, 2.5vw, 2.2rem)' }}>{slide.contenido}</p>
             </div>
           </div>
-          <div className="flex-1 w-full h-full max-h-[60vh] md:max-h-full flex items-center justify-center animate-in zoom-in-95 duration-700">
-            {slide.imagen_url ? <ImageGrid urls={slide.imagen_url} /> : <div className="w-full aspect-video flex flex-col items-center justify-center bg-white/5 rounded-3xl border-2 border-dashed border-white/10 opacity-30"><ImageIcon size={100} /></div>}
+          <div className="flex-1 w-full h-full max-h-[60vh] md:max-h-full flex items-center justify-center">
+            {slide.imagen_url ? (
+              <div className={cn("grid gap-4 w-full h-full p-4", splitImageUrls(slide.imagen_url).length === 1 ? "grid-cols-1" : "grid-cols-2")}>
+                {splitImageUrls(slide.imagen_url).map((url, i) => (
+                  <div key={i} className="relative w-full h-full overflow-hidden rounded-2xl shadow-2xl border border-white/10">
+                    <img src={url} alt="Slide" className="w-full h-full object-cover" />
+                  </div>
+                ))}
+              </div>
+            ) : <div className="w-full aspect-video flex flex-col items-center justify-center bg-white/5 rounded-3xl border-2 border-dashed border-white/10 opacity-30"><ImageIcon size={100} /></div>}
           </div>
         </div>
-        <div className="py-3 px-6 md:px-10 flex items-center justify-between bg-black/30 backdrop-blur-2xl border-t border-white/5 z-[110]">
+        <div className="py-3 px-10 flex items-center justify-between bg-black/30 backdrop-blur-2xl border-t border-white/5 z-[110]">
           <div className="flex gap-4">
             <Button variant="ghost" className="h-12 w-12 rounded-full text-white hover:bg-white/10" onClick={() => setActiveSlideIndex(Math.max(0, activeSlideIndex - 1))} disabled={activeSlideIndex === 0}><ChevronLeft size={32} /></Button>
             <div className="flex items-center px-4 text-xl font-black tabular-nums tracking-widest text-white/40"><span className="text-white">{activeSlideIndex + 1}</span> / {slides.length}</div>
@@ -715,10 +845,10 @@ export default function ProfesorDashboard() {
           </div>
           <div className="flex items-center gap-8">
             <div className="flex items-center gap-4">
-              <img src={LOGO_URL} alt="Logo IEEZ" className="h-20 w-auto object-contain" />
+              <img src={LOGO_URL} alt="Logo" className="h-20 w-auto object-contain" />
               <span className="hidden lg:block text-[10px] font-black uppercase tracking-[0.3em] text-white/40">IEEZ Plataforma de Enseñanza</span>
             </div>
-            <Button variant="outline" className="h-10 px-6 rounded-xl font-black uppercase tracking-widest bg-red-600/20 border-red-600/30 text-red-100 hover:bg-red-600 hover:text-white transition-all shadow-lg" onClick={() => setPresentationMode(false)}><X size={18} className="mr-2" /> Salir (Esc)</Button>
+            <Button variant="outline" className="h-10 px-6 rounded-xl font-black uppercase tracking-widest bg-red-600/20 border-red-600/30 text-red-100 hover:bg-red-600 shadow-lg" onClick={() => setPresentationMode(false)}><X size={18} className="mr-2" /> Salir (Esc)</Button>
           </div>
         </div>
       </div>
@@ -738,7 +868,6 @@ export default function ProfesorDashboard() {
         <Card className="border-2 border-dashed rounded-[40px] p-20 text-center bg-white shadow-inner">
           <BookOpen className="mx-auto h-20 w-20 text-slate-200 mb-6" />
           <h3 className="text-xl font-black text-slate-800 uppercase">Sin materias asignadas</h3>
-          <p className="text-slate-500 mt-2 max-w-sm mx-auto">Aún no tienes carga académica vinculada. Contacta a la dirección para habilitar tus materias.</p>
         </Card>
       ) : (
         <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
@@ -749,62 +878,39 @@ export default function ProfesorDashboard() {
             <TabsTrigger value="ejercicios" disabled={!selectedTema} className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white font-bold uppercase text-[10px] tracking-widest">Actividades</TabsTrigger>
           </TabsList>
 
-          <TabsContent value="materias" className="mt-0">
+          <TabsContent value="materias">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {asignaciones.map((asig) => (
-                <Card 
-                  key={asig.id} 
-                  onClick={() => { 
-                    setSelectedMateria({ ...asig.materias, id: asig.materia_id }); 
-                    fetchUnidades(asig.materia_id); 
-                    setCurrentTab('unidades'); 
-                  }} 
-                  className="cursor-pointer hover:shadow-2xl transition-all duration-300 border-2 border-slate-100 hover:border-primary/40 group relative overflow-hidden bg-white rounded-3xl"
-                >
-                  <div className="h-2 bg-primary/20 group-hover:bg-primary transition-colors" />
+                <Card key={asig.id} onClick={() => { setSelectedMateria({...asig.materias, id: asig.materia_id}); fetchUnidades(asig.materia_id); setCurrentTab('unidades'); }} className="cursor-pointer hover:shadow-2xl transition-all duration-300 border-2 border-slate-100 hover:border-primary/40 rounded-3xl bg-white">
+                  <div className="h-2 bg-primary/20" />
                   <CardHeader className="p-6">
-                    <div className="flex justify-between items-start mb-4">
-                      <Badge variant="outline" className="text-[9px] font-black bg-primary/5 text-primary border-primary/20 uppercase tracking-tighter">{asig.niveles?.nombre}</Badge>
-                      <div className="p-2 rounded-xl bg-slate-50 text-slate-400 group-hover:text-primary transition-colors"><ChevronRight size={20} /></div>
-                    </div>
-                    <CardTitle className="text-xl font-black text-slate-800 uppercase leading-tight group-hover:text-primary transition-colors">{asig.materias?.nombre}</CardTitle>
+                    <Badge variant="outline" className="text-[9px] font-black bg-primary/5 text-primary border-primary/20 uppercase mb-4">{asig.niveles?.nombre}</Badge>
+                    <CardTitle className="text-xl font-black text-slate-800 uppercase leading-tight">{asig.materias?.nombre}</CardTitle>
                     <p className="text-[10px] font-bold text-muted-foreground uppercase mt-2">{asig.carreras?.nombre}</p>
                   </CardHeader>
-                  <CardContent className="px-6 pb-6 pt-0 space-y-4">
-                    <div className="flex items-center gap-2 text-xs font-bold text-slate-500 uppercase tracking-tighter bg-slate-50 p-2 rounded-xl border border-slate-100"><Users size={14} className="text-primary/60" /> GRUPOS: {asig.grupo_id ? asig.grupo_id.split(',').length : 'GENERAL'}</div>
-                  </CardContent>
                 </Card>
               ))}
             </div>
           </TabsContent>
 
-          <TabsContent value="unidades" className="mt-0">
+          <TabsContent value="unidades">
             <Card className="rounded-[32px] border-muted/60 shadow-xl overflow-hidden h-[70vh] flex flex-col">
-              <CardHeader className="bg-slate-50/50 pb-6 border-b shrink-0">
-                <div className="flex flex-row items-center justify-between">
-                  <div>
-                    <Button variant="ghost" size="sm" onClick={() => setCurrentTab('materias')} className="mb-2 -ml-2 text-primary font-black uppercase text-[10px] tracking-widest hover:bg-primary/5"><ArrowLeft size={14} className="mr-1" /> Volver a Materias</Button>
-                    <CardTitle className="text-2xl font-black uppercase text-slate-800 flex items-center gap-3"><ListTree className="text-primary" size={24} /> {selectedMateria?.nombre}</CardTitle>
-                    <CardDescription className="text-xs font-bold uppercase tracking-tight text-slate-500 mt-1">Gestión de unidades didácticas</CardDescription>
-                  </div>
-                  <Button size="lg" className="rounded-2xl bg-primary text-white font-black uppercase tracking-widest gap-2 shadow-lg" onClick={() => setDialog({ open: true, type: 'unidad', data: { titulo: '', orden: unidades.length + 1 } })}><Plus size={18} /> Nueva Unidad</Button>
+              <CardHeader className="bg-slate-50/50 pb-6 border-b shrink-0 flex flex-row items-center justify-between">
+                <div>
+                  <Button variant="ghost" size="sm" onClick={() => setCurrentTab('materias')} className="text-primary font-black uppercase text-[10px]"><ArrowLeft size={14} /> Volver</Button>
+                  <CardTitle className="text-2xl font-black uppercase text-slate-800 flex items-center gap-3"><ListTree className="text-primary" /> {selectedMateria?.nombre}</CardTitle>
                 </div>
+                <Button size="lg" className="rounded-2xl bg-primary text-white font-black uppercase tracking-widest gap-2" onClick={() => setDialog({ open: true, type: 'unidad', data: { titulo: '', orden: unidades.length + 1 } })}><Plus size={18} /> Nueva Unidad</Button>
               </CardHeader>
               <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                 <div className="space-y-4">
-                  {unidades.length === 0 ? <div className="py-20 text-center text-muted-foreground italic bg-slate-50 rounded-3xl border-2 border-dashed">No has creado unidades para esta materia aún.</div> : unidades.map((u) => (
-                    <div key={u.id} onClick={() => { setSelectedUnidad(u); fetchTemas(u.id); setCurrentTab('temas'); }} className={`p-6 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all duration-300 group ${selectedUnidad?.id === u.id ? 'bg-primary/5 border-primary shadow-md' : 'border-slate-50 hover:border-primary/20 hover:bg-white hover:shadow-lg'}`}>
+                  {unidades.map((u) => (
+                    <div key={u.id} onClick={() => { setSelectedUnidad(u); fetchTemas(u.id); setCurrentTab('temas'); }} className="p-6 rounded-2xl border-2 flex items-center justify-between cursor-pointer transition-all hover:shadow-lg border-slate-50">
                       <div className="flex items-center gap-6">
-                        <span className="h-12 w-12 rounded-2xl bg-primary text-white flex items-center justify-center font-black text-lg shadow-lg group-hover:scale-110 transition-transform">{u.orden}</span>
-                        <div className="flex flex-col">
-                          <span className="font-black text-slate-800 text-lg uppercase leading-none">{u.titulo}</span>
-                          <span className="text-[10px] font-bold text-slate-400 mt-2 tracking-widest uppercase">Unidad de aprendizaje</span>
-                        </div>
+                        <span className="h-12 w-12 rounded-2xl bg-primary text-white flex items-center justify-center font-black text-lg">{u.orden}</span>
+                        <span className="font-black text-slate-800 text-lg uppercase">{u.titulo}</span>
                       </div>
-                      <div className="flex items-center gap-2">
-                         <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-400 hover:text-primary hover:bg-primary/5" onClick={(e) => { e.stopPropagation(); setDialog({ open: true, type: 'unidad', data: u }); }}><Edit size={18}/></Button>
-                         <ChevronRight size={20} className="text-slate-300 group-hover:text-primary transition-colors" />
-                      </div>
+                      <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDialog({ open: true, type: 'unidad', data: u }); }}><Edit size={18}/></Button>
                     </div>
                   ))}
                 </div>
@@ -812,35 +918,27 @@ export default function ProfesorDashboard() {
             </Card>
           </TabsContent>
 
-          <TabsContent value="temas" className="mt-0">
+          <TabsContent value="temas">
              <Card className="rounded-[32px] border-muted/60 shadow-xl overflow-hidden h-[70vh] flex flex-col">
-               <CardHeader className="bg-slate-50/50 pb-6 border-b shrink-0">
-                 <div className="flex flex-row items-center justify-between">
-                   <div>
-                     <Button variant="ghost" size="sm" onClick={() => setCurrentTab('unidades')} className="mb-2 -ml-2 text-primary font-black uppercase text-[10px] tracking-widest hover:bg-primary/5"><ArrowLeft size={14} className="mr-1" /> Volver a Unidades</Button>
-                     <CardTitle className="text-2xl font-black uppercase text-slate-800 flex items-center gap-3"><FileText className="text-primary" size={24} /> {selectedUnidad?.titulo}</CardTitle>
-                     <p className="text-[10px] font-bold text-slate-500 uppercase mt-1">Temarios y contenido didáctico</p>
-                   </div>
-                   <Button size="lg" className="rounded-2xl bg-primary text-white font-black uppercase tracking-widest gap-2 shadow-lg" onClick={() => setDialog({ open: true, type: 'tema', data: { titulo: '', contenido: '', orden: temas.length + 1 } })}><Plus size={18} /> Nuevo Tema</Button>
+               <CardHeader className="bg-slate-50/50 pb-6 border-b shrink-0 flex flex-row items-center justify-between">
+                 <div>
+                   <Button variant="ghost" size="sm" onClick={() => setCurrentTab('unidades')} className="text-primary font-black uppercase text-[10px]"><ArrowLeft size={14} /> Volver</Button>
+                   <CardTitle className="text-2xl font-black uppercase text-slate-800 flex items-center gap-3"><FileText className="text-primary" /> {selectedUnidad?.titulo}</CardTitle>
                  </div>
+                 <Button size="lg" className="rounded-2xl bg-primary text-white font-black uppercase tracking-widest gap-2" onClick={() => setDialog({ open: true, type: 'tema', data: { titulo: '', contenido: '', orden: temas.length + 1 } })}><Plus size={18} /> Nuevo Tema</Button>
                </CardHeader>
                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                   {temas.length === 0 ? <div className="md:col-span-2 py-20 text-center text-muted-foreground italic bg-slate-50 rounded-3xl border-2 border-dashed">Esta unidad aún no tiene temas publicados.</div> : temas.map((t) => (
-                     <div key={t.id} onClick={() => { setSelectedTema(t); fetchEjercicios(t.id); setCurrentTab('ejercicios'); }} className="p-6 border-2 border-slate-50 rounded-[24px] flex flex-col gap-4 cursor-pointer hover:bg-white hover:shadow-xl hover:border-primary/20 transition-all group">
+                   {temas.map((t) => (
+                     <div key={t.id} onClick={() => { setSelectedTema(t); fetchEjercicios(t.id); setCurrentTab('ejercicios'); }} className="p-6 border-2 border-slate-50 rounded-[24px] flex flex-col gap-4 cursor-pointer hover:shadow-xl transition-all">
                        <div className="flex items-center justify-between">
-                         <div className="flex flex-col">
-                           <span className="font-black text-slate-700 uppercase tracking-tight leading-tight">{t.titulo}</span>
-                           <span className="text-[9px] font-bold text-slate-400 mt-1 uppercase tracking-widest">Contenido disponible</span>
-                         </div>
+                         <span className="font-black text-slate-700 uppercase tracking-tight">{t.titulo}</span>
                          <div className="flex items-center gap-1">
-                           <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-500" onClick={(e) => { e.stopPropagation(); handleOpenSlideEditor(t); }} title="Presentación PowerPoint"><Presentation size={18}/></Button>
-                           <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-500" onClick={(e) => { e.stopPropagation(); handleOpenResourceDialog(t); }} title="Subir Recursos/Archivos"><Paperclip size={18}/></Button>
-                           <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400" onClick={(e) => { e.stopPropagation(); setDialog({ open: true, type: 'tema', data: t }); }} title="Editar Tema"><Edit size={16}/></Button>
+                           <Button variant="ghost" size="icon" className="text-blue-500" onClick={(e) => { e.stopPropagation(); handleOpenSlideEditor(t); }}><Presentation size={18}/></Button>
+                           <Button variant="ghost" size="icon" className="text-emerald-500" onClick={(e) => { e.stopPropagation(); handleOpenResourceDialog(t); }}><Paperclip size={18}/></Button>
+                           <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDialog({ open: true, type: 'tema', data: t }); }}><Edit size={16}/></Button>
                          </div>
                        </div>
-                       <Separator className="opacity-50" />
-                       <div className="flex justify-between items-center text-[10px] font-black uppercase text-primary tracking-widest"><span>Ver Actividades</span><ChevronRight size={14} className="group-hover:translate-x-1 transition-transform" /></div>
                      </div>
                    ))}
                  </div>
@@ -848,47 +946,33 @@ export default function ProfesorDashboard() {
              </Card>
           </TabsContent>
 
-          <TabsContent value="ejercicios" className="mt-0">
+          <TabsContent value="ejercicios">
              <Card className="rounded-[32px] border-muted/60 shadow-xl overflow-hidden h-[70vh] flex flex-col">
-               <CardHeader className="bg-slate-50/50 pb-6 border-b shrink-0">
-                 <div className="flex flex-row items-center justify-between">
-                   <div>
-                     <Button variant="ghost" size="sm" onClick={() => setCurrentTab('temas')} className="mb-2 -ml-2 text-primary font-black uppercase text-[10px] tracking-widest hover:bg-primary/5"><ArrowLeft size={14} className="mr-1" /> Volver a Temas</Button>
-                     <CardTitle className="text-2xl font-black uppercase text-slate-800 flex items-center gap-3"><Sparkles className="text-amber-500" size={24} /> Actividades de {selectedTema?.titulo}</CardTitle>
-                     <p className="text-[10px] font-bold text-slate-500 uppercase mt-1">Prácticas y reforzamiento interactivo</p>
-                   </div>
-                   <Button size="lg" className="rounded-2xl bg-amber-500 text-white font-black uppercase tracking-widest gap-2 shadow-lg hover:bg-amber-600" onClick={() => setDialog({ open: true, type: 'ejercicio', data: { titulo: '', tipo: 'opcion_multiple', contenido: initActivityContent('opcion_multiple'), orden: ejercicios.length + 1 } })}><Plus size={18} /> Nueva Actividad</Button>
+               <CardHeader className="bg-slate-50/50 pb-6 border-b shrink-0 flex flex-row items-center justify-between">
+                 <div>
+                   <Button variant="ghost" size="sm" onClick={() => setCurrentTab('temas')} className="text-primary font-black uppercase text-[10px]"><ArrowLeft size={14} /> Volver</Button>
+                   <CardTitle className="text-2xl font-black uppercase text-slate-800 flex items-center gap-3"><Sparkles className="text-amber-500" /> Actividades de {selectedTema?.titulo}</CardTitle>
                  </div>
+                 <Button size="lg" className="rounded-2xl bg-amber-500 text-white font-black uppercase tracking-widest gap-2" onClick={() => setDialog({ open: true, type: 'ejercicio', data: { titulo: '', tipo: 'actividad_descriptiva', contenido: initActivityContent('actividad_descriptiva'), orden: ejercicios.length + 1 } })}><Plus size={18} /> Nueva Actividad</Button>
                </CardHeader>
                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                  <Table>
-                   <TableHeader className="bg-slate-50/50"><TableRow><TableHead className="font-black uppercase text-[10px] text-slate-500">Orden</TableHead><TableHead className="font-black uppercase text-[10px] text-slate-500">Actividad</TableHead><TableHead className="font-black uppercase text-[10px] text-slate-500">Tipo</TableHead><TableHead className="text-right font-black uppercase text-[10px] text-slate-500">Acciones</TableHead></TableRow></TableHeader>
+                   <TableHeader className="bg-slate-50/50"><TableRow><TableHead className="font-black uppercase text-[10px]">Orden</TableHead><TableHead className="font-black uppercase text-[10px]">Actividad</TableHead><TableHead className="font-black uppercase text-[10px]">Tipo</TableHead><TableHead className="text-right font-black uppercase text-[10px]">Acciones</TableHead></TableRow></TableHeader>
                    <TableBody>
-                     {ejercicios.length === 0 ? <TableRow><TableCell colSpan={4} className="text-center py-10 text-muted-foreground italic">Sin actividades registradas.</TableCell></TableRow> : ejercicios.map((e) => {
+                     {ejercicios.map((e) => {
                        const template = ACTIVITY_TEMPLATES.find(t => t.id === e.tipo);
-                       const safeContent = typeof e.contenido === 'string' ? JSON.parse(e.contenido || '{}') : e.contenido;
-                       
                        return (
-                        <TableRow key={e.id} className="hover:bg-amber-50/30 transition-colors">
+                        <TableRow key={e.id}>
                           <TableCell className="font-black text-slate-400">{e.orden}</TableCell>
                           <TableCell className="font-bold text-slate-700 uppercase tracking-tight">{e.titulo}</TableCell>
                           <TableCell>
-                            <Badge variant="outline" className={cn("text-[9px] font-black uppercase border-none text-white", template?.color || 'bg-slate-400')}>
-                              {template?.label || 'General'}
-                            </Badge>
+                            <Badge className={cn("text-[9px] font-black uppercase text-white", template?.color)}>{template?.label}</Badge>
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-50" onClick={() => {
-                                setDialog({ open: true, type: 'ejercicio', data: { ...e, contenido: safeContent } });
-                              }}><Edit size={16}/></Button>
-                              <AlertDialog>
-                                <AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-red-50"><Trash2 size={16}/></Button></AlertDialogTrigger>
-                                <AlertDialogContent className="rounded-3xl">
-                                  <AlertDialogHeader><AlertDialogTitle className="font-black uppercase">¿Eliminar actividad?</AlertDialogTitle><AlertDialogDescription>Esta acción no se puede deshacer. Los alumnos ya no verán esta tarea en su portal.</AlertDialogDescription></AlertDialogHeader>
-                                  <AlertDialogFooter><AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel><AlertDialogAction className="bg-destructive rounded-xl" onClick={() => handleDelete('ejercicio', e.id)}>Eliminar Permanentemente</AlertDialogAction></AlertDialogFooter>
-                                </AlertDialogContent>
-                              </AlertDialog>
+                              <Button variant="ghost" size="icon" className="text-amber-600 hover:bg-amber-50" onClick={() => setPreviewActivity(e)}><Eye size={16}/></Button>
+                              <Button variant="ghost" size="icon" className="text-blue-600 hover:bg-blue-50" onClick={() => setDialog({ open: true, type: 'ejercicio', data: {...e, contenido: typeof e.contenido === 'string' ? JSON.parse(e.contenido || '{}') : e.contenido} })}><Edit size={16}/></Button>
+                              <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete('ejercicio', e.id)}><Trash2 size={16}/></Button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -902,145 +986,71 @@ export default function ProfesorDashboard() {
         </Tabs>
       )}
 
-      {/* PROFESSOR ACADEMIC DIALOG */}
+      {/* DIALOGO DE EDICIÓN DE ACTIVIDAD */}
       <Dialog open={dialog.open} onOpenChange={o => setDialog({...dialog, open: o})}>
-        <DialogContent className={cn(
-          "w-[95vw] max-h-[90vh] flex flex-col p-0 rounded-[32px] overflow-hidden",
-          dialog.type === 'ejercicio' ? 'max-w-4xl' : 'max-w-xl'
-        )}>
-          <DialogHeader className="p-6 md:p-8 pb-4 shrink-0 bg-slate-50 border-b">
+        <DialogContent className={cn("w-[95vw] max-h-[90vh] flex flex-col p-0 rounded-[32px] overflow-hidden", dialog.type === 'ejercicio' ? 'max-w-4xl' : 'max-w-xl')}>
+          <DialogHeader className="p-8 bg-slate-50 border-b shrink-0 flex flex-row items-center justify-between space-y-0">
             <div className="flex items-center gap-4">
-              <div className={cn(
-                "p-3 rounded-2xl text-white",
-                dialog.type === 'ejercicio' ? 'bg-amber-500' : 'bg-primary'
-              )}>
-                {dialog.type === 'ejercicio' ? <Sparkles size={24} /> : <FileText size={24} />}
-              </div>
+              <div className={cn("p-3 rounded-2xl text-white", dialog.type === 'ejercicio' ? 'bg-amber-500' : 'bg-primary')}><FileText size={24} /></div>
               <div>
-                <DialogTitle className="capitalize font-black text-2xl uppercase tracking-tight text-slate-800">
-                  {dialog.data.id ? 'Editar' : 'Nueva'} {dialog.type}
-                </DialogTitle>
-                <DialogDescription className="text-xs uppercase font-bold text-slate-400">
-                  {dialog.type === 'ejercicio' ? 'Selecciona una plantilla y configura los reactivos.' : 'Completa la información técnica del contenido.'}
-                </DialogDescription>
+                <DialogTitle className="font-black text-2xl uppercase tracking-tight text-slate-800">Editar {dialog.type}</DialogTitle>
+                <DialogDescription className="text-xs uppercase font-bold text-slate-400">Configura los reactivos y parámetros de la actividad.</DialogDescription>
               </div>
             </div>
-          </DialogHeader>
-          
-          <div className="flex-1 overflow-y-auto px-6 md:px-8 py-6 custom-scrollbar">
-            <div className="space-y-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Título Principal *</label>
-                  <Input 
-                    placeholder="EJ. EVALUACIÓN DE CONCEPTOS" 
-                    className="h-12 rounded-xl bg-white border-slate-200 focus:ring-primary/20 uppercase font-bold" 
-                    value={dialog.data.titulo || ''} 
-                    onChange={e => setDialog({...dialog, data: {...dialog.data, titulo: e.target.value.toUpperCase()}})} 
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Orden</label>
-                  <Input 
-                    type="number" 
-                    className="h-12 rounded-xl bg-white border-slate-200" 
-                    value={dialog.data.orden || 1} 
-                    onChange={e => setDialog({...dialog, data: {...dialog.data, orden: parseInt(e.target.value)}})} 
-                  />
-                </div>
-              </div>
-
-              {dialog.type === 'tema' && (
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Contenido / Descripción</label>
-                  <textarea 
-                    rows={6} 
-                    className="w-full p-4 rounded-xl bg-slate-50 border-slate-200 text-sm focus:ring-primary/20 outline-none" 
-                    placeholder="Redacta aquí el contenido del tema..." 
-                    value={dialog.data.contenido || ''} 
-                    onChange={e => setDialog({...dialog, data: {...dialog.data, contenido: e.target.value}})} 
-                  />
-                </div>
-              )}
-
-              {dialog.type === 'ejercicio' && (
-                <div className="space-y-10">
-                  <div className="space-y-4">
-                    <label className="text-[10px] font-black uppercase text-primary tracking-[0.2em] flex items-center gap-2">
-                      <Layout size={14} /> Seleccionar Plantilla de Actividad
-                    </label>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                      {ACTIVITY_TEMPLATES.map((tmpl) => (
-                        <button
-                          key={tmpl.id}
-                          type="button"
-                          onClick={() => {
-                            setDialog({
-                              ...dialog,
-                              data: {
-                                ...dialog.data,
-                                tipo: tmpl.id,
-                                contenido: initActivityContent(tmpl.id)
-                              }
-                            });
-                          }}
-                          className={cn(
-                            "flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all group",
-                            dialog.data.tipo === tmpl.id 
-                              ? "bg-primary/5 border-primary shadow-md" 
-                              : "bg-white border-slate-100 hover:border-slate-200"
-                          )}
-                        >
-                          <div className={cn(
-                            "h-10 w-10 rounded-xl flex items-center justify-center text-white shadow-sm transition-transform group-hover:scale-110",
-                            tmpl.color,
-                            dialog.data.tipo === tmpl.id ? "scale-110" : ""
-                          )}>
-                            {tmpl.icon}
-                          </div>
-                          <span className={cn(
-                            "text-[10px] font-black uppercase tracking-tighter text-center leading-tight",
-                            dialog.data.tipo === tmpl.id ? "text-primary" : "text-slate-500"
-                          )}>{tmpl.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <Separator />
-
-                  <div className="space-y-4">
-                    <label className="text-[10px] font-black uppercase text-amber-600 tracking-[0.2em] flex items-center gap-2">
-                      <Edit size={14} /> Configuración de Reactivos
-                    </label>
-                    <TemplateEditor 
-                      type={dialog.data.tipo} 
-                      content={dialog.data.contenido || {}} 
-                      updateContent={(newContent) => setDialog({ ...dialog, data: { ...dialog.data, contenido: newContent } })} 
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <DialogFooter className="p-6 md:p-8 shrink-0 border-t bg-slate-50 gap-2">
-            {dialog.data.id && (
-              <Button variant="ghost" className="text-destructive font-black uppercase text-[10px] tracking-widest mr-auto hover:bg-red-50" onClick={() => { handleDelete(dialog.type, dialog.data.id); setDialog({...dialog, open: false}); }}>
-                Eliminar {dialog.type}
+            {dialog.type === 'ejercicio' && (
+              <Button variant="outline" className="rounded-xl font-black uppercase text-[10px] tracking-widest gap-2" onClick={() => setPreviewActivity(dialog.data)}>
+                <Eye size={14} /> Ver como Alumno
               </Button>
             )}
-            <Button variant="outline" className="rounded-2xl px-8 font-black uppercase text-[10px] tracking-widest h-12" onClick={() => setDialog({ ...dialog, open: false })}>
-              Cancelar
-            </Button>
-            <Button className="bg-primary px-10 rounded-2xl font-black uppercase tracking-widest shadow-lg h-12" onClick={handleSave}>
-              Guardar Cambios
-            </Button>
+          </DialogHeader>
+          
+          <div className="flex-1 overflow-y-auto px-8 py-6 custom-scrollbar space-y-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Título Principal *</label>
+                <Input className="h-12 rounded-xl uppercase font-bold" value={dialog.data.titulo || ''} onChange={e => setDialog({...dialog, data: {...dialog.data, titulo: e.target.value.toUpperCase()}})} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Orden</label>
+                <Input type="number" className="h-12 rounded-xl" value={dialog.data.orden || 1} onChange={e => setDialog({...dialog, data: {...dialog.data, orden: parseInt(e.target.value)}})} />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Descripción / Instrucciones (Opcional)</label>
+              <textarea rows={4} className="w-full p-4 rounded-xl bg-slate-50 border-slate-200 text-sm outline-none" value={dialog.data.descripcion || ''} onChange={e => setDialog({...dialog, data: {...dialog.data, descripcion: e.target.value}})} />
+            </div>
+
+            {dialog.type === 'ejercicio' && (
+              <div className="space-y-10">
+                <div className="space-y-4">
+                  <label className="text-[10px] font-black uppercase text-primary tracking-[0.2em] flex items-center gap-2"><Layout size={14} /> Seleccionar Plantilla</label>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {ACTIVITY_TEMPLATES.map((tmpl) => (
+                      <button key={tmpl.id} type="button" onClick={() => setDialog({...dialog, data: {...dialog.data, tipo: tmpl.id, contenido: initActivityContent(tmpl.id)}})} className={cn("flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all", dialog.data.tipo === tmpl.id ? "bg-primary/5 border-primary shadow-md" : "bg-white border-slate-100 hover:border-slate-200")}>
+                        <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center text-white", tmpl.color)}>{tmpl.icon}</div>
+                        <span className="text-[10px] font-black uppercase tracking-tighter text-center">{tmpl.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <Separator />
+                <TemplateEditor type={dialog.data.tipo} content={dialog.data.contenido || {}} updateContent={(newContent) => setDialog({ ...dialog, data: { ...dialog.data, contenido: newContent } })} />
+              </div>
+            )}
+          </div>
+
+          <DialogFooter className="p-8 shrink-0 border-t bg-slate-50 gap-2">
+            <Button variant="outline" className="rounded-2xl px-8 font-black uppercase text-[10px]" onClick={() => setDialog({...dialog, open: false})}>Cancelar</Button>
+            <Button className="bg-primary px-10 rounded-2xl font-black uppercase tracking-widest shadow-lg" onClick={handleSave}>Guardar Cambios</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* SLIDE EDITOR DIALOG */}
+      {/* PREVISUALIZACIÓN DE ACTIVIDAD */}
+      {previewActivity && <ActivityPreview exercise={previewActivity} onClose={() => setPreviewActivity(null)} />}
+
+      {/* SLIDE EDITOR Y RECURSOS (MANTENIDOS IGUAL) */}
       <Dialog open={slideDialogOpen} onOpenChange={setSlideDialogOpne}>
         <DialogContent className="max-w-[95vw] w-[1300px] h-[90vh] flex flex-col p-0 rounded-3xl overflow-hidden shadow-2xl border-none">
           <DialogHeader className="p-6 bg-slate-900 border-b border-white/5 flex flex-row justify-between items-center space-y-0 shrink-0">
@@ -1048,182 +1058,90 @@ export default function ProfesorDashboard() {
               <DialogTitle className="text-2xl font-black uppercase tracking-tight text-white flex items-center gap-3">
                 <Presentation className="text-blue-400" /> Diseño de Clase: {selectedTema?.titulo}
               </DialogTitle>
-              <DialogDescription className="text-xs font-bold text-slate-400 uppercase">
-                Organiza tus diapositivas y elige estilos visuales.
-              </DialogDescription>
             </div>
             <div className="flex gap-3">
               <Button variant="default" className="bg-blue-600 hover:bg-blue-700 rounded-xl font-black uppercase tracking-widest gap-2 shadow-lg h-12 px-6" onClick={() => setPresentationMode(true)} disabled={slides.length === 0}>
                 <Play size={18} fill="currentColor" /> Presentar
               </Button>
-              <Button variant="ghost" className="rounded-xl font-bold text-white hover:bg-white/5 h-12 px-6 border border-white/10" onClick={() => setSlideDialogOpne(false)}>
-                Cerrar
-              </Button>
+              <Button variant="ghost" className="rounded-xl font-bold text-white hover:bg-white/5 h-12 px-6 border border-white/10" onClick={() => setSlideDialogOpne(false)}>Cerrar</Button>
             </div>
           </DialogHeader>
-          
           <div className="flex-1 flex overflow-hidden bg-slate-950">
             <aside className="w-72 bg-slate-900 border-r border-white/5 flex flex-col shrink-0">
               <div className="p-4 border-b border-white/5">
-                <Button className="w-full gap-2 rounded-xl bg-blue-600 font-black uppercase text-[10px] tracking-widest h-12" onClick={handleAddSlide}>
-                  <Plus size={14} /> Nueva Diapositiva
-                </Button>
+                <Button className="w-full gap-2 rounded-xl bg-blue-600 font-black uppercase text-[10px] tracking-widest h-12" onClick={handleAddSlide}>+ Nueva Diapositiva</Button>
               </div>
               <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
                 {slides.map((s, idx) => (
-                  <div key={s.id} onClick={() => setActiveSlideIndex(idx)} className={cn("p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-3 relative group", activeSlideIndex === idx ? "bg-blue-600/10 border-blue-600 shadow-[0_0_15px_rgba(37,99,235,0.2)]" : "border-transparent hover:bg-white/5")}>
+                  <div key={s.id} onClick={() => setActiveSlideIndex(idx)} className={cn("p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-3 relative group", activeSlideIndex === idx ? "bg-blue-600/10 border-blue-600" : "border-transparent hover:bg-white/5")}>
                     <span className="text-xs font-black text-slate-500">{idx + 1}</span>
-                    <div className="flex-1 truncate">
-                      <p className={cn("text-[11px] font-bold uppercase truncate", activeSlideIndex === idx ? "text-blue-400" : "text-slate-300")}>
-                        {s.titulo || 'Sin Título'}
-                      </p>
-                    </div>
-                    <button className="opacity-0 group-hover:opacity-100 h-7 w-7 rounded-lg bg-red-500/10 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shrink-0" onClick={(e) => { e.stopPropagation(); handleDeleteSlide(s.id); }}>
-                      <Trash2 size={14} />
-                    </button>
+                    <p className={cn("text-[11px] font-bold uppercase truncate", activeSlideIndex === idx ? "text-blue-400" : "text-slate-300")}>{s.titulo || 'Sin Título'}</p>
+                    <button className="opacity-0 group-hover:opacity-100 h-7 w-7 rounded-lg bg-red-500/10 text-red-500 flex items-center justify-center transition-all shrink-0" onClick={(e) => { e.stopPropagation(); handleDeleteSlide(s.id); }}><Trash2 size={14} /></button>
                   </div>
                 ))}
               </div>
             </aside>
-            <main className="flex-1 bg-slate-950 p-6 md:p-10 overflow-y-auto custom-scrollbar">
+            <main className="flex-1 bg-slate-950 p-10 overflow-y-auto custom-scrollbar">
               {slides.length > 0 && slides[activeSlideIndex] ? (
                 <div className="max-w-4xl mx-auto space-y-10">
                   <div className="space-y-4">
-                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] flex items-center gap-2">
-                      <Palette size={14} /> Estilo Visual de la Diapositiva
-                    </label>
+                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] flex items-center gap-2"><Palette size={14} /> Estilo Visual</label>
                     <div className="grid grid-cols-4 gap-4">
                       {['azul', 'vino', 'verde', 'oscuro'].map((est) => (
-                        <button key={est} onClick={() => handleUpdateSlide(slides[activeSlideIndex].id, { estilo: est })} className={cn("h-12 rounded-xl font-black text-[10px] uppercase transition-all border-2", slides[activeSlideIndex].estilo === est ? "border-blue-500 scale-105 shadow-lg" : "border-white/5 opacity-50 hover:opacity-100", est === 'azul' ? 'bg-blue-900 text-white' : est === 'vino' ? 'bg-rose-900 text-white' : est === 'verde' ? 'bg-emerald-900 text-white' : 'bg-slate-800 text-white')}>
-                          {est}
-                        </button>
+                        <button key={est} onClick={() => handleUpdateSlide(slides[activeSlideIndex].id, { estilo: est })} className={cn("h-12 rounded-xl font-black text-[10px] uppercase border-2", slides[activeSlideIndex].estilo === est ? "border-blue-500 scale-105 shadow-lg" : "border-white/5 opacity-50")}>{est}</button>
                       ))}
                     </div>
                   </div>
-                  <div className="space-y-4">
-                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Título Principal</label>
-                    <Input className="text-2xl h-16 font-black uppercase border-none bg-white/5 text-white focus:bg-white/10 focus:ring-blue-500/50 rounded-2xl px-6 transition-all" placeholder="ESCRIBE EL TÍTULO AQUÍ..." value={slides[activeSlideIndex]?.titulo || ''} onChange={(e) => handleUpdateSlide(slides[activeSlideIndex].id, { titulo: e.target.value.toUpperCase() })} />
-                  </div>
-                  <div className="space-y-4">
-                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em]">Cuerpo de Texto</label>
-                    <textarea className="w-full p-6 text-lg min-h-[200px] font-medium leading-relaxed bg-white/5 border-none text-slate-200 focus:bg-white/10 focus:ring-blue-500/50 rounded-3xl outline-none resize-none transition-all" placeholder="Redacta los puntos clave de esta diapositiva..." value={slides[activeSlideIndex]?.contenido || ''} onChange={(e) => handleUpdateSlide(slides[activeSlideIndex].id, { contenido: e.target.value })} />
-                  </div>
-                  <div className="bg-blue-600/5 p-8 rounded-3xl border border-white/5 flex flex-col gap-6">
-                    <div className="space-y-4">
-                      <label className="text-[10px] font-black uppercase text-blue-400 tracking-[0.2em] flex items-center gap-2">
-                        <ImageIcon size={14} /> Enlaces de Imágenes (Separados por coma)
-                      </label>
-                      <textarea className="w-full p-4 bg-slate-900 border-white/10 rounded-2xl text-white text-sm focus:ring-blue-500/50 outline-none min-h-[80px]" placeholder="https://img1.jpg, https://img2.jpg o data:image/..." value={slides[activeSlideIndex]?.imagen_url || ''} onChange={(e) => handleUpdateSlide(slides[activeSlideIndex].id, { imagen_url: e.target.value })} />
-                      <p className="text-[10px] text-slate-500 font-bold uppercase italic">Puedes agregar hasta 4 imágenes por diapositiva separadas por comas. El formato Base64 es compatible.</p>
-                    </div>
-                    <div className="h-48 grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {splitImageUrls(slides[activeSlideIndex]?.imagen_url).map((url: string, i: number) => (
-                        <div key={i} className="relative group rounded-xl overflow-hidden border border-white/10">
-                          <img src={url.trim()} alt="Pre" className="w-full h-full object-cover" />
-                        </div>
-                      ))}
-                      <div className="border-2 border-dashed border-white/10 rounded-xl flex items-center justify-center text-slate-600">
-                        <Plus size={24} />
-                      </div>
-                    </div>
+                  <Input className="text-2xl h-16 font-black uppercase border-none bg-white/5 text-white focus:bg-white/10 rounded-2xl px-6" value={slides[activeSlideIndex]?.titulo || ''} onChange={(e) => handleUpdateSlide(slides[activeSlideIndex].id, { titulo: e.target.value.toUpperCase() })} />
+                  <textarea className="w-full p-6 text-lg min-h-[200px] font-medium bg-white/5 border-none text-slate-200 focus:bg-white/10 rounded-3xl outline-none resize-none" value={slides[activeSlideIndex]?.contenido || ''} onChange={(e) => handleUpdateSlide(slides[activeSlideIndex].id, { contenido: e.target.value })} />
+                  <div className="bg-blue-600/5 p-8 rounded-3xl border border-white/5 space-y-4">
+                    <label className="text-[10px] font-black uppercase text-blue-400 tracking-[0.2em] flex items-center gap-2"><ImageIcon size={14} /> Imágenes</label>
+                    <textarea className="w-full p-4 bg-slate-900 border-white/10 rounded-2xl text-white text-sm outline-none min-h-[80px]" value={slides[activeSlideIndex]?.imagen_url || ''} onChange={(e) => handleUpdateSlide(slides[activeSlideIndex].id, { imagen_url: e.target.value })} />
                   </div>
                 </div>
-              ) : (
-                <div className="h-full flex flex-col items-center justify-center text-center p-12 opacity-20">
-                  <Presentation size={100} className="mb-6 text-white" />
-                  <h3 className="text-3xl font-black uppercase text-white">Laboratorio Creativo</h3>
-                  <p className="max-w-xs mt-4 text-slate-400">Haz clic en "+ Nueva Diapositiva" para comenzar a diseñar tu material educativo.</p>
-                </div>
-              )}
+              ) : <div className="h-full flex flex-col items-center justify-center opacity-20"><Presentation size={100} className="mb-6 text-white" /></div>}
             </main>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* RESOURCE MANAGEMENT DIALOG */}
       <Dialog open={isResourceDialogOpen} onOpenChange={setIsResourceDialogOpen}>
         <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] flex flex-col p-0 rounded-[32px] overflow-hidden shadow-2xl">
-          <DialogHeader className="p-6 md:p-8 bg-slate-50 border-b shrink-0">
-            <div className="flex items-center gap-4">
-              <div className="p-3 bg-emerald-100 text-emerald-600 rounded-2xl">
-                <Paperclip size={24} />
-              </div>
-              <div>
-                <DialogTitle className="text-xl md:text-2xl font-black uppercase tracking-tight text-slate-800">Recursos de {selectedTema?.titulo}</DialogTitle>
-                <DialogDescription className="text-xs font-bold text-slate-500 uppercase">Gestiona materiales descargables para tus alumnos.</DialogDescription>
-              </div>
+          <DialogHeader className="p-8 bg-slate-50 border-b shrink-0 flex items-center gap-4 space-y-0">
+            <div className="p-3 bg-emerald-100 text-emerald-600 rounded-2xl"><Paperclip size={24} /></div>
+            <div>
+              <DialogTitle className="text-2xl font-black uppercase tracking-tight text-slate-800">Recursos de {selectedTema?.titulo}</DialogTitle>
             </div>
           </DialogHeader>
-
-          <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
-            <div className="space-y-8 pr-2">
-              <div className="border-2 border-dashed border-slate-200 rounded-[24px] p-6 md:p-10 text-center hover:border-emerald-400 transition-colors bg-slate-50/50 group">
-                <label className="cursor-pointer flex flex-col items-center gap-4">
-                  <div className="h-16 w-16 rounded-full bg-white shadow-md flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
-                    {uploading ? <Loader2 className="animate-spin" size={32} /> : <FileUp size={32} />}
+          <div className="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-8">
+            <div className="border-2 border-dashed border-slate-200 rounded-[24px] p-10 text-center hover:border-emerald-400 transition-colors bg-slate-50/50">
+              <label className="cursor-pointer flex flex-col items-center gap-4">
+                <div className="h-16 w-16 rounded-full bg-white shadow-md flex items-center justify-center text-emerald-500">
+                  {uploading ? <Loader2 className="animate-spin" size={32} /> : <FileUp size={32} />}
+                </div>
+                <p className="font-black text-slate-700 uppercase tracking-widest text-sm">{uploading ? "Subiendo..." : "Haz clic para subir un recurso"}</p>
+                <input type="file" className="hidden" onChange={handleFileUpload} disabled={uploading} />
+              </label>
+            </div>
+            <div className="space-y-4">
+              <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] flex items-center gap-2"><File size={12} /> Archivos actuales</h4>
+              <div className="space-y-3">
+                {resources.map((res) => (
+                  <div key={res.id} className="flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl hover:shadow-md transition-shadow">
+                    <div className="flex items-center gap-4">
+                      <div className="h-10 w-10 rounded-xl bg-slate-100 flex items-center justify-center font-black text-[10px] uppercase text-slate-500">{res.tipo}</div>
+                      <span className="font-bold text-slate-700 uppercase text-xs truncate max-w-[200px]">{res.titulo}</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <a href={res.archivo_url} target="_blank" rel="noopener noreferrer"><Button variant="ghost" size="icon" className="h-8 w-8 text-blue-500"><Download size={16}/></Button></a>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteResource(res)}><Trash2 size={16}/></Button>
+                    </div>
                   </div>
-                  <div>
-                    <p className="font-black text-slate-700 uppercase tracking-widest text-sm">
-                      {uploading ? "Subiendo archivo..." : "Haz clic para subir un recurso"}
-                    </p>
-                    <p className="text-[10px] text-slate-400 font-bold uppercase mt-2 tracking-tighter">PDF, WORD, EXCEL, PPTX o CSV (Máx. 3MB)</p>
-                  </div>
-                  <input type="file" className="hidden" onChange={handleFileUpload} disabled={uploading} accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.csv" />
-                </label>
-              </div>
-
-              <div className="space-y-4">
-                <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] flex items-center gap-2">
-                  <File size={12} /> Archivos actuales ({resources.length})
-                </h4>
-                
-                {resources.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center py-10 opacity-30 italic">
-                    <Info size={32} className="mb-2" />
-                    <p className="text-xs font-bold uppercase">No hay archivos en este tema</p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {resources.map((res) => (
-                      <div key={res.id} className="flex items-center justify-between p-4 bg-white border border-slate-100 rounded-2xl hover:shadow-md transition-shadow group">
-                        <div className="flex items-center gap-4">
-                          <div className={cn(
-                            "h-10 w-10 rounded-xl flex items-center justify-center text-white font-black text-[10px] uppercase",
-                            res.tipo === 'pdf' ? 'bg-red-500' : 
-                            res.tipo === 'xls' || res.tipo === 'xlsx' || res.tipo === 'csv' ? 'bg-emerald-500' :
-                            res.tipo === 'doc' || res.tipo === 'docx' ? 'bg-blue-500' :
-                            res.tipo === 'ppt' || res.tipo === 'pptx' ? 'bg-orange-500' : 'bg-slate-500'
-                          )}>
-                            {res.tipo}
-                          </div>
-                          <div className="flex flex-col">
-                            <span className="font-bold text-slate-700 uppercase text-xs truncate max-w-[150px] md:max-w-[250px]">{res.titulo}</span>
-                            <span className="text-[9px] text-slate-400 font-bold uppercase">{new Date(res.created_at).toLocaleDateString()}</span>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <a href={res.archivo_url} target="_blank" rel="noopener noreferrer">
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-500 hover:bg-blue-50">
-                              <Download size={16} />
-                            </Button>
-                          </a>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-red-50" onClick={() => handleDeleteResource(res)}>
-                            <Trash2 size={16} />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                ))}
               </div>
             </div>
           </div>
-
-          <DialogFooter className="p-6 bg-slate-50 border-t shrink-0">
-            <Button variant="outline" className="rounded-xl px-8 font-bold uppercase text-[10px] tracking-widest w-full md:w-auto" onClick={() => setIsResourceDialogOpen(false)}>
-              Cerrar
-            </Button>
-          </DialogFooter>
+          <DialogFooter className="p-8 bg-slate-50 border-t shrink-0"><Button variant="outline" className="rounded-xl px-8 font-bold uppercase text-[10px]" onClick={() => setIsResourceDialogOpen(false)}>Cerrar</Button></DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
