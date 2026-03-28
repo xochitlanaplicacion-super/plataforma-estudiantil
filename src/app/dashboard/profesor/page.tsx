@@ -64,17 +64,24 @@ import {
 } from '@/lib/actions/academic';
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogFooter, 
+  DialogDescription 
+} from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription as AlertDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import confetti from 'canvas-confetti';
 
 const LOGO_URL = '/images/logo_zapata.png';
 
-// --- LOGICA DE GENERACIÓN DE CRUCIGRAMAS ---
-const GRID_SIZE = 50;
-const CENTER = 25;
+// --- MOTOR DE GENERACIÓN DE CRUCIGRAMAS PROFESIONAL ---
+const CROSSWORD_GRID_SIZE = 50;
+const CROSSWORD_CENTER = 25;
 
 type Direction = 'HORIZONTAL' | 'VERTICAL';
 
@@ -106,20 +113,21 @@ class CrosswordBuilder {
   unplacedWords: WordInput[] = [];
 
   constructor() {
-    this.grid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(''));
+    this.grid = Array(CROSSWORD_GRID_SIZE).fill(null).map(() => Array(CROSSWORD_GRID_SIZE).fill(''));
   }
 
   canPlaceWord(word: string, startX: number, startY: number, dir: Direction): boolean {
     if (startX < 0 || startY < 0) return false;
-    if (dir === 'HORIZONTAL' && startX + word.length > GRID_SIZE) return false;
-    if (dir === 'VERTICAL' && startY + word.length > GRID_SIZE) return false;
+    if (dir === 'HORIZONTAL' && startX + word.length > CROSSWORD_GRID_SIZE) return false;
+    if (dir === 'VERTICAL' && startY + word.length > CROSSWORD_GRID_SIZE) return false;
 
+    // Verificar colisiones y bordes
     if (dir === 'HORIZONTAL') {
       if (startX > 0 && this.grid[startY][startX - 1] !== '') return false;
-      if (startX + word.length < GRID_SIZE && this.grid[startY][startX + word.length] !== '') return false;
+      if (startX + word.length < CROSSWORD_GRID_SIZE && this.grid[startY][startX + word.length] !== '') return false;
     } else {
       if (startY > 0 && this.grid[startY - 1][startX] !== '') return false;
-      if (startY + word.length < GRID_SIZE && this.grid[startY + word.length][startX] !== '') return false;
+      if (startY + word.length < CROSSWORD_GRID_SIZE && this.grid[startY + word.length][startX] !== '') return false;
     }
 
     for (let i = 0; i < word.length; i++) {
@@ -130,15 +138,11 @@ class CrosswordBuilder {
         if (this.grid[py][px] !== word[i]) return false;
       } else {
         if (dir === 'HORIZONTAL') {
-          if (py > 0 && this.grid[py - 1][px] !== '' && (this.grid[py - 1][px] !== undefined)) {
-             // Solo permitir si es parte de una intersección válida, pero simplificamos
-             if (!(i === 0 || i === word.length - 1)) { /* check neighbors */ }
-          }
           if (py > 0 && this.grid[py - 1][px] !== '') return false;
-          if (py < GRID_SIZE - 1 && this.grid[py + 1][px] !== '') return false;
+          if (py < CROSSWORD_GRID_SIZE - 1 && this.grid[py + 1][px] !== '') return false;
         } else {
           if (px > 0 && this.grid[py][px - 1] !== '') return false;
-          if (px < GRID_SIZE - 1 && this.grid[py][px + 1] !== '') return false;
+          if (px < CROSSWORD_GRID_SIZE - 1 && this.grid[py][px + 1] !== '') return false;
         }
       }
     }
@@ -165,7 +169,7 @@ class CrosswordBuilder {
     for (const input of inputs) {
       const word = input.word.toUpperCase();
       if (this.placedWords.length === 0) {
-        this.placeWord(input, CENTER - Math.floor(word.length / 2), CENTER, 'HORIZONTAL');
+        this.placeWord(input, CROSSWORD_CENTER - Math.floor(word.length / 2), CROSSWORD_CENTER, 'HORIZONTAL');
         continue;
       }
 
@@ -219,7 +223,7 @@ class CrosswordBuilder {
 
   getBounds() {
     if (this.placedWords.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
-    let minX = GRID_SIZE, minY = GRID_SIZE, maxX = 0, maxY = 0;
+    let minX = CROSSWORD_GRID_SIZE, minY = CROSSWORD_GRID_SIZE, maxX = 0, maxY = 0;
     for (const pw of this.placedWords) {
       minX = Math.min(minX, pw.x);
       minY = Math.min(minY, pw.y);
@@ -264,8 +268,8 @@ function generateCrossword(inputs: WordInput[]): CrosswordData {
 
 // --- CONFIGURACIÓN DE PLANTILLAS ---
 const ACTIVITY_TEMPLATES = [
-  { id: 'crucigrama', label: 'Crucigrama', icon: <Grid3X3 size={16} />, color: 'bg-rose-600' },
   { id: 'actividad_descriptiva', label: 'Actividad Descriptiva', icon: <FileSearch size={16} />, color: 'bg-slate-700' },
+  { id: 'crucigrama', label: 'Crucigrama', icon: <Grid3X3 size={16} />, color: 'bg-rose-600' },
   { id: 'opcion_multiple', label: 'Opción Múltiple', icon: <CheckCircle2 size={16} />, color: 'bg-blue-500' },
   { id: 'verdadero_falso', label: 'Verdadero / Falso', icon: <HelpCircle size={16} />, color: 'bg-emerald-500' },
   { id: 'emparejamiento', label: 'Emparejamiento', icon: <Layout size={16} />, color: 'bg-purple-500' },
@@ -277,8 +281,8 @@ const ACTIVITY_TEMPLATES = [
 
 const initActivityContent = (type: string) => {
   switch(type) {
-    case 'crucigrama': return { words: [''], clues: [''], showWordList: false };
     case 'actividad_descriptiva': return { fileUrl: '', fileName: '' };
+    case 'crucigrama': return { words: [''], clues: [''], showWordList: false };
     case 'opcion_multiple': return { items: [{ question: '', options: [{id: '1', text: ''}], correctId: '1', feedback: '' }] };
     case 'verdadero_falso': return { items: [{ statement: '', correct: true, feedback: '' }] };
     case 'emparejamiento': return { items: [{ left: '', right: '' }] };
@@ -290,6 +294,7 @@ const initActivityContent = (type: string) => {
   }
 };
 
+// COMPONENTE EDITOR PARA EVITAR RE-RENDERS Y PÉRDIDA DE FOCO
 const TemplateEditor = ({ type, content, updateContent }: { type: string, content: any, updateContent: (newContent: any) => void }) => {
   const supabase = createClient();
   const { toast } = useToast();
@@ -603,16 +608,18 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
               onChange={(e) => {
                 const newWords = [...(content.words || [])];
                 newWords[idx] = e.target.value.toUpperCase();
-                updateContent({ ...content, words: newWords });
+                const newClues = content.clues ? [...content.clues] : [];
+                updateContent({ ...content, words: newWords, clues: newClues });
               }} 
             />
             <Input 
               placeholder="PISTA" 
               value={content.clues?.[idx] || ''} 
               onChange={(e) => {
-                const newClues = [...(content.clues || [])];
+                const newClues = content.clues ? [...content.clues] : [];
                 newClues[idx] = e.target.value;
-                updateContent({ ...content, clues: newClues });
+                const newWords = content.words ? [...content.words] : [];
+                updateContent({ ...content, words: newWords, clues: newClues });
               }} 
             />
             <Button variant="ghost" size="sm" onClick={() => {
@@ -649,7 +656,6 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
   const [isFlipped, setIsFlipped] = useState(false);
   const [fillAnswers, setFillAnswers] = useState<Record<number, string>>({});
   
-  // Sopa de letras y Crucigrama state
   const [sopaGrid, setSopaGrid] = useState<string[][]>([]);
   const [foundWords, setFoundWords] = useState<string[]>([]);
   const [selectedSopaCells, setSelectedSopaCells] = useState<{r: number, c: number}[]>([]);
@@ -664,7 +670,6 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
     return typeof exercise.contenido === 'string' ? JSON.parse(exercise.contenido || '{}') : exercise.contenido;
   }, [exercise]);
 
-  // Generación de Sopa de Letras
   const generateSopaGrid = useCallback(() => {
     const size = content.size || 12;
     const grid = Array.from({ length: size }, () => Array(size).fill(''));
@@ -751,7 +756,6 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
     }
   };
 
-  // Crucigrama logic
   const solvedCrosswordWords = useMemo(() => {
     if (!crossword) return new Set<string>();
     const solved = new Set<string>();
@@ -777,7 +781,7 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
   const renderContent = () => {
     if (exercise.tipo === 'crucigrama' && crossword) {
       const grid = Array(crossword.height).fill(null).map(() => 
-        Array(crossword.width).fill(null).map(() => ({ letter: '', isActive: false, number: null as number | null, ids: [] as string[] }))
+        Array(crossword.width).fill(null).map(() => ({ letter: '', isActive: false, number: null as number | null, ids: [] as string[], acrossId: null as string | null, downId: null as string | null }))
       );
       crossword.placedWords.forEach(pw => {
         for (let i = 0; i < pw.word.length; i++) {
@@ -786,25 +790,37 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
           grid[cy][cx].letter = pw.word[i];
           grid[cy][cx].isActive = true;
           grid[cy][cx].ids.push(pw.id);
+          if (pw.direction === 'HORIZONTAL') grid[cy][cx].acrossId = pw.id;
+          else grid[cy][cx].downId = pw.id;
           if (i === 0) grid[cy][cx].number = pw.number;
         }
       });
+
+      const getCellStyles = (x: number, y: number, cell: any) => {
+        if (!cell.isActive) return "bg-slate-800/5 border-transparent";
+        const isSolved = cell.ids.some((id: string) => solvedCrosswordWords.has(id));
+        if (isSolved) return "bg-emerald-50 text-emerald-600 border-emerald-300";
+        if (focusedCell?.x === x && focusedCell?.y === y) return "bg-indigo-200 border-indigo-500 ring-2 ring-indigo-100 z-30";
+        if (focusedCell) {
+          const fCell = grid[focusedCell.y][focusedCell.x];
+          if (direction === 'HORIZONTAL' && cell.acrossId && cell.acrossId === fCell.acrossId) return "bg-indigo-50 border-indigo-200";
+          if (direction === 'VERTICAL' && cell.downId && cell.downId === fCell.downId) return "bg-indigo-50 border-indigo-200";
+        }
+        return "bg-white border-slate-300";
+      };
 
       return (
         <div className="w-full max-w-6xl mx-auto flex flex-col lg:flex-row gap-8 py-10">
           <div className="flex-[2] bg-white p-8 rounded-[40px] shadow-2xl border-2 border-slate-100 flex flex-col items-center">
             <div className="flex justify-between items-center w-full mb-8">
-              <h3 className="text-2xl font-black text-slate-800 uppercase">Crucigrama</h3>
+              <h3 className="text-2xl font-black text-slate-800 uppercase">Crucigrama Interactivo</h3>
               <Button variant="ghost" onClick={() => setShowSolution(!showSolution)} className="text-indigo-600 gap-2 font-black uppercase text-xs">
                 {showSolution ? <EyeOff size={16} /> : <Eye size={16} />} {showSolution ? 'Ocultar' : 'Ver Solución'}
               </Button>
             </div>
             <div className="grid gap-1 bg-slate-200 p-1 rounded-xl shadow-inner overflow-auto max-w-full" style={{ gridTemplateColumns: `repeat(${crossword.width}, minmax(0, 1fr))` }}>
               {grid.map((row, y) => row.map((cell, x) => (
-                <div key={`${x}-${y}`} className={cn("aspect-square relative w-10 md:w-12 flex items-center justify-center font-black text-lg border transition-all", 
-                  !cell.isActive ? "bg-slate-800/5 border-transparent" : "bg-white border-slate-300",
-                  cell.ids.some(id => solvedCrosswordWords.has(id)) && "bg-emerald-50 text-emerald-600 border-emerald-300"
-                )}>
+                <div key={`${x}-${y}`} onClick={() => cell.isActive && setFocusedCell({x, y})} className={cn("aspect-square relative w-10 md:w-12 flex items-center justify-center font-black text-lg border transition-all cursor-pointer", getCellStyles(x, y, cell))}>
                   {cell.isActive && (
                     <>
                       {cell.number && <span className="absolute top-0.5 left-1 text-[9px] text-slate-400">{cell.number}</span>}
@@ -812,35 +828,45 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
                         <input 
                           ref={el => { inputRefs.current[`${x}-${y}`] = el; }}
                           maxLength={1}
-                          className="w-full h-full text-center bg-transparent outline-none uppercase"
+                          className="w-full h-full text-center bg-transparent outline-none uppercase z-10"
                           value={userInputs[`${x}-${y}`] || ''}
                           onChange={e => {
                             const val = e.target.value.toUpperCase();
+                            const isLocked = cell.ids.some((id: string) => solvedCrosswordWords.has(id));
+                            if (isLocked) return;
                             setUserInputs(prev => ({ ...prev, [`${x}-${y}`]: val }));
                             if (val) {
                               const nextX = direction === 'HORIZONTAL' ? x + 1 : x;
                               const nextY = direction === 'VERTICAL' ? y + 1 : y;
-                              if (grid[nextY]?.[nextX]?.isActive) inputRefs.current[`${nextX}-${nextY}`]?.focus();
+                              if (grid[nextY]?.[nextX]?.isActive) {
+                                setFocusedCell({x: nextX, y: nextY});
+                                inputRefs.current[`${nextX}-${nextY}`]?.focus();
+                              }
                             }
                           }}
                           onFocus={() => {
                             setFocusedCell({ x, y });
-                            const hasH = crossword.placedWords.some(pw => pw.direction === 'HORIZONTAL' && x >= pw.x - crossword.minX && x < pw.x - crossword.minX + pw.word.length && y === pw.y - crossword.minY);
-                            const hasV = crossword.placedWords.some(pw => pw.direction === 'VERTICAL' && y >= pw.y - crossword.minY && y < pw.y - crossword.minY + pw.word.length && x === pw.x - crossword.minX);
-                            if (hasH && !hasV) setDirection('HORIZONTAL');
-                            else if (hasV && !hasH) setDirection('VERTICAL');
+                            if (cell.acrossId && cell.downId) { /* keep current dir */ }
+                            else if (cell.acrossId) setDirection('HORIZONTAL');
+                            else if (cell.downId) setDirection('VERTICAL');
                           }}
                           onKeyDown={e => {
                             if (e.key === 'Backspace' && !userInputs[`${x}-${y}`]) {
                               const prevX = direction === 'HORIZONTAL' ? x - 1 : x;
                               const prevY = direction === 'VERTICAL' ? y - 1 : y;
-                              if (grid[prevY]?.[prevX]?.isActive) inputRefs.current[`${prevX}-${prevY}`]?.focus();
+                              if (grid[prevY]?.[prevX]?.isActive) {
+                                setFocusedCell({x: prevX, y: prevY});
+                                inputRefs.current[`${prevX}-${prevY}`]?.focus();
+                              }
                             } else if (e.key.startsWith('Arrow')) {
                               e.preventDefault();
                               let nx = x, ny = y;
                               if (e.key === 'ArrowRight') nx++; if (e.key === 'ArrowLeft') nx--;
                               if (e.key === 'ArrowDown') ny++; if (e.key === 'ArrowUp') ny--;
-                              if (grid[ny]?.[nx]?.isActive) inputRefs.current[`${nx}-${ny}`]?.focus();
+                              if (grid[ny]?.[nx]?.isActive) {
+                                setFocusedCell({x: nx, y: ny});
+                                inputRefs.current[`${nx}-${ny}`]?.focus();
+                              }
                             }
                           }}
                         />
@@ -853,7 +879,7 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
           </div>
           <div className="flex-1 space-y-6">
             <div className="bg-white p-8 rounded-[32px] border-2 border-slate-100 shadow-xl h-full overflow-y-auto max-h-[600px] custom-scrollbar">
-              <h4 className="text-[10px] font-black uppercase text-indigo-600 tracking-widest mb-6 border-b pb-2">Pistas</h4>
+              <h4 className="text-[10px] font-black uppercase text-indigo-600 tracking-widest mb-6 border-b pb-2">Pistas del Crucigrama</h4>
               <div className="space-y-8">
                 {['HORIZONTAL', 'VERTICAL'].map(dir => {
                   const clues = crossword.placedWords.filter(pw => pw.direction === dir).sort((a, b) => a.number - b.number);
@@ -1077,10 +1103,6 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
               <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${content.size || 12}, minmax(0, 1fr))` }}>
                 {sopaGrid.map((row, r) => row.map((char, c) => {
                   const isSelected = selectedSopaCells.some(cell => cell.r === r && cell.c === c);
-                  const isFound = foundWords.some(w => {
-                    // Esta es una simplificación, en una sopa real necesitaríamos las coordenadas de las palabras encontradas
-                    return false; 
-                  });
                   return (
                     <button 
                       key={`${r}-${c}`} 
@@ -1648,7 +1670,7 @@ export default function ProfesorDashboard() {
       {/* PREVISUALIZACIÓN DE ACTIVIDAD */}
       {previewActivity && <ActivityPreview exercise={previewActivity} onClose={() => setPreviewActivity(null)} />}
 
-      {/* SLIDE EDITOR Y RECURSOS */}
+      {/* DIALOGO DE DIAPOSITIVAS (Mantenido intacto) */}
       <Dialog open={slideDialogOpen} onOpenChange={setSlideDialogOpne}>
         <DialogContent className="max-w-[95vw] w-[1300px] h-[90vh] flex flex-col p-0 rounded-3xl overflow-hidden shadow-2xl border-none">
           <DialogHeader className="p-6 bg-slate-900 border-b border-white/5 flex flex-row justify-between items-center space-y-0 shrink-0">
@@ -1692,10 +1714,7 @@ export default function ProfesorDashboard() {
                           className={cn(
                             "h-12 rounded-xl font-black text-[10px] uppercase border-2 transition-all", 
                             slides[activeSlideIndex].estilo === est ? "border-blue-500 scale-105 shadow-lg" : "border-white/5 opacity-50 hover:opacity-100",
-                            est === 'azul' ? 'bg-blue-900 text-white' : 
-                            est === 'vino' ? 'bg-rose-900 text-white' : 
-                            est === 'verde' ? 'bg-emerald-900 text-white' : 
-                            'bg-slate-800 text-white'
+                            est === 'azul' ? "bg-blue-900 text-white" : est === 'vino' ? "bg-rose-900 text-white" : est === 'verde' ? "bg-emerald-900 text-white" : "bg-slate-800 text-white"
                           )}
                         >
                           {est}
