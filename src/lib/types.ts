@@ -18,16 +18,30 @@ export interface User {
   numero_empleado?: string;
   password_plain?: string;
   carrera_id?: string;
-  grupo_id?: string; // Campo para vinculación de inscripción
+  grupo_id?: string; 
   doc_acta_nacimiento?: boolean;
   doc_certificado_estudios?: boolean;
   doc_curp?: boolean;
   doc_ine?: boolean;
   created_at?: string;
   updated_at?: string;
-  // Relaciones cargadas vía JOIN
   carreras?: { nombre: string };
   groups?: { nombre: string; turno: string };
+}
+
+export interface Ejercicio {
+  id: string;
+  tema_id: string;
+  titulo: string;
+  descripcion?: string;
+  tipo: 'opcion_multiple' | 'verdadero_falso' | 'emparejamiento' | 'ordenar_secuencia' | 'completar_espacios' | 'sopa_letras' | 'flashcards' | 'texto';
+  contenido?: any;
+  orden: number;
+  publicado: boolean;
+  visible: boolean;
+  created_by?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Aspirante {

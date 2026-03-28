@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
 import { 
   BookOpen, 
   ListTree, 
@@ -30,7 +31,13 @@ import {
   Download,
   File,
   Paperclip,
-  Info
+  Info,
+  CheckCircle2,
+  HelpCircle,
+  Hash,
+  Type,
+  AlignLeft,
+  Layout
 } from 'lucide-react';
 import { 
   getMyAsignaciones, 
@@ -60,13 +67,22 @@ import { cn } from '@/lib/utils';
 
 const LOGO_URL = '/images/logo_zapata.png';
 
+const ACTIVITY_TEMPLATES = [
+  { id: 'opcion_multiple', label: 'Opción Múltiple', icon: <CheckCircle2 size={16} />, color: 'bg-blue-500' },
+  { id: 'verdadero_falso', label: 'Verdadero / Falso', icon: <HelpCircle size={16} />, color: 'bg-emerald-500' },
+  { id: 'emparejamiento', label: 'Emparejamiento', icon: <Layout size={16} />, color: 'bg-purple-500' },
+  { id: 'ordenar_secuencia', label: 'Ordenar Secuencia', icon: <Hash size={16} />, color: 'bg-orange-500' },
+  { id: 'completar_espacios', label: 'Completar Espacios', icon: <Type size={16} />, color: 'bg-pink-500' },
+  { id: 'sopa_letras', label: 'Sopa de Letras', icon: <AlignLeft size={16} />, color: 'bg-indigo-500' },
+  { id: 'flashcards', label: 'Flashcards', icon: <Sparkles size={16} />, color: 'bg-amber-500' },
+];
+
 export default function ProfesorDashboard() {
   const { toast } = useToast();
   const supabase = createClient();
   const [loading, setLoading] = useState(true);
   const [asignaciones, setAsignaciones] = useState<any[]>([]);
   
-  // Drill down states
   const [selectedMateria, setSelectedMateria] = useState<any>(null);
   const [unidades, setUnidades] = useState<any[]>([]);
   const [selectedUnidad, setSelectedUnidad] = useState<any>(null);
@@ -74,13 +90,11 @@ export default function ProfesorDashboard() {
   const [selectedTema, setSelectedTema] = useState<any>(null);
   const [ejercicios, setEjercicios] = useState<any[]>([]);
   
-  // Slide Management states
   const [slides, setSlides] = useState<any[]>([]);
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const [presentationMode, setPresentationMode] = useState(false);
   const [slideDialogOpen, setSlideDialogOpne] = useState(false);
 
-  // Resource Management states
   const [resources, setResources] = useState<any[]>([]);
   const [isResourceDialogOpen, setIsResourceDialogOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -152,7 +166,9 @@ export default function ProfesorDashboard() {
           toast({ variant: "destructive", title: "Error", description: "No hay un tema seleccionado." });
           return;
         }
-        result = await upsertEjercicio({...d, tema_id: selectedTema.id, created_by: user?.id});
+        // Asegurar que el contenido sea un objeto serializable
+        const finalContent = typeof d.contenido === 'string' ? d.contenido : JSON.stringify(d.contenido || {});
+        result = await upsertEjercicio({...d, contenido: finalContent, tema_id: selectedTema.id, created_by: user?.id});
       }
 
       if (result && !result.error) {
@@ -340,15 +356,6 @@ export default function ProfesorDashboard() {
     }
   }, [presentationMode]);
 
-  if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20 gap-4">
-        <Loader2 className="animate-spin text-primary h-10 w-10" />
-        <p className="text-muted-foreground font-bold uppercase tracking-widest text-xs">Cargando mis asignaturas...</p>
-      </div>
-    );
-  }
-
   const splitImageUrls = (urls: string) => {
     if (!urls) return [];
     return urls.split(/,(?=http|data:)/).map(u => u.trim()).filter(Boolean);
@@ -370,6 +377,230 @@ export default function ProfesorDashboard() {
             <img src={url} alt="Slide content" className="w-full h-full object-cover" />
           </div>
         ))}
+      </div>
+    );
+  };
+
+  // Helper para inicializar el contenido de una actividad según su tipo
+  const initActivityContent = (type: string) => {
+    switch(type) {
+      case 'opcion_multiple': return { items: [{ question: '', options: [{id: '1', text: ''}], correctId: '1', feedback: '' }] };
+      case 'verdadero_falso': return { items: [{ statement: '', correct: true, feedback: '' }] };
+      case 'emparejamiento': return { items: [{ left: '', right: '' }] };
+      case 'ordenar_secuencia': return { items: [''] };
+      case 'completar_espacios': return { text: '', bank: [] };
+      case 'sopa_letras': return { words: [''], clues: [''], size: 12 };
+      case 'flashcards': return { items: [{ front: '', back: '' }] };
+      default: return {};
+    }
+  };
+
+  // Renderizador del editor de plantillas
+  const TemplateEditor = () => {
+    const type = dialog.data.tipo;
+    const content = dialog.data.contenido || initActivityContent(type);
+
+    const updateContent = (newContent: any) => {
+      setDialog({ ...dialog, data: { ...dialog.data, contenido: newContent } });
+    };
+
+    if (type === 'opcion_multiple') {
+      return (
+        <div className="space-y-6">
+          {content.items.map((item: any, qIdx: number) => (
+            <div key={qIdx} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-black text-primary uppercase">Pregunta {qIdx + 1}</span>
+                {content.items.length > 1 && (
+                  <Button variant="ghost" size="sm" className="text-destructive h-6" onClick={() => {
+                    const newItems = [...content.items];
+                    newItems.splice(qIdx, 1);
+                    updateContent({ ...content, items: newItems });
+                  }}><Trash2 size={14} /></Button>
+                )}
+              </div>
+              <Input placeholder="Enunciado de la pregunta..." value={item.question} onChange={(e) => {
+                const newItems = [...content.items];
+                newItems[qIdx].question = e.target.value;
+                updateContent({ ...content, items: newItems });
+              }} />
+              <div className="space-y-2">
+                {item.options.map((opt: any, oIdx: number) => (
+                  <div key={oIdx} className="flex gap-2 items-center">
+                    <input type="radio" checked={item.correctId === opt.id} onChange={() => {
+                      const newItems = [...content.items];
+                      newItems[qIdx].correctId = opt.id;
+                      updateContent({ ...content, items: newItems });
+                    }} />
+                    <Input placeholder={`Opción ${oIdx + 1}`} value={opt.text} onChange={(e) => {
+                      const newItems = [...content.items];
+                      newItems[qIdx].options[oIdx].text = e.target.value;
+                      updateContent({ ...content, items: newItems });
+                    }} />
+                    <Button variant="ghost" size="sm" onClick={() => {
+                      const newItems = [...content.items];
+                      newItems[qIdx].options.splice(oIdx, 1);
+                      updateContent({ ...content, items: newItems });
+                    }}><X size={14} /></Button>
+                  </div>
+                ))}
+                <Button variant="outline" size="sm" className="w-full text-[10px] uppercase font-bold" onClick={() => {
+                  const newItems = [...content.items];
+                  newItems[qIdx].options.push({ id: Math.random().toString(), text: '' });
+                  updateContent({ ...content, items: newItems });
+                }}>+ Añadir Opción</Button>
+              </div>
+            </div>
+          ))}
+          <Button className="w-full bg-primary/10 text-primary border-none font-black text-xs uppercase" onClick={() => {
+            updateContent({ ...content, items: [...content.items, { question: '', options: [{id: '1', text: ''}], correctId: '1', feedback: '' }] });
+          }}>+ Añadir Pregunta</Button>
+        </div>
+      );
+    }
+
+    if (type === 'verdadero_falso') {
+      return (
+        <div className="space-y-4">
+          {content.items.map((item: any, idx: number) => (
+            <div key={idx} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-center gap-4">
+              <Input placeholder="Afirmación..." value={item.statement} className="flex-1" onChange={(e) => {
+                const newItems = [...content.items];
+                newItems[idx].statement = e.target.value;
+                updateContent({ ...content, items: newItems });
+              }} />
+              <div className="flex flex-col items-center gap-1">
+                <span className="text-[10px] font-black uppercase">{item.correct ? 'Verdadero' : 'Falso'}</span>
+                <Switch checked={item.correct} onCheckedChange={(val) => {
+                  const newItems = [...content.items];
+                  newItems[idx].correct = val;
+                  updateContent({ ...content, items: newItems });
+                }} />
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => {
+                const newItems = [...content.items];
+                newItems.splice(idx, 1);
+                updateContent({ ...content, items: newItems });
+              }}><X size={14} /></Button>
+            </div>
+          ))}
+          <Button variant="outline" className="w-full text-xs font-black uppercase" onClick={() => {
+            updateContent({ ...content, items: [...content.items, { statement: '', correct: true, feedback: '' }] });
+          }}>+ Nueva Afirmación</Button>
+        </div>
+      );
+    }
+
+    if (type === 'emparejamiento') {
+      return (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4 px-4 text-[10px] font-black uppercase text-slate-400">
+            <span>Concepto (Izq)</span>
+            <span>Relación (Der)</span>
+          </div>
+          {content.items.map((item: any, idx: number) => (
+            <div key={idx} className="flex gap-2 items-center">
+              <Input placeholder="Concepto..." value={item.left} onChange={(e) => {
+                const newItems = [...content.items];
+                newItems[idx].left = e.target.value;
+                updateContent({ ...content, items: newItems });
+              }} />
+              <Input placeholder="Definición..." value={item.right} onChange={(e) => {
+                const newItems = [...content.items];
+                newItems[idx].right = e.target.value;
+                updateContent({ ...content, items: newItems });
+              }} />
+              <Button variant="ghost" size="sm" className="text-destructive" onClick={() => {
+                const newItems = [...content.items];
+                newItems.splice(idx, 1);
+                updateContent({ ...content, items: newItems });
+              }}><Trash2 size={14} /></Button>
+            </div>
+          ))}
+          <Button variant="outline" className="w-full text-xs font-black uppercase" onClick={() => {
+            updateContent({ ...content, items: [...content.items, { left: '', right: '' }] });
+          }}>+ Añadir Par</Button>
+        </div>
+      );
+    }
+
+    if (type === 'ordenar_secuencia') {
+      return (
+        <div className="space-y-4">
+          <p className="text-[10px] font-bold text-slate-400 uppercase italic">Ingresa los pasos en el orden correcto. El sistema los mezclará automáticamente para el alumno.</p>
+          {content.items.map((item: string, idx: number) => (
+            <div key={idx} className="flex gap-2 items-center">
+              <span className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center font-black text-xs">{idx + 1}</span>
+              <Input placeholder="Describe el paso..." value={item} onChange={(e) => {
+                const newItems = [...content.items];
+                newItems[idx] = e.target.value;
+                updateContent({ ...content, items: newItems });
+              }} />
+              <Button variant="ghost" size="sm" onClick={() => {
+                const newItems = [...content.items];
+                newItems.splice(idx, 1);
+                updateContent({ ...content, items: newItems });
+              }}><X size={14} /></Button>
+            </div>
+          ))}
+          <Button variant="outline" className="w-full text-xs font-black uppercase" onClick={() => {
+            updateContent({ ...content, items: [...content.items, ''] });
+          }}>+ Añadir Paso</Button>
+        </div>
+      );
+    }
+
+    if (type === 'completar_espacios') {
+      return (
+        <div className="space-y-4">
+          <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl text-[11px] text-amber-800 leading-relaxed">
+            <strong>Instrucciones:</strong> Escribe tu texto normal y encierra entre corchetes dobles <code>[[ ]]</code> las palabras que quieres que el alumno complete.
+            <br/><br/>
+            <em>Ejemplo: La célula es la [[unidad básica]] de los seres vivos.</em>
+          </div>
+          <textarea rows={8} className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 text-sm focus:ring-primary/20 outline-none" placeholder="Redacta el texto aquí..." value={content.text} onChange={(e) => updateContent({ ...content, text: e.target.value })} />
+        </div>
+      );
+    }
+
+    if (type === 'flashcards') {
+      return (
+        <div className="space-y-6">
+          {content.items.map((item: any, idx: number) => (
+            <div key={idx} className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-200 relative group">
+              <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase text-slate-400">Frente (Término)</label>
+                <textarea rows={3} className="w-full p-3 rounded-xl border-slate-200 text-sm outline-none" value={item.front} onChange={(e) => {
+                  const newItems = [...content.items];
+                  newItems[idx].front = e.target.value;
+                  updateContent({ ...content, items: newItems });
+                }} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-[9px] font-black uppercase text-slate-400">Reverso (Definición)</label>
+                <textarea rows={3} className="w-full p-3 rounded-xl border-slate-200 text-sm outline-none" value={item.back} onChange={(e) => {
+                  const newItems = [...content.items];
+                  newItems[idx].back = e.target.value;
+                  updateContent({ ...content, items: newItems });
+                }} />
+              </div>
+              <button className="absolute -top-2 -right-2 bg-white shadow-md rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity text-destructive" onClick={() => {
+                const newItems = [...content.items];
+                newItems.splice(idx, 1);
+                updateContent({ ...content, items: newItems });
+              }}><X size={16} /></button>
+            </div>
+          ))}
+          <Button variant="outline" className="w-full text-xs font-black uppercase" onClick={() => {
+            updateContent({ ...content, items: [...content.items, { front: '', back: '' }] });
+          }}>+ Nueva Tarjeta</Button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="p-8 text-center opacity-30 italic">
+        Configura los parámetros de esta plantilla.
       </div>
     );
   };
@@ -410,7 +641,7 @@ export default function ProfesorDashboard() {
           </div>
           <div className="flex items-center gap-8">
             <div className="flex items-center gap-4">
-              <img src={LOGO_URL} alt="Logo IEEZ" className="h-20 w-auto object-contain drop-shadow-2xl" />
+              <img src={LOGO_URL} alt="Logo IEEZ" className="h-20 w-auto object-contain" />
               <span className="hidden lg:block text-[10px] font-black uppercase tracking-[0.3em] text-white/40">IEEZ Plataforma de Enseñanza</span>
             </div>
             <Button variant="outline" className="h-10 px-6 rounded-xl font-black uppercase tracking-widest bg-red-600/20 border-red-600/30 text-red-100 hover:bg-red-600 hover:text-white transition-all shadow-lg" onClick={() => setPresentationMode(false)}><X size={18} className="mr-2" /> Salir (Esc)</Button>
@@ -550,22 +781,46 @@ export default function ProfesorDashboard() {
                    <div>
                      <Button variant="ghost" size="sm" onClick={() => setCurrentTab('temas')} className="mb-2 -ml-2 text-primary font-black uppercase text-[10px] tracking-widest hover:bg-primary/5"><ArrowLeft size={14} className="mr-1" /> Volver a Temas</Button>
                      <CardTitle className="text-2xl font-black uppercase text-slate-800 flex items-center gap-3"><Sparkles className="text-amber-500" size={24} /> Actividades de {selectedTema?.titulo}</CardTitle>
-                     <p className="text-[10px] font-bold text-slate-500 uppercase mt-1">Prácticas y reforzamiento</p>
+                     <p className="text-[10px] font-bold text-slate-500 uppercase mt-1">Prácticas y reforzamiento interactivo</p>
                    </div>
-                   <Button size="lg" className="rounded-2xl bg-amber-500 text-white font-black uppercase tracking-widest gap-2 shadow-lg hover:bg-amber-600" onClick={() => setDialog({ open: true, type: 'ejercicio', data: { titulo: '', descripcion: '', orden: ejercicios.length + 1 } })}><Plus size={18} /> Nueva Actividad</Button>
+                   <Button size="lg" className="rounded-2xl bg-amber-500 text-white font-black uppercase tracking-widest gap-2 shadow-lg hover:bg-amber-600" onClick={() => setDialog({ open: true, type: 'ejercicio', data: { titulo: '', tipo: 'opcion_multiple', contenido: initActivityContent('opcion_multiple'), orden: ejercicios.length + 1 } })}><Plus size={18} /> Nueva Actividad</Button>
                  </div>
                </CardHeader>
                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                  <Table>
-                   <TableHeader className="bg-slate-50/50"><TableRow><TableHead className="font-black uppercase text-[10px] text-slate-500">Orden</TableHead><TableHead className="font-black uppercase text-[10px] text-slate-500">Descripción de la Actividad</TableHead><TableHead className="text-right font-black uppercase text-[10px] text-slate-500">Acciones</TableHead></TableRow></TableHeader>
+                   <TableHeader className="bg-slate-50/50"><TableRow><TableHead className="font-black uppercase text-[10px] text-slate-500">Orden</TableHead><TableHead className="font-black uppercase text-[10px] text-slate-500">Actividad</TableHead><TableHead className="font-black uppercase text-[10px] text-slate-500">Tipo</TableHead><TableHead className="text-right font-black uppercase text-[10px] text-slate-500">Acciones</TableHead></TableRow></TableHeader>
                    <TableBody>
-                     {ejercicios.length === 0 ? <TableRow><TableCell colSpan={3} className="text-center py-10 text-muted-foreground italic">Sin actividades registradas.</TableCell></TableRow> : ejercicios.map((e) => (
-                       <TableRow key={e.id} className="hover:bg-amber-50/30 transition-colors">
-                         <TableCell className="font-black text-slate-400">{e.orden}</TableCell>
-                         <TableCell className="font-bold text-slate-700 uppercase tracking-tight">{e.titulo}</TableCell>
-                         <TableCell className="text-right"><div className="flex justify-end gap-2"><Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-50" onClick={() => setDialog({ open: true, type: 'ejercicio', data: e })}><Edit size={16}/></Button><AlertDialog><AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-red-50"><Trash2 size={16}/></Button></AlertDialogTrigger><AlertDialogContent className="rounded-3xl"><AlertDialogHeader><AlertDialogTitle className="font-black uppercase">¿Eliminar actividad?</AlertDialogTitle><AlertDialogDescription>Esta acción no se puede deshacer. Los alumnos ya no verán esta tarea en su portal.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel><AlertDialogAction className="bg-destructive rounded-xl" onClick={() => handleDelete('ejercicio', e.id)}>Eliminar Permanentemente</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog></div></TableCell>
-                       </TableRow>
-                     ))}
+                     {ejercicios.length === 0 ? <TableRow><TableCell colSpan={4} className="text-center py-10 text-muted-foreground italic">Sin actividades registradas.</TableCell></TableRow> : ejercicios.map((e) => {
+                       const template = ACTIVITY_TEMPLATES.find(t => t.id === e.tipo);
+                       // Parsear contenido si es string
+                       const safeContent = typeof e.contenido === 'string' ? JSON.parse(e.contenido || '{}') : e.contenido;
+                       
+                       return (
+                        <TableRow key={e.id} className="hover:bg-amber-50/30 transition-colors">
+                          <TableCell className="font-black text-slate-400">{e.orden}</TableCell>
+                          <TableCell className="font-bold text-slate-700 uppercase tracking-tight">{e.titulo}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline" className={cn("text-[9px] font-black uppercase border-none text-white", template?.color || 'bg-slate-400')}>
+                              {template?.label || 'General'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:bg-blue-50" onClick={() => {
+                                setDialog({ open: true, type: 'ejercicio', data: { ...e, contenido: safeContent } });
+                              }}><Edit size={16}/></Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:bg-red-50"><Trash2 size={16}/></Button></AlertDialogTrigger>
+                                <AlertDialogContent className="rounded-3xl">
+                                  <AlertDialogHeader><AlertDialogTitle className="font-black uppercase">¿Eliminar actividad?</AlertDialogTitle><AlertDialogDescription>Esta acción no se puede deshacer. Los alumnos ya no verán esta tarea en su portal.</AlertDialogDescription></AlertDialogHeader>
+                                  <AlertDialogFooter><AlertDialogCancel className="rounded-xl">Cancelar</AlertDialogCancel><AlertDialogAction className="bg-destructive rounded-xl" onClick={() => handleDelete('ejercicio', e.id)}>Eliminar Permanentemente</AlertDialogAction></AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                       );
+                     })}
                    </TableBody>
                  </Table>
                </div>
@@ -576,45 +831,116 @@ export default function ProfesorDashboard() {
 
       {/* PROFESSOR ACADEMIC DIALOG */}
       <Dialog open={dialog.open} onOpenChange={o => setDialog({...dialog, open: o})}>
-        <DialogContent className="max-w-xl w-[95vw] max-h-[90vh] flex flex-col p-0 rounded-[32px] overflow-hidden">
-          <DialogHeader className="p-6 pb-2 shrink-0">
-            <DialogTitle className="capitalize font-black text-2xl uppercase tracking-tight text-primary">
-              {dialog.data.id ? 'Editar' : 'Nueva'} {dialog.type}
-            </DialogTitle>
-            <DialogDescription className="text-xs uppercase font-bold text-slate-400">
-              Completa la información técnica del contenido.
-            </DialogDescription>
+        <DialogContent className={cn(
+          "w-[95vw] max-h-[90vh] flex flex-col p-0 rounded-[32px] overflow-hidden",
+          dialog.type === 'ejercicio' ? 'max-w-4xl' : 'max-w-xl'
+        )}>
+          <DialogHeader className="p-6 md:p-8 pb-4 shrink-0 bg-slate-50 border-b">
+            <div className="flex items-center gap-4">
+              <div className={cn(
+                "p-3 rounded-2xl text-white",
+                dialog.type === 'ejercicio' ? 'bg-amber-500' : 'bg-primary'
+              )}>
+                {dialog.type === 'ejercicio' ? <Sparkles size={24} /> : <FileText size={24} />}
+              </div>
+              <div>
+                <DialogTitle className="capitalize font-black text-2xl uppercase tracking-tight text-slate-800">
+                  {dialog.data.id ? 'Editar' : 'Nueva'} {dialog.type}
+                </DialogTitle>
+                <DialogDescription className="text-xs uppercase font-bold text-slate-400">
+                  {dialog.type === 'ejercicio' ? 'Selecciona una plantilla y configura los reactivos.' : 'Completa la información técnica del contenido.'}
+                </DialogDescription>
+              </div>
+            </div>
           </DialogHeader>
           
-          <div className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
-            <div className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Título del Contenido</label>
-                <Input placeholder="EJ. INTRODUCCIÓN A LA LÓGICA" className="h-12 rounded-xl bg-slate-50 border-slate-200 focus:ring-primary/20 uppercase font-bold" value={dialog.data.titulo || ''} onChange={e => setDialog({...dialog, data: {...dialog.data, titulo: e.target.value.toUpperCase()}})} />
+          <div className="flex-1 overflow-y-auto px-6 md:px-8 py-6 custom-scrollbar">
+            <div className="space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Título Principal</label>
+                  <Input placeholder="EJ. EVALUACIÓN DE CONCEPTOS" className="h-12 rounded-xl bg-white border-slate-200 focus:ring-primary/20 uppercase font-bold" value={dialog.data.titulo || ''} onChange={e => setDialog({...dialog, data: {...dialog.data, titulo: e.target.value.toUpperCase()}})} />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Orden</label>
+                  <Input type="number" className="h-12 rounded-xl bg-white border-slate-200" value={dialog.data.orden || 1} onChange={e => setDialog({...dialog, data: {...dialog.data, orden: parseInt(e.target.value)}})} />
+                </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Orden en el Programa</label>
-                <Input type="number" className="h-12 rounded-xl bg-slate-50 border-slate-200" value={dialog.data.orden || 1} onChange={e => setDialog({...dialog, data: {...dialog.data, orden: parseInt(e.target.value)}})} />
-              </div>
+
               {dialog.type === 'tema' && (
                 <div className="space-y-2">
                   <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Contenido / Descripción</label>
                   <textarea rows={6} className="w-full p-4 rounded-xl bg-slate-50 border-slate-200 text-sm focus:ring-primary/20 outline-none" placeholder="Redacta aquí el contenido del tema..." value={dialog.data.contenido || ''} onChange={e => setDialog({...dialog, data: {...dialog.data, contenido: e.target.value}})} />
                 </div>
               )}
+
+              {dialog.type === 'ejercicio' && (
+                <div className="space-y-10">
+                  <div className="space-y-4">
+                    <label className="text-[10px] font-black uppercase text-primary tracking-[0.2em] flex items-center gap-2">
+                      <Layout size={14} /> Seleccionar Plantilla de Actividad
+                    </label>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                      {ACTIVITY_TEMPLATES.map((tmpl) => (
+                        <button
+                          key={tmpl.id}
+                          type="button"
+                          onClick={() => {
+                            setDialog({
+                              ...dialog,
+                              data: {
+                                ...dialog.data,
+                                tipo: tmpl.id,
+                                contenido: initActivityContent(tmpl.id)
+                              }
+                            });
+                          }}
+                          className={cn(
+                            "flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all group",
+                            dialog.data.tipo === tmpl.id 
+                              ? "bg-primary/5 border-primary shadow-md" 
+                              : "bg-white border-slate-100 hover:border-slate-200"
+                          )}
+                        >
+                          <div className={cn(
+                            "h-10 w-10 rounded-xl flex items-center justify-center text-white shadow-sm transition-transform group-hover:scale-110",
+                            tmpl.color,
+                            dialog.data.tipo === tmpl.id ? "scale-110" : ""
+                          )}>
+                            {tmpl.icon}
+                          </div>
+                          <span className={cn(
+                            "text-[10px] font-black uppercase tracking-tighter text-center leading-tight",
+                            dialog.data.tipo === tmpl.id ? "text-primary" : "text-slate-500"
+                          )}>{tmpl.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-4">
+                    <label className="text-[10px] font-black uppercase text-amber-600 tracking-[0.2em] flex items-center gap-2">
+                      <Edit size={14} /> Configuración de Reactivos
+                    </label>
+                    <TemplateEditor />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
-          <DialogFooter className="p-6 pt-2 shrink-0 border-t bg-slate-50/50 gap-2">
+          <DialogFooter className="p-6 md:p-8 shrink-0 border-t bg-slate-50 gap-2">
             {dialog.data.id && (
-              <Button variant="ghost" className="text-destructive font-black uppercase text-xs mr-auto hover:bg-red-50" onClick={() => { handleDelete(dialog.type, dialog.data.id); setDialog({...dialog, open: false}); }}>
+              <Button variant="ghost" className="text-destructive font-black uppercase text-[10px] tracking-widest mr-auto hover:bg-red-50" onClick={() => { handleDelete(dialog.type, dialog.data.id); setDialog({...dialog, open: false}); }}>
                 Eliminar {dialog.type}
               </Button>
             )}
-            <Button variant="outline" className="rounded-xl px-6 font-bold" onClick={() => setDialog({ ...dialog, open: false })}>
+            <Button variant="outline" className="rounded-2xl px-8 font-black uppercase text-[10px] tracking-widest h-12" onClick={() => setDialog({ ...dialog, open: false })}>
               Cancelar
             </Button>
-            <Button className="bg-primary px-8 rounded-xl font-black uppercase tracking-widest shadow-lg" onClick={handleSave}>
+            <Button className="bg-primary px-10 rounded-2xl font-black uppercase tracking-widest shadow-lg h-12" onClick={handleSave}>
               Guardar Cambios
             </Button>
           </DialogFooter>
@@ -738,7 +1064,6 @@ export default function ProfesorDashboard() {
 
           <div className="flex-1 overflow-y-auto p-6 md:p-8 custom-scrollbar">
             <div className="space-y-8 pr-2">
-              {/* Upload Section */}
               <div className="border-2 border-dashed border-slate-200 rounded-[24px] p-6 md:p-10 text-center hover:border-emerald-400 transition-colors bg-slate-50/50 group">
                 <label className="cursor-pointer flex flex-col items-center gap-4">
                   <div className="h-16 w-16 rounded-full bg-white shadow-md flex items-center justify-center text-emerald-500 group-hover:scale-110 transition-transform">
@@ -754,7 +1079,6 @@ export default function ProfesorDashboard() {
                 </label>
               </div>
 
-              {/* List Section (Historial) */}
               <div className="space-y-4">
                 <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] flex items-center gap-2">
                   <File size={12} /> Archivos actuales ({resources.length})
