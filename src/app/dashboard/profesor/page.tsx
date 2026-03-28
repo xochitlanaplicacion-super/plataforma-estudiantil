@@ -89,7 +89,7 @@ const ACTIVITY_TEMPLATES = [
 
 const initActivityContent = (type: string) => {
   switch(type) {
-    case 'crucigrama': return { words: [''], clues: [''] };
+    case 'crucigrama': return { words: [''], clues: [''], showWordList: false };
     case 'actividad_descriptiva': return { fileUrl: '', fileName: '' };
     case 'opcion_multiple': return { items: [{ question: '', options: [{id: '1', text: ''}], correctId: '1', feedback: '' }] };
     case 'verdadero_falso': return { items: [{ statement: '', correct: true, feedback: '' }] };
@@ -396,7 +396,10 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
             <p className="text-xs font-black text-indigo-900 uppercase">Lista de Palabras visible</p>
             <p className="text-[10px] text-indigo-600 font-bold">Si se apaga, el alumno solo verá las pistas.</p>
           </div>
-          <Switch checked={content.showWordList} onCheckedChange={(val) => updateContent({ ...content, showWordList: val })} />
+          <Switch 
+            checked={content.showWordList} 
+            onCheckedChange={(val) => updateContent({ ...content, showWordList: val })} 
+          />
         </div>
 
         <div className="grid grid-cols-2 gap-4 px-4 text-[10px] font-black uppercase text-slate-400">
@@ -780,12 +783,24 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
                 <div className="bg-indigo-50 p-8 rounded-[32px] border-2 border-indigo-100 shadow-sm">
                   <h4 className="text-[10px] font-black uppercase text-indigo-600 tracking-widest mb-6">Lista de Palabras</h4>
                   <div className="grid grid-cols-2 gap-4">
-                    {(content.words || []).filter((w:string)=>w.length>0).map((w: string, i: number) => (
-                      <div key={i} className="flex items-center gap-3">
-                        <div className={cn("h-2 w-2 rounded-full", foundWords.includes(w) ? "bg-emerald-500" : "bg-indigo-300")} />
-                        <span className={cn("font-black text-slate-700 uppercase text-sm", foundWords.includes(w) && "line-through opacity-40 text-emerald-600")}>{w}</span>
-                      </div>
-                    ))}
+                    {(content.words || []).filter((w:string)=>w.length>0).map((w: string, i: number) => {
+                      const isFound = foundWords.includes(w);
+                      // Si showWordList es false, solo mostramos la palabra si ya fue encontrada
+                      if (!content.showWordList && !isFound) {
+                        return (
+                          <div key={i} className="flex items-center gap-3 opacity-30">
+                            <div className="h-2 w-2 rounded-full bg-slate-300" />
+                            <span className="font-black text-slate-400 uppercase text-xs italic tracking-tighter">DESCONOCIDA</span>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div key={i} className="flex items-center gap-3">
+                          <div className={cn("h-2 w-2 rounded-full", isFound ? "bg-emerald-500" : "bg-indigo-300")} />
+                          <span className={cn("font-black text-slate-700 uppercase text-sm", isFound && "line-through opacity-40 text-emerald-600")}>{w}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}
@@ -809,36 +824,53 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
         <div className="max-w-4xl mx-auto space-y-10 py-10">
           <div className="text-center">
             <h3 className="text-3xl font-black text-slate-800 uppercase">Crucigrama</h3>
-            <p className="text-slate-500 font-bold uppercase text-xs mt-2">Completa la cuadrícula utilizando las pistas horizontales y verticales.</p>
+            <p className="text-slate-500 font-bold uppercase text-xs mt-2">Usa las pistas para completar las palabras.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-             <div className="bg-white p-10 rounded-[40px] border-2 border-slate-100 shadow-xl grid grid-cols-10 gap-1 aspect-square">
-                {Array.from({ length: 100 }).map((_, i) => (
-                  <div key={i} className={cn("rounded-md border flex items-center justify-center text-xs font-black", Math.random() > 0.7 ? "bg-slate-900" : "bg-slate-50 text-slate-800")}>
-                    {Math.random() > 0.7 ? "" : String.fromCharCode(65 + Math.floor(Math.random() * 26))}
-                  </div>
-                ))}
+             <div className="bg-white p-10 rounded-[40px] border-2 border-slate-100 shadow-xl space-y-6">
+                <h4 className="text-xs font-black uppercase text-rose-600 tracking-widest mb-4">Completar Palabras</h4>
+                <div className="space-y-8">
+                  {(content.words || []).map((word: string, idx: number) => (
+                    <div key={idx} className="space-y-3">
+                      <div className="flex items-center gap-3">
+                        <span className="h-6 w-6 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center font-black text-[10px]">{idx + 1}</span>
+                        <p className="text-xs font-bold text-slate-500 uppercase italic">"{content.clues?.[idx]}"</p>
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        {word.split('').map((char, charIdx) => (
+                          <input 
+                            key={charIdx}
+                            maxLength={1}
+                            className="w-8 h-10 border-2 border-slate-100 rounded-lg text-center font-black uppercase text-lg focus:border-rose-500 outline-none"
+                            placeholder="?"
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
              </div>
              <div className="space-y-6">
-                <div className="space-y-4">
-                  <h4 className="text-xs font-black uppercase text-rose-600">Pistas</h4>
-                  <div className="space-y-3">
-                    {(content.clues || []).map((c: string, i: number) => (
-                      <div key={i} className="p-4 bg-slate-50 rounded-2xl border-l-4 border-rose-500">
-                        <span className="text-[10px] font-black text-rose-400 uppercase mr-2">{i+1}.</span>
-                        <span className="text-xs font-bold text-slate-700 uppercase">"{c}"</span>
-                      </div>
-                    ))}
-                  </div>
+                <div className="p-8 bg-slate-50 rounded-[32px] border border-slate-200 shadow-inner">
+                  <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-6">Lista de Apoyo</h4>
+                  {content.showWordList ? (
+                    <div className="flex flex-wrap gap-2">
+                      {content.words?.map((w: string, i: number) => (
+                        <Badge key={i} variant="secondary" className="bg-white text-slate-600 font-black uppercase text-[10px] px-3">{w}</Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-[10px] font-bold text-slate-400 italic">La lista de palabras está oculta por el profesor.</p>
+                  )}
                 </div>
-                <Button onClick={() => setSuccess(true)} className="w-full h-14 rounded-2xl bg-rose-600 text-white font-black uppercase shadow-lg">Finalizar Crucigrama</Button>
+                <Button onClick={() => setSuccess(true)} className="w-full h-16 rounded-[32px] bg-rose-600 text-white font-black uppercase text-lg tracking-widest shadow-xl">Finalizar Actividad</Button>
              </div>
           </div>
         </div>
       );
     }
 
-    return <div className="p-20 text-center opacity-20 italic">Vista previa en desarrollo para este tipo de ejercicio.</div>;
+    return <div className="p-20 text-center opacity-20 italic">Vista previa no disponible.</div>;
   };
 
   return (
@@ -864,7 +896,7 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
               </div>
               <div className="space-y-2">
                 <h2 className="text-4xl font-black text-slate-800 uppercase">¡Ejercicio Completado!</h2>
-                <p className="text-xl text-slate-500 font-bold uppercase">Resultado Final Simulado: {score} de {shuffledItems.length || (exercise.tipo === 'ordenar_secuencia' ? content.items?.length : (exercise.tipo === 'sopa_letras' ? foundWords.length : 1))}</p>
+                <p className="text-xl text-slate-500 font-bold uppercase">Resultado Final Simulado: {score} de {shuffledItems.length || 1}</p>
               </div>
               <Button onClick={onClose} className="rounded-3xl px-12 h-16 bg-emerald-600 text-white font-black uppercase text-lg tracking-widest shadow-2xl hover:scale-105 transition-transform">Volver al Panel</Button>
             </div>
