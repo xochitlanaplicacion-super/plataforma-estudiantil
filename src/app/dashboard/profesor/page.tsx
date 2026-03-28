@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import React, { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,7 +20,6 @@ import {
   Trash2, 
   Loader2, 
   ArrowLeft,
-  Users,
   Presentation,
   Play,
   X,
@@ -31,7 +30,6 @@ import {
   Download,
   File,
   Paperclip,
-  Info,
   CheckCircle2,
   HelpCircle,
   Hash,
@@ -41,11 +39,10 @@ import {
   Eye,
   FileSearch,
   CheckCircle,
-  AlertCircle,
-  RotateCcw,
   ArrowUp,
   ArrowDown,
-  Grid3X3
+  Grid3X3,
+  EyeOff
 } from 'lucide-react';
 import { 
   getMyAsignaciones, 
@@ -67,14 +64,205 @@ import {
 } from '@/lib/actions/academic';
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import confetti from 'canvas-confetti';
 
 const LOGO_URL = '/images/logo_zapata.png';
 
+// --- LOGICA DE GENERACIÓN DE CRUCIGRAMAS ---
+const GRID_SIZE = 50;
+const CENTER = 25;
+
+type Direction = 'HORIZONTAL' | 'VERTICAL';
+
+interface WordInput {
+  id: string;
+  word: string;
+  clue: string;
+}
+
+interface PlacedWord extends WordInput {
+  x: number;
+  y: number;
+  direction: Direction;
+  number: number;
+}
+
+interface CrosswordData {
+  placedWords: PlacedWord[];
+  unplacedWords: WordInput[];
+  width: number;
+  height: number;
+  minX: number;
+  minY: number;
+}
+
+class CrosswordBuilder {
+  grid: string[][];
+  placedWords: PlacedWord[] = [];
+  unplacedWords: WordInput[] = [];
+
+  constructor() {
+    this.grid = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(''));
+  }
+
+  canPlaceWord(word: string, startX: number, startY: number, dir: Direction): boolean {
+    if (startX < 0 || startY < 0) return false;
+    if (dir === 'HORIZONTAL' && startX + word.length > GRID_SIZE) return false;
+    if (dir === 'VERTICAL' && startY + word.length > GRID_SIZE) return false;
+
+    if (dir === 'HORIZONTAL') {
+      if (startX > 0 && this.grid[startY][startX - 1] !== '') return false;
+      if (startX + word.length < GRID_SIZE && this.grid[startY][startX + word.length] !== '') return false;
+    } else {
+      if (startY > 0 && this.grid[startY - 1][startX] !== '') return false;
+      if (startY + word.length < GRID_SIZE && this.grid[startY + word.length][startX] !== '') return false;
+    }
+
+    for (let i = 0; i < word.length; i++) {
+      const px = dir === 'HORIZONTAL' ? startX + i : startX;
+      const py = dir === 'VERTICAL' ? startY + i : startY;
+
+      if (this.grid[py][px] !== '') {
+        if (this.grid[py][px] !== word[i]) return false;
+      } else {
+        if (dir === 'HORIZONTAL') {
+          if (py > 0 && this.grid[py - 1][px] !== '' && (this.grid[py - 1][px] !== undefined)) {
+             // Solo permitir si es parte de una intersección válida, pero simplificamos
+             if (!(i === 0 || i === word.length - 1)) { /* check neighbors */ }
+          }
+          if (py > 0 && this.grid[py - 1][px] !== '') return false;
+          if (py < GRID_SIZE - 1 && this.grid[py + 1][px] !== '') return false;
+        } else {
+          if (px > 0 && this.grid[py][px - 1] !== '') return false;
+          if (px < GRID_SIZE - 1 && this.grid[py][px + 1] !== '') return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  placeWord(wordInput: WordInput, x: number, y: number, direction: Direction) {
+    const word = wordInput.word.toUpperCase();
+    for (let i = 0; i < word.length; i++) {
+      const px = direction === 'HORIZONTAL' ? x + i : x;
+      const py = direction === 'VERTICAL' ? y + i : y;
+      this.grid[py][px] = word[i];
+    }
+    this.placedWords.push({
+      ...wordInput,
+      x,
+      y,
+      direction,
+      number: 0
+    });
+  }
+
+  build(inputs: WordInput[]) {
+    for (const input of inputs) {
+      const word = input.word.toUpperCase();
+      if (this.placedWords.length === 0) {
+        this.placeWord(input, CENTER - Math.floor(word.length / 2), CENTER, 'HORIZONTAL');
+        continue;
+      }
+
+      let bestPlacement = null;
+      let maxIntersections = -1;
+
+      for (const placed of this.placedWords) {
+        const pStr = placed.word.toUpperCase();
+        for (let i = 0; i < word.length; i++) {
+          for (let j = 0; j < pStr.length; j++) {
+            if (word[i] === pStr[j]) {
+              const dir: Direction = placed.direction === 'HORIZONTAL' ? 'VERTICAL' : 'HORIZONTAL';
+              const startX = dir === 'VERTICAL' ? placed.x + j : placed.x - i;
+              const startY = dir === 'VERTICAL' ? placed.y - i : placed.y + j;
+
+              if (this.canPlaceWord(word, startX, startY, dir)) {
+                let intersections = 0;
+                for (let k = 0; k < word.length; k++) {
+                  const px = dir === 'HORIZONTAL' ? startX + k : startX;
+                  const py = dir === 'VERTICAL' ? startY + k : startY;
+                  if (this.grid[py][px] !== '') intersections++;
+                }
+                if (intersections > maxIntersections) {
+                  maxIntersections = intersections;
+                  bestPlacement = { x: startX, y: startY, dir };
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if (bestPlacement) {
+        this.placeWord(input, bestPlacement.x, bestPlacement.y, bestPlacement.dir);
+      } else {
+        this.unplacedWords.push(input);
+      }
+    }
+  }
+
+  assignNumbers() {
+    this.placedWords.sort((a, b) => (a.y !== b.y ? a.y - b.y : a.x - b.x));
+    let current = 1;
+    const cellMap = new Map<string, number>();
+    for (const pw of this.placedWords) {
+      const key = `${pw.x},${pw.y}`;
+      if (!cellMap.has(key)) cellMap.set(key, current++);
+      pw.number = cellMap.get(key)!;
+    }
+  }
+
+  getBounds() {
+    if (this.placedWords.length === 0) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    let minX = GRID_SIZE, minY = GRID_SIZE, maxX = 0, maxY = 0;
+    for (const pw of this.placedWords) {
+      minX = Math.min(minX, pw.x);
+      minY = Math.min(minY, pw.y);
+      if (pw.direction === 'HORIZONTAL') {
+        maxX = Math.max(maxX, pw.x + pw.word.length - 1);
+        maxY = Math.max(maxY, pw.y);
+      } else {
+        maxX = Math.max(maxX, pw.x);
+        maxY = Math.max(maxY, pw.y + pw.word.length - 1);
+      }
+    }
+    return { minX, minY, maxX, maxY };
+  }
+}
+
+function generateCrossword(inputs: WordInput[]): CrosswordData {
+  const clean = inputs.map(i => ({ ...i, word: i.word.replace(/[^A-Za-zñÑ]/g, '').toUpperCase() })).filter(i => i.word.length > 1);
+  let bestBuilder = null;
+
+  for (let i = 0; i < 20; i++) {
+    const builder = new CrosswordBuilder();
+    const shuffled = [...clean].sort(() => Math.random() - 0.5);
+    builder.build(shuffled);
+    if (!bestBuilder || builder.placedWords.length > bestBuilder.placedWords.length) {
+      bestBuilder = builder;
+    }
+    if (bestBuilder.placedWords.length === clean.length) break;
+  }
+
+  if (!bestBuilder) return { placedWords: [], unplacedWords: clean, width: 0, height: 0, minX: 0, minY: 0 };
+  bestBuilder.assignNumbers();
+  const b = bestBuilder.getBounds();
+  return {
+    placedWords: bestBuilder.placedWords,
+    unplacedWords: bestBuilder.unplacedWords,
+    width: b.maxX - b.minX + 1,
+    height: b.maxY - b.minY + 1,
+    minX: b.minX,
+    minY: b.minY
+  };
+}
+
+// --- CONFIGURACIÓN DE PLANTILLAS ---
 const ACTIVITY_TEMPLATES = [
   { id: 'crucigrama', label: 'Crucigrama', icon: <Grid3X3 size={16} />, color: 'bg-rose-600' },
   { id: 'actividad_descriptiva', label: 'Actividad Descriptiva', icon: <FileSearch size={16} />, color: 'bg-slate-700' },
@@ -393,7 +581,7 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
       <div className="space-y-6">
         <div className="flex items-center justify-between p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100">
           <div className="space-y-1">
-            <p className="text-xs font-black text-indigo-900 uppercase">Lista de Palabras visible</p>
+            <p className="text-xs font-black text-indigo-900 uppercase">Lista de Apoyo visible</p>
             <p className="text-[10px] text-indigo-600 font-bold">Si se apaga, el alumno solo verá las pistas.</p>
           </div>
           <Switch 
@@ -413,7 +601,7 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
               className="uppercase"
               value={word} 
               onChange={(e) => {
-                const newWords = content.words ? [...content.words] : [];
+                const newWords = [...(content.words || [])];
                 newWords[idx] = e.target.value.toUpperCase();
                 updateContent({ ...content, words: newWords });
               }} 
@@ -422,25 +610,24 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
               placeholder="PISTA" 
               value={content.clues?.[idx] || ''} 
               onChange={(e) => {
-                const newWords = content.words ? [...content.words] : [];
-                const newClues = content.clues ? [...content.clues] : [];
+                const newClues = [...(content.clues || [])];
                 newClues[idx] = e.target.value;
-                updateContent({ ...content, words: newWords, clues: newClues });
+                updateContent({ ...content, clues: newClues });
               }} 
             />
             <Button variant="ghost" size="sm" onClick={() => {
-              const newWords = content.words ? [...content.words] : [];
+              const newWords = [...(content.words || [])];
               newWords.splice(idx, 1);
-              const newClues = content.clues ? [...content.clues] : [];
+              const newClues = [...(content.clues || [])];
               newClues.splice(idx, 1);
               updateContent({ ...content, words: newWords, clues: newClues });
             }}><X size={14} /></Button>
           </div>
         ))}
         <Button variant="outline" className="w-full text-xs font-black uppercase" onClick={() => {
-          const newWords = content.words ? [...content.words] : [];
-          const newClues = content.clues ? [...content.clues] : [];
-          updateContent({ ...content, words: [...newWords, ''], clues: [...newClues, ''] });
+          const newWords = [...(content.words || []), ''];
+          const newClues = [...(content.clues || []), ''];
+          updateContent({ ...content, words: newWords, clues: newClues });
         }}>+ Añadir Palabra</Button>
       </div>
     );
@@ -462,16 +649,22 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
   const [isFlipped, setIsFlipped] = useState(false);
   const [fillAnswers, setFillAnswers] = useState<Record<number, string>>({});
   
-  // Sopa de letras state
+  // Sopa de letras y Crucigrama state
   const [sopaGrid, setSopaGrid] = useState<string[][]>([]);
   const [foundWords, setFoundWords] = useState<string[]>([]);
   const [selectedSopaCells, setSelectedSopaCells] = useState<{r: number, c: number}[]>([]);
+  const [crossword, setCrossword] = useState<CrosswordData | null>(null);
+  const [userInputs, setUserInputs] = useState<Record<string, string>>({});
+  const [showSolution, setShowSolution] = useState(false);
+  const [direction, setDirection] = useState<Direction>('HORIZONTAL');
+  const [focusedCell, setFocusedCell] = useState<{ x: number; y: number } | null>(null);
+  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const content = useMemo(() => {
     return typeof exercise.contenido === 'string' ? JSON.parse(exercise.contenido || '{}') : exercise.contenido;
   }, [exercise]);
 
-  // Generación de Grilla para Sopa de Letras
+  // Generación de Sopa de Letras
   const generateSopaGrid = useCallback(() => {
     const size = content.size || 12;
     const grid = Array.from({ length: size }, () => Array(size).fill(''));
@@ -481,10 +674,9 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
       let placed = false;
       let attempts = 0;
       while (!placed && attempts < 50) {
-        const direction = Math.floor(Math.random() * 3); // 0: H, 1: V, 2: D
+        const direction = Math.floor(Math.random() * 3);
         const row = Math.floor(Math.random() * size);
         const col = Math.floor(Math.random() * size);
-        
         let canPlace = true;
         if (direction === 0 && col + word.length <= size) {
           for (let i = 0; i < word.length; i++) if (grid[row][col + i] !== '' && grid[row][col + i] !== word[i]) canPlace = false;
@@ -500,7 +692,6 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
       }
     });
 
-    // Rellenar con letras aleatorias
     for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
         if (grid[r][c] === '') grid[r][c] = String.fromCharCode(65 + Math.floor(Math.random() * 26));
@@ -510,7 +701,14 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
   }, [content]);
 
   useEffect(() => {
-    if (exercise.tipo === 'opcion_multiple' || exercise.tipo === 'verdadero_falso' || exercise.tipo === 'flashcards') {
+    if (exercise.tipo === 'crucigrama') {
+      const inputs = content.words.map((w: string, i: number) => ({
+        id: i.toString(),
+        word: w,
+        clue: content.clues[i]
+      })).filter((item: any) => item.word && item.clue);
+      setCrossword(generateCrossword(inputs));
+    } else if (exercise.tipo === 'opcion_multiple' || exercise.tipo === 'verdadero_falso' || exercise.tipo === 'flashcards') {
       if (content.items) setShuffledItems([...content.items].sort(() => Math.random() - 0.5));
     } else if (exercise.tipo === 'ordenar_secuencia' && content.items) {
       setSequenceItems([...content.items].sort(() => Math.random() - 0.5));
@@ -532,18 +730,13 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
 
   const handleSopaCellClick = (r: number, c: number) => {
     const alreadySelected = selectedSopaCells.some(cell => cell.r === r && cell.c === c);
-    let newSelection = [];
-    if (alreadySelected) {
-      newSelection = selectedSopaCells.filter(cell => !(cell.r === r && cell.c === c));
-    } else {
-      newSelection = [...selectedSopaCells, { r, c }];
-    }
+    let newSelection = alreadySelected 
+      ? selectedSopaCells.filter(cell => !(cell.r === r && cell.c === c))
+      : [...selectedSopaCells, { r, c }];
     setSelectedSopaCells(newSelection);
 
-    // Verificar si la selección actual forma alguna palabra
     const selectedText = newSelection.map(cell => sopaGrid[cell.r][cell.c]).join('');
     const selectedTextRev = [...newSelection].reverse().map(cell => sopaGrid[cell.r][cell.c]).join('');
-    
     const wordFound = (content.words || []).find((w: string) => 
       (w.toUpperCase() === selectedText || w.toUpperCase() === selectedTextRev) && !foundWords.includes(w)
     );
@@ -558,7 +751,133 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
     }
   };
 
+  // Crucigrama logic
+  const solvedCrosswordWords = useMemo(() => {
+    if (!crossword) return new Set<string>();
+    const solved = new Set<string>();
+    crossword.placedWords.forEach(pw => {
+      let isCorrect = true;
+      for (let i = 0; i < pw.word.length; i++) {
+        const cx = pw.direction === 'HORIZONTAL' ? pw.x - crossword.minX + i : pw.x - crossword.minX;
+        const cy = pw.direction === 'VERTICAL' ? pw.y - crossword.minY + i : pw.y - crossword.minY;
+        if (userInputs[`${cx}-${cy}`]?.toUpperCase() !== pw.word[i].toUpperCase()) { isCorrect = false; break; }
+      }
+      if (isCorrect) solved.add(pw.id);
+    });
+    return solved;
+  }, [crossword, userInputs]);
+
+  useEffect(() => {
+    if (crossword && crossword.placedWords.length > 0 && solvedCrosswordWords.size === crossword.placedWords.length) {
+      confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+      setTimeout(() => setSuccess(true), 2000);
+    }
+  }, [solvedCrosswordWords, crossword]);
+
   const renderContent = () => {
+    if (exercise.tipo === 'crucigrama' && crossword) {
+      const grid = Array(crossword.height).fill(null).map(() => 
+        Array(crossword.width).fill(null).map(() => ({ letter: '', isActive: false, number: null as number | null, ids: [] as string[] }))
+      );
+      crossword.placedWords.forEach(pw => {
+        for (let i = 0; i < pw.word.length; i++) {
+          const cx = pw.direction === 'HORIZONTAL' ? pw.x - crossword.minX + i : pw.x - crossword.minX;
+          const cy = pw.direction === 'VERTICAL' ? pw.y - crossword.minY + i : pw.y - crossword.minY;
+          grid[cy][cx].letter = pw.word[i];
+          grid[cy][cx].isActive = true;
+          grid[cy][cx].ids.push(pw.id);
+          if (i === 0) grid[cy][cx].number = pw.number;
+        }
+      });
+
+      return (
+        <div className="w-full max-w-6xl mx-auto flex flex-col lg:flex-row gap-8 py-10">
+          <div className="flex-[2] bg-white p-8 rounded-[40px] shadow-2xl border-2 border-slate-100 flex flex-col items-center">
+            <div className="flex justify-between items-center w-full mb-8">
+              <h3 className="text-2xl font-black text-slate-800 uppercase">Crucigrama</h3>
+              <Button variant="ghost" onClick={() => setShowSolution(!showSolution)} className="text-indigo-600 gap-2 font-black uppercase text-xs">
+                {showSolution ? <EyeOff size={16} /> : <Eye size={16} />} {showSolution ? 'Ocultar' : 'Ver Solución'}
+              </Button>
+            </div>
+            <div className="grid gap-1 bg-slate-200 p-1 rounded-xl shadow-inner overflow-auto max-w-full" style={{ gridTemplateColumns: `repeat(${crossword.width}, minmax(0, 1fr))` }}>
+              {grid.map((row, y) => row.map((cell, x) => (
+                <div key={`${x}-${y}`} className={cn("aspect-square relative w-10 md:w-12 flex items-center justify-center font-black text-lg border transition-all", 
+                  !cell.isActive ? "bg-slate-800/5 border-transparent" : "bg-white border-slate-300",
+                  cell.ids.some(id => solvedCrosswordWords.has(id)) && "bg-emerald-50 text-emerald-600 border-emerald-300"
+                )}>
+                  {cell.isActive && (
+                    <>
+                      {cell.number && <span className="absolute top-0.5 left-1 text-[9px] text-slate-400">{cell.number}</span>}
+                      {showSolution ? <span className="text-indigo-600">{cell.letter}</span> : (
+                        <input 
+                          ref={el => { inputRefs.current[`${x}-${y}`] = el; }}
+                          maxLength={1}
+                          className="w-full h-full text-center bg-transparent outline-none uppercase"
+                          value={userInputs[`${x}-${y}`] || ''}
+                          onChange={e => {
+                            const val = e.target.value.toUpperCase();
+                            setUserInputs(prev => ({ ...prev, [`${x}-${y}`]: val }));
+                            if (val) {
+                              const nextX = direction === 'HORIZONTAL' ? x + 1 : x;
+                              const nextY = direction === 'VERTICAL' ? y + 1 : y;
+                              if (grid[nextY]?.[nextX]?.isActive) inputRefs.current[`${nextX}-${nextY}`]?.focus();
+                            }
+                          }}
+                          onFocus={() => {
+                            setFocusedCell({ x, y });
+                            const hasH = crossword.placedWords.some(pw => pw.direction === 'HORIZONTAL' && x >= pw.x - crossword.minX && x < pw.x - crossword.minX + pw.word.length && y === pw.y - crossword.minY);
+                            const hasV = crossword.placedWords.some(pw => pw.direction === 'VERTICAL' && y >= pw.y - crossword.minY && y < pw.y - crossword.minY + pw.word.length && x === pw.x - crossword.minX);
+                            if (hasH && !hasV) setDirection('HORIZONTAL');
+                            else if (hasV && !hasH) setDirection('VERTICAL');
+                          }}
+                          onKeyDown={e => {
+                            if (e.key === 'Backspace' && !userInputs[`${x}-${y}`]) {
+                              const prevX = direction === 'HORIZONTAL' ? x - 1 : x;
+                              const prevY = direction === 'VERTICAL' ? y - 1 : y;
+                              if (grid[prevY]?.[prevX]?.isActive) inputRefs.current[`${prevX}-${prevY}`]?.focus();
+                            } else if (e.key.startsWith('Arrow')) {
+                              e.preventDefault();
+                              let nx = x, ny = y;
+                              if (e.key === 'ArrowRight') nx++; if (e.key === 'ArrowLeft') nx--;
+                              if (e.key === 'ArrowDown') ny++; if (e.key === 'ArrowUp') ny--;
+                              if (grid[ny]?.[nx]?.isActive) inputRefs.current[`${nx}-${ny}`]?.focus();
+                            }
+                          }}
+                        />
+                      )}
+                    </>
+                  )}
+                </div>
+              )))}
+            </div>
+          </div>
+          <div className="flex-1 space-y-6">
+            <div className="bg-white p-8 rounded-[32px] border-2 border-slate-100 shadow-xl h-full overflow-y-auto max-h-[600px] custom-scrollbar">
+              <h4 className="text-[10px] font-black uppercase text-indigo-600 tracking-widest mb-6 border-b pb-2">Pistas</h4>
+              <div className="space-y-8">
+                {['HORIZONTAL', 'VERTICAL'].map(dir => {
+                  const clues = crossword.placedWords.filter(pw => pw.direction === dir).sort((a, b) => a.number - b.number);
+                  return (
+                    <div key={dir}>
+                      <h5 className="text-xs font-black uppercase text-slate-400 mb-4">{dir === 'HORIZONTAL' ? 'Horizontales' : 'Verticales'}</h5>
+                      <ul className="space-y-4">
+                        {clues.map(pw => (
+                          <li key={pw.id} className={cn("text-xs font-bold transition-all", solvedCrosswordWords.has(pw.id) ? "text-emerald-600 line-through opacity-50" : "text-slate-600")}>
+                            <span className="inline-block w-6 h-6 rounded bg-slate-100 text-center leading-6 mr-2 text-[10px]">{pw.number}</span>
+                            {pw.clue}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     if (exercise.tipo === 'actividad_descriptiva') {
       return (
         <div className="space-y-8 text-center py-10">
@@ -628,9 +947,7 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
     if (exercise.tipo === 'emparejamiento' && content.items) {
       const leftItems = content.items.map((i: any) => i.left);
       const rightItems = [...content.items.map((i: any) => i.right)].sort(() => Math.random() - 0.5);
-      
       const isComplete = Object.keys(matchedPairs).length === leftItems.length;
-
       const handleMatch = (right: string) => {
         if (!currentLeft) return;
         setMatchedPairs({ ...matchedPairs, [currentLeft]: right });
@@ -729,13 +1046,11 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
           </div>
           <div className="perspective-1000 h-[400px]">
             <div onClick={() => setIsFlipped(!isFlipped)} className={cn("relative w-full h-full transition-all duration-500 transform-style-3d cursor-pointer", isFlipped && "rotate-y-180")}>
-              {/* Frente */}
               <div className="absolute inset-0 w-full h-full backface-hidden bg-white border-4 border-amber-100 rounded-[50px] flex flex-col items-center justify-center p-10 text-center shadow-xl">
                 <span className="text-[10px] font-black uppercase text-amber-400 tracking-[0.3em] mb-6">Término / Concepto</span>
                 <h3 className="text-3xl font-black text-slate-800 uppercase leading-tight">{card.front}</h3>
                 <p className="mt-10 text-[10px] font-black text-slate-300 uppercase animate-pulse">Haz clic para voltear</p>
               </div>
-              {/* Reverso */}
               <div className="absolute inset-0 w-full h-full backface-hidden rotate-y-180 bg-amber-500 border-4 border-amber-400 rounded-[50px] flex flex-col items-center justify-center p-10 text-center shadow-xl text-white">
                 <span className="text-[10px] font-black uppercase text-amber-200 tracking-[0.3em] mb-6">Definición / Respuesta</span>
                 <p className="text-2xl font-bold leading-relaxed">{card.back}</p>
@@ -762,6 +1077,10 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
               <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${content.size || 12}, minmax(0, 1fr))` }}>
                 {sopaGrid.map((row, r) => row.map((char, c) => {
                   const isSelected = selectedSopaCells.some(cell => cell.r === r && cell.c === c);
+                  const isFound = foundWords.some(w => {
+                    // Esta es una simplificación, en una sopa real necesitaríamos las coordenadas de las palabras encontradas
+                    return false; 
+                  });
                   return (
                     <button 
                       key={`${r}-${c}`} 
@@ -777,34 +1096,29 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
                 }))}
               </div>
             </div>
-            
             <div className="lg:col-span-5 space-y-6">
-              {(content.showWordList || foundWords.length > 0) && (
-                <div className="bg-indigo-50 p-8 rounded-[32px] border-2 border-indigo-100 shadow-sm">
-                  <h4 className="text-[10px] font-black uppercase text-indigo-600 tracking-widest mb-6">Lista de Palabras</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    {(content.words || []).filter((w:string)=>w.length>0).map((w: string, i: number) => {
-                      const isFound = foundWords.includes(w);
-                      // Si showWordList es false, solo mostramos la palabra si ya fue encontrada
-                      if (!content.showWordList && !isFound) {
-                        return (
-                          <div key={i} className="flex items-center gap-3 opacity-30">
-                            <div className="h-2 w-2 rounded-full bg-slate-300" />
-                            <span className="font-black text-slate-400 uppercase text-xs italic tracking-tighter">DESCONOCIDA</span>
-                          </div>
-                        );
-                      }
+              <div className="bg-indigo-50 p-8 rounded-[32px] border-2 border-indigo-100 shadow-sm">
+                <h4 className="text-[10px] font-black uppercase text-indigo-600 tracking-widest mb-6">Lista de Palabras</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  {(content.words || []).filter((w:string)=>w.length>0).map((w: string, i: number) => {
+                    const isFound = foundWords.includes(w);
+                    if (!content.showWordList && !isFound) {
                       return (
-                        <div key={i} className="flex items-center gap-3">
-                          <div className={cn("h-2 w-2 rounded-full", isFound ? "bg-emerald-500" : "bg-indigo-300")} />
-                          <span className={cn("font-black text-slate-700 uppercase text-sm", isFound && "line-through opacity-40 text-emerald-600")}>{w}</span>
+                        <div key={i} className="flex items-center gap-3 opacity-30">
+                          <div className="h-2 w-2 rounded-full bg-slate-300" />
+                          <span className="font-black text-slate-400 uppercase text-xs italic tracking-tighter">DESCONOCIDA</span>
                         </div>
                       );
-                    })}
-                  </div>
+                    }
+                    return (
+                      <div key={i} className="flex items-center gap-3">
+                        <div className={cn("h-2 w-2 rounded-full", isFound ? "bg-emerald-500" : "bg-indigo-300")} />
+                        <span className={cn("font-black text-slate-700 uppercase text-sm", isFound && "line-through opacity-40 text-emerald-600")}>{w}</span>
+                      </div>
+                    );
+                  })}
                 </div>
-              )}
-              
+              </div>
               <div className="bg-slate-50 p-8 rounded-[32px] border-2 border-slate-100 shadow-sm">
                 <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-6">Pistas</h4>
                 <div className="space-y-4">
@@ -814,57 +1128,6 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      );
-    }
-
-    if (exercise.tipo === 'crucigrama') {
-      return (
-        <div className="max-w-4xl mx-auto space-y-10 py-10">
-          <div className="text-center">
-            <h3 className="text-3xl font-black text-slate-800 uppercase">Crucigrama</h3>
-            <p className="text-slate-500 font-bold uppercase text-xs mt-2">Usa las pistas para completar las palabras.</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-             <div className="bg-white p-10 rounded-[40px] border-2 border-slate-100 shadow-xl space-y-6">
-                <h4 className="text-xs font-black uppercase text-rose-600 tracking-widest mb-4">Completar Palabras</h4>
-                <div className="space-y-8">
-                  {(content.words || []).map((word: string, idx: number) => (
-                    <div key={idx} className="space-y-3">
-                      <div className="flex items-center gap-3">
-                        <span className="h-6 w-6 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center font-black text-[10px]">{idx + 1}</span>
-                        <p className="text-xs font-bold text-slate-500 uppercase italic">"{content.clues?.[idx]}"</p>
-                      </div>
-                      <div className="flex flex-wrap gap-1">
-                        {word.split('').map((char, charIdx) => (
-                          <input 
-                            key={charIdx}
-                            maxLength={1}
-                            className="w-8 h-10 border-2 border-slate-100 rounded-lg text-center font-black uppercase text-lg focus:border-rose-500 outline-none"
-                            placeholder="?"
-                          />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-             </div>
-             <div className="space-y-6">
-                <div className="p-8 bg-slate-50 rounded-[32px] border border-slate-200 shadow-inner">
-                  <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-6">Lista de Apoyo</h4>
-                  {content.showWordList ? (
-                    <div className="flex flex-wrap gap-2">
-                      {content.words?.map((w: string, i: number) => (
-                        <Badge key={i} variant="secondary" className="bg-white text-slate-600 font-black uppercase text-[10px] px-3">{w}</Badge>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-[10px] font-bold text-slate-400 italic">La lista de palabras está oculta por el profesor.</p>
-                  )}
-                </div>
-                <Button onClick={() => setSuccess(true)} className="w-full h-16 rounded-[32px] bg-rose-600 text-white font-black uppercase text-lg tracking-widest shadow-xl">Finalizar Actividad</Button>
-             </div>
           </div>
         </div>
       );
@@ -896,7 +1159,7 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
               </div>
               <div className="space-y-2">
                 <h2 className="text-4xl font-black text-slate-800 uppercase">¡Ejercicio Completado!</h2>
-                <p className="text-xl text-slate-500 font-bold uppercase">Resultado Final Simulado: {score} de {shuffledItems.length || 1}</p>
+                <p className="text-xl text-slate-500 font-bold uppercase">Simulación finalizada exitosamente.</p>
               </div>
               <Button onClick={onClose} className="rounded-3xl px-12 h-16 bg-emerald-600 text-white font-black uppercase text-lg tracking-widest shadow-2xl hover:scale-105 transition-transform">Volver al Panel</Button>
             </div>
@@ -983,26 +1246,17 @@ export default function ProfesorDashboard() {
 
     try {
       if (dialog.type === 'unidad') {
-        if (!selectedMateria?.id) {
-          toast({ variant: "destructive", title: "Error de selección", description: "No hay una materia vinculada." });
-          return;
-        }
+        if (!selectedMateria?.id) { toast({ variant: "destructive", title: "Error", description: "No hay materia seleccionada." }); return; }
         result = await upsertUnidad({...d, materia_id: selectedMateria.id, created_by: user?.id});
       }
       
       if (dialog.type === 'tema') {
-        if (!selectedUnidad?.id) {
-          toast({ variant: "destructive", title: "Error de selección", description: "No hay una unidad vinculada." });
-          return;
-        }
+        if (!selectedUnidad?.id) { toast({ variant: "destructive", title: "Error", description: "No hay unidad seleccionada." }); return; }
         result = await upsertTema({...d, unidad_id: selectedUnidad.id, created_by: user?.id});
       }
       
       if (dialog.type === 'ejercicio') {
-        if (!selectedTema?.id) {
-          toast({ variant: "destructive", title: "Error de selección", description: "No hay un tema vinculado." });
-          return;
-        }
+        if (!selectedTema?.id) { toast({ variant: "destructive", title: "Error", description: "No hay tema seleccionado." }); return; }
         const finalContent = typeof d.contenido === 'string' ? d.contenido : JSON.stringify(d.contenido || {});
         result = await upsertEjercicio({...d, contenido: finalContent, tema_id: selectedTema.id, created_by: user?.id});
       }
@@ -1013,12 +1267,8 @@ export default function ProfesorDashboard() {
         if (dialog.type === 'unidad') fetchUnidades(selectedMateria.id);
         if (dialog.type === 'tema') fetchTemas(selectedUnidad.id);
         if (dialog.type === 'ejercicio') fetchEjercicios(selectedTema.id);
-      } else if (result) {
-        toast({ variant: "destructive", title: "Error", description: result.error?.message || "No se pudo guardar." });
       }
-    } catch (e) {
-      console.error(e);
-    }
+    } catch (e) { console.error(e); }
   };
 
   const handleDelete = async (type: string, id: string) => {
@@ -1052,10 +1302,7 @@ export default function ProfesorDashboard() {
       estilo: 'azul'
     };
     const { data, error } = await upsertSlide(newSlide);
-    if (error) {
-      toast({ variant: "destructive", title: "Error", description: "Problema al crear diapositiva." });
-      return;
-    }
+    if (error) { toast({ variant: "destructive", title: "Error", description: "Problema al crear diapositiva." }); return; }
     if (data) {
       setSlides([...slides, data]);
       setActiveSlideIndex(slides.length);
@@ -1088,10 +1335,7 @@ export default function ProfesorDashboard() {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 3 * 1024 * 1024) {
-      toast({ variant: "destructive", title: "Archivo demasiado grande", description: "Límite 3MB" });
-      return;
-    }
+    if (file.size > 3 * 1024 * 1024) { toast({ variant: "destructive", title: "Archivo grande", description: "Límite 3MB" }); return; }
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setUploading(true);
@@ -1114,11 +1358,7 @@ export default function ProfesorDashboard() {
       if (dbError) throw dbError;
       toast({ title: "Archivo cargado" });
       fetchResources(selectedTema.id);
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Error", description: err.message });
-    } finally {
-      setUploading(false);
-    }
+    } catch (err: any) { toast({ variant: "destructive", title: "Error", description: err.message }); } finally { setUploading(false); }
   };
 
   const handleDeleteResource = async (resource: any) => {
@@ -1128,9 +1368,7 @@ export default function ProfesorDashboard() {
       if (dbError) throw dbError;
       toast({ title: "Recurso eliminado" });
       setResources(resources.filter(r => r.id !== resource.id));
-    } catch (err: any) {
-      toast({ variant: "destructive", title: "Error", description: err.message });
-    }
+    } catch (err: any) { toast({ variant: "destructive", title: "Error", description: err.message }); }
   };
 
   const handleKeyDown = useCallback((e: KeyboardEvent) => {
@@ -1139,9 +1377,7 @@ export default function ProfesorDashboard() {
         setActiveSlideIndex((prev) => Math.min(prev + 1, slides.length - 1));
       } else if (e.key === 'ArrowLeft') {
         setActiveSlideIndex((prev) => Math.max(prev - 1, 0));
-      } else if (e.key === 'Escape') {
-        setPresentationMode(false);
-      }
+      } else if (e.key === 'Escape') { setPresentationMode(false); }
     }
   }, [presentationMode, slides.length]);
 
@@ -1156,11 +1392,8 @@ export default function ProfesorDashboard() {
   }, [handleKeyDown]);
 
   useEffect(() => {
-    if (presentationMode) {
-      if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
-    } else {
-      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    }
+    if (presentationMode) { if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {}); }
+    else { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); }
   }, [presentationMode]);
 
   const splitImageUrls = (urls: string) => {
@@ -1170,10 +1403,7 @@ export default function ProfesorDashboard() {
 
   if (presentationMode && slides.length > 0) {
     const slide = slides[activeSlideIndex];
-    if (!slide) {
-      setPresentationMode(false);
-      return null;
-    }
+    if (!slide) { setPresentationMode(false); return null; }
     const styleMap: any = {
       'azul': 'bg-slate-900 from-slate-900 to-blue-900 text-white',
       'vino': 'bg-[#4c0519] from-[#4c0519] to-[#8B2332] text-white',
@@ -1362,7 +1592,7 @@ export default function ProfesorDashboard() {
               <div className={cn("p-3 rounded-2xl text-white", dialog.type === 'ejercicio' ? 'bg-amber-500' : 'bg-primary')}><FileText size={24} /></div>
               <div>
                 <DialogTitle className="font-black text-2xl uppercase tracking-tight text-slate-800">Editar {dialog.type}</DialogTitle>
-                <DialogDescription className="text-xs uppercase font-bold text-slate-400">Configura los reactivos y parámetros de la actividad.</DialogDescription>
+                <DialogDescription className="text-xs uppercase font-bold text-slate-400">Configura los parámetros de la actividad.</DialogDescription>
               </div>
             </div>
             {dialog.type === 'ejercicio' && (
