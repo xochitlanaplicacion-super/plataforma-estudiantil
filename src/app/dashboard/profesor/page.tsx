@@ -263,7 +263,7 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-4 px-4 text-[10px] font-black uppercase text-slate-400">
           <span>Concepto (Izq)</span>
-          <span>Relación (Der)</span>
+          <span>Definición (Der)</span>
         </div>
         {content.items?.map((item: any, idx: number) => (
           <div key={idx} className="flex gap-2 items-center">
@@ -407,7 +407,7 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
               onChange={(e) => {
                 const newClues = content.clues ? [...content.clues] : [];
                 newClues[idx] = e.target.value;
-                updateContent({ ...content, words: newWords, clues: newClues });
+                updateContent({ ...content, words: content.words, clues: newClues });
               }} 
             />
             <Button variant="ghost" size="sm" onClick={() => {
@@ -1050,7 +1050,7 @@ export default function ProfesorDashboard() {
       {/* PREVISUALIZACIÓN DE ACTIVIDAD */}
       {previewActivity && <ActivityPreview exercise={previewActivity} onClose={() => setPreviewActivity(null)} />}
 
-      {/* SLIDE EDITOR Y RECURSOS (MANTENIDOS IGUAL) */}
+      {/* SLIDE EDITOR Y RECURSOS */}
       <Dialog open={slideDialogOpen} onOpenChange={setSlideDialogOpne}>
         <DialogContent className="max-w-[95vw] w-[1300px] h-[90vh] flex flex-col p-0 rounded-3xl overflow-hidden shadow-2xl border-none">
           <DialogHeader className="p-6 bg-slate-900 border-b border-white/5 flex flex-row justify-between items-center space-y-0 shrink-0">
@@ -1088,7 +1088,20 @@ export default function ProfesorDashboard() {
                     <label className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] flex items-center gap-2"><Palette size={14} /> Estilo Visual</label>
                     <div className="grid grid-cols-4 gap-4">
                       {['azul', 'vino', 'verde', 'oscuro'].map((est) => (
-                        <button key={est} onClick={() => handleUpdateSlide(slides[activeSlideIndex].id, { estilo: est })} className={cn("h-12 rounded-xl font-black text-[10px] uppercase border-2", slides[activeSlideIndex].estilo === est ? "border-blue-500 scale-105 shadow-lg" : "border-white/5 opacity-50")}>{est}</button>
+                        <button 
+                          key={est} 
+                          onClick={() => handleUpdateSlide(slides[activeSlideIndex].id, { estilo: est })} 
+                          className={cn(
+                            "h-12 rounded-xl font-black text-[10px] uppercase border-2 transition-all", 
+                            slides[activeSlideIndex].estilo === est ? "border-blue-500 scale-105 shadow-lg" : "border-white/5 opacity-50 hover:opacity-100",
+                            est === 'azul' ? 'bg-blue-900 text-white' : 
+                            est === 'vino' ? 'bg-[#8B2332] text-white' : 
+                            est === 'verde' ? 'bg-[#1A4A3F] text-white' : 
+                            'bg-slate-800 text-white'
+                          )}
+                        >
+                          {est}
+                        </button>
                       ))}
                     </div>
                   </div>
