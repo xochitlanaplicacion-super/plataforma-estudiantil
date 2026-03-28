@@ -44,7 +44,8 @@ import {
   AlertCircle,
   RotateCcw,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Grid3X3
 } from 'lucide-react';
 import { 
   getMyAsignaciones, 
@@ -75,6 +76,7 @@ import { cn } from '@/lib/utils';
 const LOGO_URL = '/images/logo_zapata.png';
 
 const ACTIVITY_TEMPLATES = [
+  { id: 'crucigrama', label: 'Crucigrama', icon: <Grid3X3 size={16} />, color: 'bg-rose-600' },
   { id: 'actividad_descriptiva', label: 'Actividad Descriptiva', icon: <FileSearch size={16} />, color: 'bg-slate-700' },
   { id: 'opcion_multiple', label: 'Opción Múltiple', icon: <CheckCircle2 size={16} />, color: 'bg-blue-500' },
   { id: 'verdadero_falso', label: 'Verdadero / Falso', icon: <HelpCircle size={16} />, color: 'bg-emerald-500' },
@@ -87,13 +89,14 @@ const ACTIVITY_TEMPLATES = [
 
 const initActivityContent = (type: string) => {
   switch(type) {
+    case 'crucigrama': return { words: [''], clues: [''] };
     case 'actividad_descriptiva': return { fileUrl: '', fileName: '' };
     case 'opcion_multiple': return { items: [{ question: '', options: [{id: '1', text: ''}], correctId: '1', feedback: '' }] };
     case 'verdadero_falso': return { items: [{ statement: '', correct: true, feedback: '' }] };
     case 'emparejamiento': return { items: [{ left: '', right: '' }] };
     case 'ordenar_secuencia': return { items: [''] };
     case 'completar_espacios': return { text: '', bank: [] };
-    case 'sopa_letras': return { words: [''], clues: [''], size: 12 };
+    case 'sopa_letras': return { words: [''], clues: [''], size: 12, showWordList: false };
     case 'flashcards': return { items: [{ front: '', back: '' }] };
     default: return {};
   }
@@ -147,9 +150,9 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
               <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
                 <File size={14} className="text-primary" /> {content.fileName}
               </div>
-              <Button variant="ghost" size="sm" className="h-6 w-6 text-destructive" onClick={() => updateContent({...content, fileUrl: '', fileName: ''})}>
+              <button className="h-6 w-6 text-destructive" onClick={() => updateContent({...content, fileUrl: '', fileName: ''})}>
                 <X size={14} />
-              </Button>
+              </button>
             </div>
           )}
         </div>
@@ -385,9 +388,17 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
     );
   }
 
-  if (type === 'sopa_letras') {
+  if (type === 'sopa_letras' || type === 'crucigrama') {
     return (
-      <div className="space-y-4">
+      <div className="space-y-6">
+        <div className="flex items-center justify-between p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100">
+          <div className="space-y-1">
+            <p className="text-xs font-black text-indigo-900 uppercase">Lista de Palabras visible</p>
+            <p className="text-[10px] text-indigo-600 font-bold">Si se apaga, el alumno solo verá las pistas.</p>
+          </div>
+          <Switch checked={content.showWordList} onCheckedChange={(val) => updateContent({ ...content, showWordList: val })} />
+        </div>
+
         <div className="grid grid-cols-2 gap-4 px-4 text-[10px] font-black uppercase text-slate-400">
           <span>Palabra</span>
           <span>Pista</span>
@@ -399,7 +410,7 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
               className="uppercase"
               value={word} 
               onChange={(e) => {
-                const newWords = [...content.words];
+                const newWords = content.words ? [...content.words] : [];
                 newWords[idx] = e.target.value.toUpperCase();
                 updateContent({ ...content, words: newWords });
               }} 
@@ -408,9 +419,10 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
               placeholder="PISTA" 
               value={content.clues?.[idx] || ''} 
               onChange={(e) => {
+                const newWords = content.words ? [...content.words] : [];
                 const newClues = content.clues ? [...content.clues] : [];
                 newClues[idx] = e.target.value;
-                updateContent({ ...content, words: content.words, clues: newClues });
+                updateContent({ ...content, words: newWords, clues: newClues });
               }} 
             />
             <Button variant="ghost" size="sm" onClick={() => {
@@ -446,18 +458,63 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
   const [currentLeft, setCurrentLeft] = useState<string | null>(null);
   const [isFlipped, setIsFlipped] = useState(false);
   const [fillAnswers, setFillAnswers] = useState<Record<number, string>>({});
+  
+  // Sopa de letras state
+  const [sopaGrid, setSopaGrid] = useState<string[][]>([]);
+  const [foundWords, setFoundWords] = useState<string[]>([]);
+  const [selectedSopaCells, setSelectedSopaCells] = useState<{r: number, c: number}[]>([]);
 
   const content = useMemo(() => {
     return typeof exercise.contenido === 'string' ? JSON.parse(exercise.contenido || '{}') : exercise.contenido;
   }, [exercise]);
+
+  // Generación de Grilla para Sopa de Letras
+  const generateSopaGrid = useCallback(() => {
+    const size = content.size || 12;
+    const grid = Array.from({ length: size }, () => Array(size).fill(''));
+    const words = (content.words || []).filter((w: string) => w.length > 0);
+
+    words.forEach((word: string) => {
+      let placed = false;
+      let attempts = 0;
+      while (!placed && attempts < 50) {
+        const direction = Math.floor(Math.random() * 3); // 0: H, 1: V, 2: D
+        const row = Math.floor(Math.random() * size);
+        const col = Math.floor(Math.random() * size);
+        
+        let canPlace = true;
+        if (direction === 0 && col + word.length <= size) {
+          for (let i = 0; i < word.length; i++) if (grid[row][col + i] !== '' && grid[row][col + i] !== word[i]) canPlace = false;
+          if (canPlace) { for (let i = 0; i < word.length; i++) grid[row][col + i] = word[i]; placed = true; }
+        } else if (direction === 1 && row + word.length <= size) {
+          for (let i = 0; i < word.length; i++) if (grid[row + i][col] !== '' && grid[row + i][col] !== word[i]) canPlace = false;
+          if (canPlace) { for (let i = 0; i < word.length; i++) grid[row + i][col] = word[i]; placed = true; }
+        } else if (direction === 2 && row + word.length <= size && col + word.length <= size) {
+          for (let i = 0; i < word.length; i++) if (grid[row + i][col + i] !== '' && grid[row + i][col + i] !== word[i]) canPlace = false;
+          if (canPlace) { for (let i = 0; i < word.length; i++) grid[row + i][col + i] = word[i]; placed = true; }
+        }
+        attempts++;
+      }
+    });
+
+    // Rellenar con letras aleatorias
+    for (let r = 0; row < size; r++) {
+      for (let c = 0; c < size; c++) {
+        if (grid[r][c] === '') grid[r][c] = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+      }
+    }
+    setSopaGrid(grid);
+  }, [content]);
 
   useEffect(() => {
     if (exercise.tipo === 'opcion_multiple' || exercise.tipo === 'verdadero_falso' || exercise.tipo === 'flashcards') {
       if (content.items) setShuffledItems([...content.items].sort(() => Math.random() - 0.5));
     } else if (exercise.tipo === 'ordenar_secuencia' && content.items) {
       setSequenceItems([...content.items].sort(() => Math.random() - 0.5));
+    } else if (exercise.tipo === 'sopa_letras') {
+      generateSopaGrid();
     }
-  }, [content, exercise.tipo]);
+  }, [content, exercise.tipo, generateSopaGrid]);
 
   const handleNext = (isCorrect: boolean) => {
     if (isCorrect) setScore(s => s + 1);
@@ -467,6 +524,34 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
       setIsFlipped(false);
     } else {
       setSuccess(true);
+    }
+  };
+
+  const handleSopaCellClick = (r: number, c: number) => {
+    const alreadySelected = selectedSopaCells.some(cell => cell.r === r && cell.c === c);
+    let newSelection = [];
+    if (alreadySelected) {
+      newSelection = selectedSopaCells.filter(cell => !(cell.r === r && cell.c === c));
+    } else {
+      newSelection = [...selectedSopaCells, { r, c }];
+    }
+    setSelectedSopaCells(newSelection);
+
+    // Verificar si la selección actual forma alguna palabra
+    const selectedText = newSelection.map(cell => sopaGrid[cell.r][cell.c]).join('');
+    const selectedTextRev = [...newSelection].reverse().map(cell => sopaGrid[cell.r][cell.c]).join('');
+    
+    const wordFound = (content.words || []).find((w: string) => 
+      (w.toUpperCase() === selectedText || w.toUpperCase() === selectedTextRev) && !foundWords.includes(w)
+    );
+
+    if (wordFound) {
+      const newFound = [...foundWords, wordFound];
+      setFoundWords(newFound);
+      setSelectedSopaCells([]);
+      if (newFound.length === (content.words || []).filter((w:string)=>w.length>0).length) {
+        setTimeout(() => setSuccess(true), 1000);
+      }
     }
   };
 
@@ -662,45 +747,93 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
       );
     }
 
-    if (exercise.tipo === 'sopa_letras' && content.words) {
+    if (exercise.tipo === 'sopa_letras' && sopaGrid.length > 0) {
+      return (
+        <div className="max-w-6xl mx-auto space-y-10 py-10">
+          <div className="text-center">
+            <h3 className="text-3xl font-black text-slate-800 uppercase">Sopa de Letras</h3>
+            <p className="text-slate-500 font-bold uppercase text-xs mt-2">Encuentra las siguientes palabras ocultas en la cuadrícula.</p>
+          </div>
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
+            <div className="lg:col-span-7 bg-white p-8 rounded-[40px] border-2 border-slate-100 shadow-2xl flex justify-center">
+              <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${content.size || 12}, minmax(0, 1fr))` }}>
+                {sopaGrid.map((row, r) => row.map((char, c) => {
+                  const isSelected = selectedSopaCells.some(cell => cell.r === r && cell.c === c);
+                  return (
+                    <button 
+                      key={`${r}-${c}`} 
+                      onClick={() => handleSopaCellClick(r, c)}
+                      className={cn(
+                        "h-8 w-8 md:h-10 md:w-10 rounded-lg flex items-center justify-center font-black text-sm transition-all",
+                        isSelected ? "bg-indigo-600 text-white scale-110 shadow-lg" : "bg-slate-50 text-slate-400 hover:bg-indigo-100 hover:text-indigo-600"
+                      )}
+                    >
+                      {char}
+                    </button>
+                  );
+                }))}
+              </div>
+            </div>
+            
+            <div className="lg:col-span-5 space-y-6">
+              {(content.showWordList || foundWords.length > 0) && (
+                <div className="bg-indigo-50 p-8 rounded-[32px] border-2 border-indigo-100 shadow-sm">
+                  <h4 className="text-[10px] font-black uppercase text-indigo-600 tracking-widest mb-6">Lista de Palabras</h4>
+                  <div className="grid grid-cols-2 gap-4">
+                    {(content.words || []).filter((w:string)=>w.length>0).map((w: string, i: number) => (
+                      <div key={i} className="flex items-center gap-3">
+                        <div className={cn("h-2 w-2 rounded-full", foundWords.includes(w) ? "bg-emerald-500" : "bg-indigo-300")} />
+                        <span className={cn("font-black text-slate-700 uppercase text-sm", foundWords.includes(w) && "line-through opacity-40 text-emerald-600")}>{w}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              <div className="bg-slate-50 p-8 rounded-[32px] border-2 border-slate-100 shadow-sm">
+                <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-6">Pistas</h4>
+                <div className="space-y-4">
+                  {(content.clues || []).filter((c:string)=>c.length>0).map((c: string, i: number) => (
+                    <p key={i} className="text-xs font-bold text-slate-600 uppercase italic leading-relaxed border-l-4 border-indigo-200 pl-4">"{c}"</p>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (exercise.tipo === 'crucigrama') {
       return (
         <div className="max-w-4xl mx-auto space-y-10 py-10">
           <div className="text-center">
-            <h3 className="text-2xl font-black text-slate-800 uppercase">Sopa de Letras</h3>
-            <p className="text-slate-500 font-bold uppercase text-xs">Encuentra las siguientes palabras ocultas en la cuadrícula.</p>
+            <h3 className="text-3xl font-black text-slate-800 uppercase">Crucigrama</h3>
+            <p className="text-slate-500 font-bold uppercase text-xs mt-2">Completa la cuadrícula utilizando las pistas horizontales y verticales.</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-            <div className="bg-white p-8 rounded-[40px] border-2 border-slate-100 shadow-xl flex flex-wrap gap-2 justify-center content-center">
-              {/* Simulación visual de cuadrícula */}
-              {Array.from({ length: 144 }).map((_, i) => (
-                <div key={i} className="h-8 w-8 rounded bg-slate-50 flex items-center justify-center text-[10px] font-black text-slate-400">
-                  {String.fromCharCode(65 + Math.floor(Math.random() * 26))}
+             <div className="bg-white p-10 rounded-[40px] border-2 border-slate-100 shadow-xl grid grid-cols-10 gap-1 aspect-square">
+                {Array.from({ length: 100 }).map((_, i) => (
+                  <div key={i} className={cn("rounded-md border flex items-center justify-center text-xs font-black", Math.random() > 0.7 ? "bg-slate-900" : "bg-slate-50 text-slate-800")}>
+                    {Math.random() > 0.7 ? "" : String.fromCharCode(65 + Math.floor(Math.random() * 26))}
+                  </div>
+                ))}
+             </div>
+             <div className="space-y-6">
+                <div className="space-y-4">
+                  <h4 className="text-xs font-black uppercase text-rose-600">Pistas</h4>
+                  <div className="space-y-3">
+                    {(content.clues || []).map((c: string, i: number) => (
+                      <div key={i} className="p-4 bg-slate-50 rounded-2xl border-l-4 border-rose-500">
+                        <span className="text-[10px] font-black text-rose-400 uppercase mr-2">{i+1}.</span>
+                        <span className="text-xs font-bold text-slate-700 uppercase">"{c}"</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              ))}
-            </div>
-            <div className="space-y-6">
-              <div className="bg-indigo-50 p-6 rounded-3xl border-2 border-indigo-100">
-                <h4 className="text-[10px] font-black uppercase text-indigo-600 tracking-widest mb-4">Lista de Palabras</h4>
-                <ul className="space-y-2">
-                  {content.words.map((w: string, i: number) => (
-                    <li key={i} className="flex items-center gap-3">
-                      <div className="h-2 w-2 rounded-full bg-indigo-400" />
-                      <span className="font-black text-slate-700 uppercase text-sm">{w}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="bg-slate-50 p-6 rounded-3xl border-2 border-slate-100">
-                <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">Pistas</h4>
-                <ul className="space-y-3">
-                  {content.clues?.map((c: string, i: number) => (
-                    <li key={i} className="text-xs font-bold text-slate-600 uppercase italic">"{c}"</li>
-                  ))}
-                </ul>
-              </div>
-            </div>
+                <Button onClick={() => setSuccess(true)} className="w-full h-14 rounded-2xl bg-rose-600 text-white font-black uppercase shadow-lg">Finalizar Crucigrama</Button>
+             </div>
           </div>
-          <Button onClick={() => setSuccess(true)} className="w-full h-16 rounded-[32px] bg-indigo-600 text-white font-black uppercase text-lg tracking-widest shadow-xl">Finalizar Actividad</Button>
         </div>
       );
     }
@@ -723,7 +856,7 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
         </Button>
       </header>
       <main className="flex-1 overflow-y-auto custom-scrollbar bg-slate-50/50">
-        <div className="container mx-auto max-w-5xl px-6">
+        <div className="container mx-auto max-w-full px-6">
           {finished ? (
             <div className="h-full flex flex-col items-center justify-center py-20 text-center space-y-8">
               <div className="h-32 w-32 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center shadow-inner animate-bounce">
@@ -731,7 +864,7 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
               </div>
               <div className="space-y-2">
                 <h2 className="text-4xl font-black text-slate-800 uppercase">¡Ejercicio Completado!</h2>
-                <p className="text-xl text-slate-500 font-bold uppercase">Resultado Final Simulado: {score} de {shuffledItems.length || (exercise.tipo === 'ordenar_secuencia' ? content.items?.length : 1)}</p>
+                <p className="text-xl text-slate-500 font-bold uppercase">Resultado Final Simulado: {score} de {shuffledItems.length || (exercise.tipo === 'ordenar_secuencia' ? content.items?.length : (exercise.tipo === 'sopa_letras' ? foundWords.length : 1))}</p>
               </div>
               <Button onClick={onClose} className="rounded-3xl px-12 h-16 bg-emerald-600 text-white font-black uppercase text-lg tracking-widest shadow-2xl hover:scale-105 transition-transform">Volver al Panel</Button>
             </div>
@@ -1156,7 +1289,7 @@ export default function ProfesorDashboard() {
                    <Button variant="ghost" size="sm" onClick={() => setCurrentTab('temas')} className="text-primary font-black uppercase text-[10px]"><ArrowLeft size={14} /> Volver</Button>
                    <CardTitle className="text-2xl font-black uppercase text-slate-800 flex items-center gap-3"><Sparkles className="text-amber-500" /> Actividades de {selectedTema?.titulo}</CardTitle>
                  </div>
-                 <Button size="lg" className="rounded-2xl bg-amber-500 text-white font-black uppercase tracking-widest gap-2" onClick={() => setDialog({ open: true, type: 'ejercicio', data: { titulo: '', tipo: 'actividad_descriptiva', contenido: initActivityContent('actividad_descriptiva'), orden: ejercicios.length + 1 } })}><Plus size={18} /> Nueva Actividad</Button>
+                 <Button size="lg" className="rounded-2xl bg-amber-500 text-white font-black uppercase tracking-widest gap-2" onClick={() => setDialog({ open: true, type: 'ejercicio', data: { titulo: '', tipo: 'crucigrama', contenido: initActivityContent('crucigrama'), orden: ejercicios.length + 1 } })}><Plus size={18} /> Nueva Actividad</Button>
                </CardHeader>
                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                  <Table>
@@ -1228,7 +1361,7 @@ export default function ProfesorDashboard() {
               <div className="space-y-10">
                 <div className="space-y-4">
                   <label className="text-[10px] font-black uppercase text-primary tracking-[0.2em] flex items-center gap-2"><Layout size={14} /> Seleccionar Plantilla</label>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
                     {ACTIVITY_TEMPLATES.map((tmpl) => (
                       <button key={tmpl.id} type="button" onClick={() => setDialog({...dialog, data: {...dialog.data, tipo: tmpl.id, contenido: initActivityContent(tmpl.id)}})} className={cn("flex flex-col items-center gap-3 p-4 rounded-2xl border-2 transition-all", dialog.data.tipo === tmpl.id ? "bg-primary/5 border-primary shadow-md" : "bg-white border-slate-100 hover:border-slate-200")}>
                         <div className={cn("h-10 w-10 rounded-xl flex items-center justify-center text-white", tmpl.color)}>{tmpl.icon}</div>
