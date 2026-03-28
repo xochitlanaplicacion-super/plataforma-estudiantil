@@ -42,7 +42,8 @@ import {
   ArrowUp,
   ArrowDown,
   Grid3X3,
-  EyeOff
+  EyeOff,
+  AlertCircle
 } from 'lucide-react';
 import { 
   getMyAsignaciones, 
@@ -121,7 +122,6 @@ class CrosswordBuilder {
     if (dir === 'HORIZONTAL' && startX + word.length > CROSSWORD_GRID_SIZE) return false;
     if (dir === 'VERTICAL' && startY + word.length > CROSSWORD_GRID_SIZE) return false;
 
-    // Verificar colisiones y bordes
     if (dir === 'HORIZONTAL') {
       if (startX > 0 && this.grid[startY][startX - 1] !== '') return false;
       if (startX + word.length < CROSSWORD_GRID_SIZE && this.grid[startY][startX + word.length] !== '') return false;
@@ -156,13 +156,7 @@ class CrosswordBuilder {
       const py = direction === 'VERTICAL' ? y + i : y;
       this.grid[py][px] = word[i];
     }
-    this.placedWords.push({
-      ...wordInput,
-      x,
-      y,
-      direction,
-      number: 0
-    });
+    this.placedWords.push({ ...wordInput, x, y, direction, number: 0 });
   }
 
   build(inputs: WordInput[]) {
@@ -202,11 +196,8 @@ class CrosswordBuilder {
         }
       }
 
-      if (bestPlacement) {
-        this.placeWord(input, bestPlacement.x, bestPlacement.y, bestPlacement.dir);
-      } else {
-        this.unplacedWords.push(input);
-      }
+      if (bestPlacement) this.placeWord(input, bestPlacement.x, bestPlacement.y, bestPlacement.dir);
+      else this.unplacedWords.push(input);
     }
   }
 
@@ -294,7 +285,6 @@ const initActivityContent = (type: string) => {
   }
 };
 
-// COMPONENTE EDITOR PARA EVITAR RE-RENDERS Y PÉRDIDA DE FOCO
 const TemplateEditor = ({ type, content, updateContent }: { type: string, content: any, updateContent: (newContent: any) => void }) => {
   const supabase = createClient();
   const { toast } = useToast();
@@ -647,6 +637,7 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
 const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => void }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [score, setScore] = useState(0);
+  const [totalSteps, setTotalSteps] = useState(0);
   const [finished, setSuccess] = useState(false);
   const [selectedOption, setSelectedOption] = useState<any>(null);
   const [shuffledItems, setShuffledItems] = useState<any[]>([]);
@@ -714,18 +705,30 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
       })).filter((item: any) => item.word && item.clue);
       setCrossword(generateCrossword(inputs));
     } else if (exercise.tipo === 'opcion_multiple' || exercise.tipo === 'verdadero_falso' || exercise.tipo === 'flashcards') {
-      if (content.items) setShuffledItems([...content.items].sort(() => Math.random() - 0.5));
+      if (content.items) {
+        const shuffled = [...content.items].sort(() => Math.random() - 0.5);
+        setShuffledItems(shuffled);
+        setTotalSteps(shuffled.length);
+      }
     } else if (exercise.tipo === 'ordenar_secuencia' && content.items) {
       setSequenceItems([...content.items].sort(() => Math.random() - 0.5));
+      setTotalSteps(1);
+    } else if (exercise.tipo === 'emparejamiento' && content.items) {
+      setTotalSteps(content.items.length);
     } else if (exercise.tipo === 'sopa_letras') {
       generateSopaGrid();
+      setTotalSteps((content.words || []).filter((w:string)=>w.length>0).length);
+    } else if (exercise.tipo === 'completar_espacios' && content.text) {
+      const parts = content.text.split(/\[\[(.*?)\]\]/);
+      setTotalSteps(Math.floor(parts.length / 2));
     }
   }, [content, exercise.tipo, generateSopaGrid]);
 
   const handleNext = (isCorrect: boolean) => {
-    if (isCorrect) setScore(s => s + 1);
-    if (currentStep + 1 < (shuffledItems.length || 1)) {
-      setCurrentStep(s => s + 1);
+    if (isCorrect) setScore(prev => prev + 1);
+    
+    if (currentStep + 1 < totalSteps) {
+      setCurrentStep(prev => prev + 1);
       setSelectedOption(null);
       setIsFlipped(false);
     } else {
@@ -749,8 +752,9 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
     if (wordFound) {
       const newFound = [...foundWords, wordFound];
       setFoundWords(newFound);
+      setScore(newFound.length);
       setSelectedSopaCells([]);
-      if (newFound.length === (content.words || []).filter((w:string)=>w.length>0).length) {
+      if (newFound.length === totalSteps) {
         setTimeout(() => setSuccess(true), 1000);
       }
     }
@@ -774,9 +778,35 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
   useEffect(() => {
     if (crossword && crossword.placedWords.length > 0 && solvedCrosswordWords.size === crossword.placedWords.length) {
       confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+      setScore(crossword.placedWords.length);
+      setTotalSteps(crossword.placedWords.length);
       setTimeout(() => setSuccess(true), 2000);
     }
   }, [solvedCrosswordWords, crossword]);
+
+  const finishGradedActivity = () => {
+    let finalScore = 0;
+    if (exercise.tipo === 'emparejamiento') {
+      content.items.forEach((item: any) => {
+        if (matchedPairs[item.left] === item.right) finalScore++;
+      });
+    } else if (exercise.tipo === 'ordenar_secuencia') {
+      let isPerfect = true;
+      content.items.forEach((item: string, i: number) => {
+        if (sequenceItems[i] !== item) isPerfect = false;
+      });
+      finalScore = isPerfect ? 1 : 0;
+    } else if (exercise.tipo === 'completar_espacios') {
+      const parts = content.text.split(/\[\[(.*?)\]\]/);
+      parts.forEach((part: string, i: number) => {
+        if (i % 2 !== 0) {
+          if (fillAnswers[i]?.trim().toLowerCase() === part.trim().toLowerCase()) finalScore++;
+        }
+      });
+    }
+    setScore(finalScore);
+    setSuccess(true);
+  };
 
   const renderContent = () => {
     if (exercise.tipo === 'crucigrama' && crossword) {
@@ -934,7 +964,7 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
       return (
         <div className="max-w-2xl mx-auto space-y-8 py-10">
           <div className="flex justify-between items-center px-4">
-            <Badge className="bg-blue-600 text-white px-4 py-1">PREGUNTA {currentStep + 1} / {shuffledItems.length}</Badge>
+            <Badge className="bg-blue-600 text-white px-4 py-1">PREGUNTA {currentStep + 1} / {totalSteps}</Badge>
             <span className="text-xs font-black text-slate-400">ACIERTOS: {score}</span>
           </div>
           <h3 className="text-2xl font-black text-slate-800 text-center uppercase">{q.question}</h3>
@@ -955,7 +985,7 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
       return (
         <div className="max-w-2xl mx-auto space-y-8 py-10">
           <div className="flex justify-between items-center px-4">
-            <Badge className="bg-emerald-600 text-white px-4 py-1">AFIRMACIÓN {currentStep + 1} / {shuffledItems.length}</Badge>
+            <Badge className="bg-emerald-600 text-white px-4 py-1">AFIRMACIÓN {currentStep + 1} / {totalSteps}</Badge>
             <span className="text-xs font-black text-slate-400">ACIERTOS: {score}</span>
           </div>
           <div className="bg-white p-10 rounded-[40px] border-2 border-slate-100 shadow-xl text-center">
@@ -974,6 +1004,7 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
       const leftItems = content.items.map((i: any) => i.left);
       const rightItems = [...content.items.map((i: any) => i.right)].sort(() => Math.random() - 0.5);
       const isComplete = Object.keys(matchedPairs).length === leftItems.length;
+      
       const handleMatch = (right: string) => {
         if (!currentLeft) return;
         setMatchedPairs({ ...matchedPairs, [currentLeft]: right });
@@ -1006,7 +1037,7 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
             </div>
           </div>
           {isComplete && (
-            <Button onClick={() => setSuccess(true)} className="w-full h-16 rounded-[32px] bg-purple-600 text-white font-black uppercase text-lg tracking-widest shadow-xl">Finalizar Ejercicio</Button>
+            <Button onClick={finishGradedActivity} className="w-full h-16 rounded-[32px] bg-purple-600 text-white font-black uppercase text-lg tracking-widest shadow-xl">Finalizar Ejercicio</Button>
           )}
         </div>
       );
@@ -1039,7 +1070,7 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
               </div>
             ))}
           </div>
-          <Button onClick={() => setSuccess(true)} className="w-full h-16 rounded-[32px] bg-orange-500 text-white font-black uppercase text-lg tracking-widest shadow-xl">Verificar Orden</Button>
+          <Button onClick={finishGradedActivity} className="w-full h-16 rounded-[32px] bg-orange-500 text-white font-black uppercase text-lg tracking-widest shadow-xl">Verificar Orden</Button>
         </div>
       );
     }
@@ -1058,7 +1089,7 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
               )
             ))}
           </div>
-          <Button onClick={() => setSuccess(true)} className="w-full h-16 rounded-[32px] bg-pink-500 text-white font-black uppercase text-lg tracking-widest shadow-xl">Enviar Respuestas</Button>
+          <Button onClick={finishGradedActivity} className="w-full h-16 rounded-[32px] bg-pink-500 text-white font-black uppercase text-lg tracking-widest shadow-xl">Enviar Respuestas</Button>
         </div>
       );
     }
@@ -1068,7 +1099,7 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
       return (
         <div className="max-w-2xl mx-auto space-y-8 py-10">
           <div className="flex justify-between items-center px-4">
-            <Badge className="bg-amber-500 text-white px-4 py-1">TARJETA {currentStep + 1} / {shuffledItems.length}</Badge>
+            <Badge className="bg-amber-500 text-white px-4 py-1">TARJETA {currentStep + 1} / {totalSteps}</Badge>
           </div>
           <div className="perspective-1000 h-[400px]">
             <div onClick={() => setIsFlipped(!isFlipped)} className={cn("relative w-full h-full transition-all duration-500 transform-style-3d cursor-pointer", isFlipped && "rotate-y-180")}>
@@ -1176,14 +1207,21 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
         <div className="container mx-auto max-w-full px-6">
           {finished ? (
             <div className="h-full flex flex-col items-center justify-center py-20 text-center space-y-8">
-              <div className="h-32 w-32 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center shadow-inner animate-bounce">
-                <CheckCircle size={80} />
+              <div className={cn(
+                "h-32 w-32 rounded-full flex items-center justify-center shadow-inner animate-in zoom-in duration-500",
+                score === totalSteps ? "bg-emerald-100 text-emerald-600" : "bg-amber-100 text-amber-600"
+              )}>
+                {score === totalSteps ? <CheckCircle size={80} /> : <AlertCircle size={80} />}
               </div>
               <div className="space-y-2">
-                <h2 className="text-4xl font-black text-slate-800 uppercase">¡Ejercicio Completado!</h2>
-                <p className="text-xl text-slate-500 font-bold uppercase">Simulación finalizada exitosamente.</p>
+                <h2 className="text-4xl font-black text-slate-800 uppercase">
+                  {score === totalSteps ? "¡Excelente Trabajo!" : "Actividad Finalizada"}
+                </h2>
+                <p className="text-2xl text-slate-500 font-bold uppercase">
+                  Resumen: <span className="text-primary">{score}</span> aciertos de {totalSteps} totales
+                </p>
               </div>
-              <Button onClick={onClose} className="rounded-3xl px-12 h-16 bg-emerald-600 text-white font-black uppercase text-lg tracking-widest shadow-2xl hover:scale-105 transition-transform">Volver al Panel</Button>
+              <Button onClick={onClose} className="rounded-3xl px-12 h-16 bg-slate-800 text-white font-black uppercase text-lg tracking-widest shadow-2xl hover:scale-105 transition-transform">Volver al Panel</Button>
             </div>
           ) : renderContent()}
         </div>
@@ -1670,7 +1708,7 @@ export default function ProfesorDashboard() {
       {/* PREVISUALIZACIÓN DE ACTIVIDAD */}
       {previewActivity && <ActivityPreview exercise={previewActivity} onClose={() => setPreviewActivity(null)} />}
 
-      {/* DIALOGO DE DIAPOSITIVAS (Mantenido intacto) */}
+      {/* DIALOGO DE DIAPOSITIVAS */}
       <Dialog open={slideDialogOpen} onOpenChange={setSlideDialogOpne}>
         <DialogContent className="max-w-[95vw] w-[1300px] h-[90vh] flex flex-col p-0 rounded-3xl overflow-hidden shadow-2xl border-none">
           <DialogHeader className="p-6 bg-slate-900 border-b border-white/5 flex flex-row justify-between items-center space-y-0 shrink-0">
