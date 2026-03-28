@@ -426,7 +426,7 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
               }} 
             />
             <Button variant="ghost" size="sm" onClick={() => {
-              const newWords = [...content.words];
+              const newWords = content.words ? [...content.words] : [];
               newWords.splice(idx, 1);
               const newClues = content.clues ? [...content.clues] : [];
               newClues.splice(idx, 1);
@@ -498,7 +498,7 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
     });
 
     // Rellenar con letras aleatorias
-    for (let r = 0; row < size; r++) {
+    for (let r = 0; r < size; r++) {
       for (let c = 0; c < size; c++) {
         if (grid[r][c] === '') grid[r][c] = String.fromCharCode(65 + Math.floor(Math.random() * 26));
       }
@@ -1431,8 +1431,8 @@ export default function ProfesorDashboard() {
                             "h-12 rounded-xl font-black text-[10px] uppercase border-2 transition-all", 
                             slides[activeSlideIndex].estilo === est ? "border-blue-500 scale-105 shadow-lg" : "border-white/5 opacity-50 hover:opacity-100",
                             est === 'azul' ? 'bg-blue-900 text-white' : 
-                            est === 'vino' ? 'bg-[#8B2332] text-white' : 
-                            est === 'verde' ? 'bg-[#1A4A3F] text-white' : 
+                            est === 'vino' ? 'bg-rose-900 text-white' : 
+                            est === 'verde' ? 'bg-emerald-900 text-white' : 
                             'bg-slate-800 text-white'
                           )}
                         >

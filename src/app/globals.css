@@ -96,26 +96,26 @@
   }
 }
 
-/* Custom Scrollbar VISIBLE para Diálogos */
+/* Custom Scrollbar ULTRA VISIBLE para Diálogos */
 .custom-scrollbar::-webkit-scrollbar {
-  width: 10px;
-  height: 10px;
+  width: 12px;
+  height: 12px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.05);
+  background: rgba(0, 0, 0, 0.08);
   border-radius: 10px;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.3); /* Color más oscuro para visibilidad */
+  background: rgba(0, 0, 0, 0.45); /* Color más oscuro para visibilidad total */
   border-radius: 10px;
-  border: 2px solid rgba(255, 255, 255, 0.8);
+  border: 3px solid rgba(255, 255, 255, 0.9);
   background-clip: padding-box;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.6);
 }
 
 .dark .custom-scrollbar::-webkit-scrollbar-track {

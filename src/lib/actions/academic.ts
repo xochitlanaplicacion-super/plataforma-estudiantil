@@ -1,3 +1,4 @@
+
 'use server';
 
 import { createClient } from '@supabase/supabase-js';
@@ -47,7 +48,7 @@ const prepareForUpsert = (data: any) => {
       delete cleanData[key];
       return;
     }
-    // IMPORTANTE: No convertir '' a null si la columna es NOT NULL en DB
+    // IMPORTANTE: Aseguramos que undefined sea null, pero preservamos strings (incluso vacíos)
     if (cleanData[key] === undefined) {
       cleanData[key] = null;
     }
