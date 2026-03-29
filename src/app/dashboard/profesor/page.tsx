@@ -43,8 +43,12 @@ import {
   ArrowDown,
   Grid3X3,
   EyeOff,
-  AlertCircle
+  AlertCircle,
+  ArrowRight,
+  RotateCcw,
+  XCircle
 } from 'lucide-react';
+
 import { 
   getMyAsignaciones, 
   getUnidades, 
@@ -285,6 +289,229 @@ const initActivityContent = (type: string) => {
   }
 };
 
+interface Token {
+  id: string;
+  text: string;
+  isMissing: boolean;
+}
+
+function CompletarEspaciosEditor({ content, updateContent }: { content: any, updateContent: (newContent: any) => void }) {
+  const [appState, setAppState] = useState<'INPUT' | 'SELECT'>('INPUT');
+  const [text, setText] = useState(content.text || '');
+  const [tokens, setTokens] = useState<Token[]>(content.tokens || []);
+
+  const handleInputNext = () => {
+    const words = text.split(/(\s+)/).filter((w: string) => w.length > 0);
+    if (words.join("") !== tokens.map(t => t.text).join("")) {
+      setTokens(words.map((word: string, i: number) => ({ id: `token-${Date.now()}-${i}`, text: word, isMissing: false })));
+    }
+    setAppState("SELECT");
+  };
+
+  const handleToggleToken = (id: string) => {
+    setTokens(prev => prev.map(t => t.id === id ? { ...t, isMissing: !t.isMissing } : t));
+  };
+
+  if (appState === 'INPUT') {
+    return (
+      <div className="space-y-4">
+        <label className="text-[10px] font-black uppercase text-slate-400">Texto del Ejercicio</label>
+        <textarea 
+          rows={8} 
+          className="w-full p-6 rounded-3xl bg-slate-50 border-2 border-slate-200 text-lg focus:ring-4 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none resize-none transition-all shadow-sm" 
+          placeholder="Ejemplo: La célula es la unidad básica de la vida..." 
+          value={text} 
+          onChange={(e) => setText(e.target.value)} 
+        />
+        <Button onClick={() => { handleInputNext(); updateContent({ ...content, text }); }} disabled={!text.trim()} className="w-full h-14 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase tracking-widest text-sm shadow-xl transition-all">
+          Elegir Palabras Ocultas <ArrowRight className="ml-2 w-5 h-5" />
+        </Button>
+      </div>
+    );
+  }
+
+  const missingCount = tokens.filter(t => t.isMissing && t.text.trim() !== "").length;
+
+  return (
+    <div className="space-y-6">
+      <div className="text-center space-y-2 mb-4">
+        <h3 className="text-lg font-black text-slate-800 uppercase tracking-widest">Selecciona las Palabras a Ocultar</h3>
+        <p className="text-xs text-slate-500 font-bold uppercase">Haz clic en las palabras que el alumno deberá arrastrar y soltar.</p>
+      </div>
+      <div className="bg-white p-8 rounded-3xl shadow-lg border-2 border-slate-100 flex flex-wrap gap-x-1 gap-y-3 leading-loose">
+        {tokens.map((token) => {
+          if (!token.text.trim()) return <span key={token.id} className="w-2">{token.text}</span>;
+          return (
+            <button
+              key={token.id}
+              onClick={() => handleToggleToken(token.id)}
+              className={cn("px-2 py-1 rounded-lg transition-all font-black text-lg border-b-4", token.isMissing ? "bg-indigo-600 border-indigo-800 text-white shadow-xl transform scale-110 -translate-y-1 mx-1 z-10" : "bg-slate-50 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 text-slate-700")}
+            >
+              {token.text}
+            </button>
+          )
+        })}
+      </div>
+      <div className="flex items-center justify-between px-2 pt-2">
+        <Button variant="ghost" onClick={() => setAppState('INPUT')} className="text-slate-600 font-black text-xs uppercase hover:bg-slate-100"><ArrowLeft className="mr-2 w-4 h-4" /> Volver a Editar Texto</Button>
+        <div className="text-xs font-black uppercase text-slate-400">Ocultas seleccionadas: <span className="text-indigo-600 text-base">{missingCount}</span></div>
+      </div>
+      <Button onClick={() => updateContent({ ...content, text, tokens })} className="w-full h-16 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase tracking-widest shadow-xl transition-all text-sm">
+        <CheckCircle2 className="w-5 h-5 mr-2" /> Guardar Configuración
+      </Button>
+    </div>
+  );
+}
+
+function CompletarEspaciosPreview({ content, onFinish }: { content: any, onFinish: (score: number, total: number) => void }) {
+  const [appState, setAppState] = useState<'PLAY' | 'RESULT'>('PLAY');
+  const [tokens] = useState<Token[]>(content.tokens || []);
+  const [placed, setPlaced] = useState<Record<string, string>>({});
+  const [bank, setBank] = useState<string[]>([]);
+  const [resultsMap, setResultsMap] = useState<Record<string, boolean>>({});
+  const [score, setScore] = useState(0);
+
+  useEffect(() => {
+    const missing = tokens.filter((t) => t.isMissing && t.text.trim() !== "").map((t) => t.id);
+    setBank(missing.sort(() => Math.random() - 0.5));
+    setPlaced({});
+  }, [tokens]);
+
+  const missingTokens = tokens.filter((t) => t.isMissing && t.text.trim() !== "");
+
+  const handleDragStart = (e: React.DragEvent, wordId: string, sourceBlankId: string | null) => {
+    e.dataTransfer.setData("application/json", JSON.stringify({ wordId, sourceBlankId }));
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault(); e.dataTransfer.dropEffect = "move"; };
+
+  const handleDropOnBlank = (e: React.DragEvent, targetBlankId: string) => {
+    e.preventDefault();
+    try {
+      const data = JSON.parse(e.dataTransfer.getData("application/json"));
+      const { wordId, sourceBlankId } = data;
+      if (!wordId) return;
+      setPlaced((prev) => {
+        const newPlaced = { ...prev };
+        if (sourceBlankId) delete newPlaced[sourceBlankId];
+        else setBank((prevBank) => prevBank.filter((id) => id !== wordId));
+        const existingWordId = newPlaced[targetBlankId];
+        if (existingWordId) setBank((prevBank) => [...prevBank, existingWordId]);
+        newPlaced[targetBlankId] = wordId;
+        return newPlaced;
+      });
+    } catch (err) {}
+  };
+
+  const handleDropOnBank = (e: React.DragEvent) => {
+    e.preventDefault();
+    try {
+      const data = JSON.parse(e.dataTransfer.getData("application/json"));
+      const { wordId, sourceBlankId } = data;
+      if (!wordId || !sourceBlankId) return;
+      setPlaced((prev) => { const newPlaced = { ...prev }; delete newPlaced[sourceBlankId]; return newPlaced; });
+      setBank((prevBank) => { if (!prevBank.includes(wordId)) return [...prevBank, wordId]; return prevBank; });
+    } catch (err) {}
+  };
+
+  const handleEvaluate = () => {
+    let correct = 0;
+    const results: Record<string, boolean> = {};
+    missingTokens.forEach((t) => {
+      const placedWordId = placed[t.id];
+      const isCorrect = placedWordId && tokens.find(x => x.id === placedWordId)?.text === t.text;
+      results[t.id] = !!isCorrect;
+      if (isCorrect) correct++;
+    });
+    setResultsMap(results);
+    setScore(correct);
+    if (correct === missingTokens.length) confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
+    setAppState('RESULT');
+  };
+
+  if (appState === 'PLAY') {
+    return (
+      <div className="w-full max-w-6xl mx-auto space-y-8 animate-in slide-in-from-bottom-4 duration-500 py-6">
+        <div className="flex items-center justify-between bg-white px-10 py-6 rounded-[32px] shadow-xl border-2 border-indigo-100">
+          <h2 className="text-2xl font-black text-slate-800 flex items-center gap-4 uppercase tracking-widest"><RotateCcw className="text-indigo-600 w-8 h-8" /> Completa el Texto</h2>
+          <Button onClick={handleEvaluate} disabled={Object.keys(placed).length !== missingTokens.length} className="px-10 h-14 bg-indigo-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-indigo-700 shadow-xl disabled:opacity-50 transition-all">
+            <CheckCircle2 className="w-5 h-5 mr-3" /> Revisar Respuestas
+          </Button>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
+          <div className="lg:col-span-3 bg-white p-12 rounded-[40px] shadow-2xl border-2 border-slate-100 leading-[3.5] text-2xl font-medium text-slate-700 max-h-[600px] overflow-y-auto custom-scrollbar">
+            <div className="flex flex-wrap items-center">
+              {tokens.map((token) => {
+                if (!token.text.trim()) return <span key={token.id} className="w-2">{token.text}</span>;
+                if (!token.isMissing) return <span key={token.id} className="text-slate-800 px-1 font-semibold">{token.text}</span>;
+                const placedWordId = placed[token.id];
+                return (
+                  <div key={token.id} onDragOver={handleDragOver} onDrop={(e) => handleDropOnBlank(e, token.id)} className={cn("min-w-[120px] h-14 flex items-center justify-center border-b-4 rounded-t-xl transition-all px-4 mx-2 align-middle inline-flex shadow-sm", placedWordId ? "border-indigo-600 bg-indigo-50 shadow-inner" : "border-slate-300 bg-slate-50")}>
+                    {placedWordId ? (
+                      <div draggable onDragStart={(e) => handleDragStart(e, placedWordId, token.id)} className="cursor-grab active:cursor-grabbing font-black text-indigo-700 select-none tracking-wider text-xl">{tokens.find(t=>t.id===placedWordId)?.text}</div>
+                    ) : <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Arrastra aquí</span>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+          <div onDragOver={handleDragOver} onDrop={handleDropOnBank} className="lg:col-span-1 bg-indigo-50/70 p-8 rounded-[32px] border-4 border-dashed border-indigo-200/60 flex flex-col min-h-[500px] shadow-inner">
+            <h3 className="text-xs font-black tracking-widest uppercase text-indigo-900 mb-8 text-center border-b-2 border-indigo-200/50 pb-4">Palabras Disponibles</h3>
+            <div className="flex flex-col gap-4 flex-1">
+              {bank.length === 0 ? <div className="text-center text-slate-400 italic text-xs font-bold mt-10 uppercase bg-white/50 p-4 rounded-xl">Todas colocadas</div> : bank.map((wordId) => (
+                <div key={wordId} draggable onDragStart={(e) => handleDragStart(e, wordId, null)} className="bg-white px-6 py-4 rounded-2xl shadow-lg border-2 border-indigo-100 text-center font-black text-slate-700 cursor-grab active:cursor-grabbing hover:border-indigo-500 hover:shadow-xl hover:-translate-y-1 transition-all select-none text-lg">
+                  {tokens.find(t=>t.id===wordId)?.text}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const isPerfect = score === missingTokens.length;
+  const percentage = Math.round((score / missingTokens.length) * 100) || 0;
+
+  return (
+    <div className="flex flex-col max-w-5xl mx-auto w-full space-y-10 animate-in zoom-in-95 duration-500 py-10">
+      <div className={cn("p-12 rounded-[40px] shadow-2xl text-center border-4", isPerfect ? 'bg-emerald-50 border-emerald-200' : 'bg-red-50 border-red-200')}>
+        <h2 className="text-5xl font-black mb-8 flex items-center justify-center gap-4 text-slate-800 uppercase tracking-widest">
+          {isPerfect ? <><CheckCircle2 className="w-14 h-14 text-emerald-500" /> ¡Excelente Trabajo!</> : <><RotateCcw className="w-14 h-14 text-red-500" /> Sigue Practicando</>}
+        </h2>
+        <div className="flex items-center justify-center gap-20 mt-10">
+          <div className="text-center"><div className="text-8xl font-black mb-4 text-indigo-700 tracking-tighter">{score}<span className="text-5xl text-indigo-400">/{missingTokens.length}</span></div><div className="text-sm text-slate-500 font-black uppercase tracking-widest">Aciertos</div></div>
+          <div className="w-1 h-32 bg-slate-300 rounded-full"></div>
+          <div className="text-center"><div className={cn("text-8xl font-black mb-4 tracking-tighter", percentage >= 80 ? 'text-emerald-600' : percentage >= 50 ? 'text-amber-500' : 'text-red-500')}>{percentage}<span className="text-5xl">%</span></div><div className="text-sm text-slate-500 font-black uppercase tracking-widest">Puntuación</div></div>
+        </div>
+      </div>
+      <div className="bg-white p-12 rounded-[40px] shadow-2xl border-2 border-slate-100 leading-[3.5] text-2xl">
+        <h3 className="text-sm font-black text-indigo-600 mb-8 border-b-2 border-indigo-100 pb-4 uppercase tracking-widest flex items-center gap-3"><FileText className="w-5 h-5" /> Revisión del Ejercicio</h3>
+        <div className="flex flex-wrap items-center">
+          {tokens.map((token) => {
+            if (!token.text.trim()) return <span key={token.id} className="w-2">{token.text}</span>;
+            if (!token.isMissing) return <span key={token.id} className="text-slate-800 px-1 font-medium">{token.text}</span>;
+            const isCorrect = resultsMap[token.id];
+            return (
+              <div key={token.id} className={cn("relative px-6 py-2 min-h-14 flex items-center justify-center rounded-xl border-4 font-black mx-2 inline-flex align-middle", isCorrect ? "bg-emerald-100 border-emerald-500 text-emerald-800" : "bg-red-100 border-red-500 text-red-800 line-through decoration-red-600/70 decoration-[4px] opacity-80")}>
+                {tokens.find(t=>t.id===placed[token.id])?.text || '____'}
+                {!isCorrect && <XCircle className="absolute -top-5 -right-5 w-10 h-10 text-red-600 bg-white rounded-full shadow-xl z-10 border-4 border-white" />}
+                {isCorrect && <CheckCircle2 className="absolute -top-5 -right-5 w-10 h-10 text-emerald-600 bg-white rounded-full shadow-xl z-10 border-4 border-white" />}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+      <div className="flex justify-center mt-12">
+        <Button onClick={() => onFinish(score, missingTokens.length)} className="px-14 h-20 bg-slate-800 text-white rounded-[32px] font-black text-xl hover:bg-slate-900 transition-all shadow-2xl hover:-translate-y-2 uppercase tracking-widest">
+          Cerrar y Regresar
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 const TemplateEditor = ({ type, content, updateContent }: { type: string, content: any, updateContent: (newContent: any) => void }) => {
   const supabase = createClient();
   const { toast } = useToast();
@@ -449,124 +676,137 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
 
   if (type === 'emparejamiento') {
     return (
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 gap-4 px-4 text-[10px] font-black uppercase text-slate-400">
-          <span>Concepto (Izq)</span>
-          <span>Definición (Der)</span>
+      <div className="space-y-6">
+        <div className="text-center space-y-2 mb-6">
+          <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Pares de Emparejamiento</h3>
+          <p className="text-xs text-slate-500 font-bold uppercase">Agrega los conceptos y sus definiciones. El alumno deberá unirlos correctamente.</p>
         </div>
-        {content.items?.map((item: any, idx: number) => (
-          <div key={idx} className="flex gap-2 items-center">
-            <Input placeholder="Concepto..." value={item.left} onChange={(e) => {
-              const newItems = [...content.items];
-              newItems[idx].left = e.target.value;
-              updateContent({ ...content, items: newItems });
-            }} />
-            <Input placeholder="Definición..." value={item.right} onChange={(e) => {
-              const newItems = [...content.items];
-              newItems[idx].right = e.target.value;
-              updateContent({ ...content, items: newItems });
-            }} />
-            <Button variant="ghost" size="sm" className="text-destructive" onClick={() => {
-              const newItems = [...content.items];
-              newItems.splice(idx, 1);
-              updateContent({ ...content, items: newItems });
-            }}><Trash2 size={14} /></Button>
-          </div>
-        ))}
-        <Button variant="outline" className="w-full text-xs font-black uppercase" onClick={() => {
+        <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+          {content.items?.map((item: any, idx: number) => (
+            <div key={idx} className="flex gap-4 items-center bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 relative group transition-all hover:border-purple-200 hover:shadow-md">
+              <span className="absolute -left-3 -top-3 w-8 h-8 bg-purple-100 text-purple-700 font-black rounded-full flex items-center justify-center border-4 border-white shadow-sm">{idx + 1}</span>
+              <div className="flex-1 space-y-2">
+                <label className="text-[10px] font-black uppercase text-slate-400">Concepto</label>
+                <Input placeholder="Ej. Mitocondria" value={item.left} className="font-bold border-slate-200 bg-white" onChange={(e) => {
+                  const newItems = [...content.items];
+                  newItems[idx].left = e.target.value;
+                  updateContent({ ...content, items: newItems });
+                }} />
+              </div>
+              <div className="flex-1 space-y-2">
+                <label className="text-[10px] font-black uppercase text-slate-400">Definición</label>
+                <Input placeholder="Ej. Organelo generador de energía" value={item.right} className="font-bold border-slate-200 bg-white" onChange={(e) => {
+                  const newItems = [...content.items];
+                  newItems[idx].right = e.target.value;
+                  updateContent({ ...content, items: newItems });
+                }} />
+              </div>
+              <Button variant="ghost" size="icon" className="text-red-400 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 hover:text-red-600 self-end mb-1" onClick={() => {
+                const newItems = [...content.items];
+                newItems.splice(idx, 1);
+                updateContent({ ...content, items: newItems });
+              }}><Trash2 size={18} /></Button>
+            </div>
+          ))}
+        </div>
+        <Button className="w-full h-14 rounded-2xl bg-purple-50 hover:bg-purple-100 text-purple-700 font-black uppercase tracking-widest text-xs border-2 border-dashed border-purple-200 transition-all" onClick={() => {
           const newItems = content.items ? [...content.items] : [];
           updateContent({ ...content, items: [...newItems, { left: '', right: '' }] });
-        }}>+ Añadir Par</Button>
+        }}><Plus className="w-4 h-4 mr-2" /> Añadir Nuevo Par</Button>
       </div>
     );
   }
 
   if (type === 'ordenar_secuencia') {
+    const move = (idx: number, dir: number) => {
+      const newItems = [...content.items];
+      const targetIdx = idx + dir;
+      if (targetIdx < 0 || targetIdx >= newItems.length) return;
+      [newItems[idx], newItems[targetIdx]] = [newItems[targetIdx], newItems[idx]];
+      updateContent({ ...content, items: newItems });
+    };
+
     return (
-      <div className="space-y-4">
-        <p className="text-[10px] font-bold text-slate-400 uppercase italic">Ingresa los pasos en el orden correcto.</p>
-        {content.items?.map((item: string, idx: number) => (
-          <div key={idx} className="flex gap-2 items-center">
-            <span className="h-8 w-8 rounded-lg bg-slate-100 flex items-center justify-center font-black text-xs">{idx + 1}</span>
-            <Input placeholder="Describe el paso..." value={item} onChange={(e) => {
-              const newItems = [...content.items];
-              newItems[idx] = e.target.value;
-              updateContent({ ...content, items: newItems });
-            }} />
-            <Button variant="ghost" size="sm" onClick={() => {
-              const newItems = [...content.items];
-              newItems.splice(idx, 1);
-              updateContent({ ...content, items: newItems });
-            }}><X size={14} /></Button>
-          </div>
-        ))}
-        <Button variant="outline" className="w-full text-xs font-black uppercase" onClick={() => {
+      <div className="space-y-6">
+        <div className="text-center space-y-2 mb-6">
+          <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Secuencia Correcta</h3>
+          <p className="text-xs text-slate-500 font-bold uppercase">Ingresa los pasos en el orden correcto. En el ejercicio aparecerán desordenados.</p>
+        </div>
+        <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+          {content.items?.map((item: string, idx: number) => (
+            <div key={idx} className="flex gap-3 items-center bg-white p-3 rounded-2xl border-2 border-slate-100 shadow-sm group hover:border-orange-200 transition-all">
+              <div className="flex flex-col gap-1">
+                <button className="text-slate-300 hover:text-orange-500 disabled:opacity-30 disabled:hover:text-slate-300" disabled={idx === 0} onClick={() => move(idx, -1)}><ArrowUp size={16} /></button>
+                <button className="text-slate-300 hover:text-orange-500 disabled:opacity-30 disabled:hover:text-slate-300" disabled={idx === content.items.length - 1} onClick={() => move(idx, 1)}><ArrowDown size={16} /></button>
+              </div>
+              <span className="h-10 w-10 flex-shrink-0 rounded-xl bg-orange-100 flex items-center justify-center font-black text-orange-600 text-sm">{idx + 1}</span>
+              <Input placeholder={`Paso ${idx + 1}...`} value={item} className="font-bold border-none shadow-none focus-visible:ring-0 px-2 bg-transparent h-auto text-base" onChange={(e) => {
+                const newItems = [...content.items];
+                newItems[idx] = e.target.value;
+                updateContent({ ...content, items: newItems });
+              }} />
+              <Button variant="ghost" size="icon" className="text-red-400 opacity-0 group-hover:opacity-100 hover:bg-red-50 hover:text-red-600 transition-opacity" onClick={() => {
+                const newItems = [...content.items];
+                newItems.splice(idx, 1);
+                updateContent({ ...content, items: newItems });
+              }}><X size={16} /></Button>
+            </div>
+          ))}
+        </div>
+        <Button className="w-full h-14 rounded-2xl bg-orange-50 hover:bg-orange-100 text-orange-700 font-black uppercase tracking-widest text-xs border-2 border-dashed border-orange-200 transition-all" onClick={() => {
           const newItems = content.items ? [...content.items] : [];
           updateContent({ ...content, items: [...newItems, ''] });
-        }}>+ Añadir Paso</Button>
+        }}><Plus className="w-4 h-4 mr-2" /> Añadir Paso</Button>
       </div>
     );
   }
 
   if (type === 'completar_espacios') {
-    return (
-      <div className="space-y-4">
-        <div className="p-4 bg-amber-50 border border-amber-100 rounded-2xl text-[11px] text-amber-800 leading-relaxed">
-          <strong>Instrucciones:</strong> Escribe tu texto y encierra entre corchetes dobles <code>[[ ]]</code> las palabras a completar.
-        </div>
-        <textarea 
-          rows={8} 
-          className="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 text-sm focus:ring-primary/20 outline-none" 
-          placeholder="La célula es la [[unidad básica]] de los seres vivos." 
-          value={content.text || ''} 
-          onChange={(e) => updateContent({ ...content, text: e.target.value })} 
-        />
-      </div>
-    );
+    return <CompletarEspaciosEditor content={content} updateContent={updateContent} />;
   }
 
   if (type === 'flashcards') {
     return (
-      <div className="space-y-6">
-        {content.items?.map((item: any, idx: number) => (
-          <div key={idx} className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-200 relative group">
-            <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase text-slate-400">Frente (Término)</label>
-              <textarea 
-                rows={3} 
-                className="w-full p-3 rounded-xl border-slate-200 text-sm outline-none" 
-                value={item.front} 
-                onChange={(e) => {
-                  const newItems = [...content.items];
-                  newItems[idx].front = e.target.value;
-                  updateContent({ ...content, items: newItems });
-                }} 
-              />
+      <div className="space-y-8">
+        <div className="text-center space-y-2 mb-6">
+          <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Tarjetas de Repaso (Flashcards)</h3>
+          <p className="text-xs text-slate-500 font-bold uppercase">Agrega un término en el frente y su definición en el reverso.</p>
+        </div>
+        <div className="grid grid-cols-1 gap-6 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
+          {content.items?.map((item: any, idx: number) => (
+            <div key={idx} className="relative bg-white p-6 rounded-3xl border-2 border-amber-100 shadow-sm group hover:border-amber-300 transition-all">
+              <span className="absolute -left-3 -top-3 w-8 h-8 bg-amber-400 text-white font-black rounded-full flex items-center justify-center border-4 border-white shadow-sm z-10">{idx + 1}</span>
+              <button className="absolute -right-3 -top-3 w-8 h-8 bg-white text-red-500 hover:bg-red-50 hover:scale-110 font-black rounded-full flex items-center justify-center border-2 border-slate-100 shadow-sm opacity-0 group-hover:opacity-100 transition-all z-10" onClick={() => {
+                const newItems = [...content.items];
+                newItems.splice(idx, 1);
+                updateContent({ ...content, items: newItems });
+              }}><X size={14} /></button>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-3 bg-amber-50/50 p-4 rounded-2xl border border-amber-100/50">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-amber-600 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-amber-400"/> Frente (Término)</label>
+                  <textarea rows={3} className="w-full bg-transparent border-none text-slate-700 font-bold text-lg resize-none focus:ring-0 outline-none placeholder:text-slate-300" placeholder="Escribe el concepto..." value={item.front} onChange={(e) => {
+                    const newItems = [...content.items];
+                    newItems[idx].front = e.target.value;
+                    updateContent({ ...content, items: newItems });
+                  }} />
+                </div>
+                <div className="space-y-3 bg-yellow-50/50 p-4 rounded-2xl border border-yellow-100/50">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-yellow-600 flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-yellow-400"/> Reverso (Definición)</label>
+                  <textarea rows={3} className="w-full bg-transparent border-none text-slate-700 font-medium text-base resize-none focus:ring-0 outline-none placeholder:text-slate-300" placeholder="Escribe la explicación o respuesta..." value={item.back} onChange={(e) => {
+                    const newItems = [...content.items];
+                    newItems[idx].back = e.target.value;
+                    updateContent({ ...content, items: newItems });
+                  }} />
+                </div>
+              </div>
             </div>
-            <div className="space-y-2">
-              <label className="text-[9px] font-black uppercase text-slate-400">Reverso (Definición)</label>
-              <textarea 
-                rows={3} 
-                className="w-full p-3 rounded-xl border-slate-200 text-sm outline-none" 
-                value={item.back} 
-                onChange={(e) => {
-                  const newItems = [...content.items];
-                  newItems[idx].back = e.target.value;
-                  updateContent({ ...content, items: newItems });
-                }} 
-              />
-            </div>
-            <button className="absolute -top-2 -right-2 bg-white shadow-md rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity text-destructive" onClick={() => {
-              const newItems = [...content.items];
-              newItems.splice(idx, 1);
-              updateContent({ ...content, items: newItems });
-            }}><X size={16} /></button>
-          </div>
-        ))}
-        <Button variant="outline" className="w-full text-xs font-black uppercase" onClick={() => {
+          ))}
+        </div>
+        <Button className="w-full h-14 rounded-2xl bg-amber-50 hover:bg-amber-100 text-amber-700 font-black uppercase tracking-widest text-xs border-2 border-dashed border-amber-300 transition-all" onClick={() => {
           const newItems = content.items ? [...content.items] : [];
           updateContent({ ...content, items: [...newItems, { front: '', back: '' }] });
-        }}>+ Nueva Tarjeta</Button>
+        }}><Plus className="w-4 h-4 mr-2" /> Añadir Nueva Tarjeta</Button>
       </div>
     );
   }
@@ -715,12 +955,13 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
       setTotalSteps(1);
     } else if (exercise.tipo === 'emparejamiento' && content.items) {
       setTotalSteps(content.items.length);
+      setShuffledItems([...content.items.map((i: any) => i.right)].sort(() => Math.random() - 0.5));
     } else if (exercise.tipo === 'sopa_letras') {
       generateSopaGrid();
       setTotalSteps((content.words || []).filter((w:string)=>w.length>0).length);
-    } else if (exercise.tipo === 'completar_espacios' && content.text) {
-      const parts = content.text.split(/\[\[(.*?)\]\]/);
-      setTotalSteps(Math.floor(parts.length / 2));
+    } else if (exercise.tipo === 'completar_espacios' && content.tokens) {
+      const missing = content.tokens.filter((t: any) => t.isMissing && t.text.trim() !== "");
+      setTotalSteps(missing.length);
     }
   }, [content, exercise.tipo, generateSopaGrid]);
 
@@ -797,12 +1038,8 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
       });
       finalScore = isPerfect ? 1 : 0;
     } else if (exercise.tipo === 'completar_espacios') {
-      const parts = content.text.split(/\[\[(.*?)\]\]/);
-      parts.forEach((part: string, i: number) => {
-        if (i % 2 !== 0) {
-          if (fillAnswers[i]?.trim().toLowerCase() === part.trim().toLowerCase()) finalScore++;
-        }
-      });
+      // Logic handled by onFinish callback of CompletarEspaciosPreview
+      return;
     }
     setScore(finalScore);
     setSuccess(true);
@@ -1002,121 +1239,174 @@ const ActivityPreview = ({ exercise, onClose }: { exercise: any, onClose: () => 
 
     if (exercise.tipo === 'emparejamiento' && content.items) {
       const leftItems = content.items.map((i: any) => i.left);
-      const rightItems = [...content.items.map((i: any) => i.right)].sort(() => Math.random() - 0.5);
+      const rightItems = shuffledItems.length > 0 ? shuffledItems : content.items.map((i: any) => i.right);
       const isComplete = Object.keys(matchedPairs).length === leftItems.length;
-      
-      const handleMatch = (right: string) => {
-        if (!currentLeft) return;
-        setMatchedPairs({ ...matchedPairs, [currentLeft]: right });
-        setCurrentLeft(null);
+
+      const handleDragStartMatch = (e: React.DragEvent, left: string) => {
+        e.dataTransfer.setData("text/plain", left);
+      };
+
+      const handleDropMatch = (e: React.DragEvent, right: string) => {
+        e.preventDefault();
+        const left = e.dataTransfer.getData("text/plain");
+        if (!left) return;
+        setMatchedPairs(prev => {
+          const newPairs = { ...prev };
+          const existingKey = Object.keys(newPairs).find(k => newPairs[k] === right);
+          if (existingKey) delete newPairs[existingKey];
+          newPairs[left] = right;
+          return newPairs;
+        });
       };
 
       return (
-        <div className="max-w-4xl mx-auto space-y-8 py-10">
-          <div className="text-center space-y-2">
-            <h3 className="text-2xl font-black text-slate-800 uppercase">Relación de Columnas</h3>
-            <p className="text-slate-500 font-bold uppercase text-xs">Selecciona un concepto de la izquierda y luego su definición a la derecha.</p>
+        <div className="max-w-5xl mx-auto space-y-10 py-10 animate-in fade-in zoom-in-95 duration-500">
+          <div className="text-center space-y-3 bg-white p-8 rounded-[32px] shadow-sm border-2 border-purple-50">
+            <h3 className="text-3xl font-black text-slate-800 uppercase tracking-widest flex items-center justify-center gap-3"><Layout className="text-purple-600"/> Relación de Columnas</h3>
+            <p className="text-slate-500 font-bold uppercase text-xs tracking-widest">Arrastra los conceptos (Izquierda) hacia su definición correspondiente (Derecha).</p>
           </div>
-          <div className="grid grid-cols-2 gap-10">
-            <div className="space-y-4">
-              {leftItems.map((left: string, i: number) => (
-                <button key={i} onClick={() => setCurrentLeft(left)} disabled={!!matchedPairs[left]} className={cn("w-full p-5 rounded-2xl border-2 text-left font-bold transition-all", matchedPairs[left] ? "bg-slate-100 border-slate-200 opacity-50" : currentLeft === left ? "border-purple-600 bg-purple-50 text-purple-700 ring-2 ring-purple-200 shadow-lg" : "bg-white border-slate-100 hover:border-purple-200")}>
-                  {left}
-                </button>
-              ))}
-            </div>
-            <div className="space-y-4">
-              {rightItems.map((right: string, i: number) => {
-                const matchedWith = Object.entries(matchedPairs).find(([l, r]) => r === right)?.[0];
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+            <div className="space-y-4 bg-purple-50/50 p-6 rounded-[32px] border-2 border-purple-100">
+              <h4 className="text-[10px] font-black text-purple-600 uppercase tracking-widest mb-6 text-center">Conceptos (Arrastra estos)</h4>
+              {leftItems.map((left: string, i: number) => {
+                const isMatched = !!matchedPairs[left];
                 return (
-                  <button key={i} onClick={() => handleMatch(right)} disabled={!currentLeft || !!matchedWith} className={cn("w-full p-5 rounded-2xl border-2 text-left font-bold transition-all h-full min-h-[60px]", matchedWith ? "bg-purple-600 border-purple-600 text-white shadow-md" : !currentLeft ? "bg-slate-50 border-transparent opacity-40" : "bg-white border-slate-100 hover:border-purple-400 shadow-sm")}>
-                    {right}
-                  </button>
+                  <div key={i} draggable={!isMatched} onDragStart={(e) => handleDragStartMatch(e, left)} className={cn("w-full p-6 py-5 rounded-2xl border-2 font-black transition-all text-center", isMatched ? "bg-slate-100 border-slate-200 text-slate-400 opacity-50 select-none" : "bg-white border-purple-200 text-purple-700 cursor-grab active:cursor-grabbing hover:border-purple-400 hover:shadow-lg hover:-translate-y-1 shadow-sm")}>
+                    {left}
+                  </div>
+                );
+              })}
+            </div>
+            <div className="space-y-4 bg-slate-50/50 p-6 rounded-[32px] border-2 border-slate-100">
+              <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-6 text-center">Definiciones (Suelta aquí)</h4>
+              {rightItems.map((right: string, i: number) => {
+                const matchedLeft = Object.keys(matchedPairs).find(k => matchedPairs[k] === right);
+                return (
+                  <div key={i} onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDropMatch(e, right)} className={cn("w-full min-h-[80px] p-6 rounded-2xl border-4 border-dashed transition-all flex flex-col items-center justify-center gap-3", matchedLeft ? "bg-purple-100/50 border-purple-300" : "bg-white border-slate-200 hover:border-purple-300")}>
+                    <p className="font-semibold text-slate-600 text-sm text-center leading-relaxed">{right}</p>
+                    {matchedLeft ? (
+                      <div className="w-full mt-2 py-3 px-4 bg-purple-600 text-white rounded-xl font-black text-sm text-center shadow-md animate-in zoom-in-50 duration-200">
+                        {matchedLeft}
+                      </div>
+                    ) : (
+                      <div className="w-full mt-2 py-3 bg-slate-100 rounded-xl font-black text-[10px] uppercase text-slate-400 text-center tracking-widest">
+                        Soltar Aquí
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
           </div>
           {isComplete && (
-            <Button onClick={finishGradedActivity} className="w-full h-16 rounded-[32px] bg-purple-600 text-white font-black uppercase text-lg tracking-widest shadow-xl">Finalizar Ejercicio</Button>
+            <div className="flex justify-center mt-10">
+              <Button onClick={finishGradedActivity} className="px-12 h-16 rounded-[32px] bg-purple-600 text-white font-black uppercase text-lg tracking-widest shadow-xl hover:bg-purple-700 hover:-translate-y-1 transition-all"><CheckCircle2 className="w-6 h-6 mr-3"/> Finalizar Actividad</Button>
+            </div>
           )}
         </div>
       );
     }
 
     if (exercise.tipo === 'ordenar_secuencia' && sequenceItems.length > 0) {
-      const move = (idx: number, dir: number) => {
+      const handleDragStartSeq = (e: React.DragEvent, idx: number) => {
+        e.dataTransfer.setData("text/plain", idx.toString());
+      };
+      
+      const handleDragOverSeq = (e: React.DragEvent) => { e.preventDefault(); };
+      
+      const handleDropSeq = (e: React.DragEvent, dropIdx: number) => {
+        e.preventDefault();
+        const dragIdx = parseInt(e.dataTransfer.getData("text/plain"));
+        if (isNaN(dragIdx) || dragIdx === dropIdx) return;
         const newItems = [...sequenceItems];
-        const targetIdx = idx + dir;
-        if (targetIdx < 0 || targetIdx >= newItems.length) return;
-        [newItems[idx], newItems[targetIdx]] = [newItems[targetIdx], newItems[idx]];
+        const [dragged] = newItems.splice(dragIdx, 1);
+        newItems.splice(dropIdx, 0, dragged);
         setSequenceItems(newItems);
       };
 
       return (
-        <div className="max-w-2xl mx-auto space-y-8 py-10">
-          <div className="text-center">
-            <h3 className="text-2xl font-black text-slate-800 uppercase">Ordenar Pasos</h3>
-            <p className="text-xs font-bold text-slate-400 uppercase mt-2">Usa las flechas para organizar la secuencia correctamente.</p>
+        <div className="max-w-3xl mx-auto space-y-10 py-10 animate-in fade-in zoom-in-95 duration-500">
+          <div className="text-center space-y-3 bg-white p-8 rounded-[32px] shadow-sm border-2 border-orange-50">
+            <h3 className="text-3xl font-black text-slate-800 uppercase tracking-widest flex items-center justify-center gap-3"><Hash className="text-orange-600"/> Ordenar Pasos</h3>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Arrastra y suelta las tarjetas para organizar la secuencia en el orden correcto.</p>
           </div>
-          <div className="space-y-3">
+          <div className="space-y-4 bg-orange-50/30 p-8 rounded-[40px] border-2 border-orange-100/50">
             {sequenceItems.map((item, i) => (
-              <div key={i} className="flex items-center gap-4 p-5 bg-white border-2 border-slate-100 rounded-3xl shadow-sm group hover:border-orange-400 transition-colors">
-                <span className="h-10 w-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center font-black">{i + 1}</span>
-                <span className="flex-1 font-bold text-slate-700 uppercase text-sm">{item}</span>
-                <div className="flex flex-col gap-1">
-                  <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-orange-50 text-orange-600" onClick={() => move(i, -1)} disabled={i === 0}><ArrowUp size={16} /></Button>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-orange-50 text-orange-600" onClick={() => move(i, 1)} disabled={i === sequenceItems.length - 1}><ArrowDown size={16} /></Button>
-                </div>
+              <div 
+                key={i} 
+                draggable 
+                onDragStart={(e) => handleDragStartSeq(e, i)}
+                onDragOver={handleDragOverSeq}
+                onDrop={(e) => handleDropSeq(e, i)}
+                className="flex items-center gap-6 p-6 bg-white border-2 border-slate-100 rounded-3xl shadow-md cursor-grab active:cursor-grabbing hover:border-orange-400 hover:shadow-xl hover:-translate-y-1 transition-all group"
+              >
+                <div className="h-12 w-12 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center font-black text-xl shadow-inner group-hover:bg-orange-500 group-hover:text-white transition-colors">{i + 1}</div>
+                <span className="flex-1 font-black text-slate-700 uppercase text-lg">{item}</span>
+                <ListTree className="text-slate-200 group-hover:text-orange-300 w-6 h-6"/>
               </div>
             ))}
           </div>
-          <Button onClick={finishGradedActivity} className="w-full h-16 rounded-[32px] bg-orange-500 text-white font-black uppercase text-lg tracking-widest shadow-xl">Verificar Orden</Button>
+          <div className="flex justify-center mt-10">
+            <Button onClick={finishGradedActivity} className="px-12 h-16 rounded-[32px] bg-orange-500 hover:bg-orange-600 text-white font-black uppercase text-lg tracking-widest shadow-xl hover:-translate-y-1 transition-all"><CheckCircle2 className="w-6 h-6 mr-3"/> Verificar Orden</Button>
+          </div>
         </div>
       );
     }
 
-    if (exercise.tipo === 'completar_espacios' && content.text) {
-      const parts = content.text.split(/\[\[(.*?)\]\]/);
+    if (exercise.tipo === 'completar_espacios' && content.tokens) {
       return (
-        <div className="max-w-3xl mx-auto space-y-10 py-10">
-          <div className="text-center">
-            <h3 className="text-2xl font-black text-slate-800 uppercase">Completar el Texto</h3>
-          </div>
-          <div className="bg-white p-12 rounded-[40px] border-2 border-slate-100 shadow-xl leading-[3.5] text-lg font-medium text-slate-700">
-            {parts.map((part: string, i: number) => (
-              i % 2 === 0 ? <span key={i}>{part}</span> : (
-                <input key={i} type="text" value={fillAnswers[i] || ''} onChange={(e) => setFillAnswers({ ...fillAnswers, [i]: e.target.value })} className="inline-block border-b-4 border-pink-300 focus:border-pink-500 outline-none px-4 min-w-[150px] text-center font-black text-pink-600 bg-pink-50/30 rounded-t-lg transition-all mx-2" placeholder="..." />
-              )
-            ))}
-          </div>
-          <Button onClick={finishGradedActivity} className="w-full h-16 rounded-[32px] bg-pink-500 text-white font-black uppercase text-lg tracking-widest shadow-xl">Enviar Respuestas</Button>
-        </div>
+        <CompletarEspaciosPreview 
+          content={content} 
+          onFinish={(s, t) => {
+            setScore(s);
+            setTotalSteps(t);
+            setSuccess(true);
+          }} 
+        />
       );
     }
 
     if (exercise.tipo === 'flashcards' && shuffledItems.length > 0) {
       const card = shuffledItems[currentStep];
+      const progress = ((currentStep) / totalSteps) * 100;
+      
       return (
-        <div className="max-w-2xl mx-auto space-y-8 py-10">
-          <div className="flex justify-between items-center px-4">
-            <Badge className="bg-amber-500 text-white px-4 py-1">TARJETA {currentStep + 1} / {totalSteps}</Badge>
+        <div className="max-w-3xl mx-auto space-y-10 py-10 animate-in fade-in zoom-in-95 duration-500">
+          <div className="space-y-4">
+            <div className="flex justify-between items-center px-4">
+              <Badge className="bg-amber-500/20 text-amber-700 px-4 py-1.5 border border-amber-500/30 text-[10px] tracking-widest">TARJETA {currentStep + 1} DE {totalSteps}</Badge>
+              <span className="text-xs font-black text-slate-400 tracking-widest uppercase">Repasadas: {score} / {totalSteps}</span>
+            </div>
+            <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+              <div className="bg-amber-500 h-full transition-all duration-500" style={{width: `${progress}%`}}></div>
+            </div>
           </div>
-          <div className="perspective-1000 h-[400px]">
-            <div onClick={() => setIsFlipped(!isFlipped)} className={cn("relative w-full h-full transition-all duration-500 transform-style-3d cursor-pointer", isFlipped && "rotate-y-180")}>
-              <div className="absolute inset-0 w-full h-full backface-hidden bg-white border-4 border-amber-100 rounded-[50px] flex flex-col items-center justify-center p-10 text-center shadow-xl">
-                <span className="text-[10px] font-black uppercase text-amber-400 tracking-[0.3em] mb-6">Término / Concepto</span>
-                <h3 className="text-3xl font-black text-slate-800 uppercase leading-tight">{card.front}</h3>
-                <p className="mt-10 text-[10px] font-black text-slate-300 uppercase animate-pulse">Haz clic para voltear</p>
+
+          <div className="perspective-1000 h-[450px] w-full mt-8" style={{ perspective: '1000px' }}>
+            <div onClick={() => setIsFlipped(!isFlipped)} className={cn("relative w-full h-full transition-all duration-700 cursor-pointer group", isFlipped && "[transform:rotateY(180deg)]")} style={{ transformStyle: 'preserve-3d' }}>
+              {/* DORSO / FRENTE */}
+              <div className="absolute inset-0 w-full h-full bg-white border-[6px] border-amber-100 rounded-[64px] flex flex-col items-center justify-center p-12 text-center shadow-2xl group-hover:border-amber-300 transition-colors" style={{ backfaceVisibility: 'hidden' }}>
+                <span className="absolute top-10 text-[10px] font-black uppercase text-amber-400 tracking-[0.4em]">Frente de Tarjeta</span>
+                <h3 className="text-4xl md:text-5xl font-black text-slate-800 uppercase leading-snug">{card.front}</h3>
+                <div className="absolute bottom-10 flex items-center gap-2 text-[10px] font-black text-amber-500/50 uppercase tracking-widest animate-pulse">
+                  <RotateCcw className="w-4 h-4"/> Voltear para ver definición
+                </div>
               </div>
-              <div className="absolute inset-0 w-full h-full backface-hidden rotate-y-180 bg-amber-500 border-4 border-amber-400 rounded-[50px] flex flex-col items-center justify-center p-10 text-center shadow-xl text-white">
-                <span className="text-[10px] font-black uppercase text-amber-200 tracking-[0.3em] mb-6">Definición / Respuesta</span>
-                <p className="text-2xl font-bold leading-relaxed">{card.back}</p>
+              
+              {/* REVERSO */}
+              <div className="absolute inset-0 w-full h-full bg-gradient-to-br from-amber-400 to-amber-600 border-[6px] border-amber-300 rounded-[64px] flex flex-col items-center justify-center p-12 text-center shadow-2xl text-white" style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}>
+                <span className="absolute top-10 text-[10px] font-black uppercase text-amber-200 tracking-[0.4em]">Reverso (Definición)</span>
+                <p className="text-3xl font-bold leading-relaxed">{card.back}</p>
+                <div className="absolute bottom-10 flex items-center gap-2 text-[10px] font-black text-amber-100/50 uppercase tracking-widest animate-pulse">
+                  <RotateCcw className="w-4 h-4"/> Voltear al frente
+                </div>
               </div>
             </div>
           </div>
-          <div className="flex gap-4">
-            <Button onClick={() => handleNext(true)} className="flex-1 h-16 rounded-[32px] bg-emerald-600 text-white font-black uppercase text-lg tracking-widest shadow-xl">Lo sé</Button>
-            <Button onClick={() => handleNext(false)} className="flex-1 h-16 rounded-[32px] bg-slate-800 text-white font-black uppercase text-lg tracking-widest shadow-xl">Repasar</Button>
+          
+          <div className="flex gap-6 mt-12 justify-center">
+            <Button onClick={() => handleNext(false)} className="w-48 h-20 rounded-[32px] bg-white border-4 border-slate-100 text-slate-400 font-black uppercase text-lg tracking-widest shadow-lg hover:border-red-200 hover:text-red-500 hover:bg-red-50 hover:-translate-y-2 transition-all"><X className="w-8 h-8 mr-2"/> Repasar</Button>
+            <Button onClick={() => handleNext(true)} className="w-48 h-20 rounded-[32px] bg-white border-4 border-slate-100 text-slate-400 font-black uppercase text-lg tracking-widest shadow-lg hover:border-emerald-200 hover:text-emerald-500 hover:bg-emerald-50 hover:-translate-y-2 transition-all"><CheckCircle className="w-8 h-8 mr-2"/> Lo Sé</Button>
           </div>
         </div>
       );
