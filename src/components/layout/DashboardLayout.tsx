@@ -107,7 +107,7 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
     profesor: [
       { group: "Docencia", items: [
         { icon: LayoutDashboard, label: 'Mis Asignaturas', href: '/dashboard/profesor' },
-        { icon: Layers, label: 'Unidades y Temas', href: '/dashboard/profesor/contenido' },
+        { icon: Users, label: 'Listas de grupos', href: '/dashboard/profesor/grupos' },
       ]}
     ],
     alumno: [

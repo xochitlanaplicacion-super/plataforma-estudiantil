@@ -398,3 +398,15 @@ export async function bulkAssignGroup(userIds: string[], groupId: string | null)
     return { success: false, error: error.message };
   }
 }
+
+// --- GRUPOS Y ALUMNOS ---
+export async function getAlumnosPorGrupo(groupId: string) {
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('id, nombre, apellidos, curp, email, matricula, fecha_expiracion, estatus, rol, carrera_id, grupo_id')
+    .eq('grupo_id', groupId)
+    .eq('rol', 'alumno')
+    .eq('estatus', 'activo')
+    .order('apellidos');
+  return { data, error };
+}
