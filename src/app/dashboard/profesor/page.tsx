@@ -1546,6 +1546,10 @@ export default function ProfesorDashboard() {
 
   const [currentTab, setCurrentTab] = useState('materias');
   const [dialog, setDialog] = useState<any>({ open: false, type: '', data: {} });
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<any>(null);
+  const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
+  const [slideToDelete, setSlideToDelete] = useState<string | null>(null);
   
   const [previewActivity, setPreviewActivity] = useState<any | null>(null);
 
@@ -1631,17 +1635,41 @@ export default function ProfesorDashboard() {
     } catch (e) { console.error(e); }
   };
 
-  const handleDelete = async (type: string, id: string) => {
+  const handleDelete = async (type: string, id: string, title?: string) => {
+    if (type === 'unidad' || type === 'tema') {
+      setDeleteConfirmTarget({ type, id, title });
+      setDeleteConfirmInput("");
+      setDeleteConfirmOpen(true);
+      return;
+    }
+    
     let error;
-    if (type === 'unidad') ({ error } = await deleteUnidad(id));
-    if (type === 'tema') ({ error } = await deleteTema(id));
     if (type === 'ejercicio') ({ error } = await deleteEjercicio(id));
 
     if (!error) {
       toast({ title: "Eliminado correctamente" });
+      if (type === 'ejercicio') fetchEjercicios(selectedTema.id);
+    }
+  };
+
+  const onConfirmDelete = async () => {
+    if (deleteConfirmInput !== 'BORRAR') return;
+    if (!deleteConfirmTarget) return;
+
+    let error;
+    const { type, id } = deleteConfirmTarget;
+
+    if (type === 'unidad') ({ error } = await deleteUnidad(id));
+    if (type === 'tema') ({ error } = await deleteTema(id));
+
+    if (!error) {
+      toast({ title: "Eliminado con éxito", description: `Se ha borrado el/la ${type} y todo su contenido.` });
+      setDeleteConfirmOpen(false);
+      setDeleteConfirmTarget(null);
       if (type === 'unidad') { fetchUnidades(selectedMateria.id); setSelectedUnidad(null); }
       if (type === 'tema') { fetchTemas(selectedUnidad.id); setSelectedTema(null); }
-      if (type === 'ejercicio') fetchEjercicios(selectedTema.id);
+    } else {
+      toast({ variant: "destructive", title: "Error al eliminar", description: "No se pudo realizar la operación." });
     }
   };
 
@@ -1677,13 +1705,20 @@ export default function ProfesorDashboard() {
     await upsertSlide(updated);
   };
 
-  const handleDeleteSlide = async (id: string) => {
-    const { error } = await deleteSlide(id);
+  const handleDeleteSlide = (id: string) => {
+    setSlideToDelete(id);
+  };
+
+  const confirmDeleteSlide = async () => {
+    if (!slideToDelete) return;
+    const { error } = await deleteSlide(slideToDelete);
     if (!error) {
-      const newSlides = slides.filter(s => s.id !== id);
+      const newSlides = slides.filter(s => s.id !== slideToDelete);
       setSlides(newSlides);
       if (activeSlideIndex >= newSlides.length) setActiveSlideIndex(Math.max(0, newSlides.length - 1));
+      toast({ title: "Diapositiva eliminada" });
     }
+    setSlideToDelete(null);
   };
 
   const handleOpenResourceDialog = (tema: any) => {
@@ -1868,7 +1903,10 @@ export default function ProfesorDashboard() {
                         <span className="h-12 w-12 rounded-2xl bg-primary text-white flex items-center justify-center font-black text-lg">{u.orden}</span>
                         <span className="font-black text-slate-800 text-lg uppercase">{u.titulo}</span>
                       </div>
-                      <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDialog({ open: true, type: 'unidad', data: u }); }}><Edit size={18}/></Button>
+                      <div className="flex items-center gap-2">
+                        <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDialog({ open: true, type: 'unidad', data: u }); }}><Edit size={18}/></Button>
+                        <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); handleDelete('unidad', u.id, u.titulo); }}><Trash2 size={18}/></Button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -1895,6 +1933,7 @@ export default function ProfesorDashboard() {
                            <Button variant="ghost" size="icon" className="text-blue-500" onClick={(e) => { e.stopPropagation(); handleOpenSlideEditor(t); }}><Presentation size={18}/></Button>
                            <Button variant="ghost" size="icon" className="text-emerald-500" onClick={(e) => { e.stopPropagation(); handleOpenResourceDialog(t); }}><Paperclip size={18}/></Button>
                            <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDialog({ open: true, type: 'tema', data: t }); }}><Edit size={16}/></Button>
+                           <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); handleDelete('tema', t.id, t.titulo); }}><Trash2 size={16}/></Button>
                          </div>
                        </div>
                      </div>
@@ -2119,6 +2158,67 @@ export default function ProfesorDashboard() {
             </div>
           </div>
           <DialogFooter className="p-8 bg-slate-50 border-t shrink-0"><Button variant="outline" className="rounded-xl px-8 font-bold uppercase text-[10px]" onClick={() => setIsResourceDialogOpen(false)}>Cerrar</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
+      {/* DIALOG DE CONFIRMACIÓN DE BORRADO SEGURO */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className="max-w-md w-[95vw] max-h-[90vh] overflow-y-auto rounded-[32px] p-6 sm:p-8 border-none shadow-2xl custom-scrollbar">
+          <DialogHeader className="flex flex-col items-center text-center">
+            <div className="h-20 w-20 bg-destructive/10 text-destructive rounded-3xl flex items-center justify-center mb-6 rotate-3">
+              <AlertCircle size={40} />
+            </div>
+            <DialogTitle className="text-3xl font-black uppercase tracking-tight text-slate-800">¿Estás seguro?</DialogTitle>
+            <DialogDescription className="text-slate-500 text-lg leading-relaxed pt-4">
+              Estás a punto de borrar el/la {deleteConfirmTarget?.type === 'unidad' ? 'unidad' : 'tema'}: 
+              <span className="font-black text-slate-900 block my-3 text-xl italic underline decoration-destructive/30">"{deleteConfirmTarget?.title}"</span>
+              Esta acción eliminará <span className="text-destructive font-black underline">TODO</span> el contenido relacionado (temas, ejercicios, presentaciones y recursos) y <span className="font-black text-slate-900">no se puede deshacer.</span>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-8">
+            <div className="bg-slate-50 p-6 rounded-2xl border-2 border-slate-100">
+              <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] text-center mb-4">
+                Escribe <span className="text-destructive">BORRAR</span> para confirmar
+              </p>
+              <Input 
+                value={deleteConfirmInput} 
+                onChange={e => setDeleteConfirmInput(e.target.value)}
+                placeholder="BORRAR"
+                className="h-16 text-center text-2xl font-black tracking-[0.5em] uppercase border-none bg-white shadow-inner focus-visible:ring-destructive rounded-xl"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="flex flex-col sm:flex-row gap-4">
+            <Button variant="ghost" className="flex-1 rounded-2xl h-16 font-bold uppercase tracking-widest text-slate-400 hover:text-slate-600" onClick={() => setDeleteConfirmOpen(false)}>Cancelar</Button>
+            <Button 
+              variant="destructive" 
+              className="flex-1 rounded-2xl h-16 font-black uppercase tracking-widest gap-3 shadow-xl shadow-destructive/20 disabled:opacity-20 transition-all active:scale-95"
+              disabled={deleteConfirmInput !== 'BORRAR'}
+              onClick={onConfirmDelete}
+            >
+              <Trash2 size={20} /> Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG DE CONFIRMACIÓN PARA DIAPOSITIVAS */}
+      <Dialog open={!!slideToDelete} onOpenChange={(open) => !open && setSlideToDelete(null)}>
+        <DialogContent className="max-w-sm rounded-[32px] p-8 border-none shadow-2xl">
+          <DialogHeader className="flex flex-col items-center text-center">
+            <div className="h-16 w-16 bg-red-50 text-red-500 rounded-2xl flex items-center justify-center mb-4">
+              <Trash2 size={32} />
+            </div>
+            <DialogTitle className="text-xl font-black uppercase text-slate-800">¿Eliminar Diapositiva?</DialogTitle>
+            <DialogDescription className="text-slate-500 pt-2">
+              ¿Estás seguro de que quieres eliminar esta diapositiva? Esta acción no se puede deshacer.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-6">
+            <Button variant="ghost" className="flex-1 rounded-xl h-12 font-bold uppercase text-[10px]" onClick={() => setSlideToDelete(null)}>Cancelar</Button>
+            <Button variant="destructive" className="flex-1 rounded-xl h-12 font-black uppercase text-[10px] bg-red-500 text-white" onClick={confirmDeleteSlide}>Eliminar</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
