@@ -81,6 +81,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
 import confetti from 'canvas-confetti';
+import { polyfill } from "mobile-drag-drop";
+import "mobile-drag-drop/default.css";
 
 const LOGO_URL = '/images/logo_zapata.png';
 
@@ -1557,7 +1559,15 @@ export default function ProfesorDashboard() {
     setLoading(false);
   };
 
-  useEffect(() => { fetchInitialData(); }, []);
+  useEffect(() => { 
+    fetchInitialData(); 
+    // Inicializar polyfill para drag and drop en móviles
+    polyfill({
+      dragImageTranslateOverride: (event, hoverCoordinates, hoveredElement, translateDragImageFn) => {
+        translateDragImageFn(hoverCoordinates.x, hoverCoordinates.y);
+      }
+    });
+  }, []);
 
   const fetchUnidades = async (mId: string) => {
     const { data } = await getUnidades(mId);

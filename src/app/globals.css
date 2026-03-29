@@ -154,3 +154,23 @@
   border: none !important;
   transition: all 2s ease-in-out;
 }
+
+/* Drag and Drop Polyfill support - Mejora para móviles */
+[draggable] {
+  user-select: none;
+  -webkit-user-drag: element;
+  cursor: grab;
+  touch-action: none; /* Previene el scroll involuntario al arrastrar */
+}
+
+[draggable]:active {
+  cursor: grabbing;
+  opacity: 0.8;
+  transform: scale(1.05);
+  transition: transform 0.1s;
+}
+
+/* Estilos específicos para el polyfill */
+.dnd-poly-dragging {
+  opacity: 0.5 !important;
+}
