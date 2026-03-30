@@ -20,7 +20,9 @@ import {
   Layers,
   ArrowRight,
   ChevronLeft,
-  GraduationCap
+  GraduationCap,
+  Download,
+  FileText
 } from 'lucide-react';
 import { 
   getNiveles, 
@@ -33,7 +35,12 @@ import {
 } from '@/lib/actions/academic';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
+import ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export default function InscripcionAlumnos() {
   const { toast } = useToast();
@@ -41,6 +48,8 @@ export default function InscripcionAlumnos() {
   const [alumnos, setAlumnos] = useState<any[]>([]);
   const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [adminName, setAdminName] = useState('');
+  const supabase = createClient();
   
   // Catalogos
   const [niveles, setNiveles] = useState<any[]>([]);
@@ -72,6 +81,13 @@ export default function InscripcionAlumnos() {
       if (alRes.data) setAlumnos(alRes.data);
       if (nivRes.data) setNiveles(nivRes.data);
       if (grRes.data) setAllGrupos(grRes.data);
+
+      // Obtener nombre del administrador
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: prof } = await supabase.from('profiles').select('nombre, apellidos').eq('id', user.id).single();
+        if (prof) setAdminName(`${prof.nombre} ${prof.apellidos}`);
+      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -202,6 +218,124 @@ export default function InscripcionAlumnos() {
   const selectedGroupData = useMemo(() => {
     return allGrupos.find(g => g.id === selectedGroupId);
   }, [allGrupos, selectedGroupId]);
+
+  const handleExportExcel = async () => {
+    if (!selectedGroupData || currentGroupMembers.length === 0) return;
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Lista de Asistencia');
+
+    try {
+      const response = await fetch('/images/logo_zapata.png');
+      const buffer = await response.arrayBuffer();
+      const logoId = workbook.addImage({ buffer, extension: 'png' });
+      worksheet.addImage(logoId, 'A1:A4');
+    } catch (e) { console.error("Error logo", e); }
+
+    worksheet.mergeCells('B1:S1');
+    const titleCell = worksheet.getCell('B1');
+    titleCell.value = 'INSTITUTO EDUCATIVO EMILIANO ZAPATA';
+    titleCell.font = { name: 'Arial Black', size: 18 };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    worksheet.mergeCells('B2:S2');
+    const subTitleCell = worksheet.getCell('B2');
+    subTitleCell.value = 'LISTA DE CONTROL DE ASISTENCIA Y EVALUACIÓN (ADMINISTRACIÓN)';
+    subTitleCell.font = { name: 'Arial', size: 14, bold: true };
+    subTitleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    worksheet.addRow([]);
+    const infoRows = [
+      ['ADMINISTRADOR:', adminName.toUpperCase(), '', 'NIVEL:', selectedGroupData.carreras?.niveles?.nombre?.toUpperCase()],
+      ['CARRERA:', selectedGroupData.carreras?.nombre?.toUpperCase(), '', 'GRUPO:', `${selectedGroupData.grados?.nombre || 'GRAL.'} - ${selectedGroupData.nombre}`.toUpperCase()],
+      ['FECHA:', new Date().toLocaleDateString('es-MX').toUpperCase(), '', 'TURNO:', selectedGroupData.turno?.toUpperCase() || 'N/A']
+    ];
+
+    infoRows.forEach(row => {
+      const r = worksheet.addRow(row);
+      r.eachCell((cell, col) => { if (col === 1 || col === 1) cell.font = { bold: true }; });
+    });
+
+    worksheet.addRow([]);
+    const attendanceCols = Array.from({ length: 15 }, (_, i) => `DÍA ${i + 1}`);
+    const headRow = worksheet.addRow(['N°', 'MATRÍCULA', 'NOMBRE DEL ALUMNO', ...attendanceCols]);
+    headRow.eachCell(c => {
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+      c.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 9 };
+      c.alignment = { horizontal: 'center' };
+      c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+    });
+
+    currentGroupMembers.forEach((alum, i) => {
+      const r = worksheet.addRow([i + 1, alum.matricula || 'N/A', `${alum.apellidos}, ${alum.nombre}`.toUpperCase(), ...Array(15).fill('')]);
+      r.height = 25;
+      r.eachCell(c => {
+        c.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+        c.font = { size: 9 };
+      });
+    });
+
+    worksheet.getColumn(1).width = 5;
+    worksheet.getColumn(2).width = 15;
+    worksheet.getColumn(3).width = 45;
+    for (let c = 4; c <= 18; c++) worksheet.getColumn(c).width = 6;
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    saveAs(new Blob([buffer]), `Lista_Adm_${selectedGroupData.nombre}.xlsx`);
+    toast({ title: "Excel Generado" });
+  };
+
+  const handleExportPDF = async () => {
+    if (!selectedGroupData || currentGroupMembers.length === 0) return;
+    const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+
+    try {
+      const response = await fetch('/images/logo_zapata.png');
+      const blob = await response.blob();
+      const base64 = await new Promise<string>(r => {
+        const fr = new FileReader(); fr.onloadend = () => r(fr.result as string); fr.readAsDataURL(blob);
+      });
+      doc.addImage(base64, 'PNG', 15, 10, 30, 30);
+    } catch (e) { console.error("Logo pdf error", e); }
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(22);
+    doc.setTextColor(30, 41, 59);
+    doc.text('INSTITUTO EDUCATIVO EMILIANO ZAPATA', 50, 20);
+
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'normal');
+    doc.text('LISTA DE ASISTENCIA Y EVALUACIÓN (ADMINIS.)', 50, 30);
+
+    const infoY = 55;
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('ADMINISTRADOR:', 15, infoY);
+    doc.text('CARRERA:', 15, infoY + 7);
+    doc.text(adminName.toUpperCase(), 45, infoY);
+    doc.text(selectedGroupData.carreras?.nombre?.toUpperCase() || '', 45, infoY + 7);
+
+    doc.text('NIVEL:', 180, infoY);
+    doc.text('GRADO/GRUPO:', 180, infoY + 7);
+    doc.text(selectedGroupData.carreras?.niveles?.nombre?.toUpperCase() || '', 210, infoY);
+    doc.text(`${selectedGroupData.grados?.nombre || 'GRAL.'} - ${selectedGroupData.nombre}`.toUpperCase(), 210, infoY + 7);
+
+    const tableHeaders = [['N°', 'MATRÍCULA', 'ALUMNO', ...Array.from({ length: 15 }, (_, i) => `${i + 1}`)]];
+    const tableData = currentGroupMembers.map((m, i) => [i + 1, m.matricula || 'N/A', `${m.apellidos}, ${m.nombre}`.toUpperCase(), ...Array(15).fill('')]);
+
+    autoTable(doc, {
+      startY: 80,
+      head: tableHeaders,
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [30, 41, 59], fontSize: 8 },
+      styles: { fontSize: 7, cellPadding: 2 },
+      columnStyles: { 0: { cellWidth: 8 }, 1: { cellWidth: 25 }, 2: { cellWidth: 80 } },
+      didDrawPage: (data) => doc.text(`Página ${data.pageNumber}`, 282, 200, { align: 'right' })
+    });
+
+    doc.save(`Lista_Adm_${selectedGroupData.nombre}.pdf`);
+    toast({ title: "PDF Generado" });
+  };
 
   return (
     <div className="space-y-6">
@@ -475,10 +609,29 @@ export default function InscripcionAlumnos() {
             <div className="lg:col-span-5">
               <Card className="border-muted/60 shadow-xl rounded-[32px] overflow-hidden sticky top-6 border-t-4 border-t-amber-500">
                 <CardHeader className="bg-slate-50/50">
-                  <div className="flex flex-col">
-                    <CardTitle className="text-lg font-black uppercase tracking-tighter text-slate-700">Integrantes de Salón</CardTitle>
-                    {selectedGroupData && (
-                      <p className="text-xs font-bold text-amber-600 uppercase mt-1">{selectedGroupData.nombre}</p>
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex flex-col">
+                      <CardTitle className="text-lg font-black uppercase tracking-tighter text-slate-700">Integrantes de Salón</CardTitle>
+                      {selectedGroupData && (
+                        <p className="text-xs font-bold text-amber-600 uppercase mt-1">{selectedGroupData.nombre}</p>
+                      )}
+                    </div>
+                    {selectedGroupId && currentGroupMembers.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        <Button 
+                          onClick={handleExportExcel}
+                          className="h-8 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-black uppercase text-[9px] tracking-widest px-3 shadow-md"
+                        >
+                          <Download className="mr-1.5 h-3 w-3" /> Excel
+                        </Button>
+                        <Button 
+                          onClick={handleExportPDF}
+                          variant="outline"
+                          className="h-8 rounded-lg border-2 border-red-200 text-red-600 font-black uppercase text-[9px] tracking-widest px-3 hover:bg-red-50"
+                        >
+                          <FileText className="mr-1.5 h-3 w-3" /> PDF
+                        </Button>
+                      </div>
                     )}
                   </div>
                 </CardHeader>
