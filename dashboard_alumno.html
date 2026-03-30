@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+
+<html lang="es-MX"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Portal Académico IEEZ - Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "surface-tint": "#9c4052",
+                        "outline-variant": "#dac0c3",
+                        "primary-container": "#6b1a2e",
+                        "primary-fixed": "#ffd9dd",
+                        "surface-variant": "#e6e2db",
+                        "on-surface-variant": "#554244",
+                        "on-secondary-fixed-variant": "#6b3742",
+                        "error-container": "#ffdad6",
+                        "on-primary-fixed-variant": "#7d283b",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-container": "#ffb6c2",
+                        "on-tertiary": "#ffffff",
+                        "tertiary-fixed": "#ffe08e",
+                        "surface-bright": "#fef9f2",
+                        "secondary-fixed-dim": "#fcb3bf",
+                        "surface-container-high": "#ece7e1",
+                        "primary": "#4d021a",
+                        "tertiary": "#755b00",
+                        "on-primary": "#ffffff",
+                        "surface-container": "#f2ede6",
+                        "inverse-primary": "#ffb2bc",
+                        "surface-container-low": "#f8f3ec",
+                        "on-primary-container": "#ef8194",
+                        "on-secondary-container": "#7b444f",
+                        "on-error": "#ffffff",
+                        "on-secondary": "#ffffff",
+                        "background": "#fef9f2",
+                        "surface": "#fef9f2",
+                        "on-primary-fixed": "#400013",
+                        "error": "#ba1a1a",
+                        "secondary-fixed": "#ffd9de",
+                        "on-tertiary-fixed-variant": "#584400",
+                        "on-background": "#1d1c18",
+                        "inverse-surface": "#32302c",
+                        "surface-container-highest": "#e6e2db",
+                        "tertiary-fixed-dim": "#ecc246",
+                        "on-tertiary-fixed": "#241a00",
+                        "on-surface": "#1d1c18",
+                        "on-tertiary-container": "#4f3d00",
+                        "tertiary-container": "#cea62c",
+                        "on-secondary-fixed": "#360c17",
+                        "surface-dim": "#ded9d3",
+                        "secondary": "#874e59",
+                        "on-error-container": "#93000a",
+                        "outline": "#877274",
+                        "primary-fixed-dim": "#ffb2bc",
+                        "inverse-on-surface": "#f5f0e9"
+                    },
+                    fontFamily: {
+                        "headline": ["Inter"],
+                        "body": ["Inter"],
+                        "label": ["Inter"]
+                    },
+                    borderRadius: { "DEFAULT": "1rem", "lg": "2rem", "xl": "3rem", "full": "9999px" },
+                },
+            },
+        }
+    </script>
+<style>
+        body { font-family: 'Inter', sans-serif; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface antialiased">
+<!-- SideNavBar Shell -->
+<aside class="h-screen w-64 fixed left-0 top-0 overflow-y-auto bg-[#370D18] dark:bg-[#1A060B] shadow-[32px_0_64px_-12px_rgba(64,0,19,0.2)] flex flex-col py-8 z-50">
+<div class="px-8 mb-12">
+<h1 class="text-2xl font-black text-white tracking-tight">IEEZ</h1>
+<p class="text-white/50 text-xs font-medium uppercase tracking-widest">Portal Académico</p>
+</div>
+<nav class="flex-1 space-y-1">
+<!-- Active Navigation -->
+<a class="flex items-center gap-3 px-6 py-4 text-[#CEA62C] bg-white/10 border-r-4 border-[#CEA62C] font-semibold active:scale-95 duration-150 ease-in-out transition-all" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span>Inicio</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-4 text-white/70 font-medium hover:text-white hover:bg-white/5 transition-all active:scale-95 duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="book">book</span>
+<span>Mis Materias</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-4 text-white/70 font-medium hover:text-white hover:bg-white/5 transition-all active:scale-95 duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="assignment">assignment</span>
+<span>Mis Tareas</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-4 text-white/70 font-medium hover:text-white hover:bg-white/5 transition-all active:scale-95 duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="grade">grade</span>
+<span>Mis Calificaciones</span>
+</a>
+<a class="flex items-center gap-3 px-6 py-4 text-white/70 font-medium hover:text-white hover:bg-white/5 transition-all active:scale-95 duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="person">person</span>
+<span>Mi Perfil</span>
+</a>
+</nav>
+<div class="mt-auto px-2">
+<a class="flex items-center gap-3 px-6 py-4 text-white/40 font-medium hover:text-error transition-all active:scale-95 duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="logout">logout</span>
+<span>Cerrar Sesión</span>
+</a>
+</div>
+</aside>
+<!-- Main Content Area -->
+<main class="ml-64 min-h-screen">
+<!-- TopAppBar Shell -->
+<header class="fixed top-0 right-0 w-[calc(100%-16rem)] h-20 z-40 bg-[#FEF9F2]/80 backdrop-blur-md flex items-center justify-between px-10">
+<h2 class="font-headline text-xl font-bold text-primary tracking-tight">¡Bienvenido, Alejandro Martínez!</h2>
+<div class="flex items-center gap-6">
+<div class="flex gap-2">
+<button class="hover:bg-[#F8F3EC] rounded-full p-2 transition-opacity active:opacity-80">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="notifications">notifications</span>
+</button>
+<button class="hover:bg-[#F8F3EC] rounded-full p-2 transition-opacity active:opacity-80">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="settings">settings</span>
+</button>
+</div>
+<div class="h-10 w-10 rounded-full bg-surface-container-high overflow-hidden border-2 border-primary-container/20">
+<img alt="Alumno Profile Photo" class="h-full w-full object-cover" data-alt="Close-up portrait of a young Hispanic male university student with short dark hair, smiling confidently in soft indoor lighting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuBnVYI8ei59k0dwoH8FvpCmyt1X1ebK6c-FRZaHPfpLNv8zFi_iCIiIsrtc6OmSX67FMg-BnEfsZso89Oh0neyhnTZsq4tMEUgVpBc_EcCrtax99GEGOgKGYD-TmfrvK9Kgjf6AXp6771KmDJ9s1g8kDxJoXTSzN-JTjTdNf3dXkw4G6vO07eHmt9dd9PG34dx-lR9YrSw9lRxwW0_gY7MCLbBlH0PCrTIxZv3UduAHhuVR02vB2Z7pu9SZIpFSYOfaoKWgXfno"/>
+</div>
+</div>
+</header>
+<!-- Page Content -->
+<div class="pt-28 pb-16 px-10 max-w-7xl mx-auto space-y-12">
+<!-- Banner de Bienvenida -->
+<section class="relative overflow-hidden bg-gradient-to-br from-[#6B1A2E] to-[#370D18] rounded-xl p-12 text-white shadow-2xl">
+<div class="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
+<div class="space-y-4">
+<span class="inline-block px-3 py-1 bg-tertiary-container text-on-tertiary-container rounded-full text-xs font-bold uppercase tracking-widest">Estado Académico</span>
+<h3 class="text-4xl font-black font-headline leading-tight">Alejandro Martínez Silva</h3>
+<div class="flex flex-wrap gap-x-8 gap-y-2 text-white/80 font-medium">
+<p class="flex items-center gap-2"><span class="material-symbols-outlined text-sm" data-icon="school">school</span> Ingeniería Industrial</p>
+<p class="flex items-center gap-2"><span class="material-symbols-outlined text-sm" data-icon="calendar_today">calendar_today</span> 5to Semestre</p>
+<p class="flex items-center gap-2"><span class="material-symbols-outlined text-sm" data-icon="groups">groups</span> Grupo: A</p>
+<p class="flex items-center gap-2"><span class="material-symbols-outlined text-sm" data-icon="wb_sunny">wb_sunny</span> Turno: Matutino</p>
+</div>
+</div>
+<!-- KPI Metrics -->
+<div class="grid grid-cols-2 gap-8 w-full md:w-auto">
+<div class="text-center">
+<p class="text-6xl font-black text-[#CEA62C] font-headline tracking-tighter">6</p>
+<p class="text-xs font-bold uppercase text-white/60 tracking-widest">Materias</p>
+</div>
+<div class="text-center">
+<p class="text-6xl font-black text-[#CEA62C] font-headline tracking-tighter">9.4</p>
+<p class="text-xs font-bold uppercase text-white/60 tracking-widest">Promedio</p>
+</div>
+<div class="text-center">
+<p class="text-6xl font-black text-[#CEA62C] font-headline tracking-tighter">4</p>
+<p class="text-xs font-bold uppercase text-white/60 tracking-widest">Tareas</p>
+</div>
+<div class="text-center">
+<p class="text-6xl font-black text-[#CEA62C] font-headline tracking-tighter">120</p>
+<p class="text-xs font-bold uppercase text-white/60 tracking-widest">Créditos</p>
+</div>
+</div>
+</div>
+<!-- Subtle Background Pattern -->
+<div class="absolute top-0 right-0 w-1/2 h-full opacity-10 pointer-events-none">
+<div class="w-full h-full" style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuD3A6TuOSXytIOuKI9ZExdpaH5afEt1ijALQ3gznkb16YCsk9ZpASo6t-3sGakNeB4AASLPQc9EPdo9lHObmzch7CL-64svxLmzZHy6FhEnsAFk1CUxb1yVSQm7NVyIquxI2GlNJ80_YcjXzYKyGUwThXuzi7LiK4prMedOIlPFFf0Gp09rLY5slSGEysvdzTziqcvcOxdLBkBUqSvD6_0gNiYdF_WoS6FiNpBtbkXFhms-YStlyhsHW278XdPuhkvjo-Ypr8Om');"></div>
+</div>
+</section>
+<!-- Mis Materias Grid -->
+<section class="space-y-8">
+<div class="flex justify-between items-end">
+<div>
+<h4 class="text-2xl font-bold font-headline text-primary tracking-tight">Mis Materias</h4>
+<p class="text-on-surface-variant font-medium">Ciclo Escolar 2024-1</p>
+</div>
+<a class="text-primary font-bold hover:underline flex items-center gap-1" href="#">Ver horario completo <span class="material-symbols-outlined text-sm" data-icon="arrow_forward">arrow_forward</span></a>
+</div>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+<!-- Materia 1 -->
+<div class="bg-surface-container-lowest p-8 rounded-lg shadow-[32px_0_64px_-12px_rgba(64,0,19,0.04)] border-l-4 border-primary transition-all hover:-translate-y-1">
+<div class="flex justify-between items-start mb-6">
+<span class="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-[10px] font-bold uppercase tracking-wider">EN CURSO</span>
+<span class="material-symbols-outlined text-primary/20" data-icon="functions">functions</span>
+</div>
+<h5 class="text-xl font-bold text-on-surface mb-2 tracking-tight">Matemáticas</h5>
+<p class="text-sm text-on-surface-variant font-medium mb-6">Prof. Gómez</p>
+<div class="flex items-center justify-between text-xs text-on-surface-variant bg-surface-container-low p-3 rounded-xl">
+<div class="flex items-center gap-2"><span class="material-symbols-outlined text-sm" data-icon="schedule">schedule</span> 08:00</div>
+<div class="flex items-center gap-2"><span class="material-symbols-outlined text-sm" data-icon="room">room</span> Salón 102</div>
+</div>
+</div>
+<!-- Materia 2 -->
+<div class="bg-surface-container-lowest p-8 rounded-lg shadow-[32px_0_64px_-12px_rgba(64,0,19,0.04)] border-l-4 border-tertiary-container transition-all hover:-translate-y-1">
+<div class="flex justify-between items-start mb-6">
+<span class="px-3 py-1 bg-[#F3D57F] text-[#755B00] rounded-full text-[10px] font-bold uppercase tracking-wider">EXAMEN</span>
+<span class="material-symbols-outlined text-tertiary-container/40" data-icon="history_edu">history_edu</span>
+</div>
+<h5 class="text-xl font-bold text-on-surface mb-2 tracking-tight">Español</h5>
+<p class="text-sm text-on-surface-variant font-medium mb-6">Prof. Ruiz</p>
+<div class="flex items-center justify-between text-xs text-on-surface-variant bg-surface-container-low p-3 rounded-xl">
+<div class="flex items-center gap-2"><span class="material-symbols-outlined text-sm" data-icon="schedule">schedule</span> 10:00</div>
+<div class="flex items-center gap-2"><span class="material-symbols-outlined text-sm" data-icon="room">room</span> Salón 105</div>
+</div>
+</div>
+<!-- Materia 3 -->
+<div class="bg-surface-container-lowest p-8 rounded-lg shadow-[32px_0_64px_-12px_rgba(64,0,19,0.04)] border-l-4 border-primary transition-all hover:-translate-y-1">
+<div class="flex justify-between items-start mb-6">
+<span class="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-[10px] font-bold uppercase tracking-wider">EN CURSO</span>
+<span class="material-symbols-outlined text-primary/20" data-icon="science">science</span>
+</div>
+<h5 class="text-xl font-bold text-on-surface mb-2 tracking-tight">Física</h5>
+<p class="text-sm text-on-surface-variant font-medium mb-6">Prof. Hernández</p>
+<div class="flex items-center justify-between text-xs text-on-surface-variant bg-surface-container-low p-3 rounded-xl">
+<div class="flex items-center gap-2"><span class="material-symbols-outlined text-sm" data-icon="schedule">schedule</span> 12:00</div>
+<div class="flex items-center gap-2"><span class="material-symbols-outlined text-sm" data-icon="room">room</span> Salón 201</div>
+</div>
+</div>
+<!-- Materia 4 -->
+<div class="bg-surface-container-lowest p-8 rounded-lg shadow-[32px_0_64px_-12px_rgba(64,0,19,0.04)] border-l-4 border-green-500 transition-all hover:-translate-y-1 opacity-70">
+<div class="flex justify-between items-start mb-6">
+<span class="px-3 py-1 bg-green-100 text-green-700 rounded-full text-[10px] font-bold uppercase tracking-wider">APROBADA</span>
+<span class="material-symbols-outlined text-green-500/20" data-icon="account_balance">account_balance</span>
+</div>
+<h5 class="text-xl font-bold text-on-surface mb-2 tracking-tight">Historia</h5>
+<p class="text-sm text-on-surface-variant font-medium mb-6">Prof. Silva</p>
+<div class="flex items-center justify-between text-xs text-on-surface-variant bg-surface-container-low p-3 rounded-xl">
+<div class="flex items-center gap-2"><span class="material-symbols-outlined text-sm" data-icon="schedule">schedule</span> 09:00</div>
+<div class="flex items-center gap-2"><span class="material-symbols-outlined text-sm" data-icon="room">room</span> Salón 103</div>
+</div>
+</div>
+<!-- Materia 5 -->
+<div class="bg-surface-container-lowest p-8 rounded-lg shadow-[32px_0_64px_-12px_rgba(64,0,19,0.04)] border-l-4 border-primary transition-all hover:-translate-y-1">
+<div class="flex justify-between items-start mb-6">
+<span class="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-[10px] font-bold uppercase tracking-wider">EN CURSO</span>
+<span class="material-symbols-outlined text-primary/20" data-icon="biotech">biotech</span>
+</div>
+<h5 class="text-xl font-bold text-on-surface mb-2 tracking-tight">Química</h5>
+<p class="text-sm text-on-surface-variant font-medium mb-6">Prof. Castro</p>
+<div class="flex items-center justify-between text-xs text-on-surface-variant bg-surface-container-low p-3 rounded-xl">
+<div class="flex items-center gap-2"><span class="material-symbols-outlined text-sm" data-icon="schedule">schedule</span> 11:00</div>
+<div class="flex items-center gap-2"><span class="material-symbols-outlined text-sm" data-icon="room">room</span> Salón 202</div>
+</div>
+</div>
+<!-- Materia 6 -->
+<div class="bg-surface-container-lowest p-8 rounded-lg shadow-[32px_0_64px_-12px_rgba(64,0,19,0.04)] border-l-4 border-tertiary-container transition-all hover:-translate-y-1">
+<div class="flex justify-between items-start mb-6">
+<span class="px-3 py-1 bg-[#F3D57F] text-[#755B00] rounded-full text-[10px] font-bold uppercase tracking-wider">EXAMEN</span>
+<span class="material-symbols-outlined text-tertiary-container/40" data-icon="translate">translate</span>
+</div>
+<h5 class="text-xl font-bold text-on-surface mb-2 tracking-tight">Inglés</h5>
+<p class="text-sm text-on-surface-variant font-medium mb-6">Prof. Wilson</p>
+<div class="flex items-center justify-between text-xs text-on-surface-variant bg-surface-container-low p-3 rounded-xl">
+<div class="flex items-center gap-2"><span class="material-symbols-outlined text-sm" data-icon="schedule">schedule</span> 13:00</div>
+<div class="flex items-center gap-2"><span class="material-symbols-outlined text-sm" data-icon="room">room</span> Salón 301</div>
+</div>
+</div>
+</div>
+</section>
+<!-- Tareas Pendientes List -->
+<section class="space-y-8 pb-12">
+<div>
+<h4 class="text-2xl font-bold font-headline text-primary tracking-tight">Tareas Pendientes</h4>
+<p class="text-on-surface-variant font-medium">Actividades para esta semana</p>
+</div>
+<div class="bg-surface-container-lowest rounded-lg overflow-hidden shadow-[32px_0_64px_-12px_rgba(64,0,19,0.04)]">
+<div class="divide-y divide-surface-variant/30">
+<!-- Tarea 1 -->
+<div class="p-6 flex flex-col md:flex-row items-center justify-between gap-6 hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-6 flex-1">
+<div class="h-12 w-12 rounded-full bg-error-container flex items-center justify-center text-error">
+<span class="material-symbols-outlined" data-icon="warning">warning</span>
+</div>
+<div>
+<h6 class="font-bold text-on-surface tracking-tight">Proyecto de Cálculo</h6>
+<p class="text-sm text-on-surface-variant font-medium">Matemáticas • Entrega: 15 de Mayo</p>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<span class="px-4 py-1.5 bg-error text-white text-[10px] font-black uppercase tracking-widest rounded-full">URGENTE</span>
+<button class="px-6 py-2 bg-primary text-white rounded-full font-bold text-sm hover:opacity-90 active:scale-95 transition-all">Ver Ejercicio</button>
+</div>
+</div>
+<!-- Tarea 2 -->
+<div class="p-6 flex flex-col md:flex-row items-center justify-between gap-6 hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-6 flex-1">
+<div class="h-12 w-12 rounded-full bg-tertiary-container/20 flex items-center justify-center text-tertiary">
+<span class="material-symbols-outlined" data-icon="timer">timer</span>
+</div>
+<div>
+<h6 class="font-bold text-on-surface tracking-tight">Ensayo Literario</h6>
+<p class="text-sm text-on-surface-variant font-medium">Español • Entrega: 18 de Mayo</p>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<span class="px-4 py-1.5 bg-orange-500 text-white text-[10px] font-black uppercase tracking-widest rounded-full">PRÓXIMA</span>
+<button class="px-6 py-2 bg-primary text-white rounded-full font-bold text-sm hover:opacity-90 active:scale-95 transition-all">Ver Ejercicio</button>
+</div>
+</div>
+<!-- Tarea 3 -->
+<div class="p-6 flex flex-col md:flex-row items-center justify-between gap-6 hover:bg-surface-container-low transition-colors">
+<div class="flex items-center gap-6 flex-1">
+<div class="h-12 w-12 rounded-full bg-green-100 flex items-center justify-center text-green-700">
+<span class="material-symbols-outlined" data-icon="check_circle">check_circle</span>
+</div>
+<div>
+<h6 class="font-bold text-on-surface tracking-tight">Práctica de Laboratorio</h6>
+<p class="text-sm text-on-surface-variant font-medium">Física • Entrega: 22 de Mayo</p>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<span class="px-4 py-1.5 bg-green-600 text-white text-[10px] font-black uppercase tracking-widest rounded-full">A TIEMPO</span>
+<button class="px-6 py-2 bg-primary text-white rounded-full font-bold text-sm hover:opacity-90 active:scale-95 transition-all">Ver Ejercicio</button>
+</div>
+</div>
+</div>
+<div class="bg-surface-container-high p-4 text-center">
+<button class="text-primary font-bold text-sm hover:underline">Ver todas las tareas pendientes</button>
+</div>
+</div>
+</section>
+</div>
+</main>
+<!-- FAB (Suppressed for this context as per design system but added logic check) -->
+<!-- Not needed for Dashboard main view -->
+</body></html>
