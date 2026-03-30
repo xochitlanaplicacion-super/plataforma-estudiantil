@@ -330,7 +330,9 @@ export default function InscripcionAlumnos() {
       headStyles: { fillColor: [30, 41, 59], fontSize: 8 },
       styles: { fontSize: 7, cellPadding: 2 },
       columnStyles: { 0: { cellWidth: 8 }, 1: { cellWidth: 25 }, 2: { cellWidth: 80 } },
-      didDrawPage: (data) => doc.text(`Página ${data.pageNumber}`, 282, 200, { align: 'right' })
+      didDrawPage: (data) => {
+        doc.text(`Página ${data.pageNumber}`, 282, 200, { align: 'right' });
+      }
     });
 
     doc.save(`Lista_Adm_${selectedGroupData.nombre}.pdf`);
