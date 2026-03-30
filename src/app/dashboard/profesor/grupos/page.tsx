@@ -42,6 +42,8 @@ export default function GruposProfesorPage() {
   const [alumnos, setAlumnos] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [professorName, setProfessorName] = useState('');
+  const [catalogoGrupos, setCatalogoGrupos] = useState<any[]>([]);
+  const [catalogoGrados, setCatalogoGrados] = useState<any[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -56,6 +58,23 @@ export default function GruposProfesorPage() {
             return acc;
           }, []);
           setAsignaciones(uniqGroups);
+
+          // 2. Resolver Catálogos de Grados y Grupos para los nombres reales
+          const allGrupoIds = Array.from(new Set(data.flatMap((asig: any) => 
+            (asig.grupo_id || '').split(',').filter(Boolean)
+          )));
+          const allGradoIds = Array.from(new Set(data.flatMap((asig: any) => 
+            (asig.grado_id || '').split(',').filter(Boolean)
+          )));
+
+          if (allGrupoIds.length > 0) {
+            const { data: gps } = await supabase.from('grupos').select('id, nombre, turno').in('id', allGrupoIds);
+            if (gps) setCatalogoGrupos(gps);
+          }
+          if (allGradoIds.length > 0) {
+            const { data: gds } = await supabase.from('grados').select('id, nombre').in('id', allGradoIds);
+            if (gds) setCatalogoGrados(gds);
+          }
         }
         
         // Obtener datos del perfil del profesor
@@ -70,6 +89,27 @@ export default function GruposProfesorPage() {
     };
     fetchData();
   }, []);
+
+  // Funciones auxiliares para resolver nombres
+  const getGradosNombres = (gradoIdsStr: string) => {
+    if (!gradoIdsStr) return 'GENERAL';
+    const ids = gradoIdsStr.split(',').filter(Boolean);
+    const nombres = ids.map(id => catalogoGrados.find(g => g.id === id)?.nombre).filter(Boolean);
+    return nombres.length > 0 ? nombres.join(', ') : 'N/A';
+  };
+
+  const getGruposNombres = (grupoIdsStr: string) => {
+    if (!grupoIdsStr) return 'TODOS';
+    const ids = grupoIdsStr.split(',').filter(Boolean);
+    const nombres = ids.map(id => catalogoGrupos.find(g => g.id === id)?.nombre).filter(Boolean);
+    return nombres.length > 0 ? nombres.join(', ') : 'N/A';
+  };
+
+  const getGrupoTurno = (grupoIdsStr: string) => {
+    if (!grupoIdsStr) return 'N/A';
+    const firstId = grupoIdsStr.split(',')[0];
+    return catalogoGrupos.find(g => g.id === firstId)?.turno || 'N/A';
+  };
 
   const handleSelectGrupo = async (asig: any) => {
     setSelectedAsignacion(asig);
@@ -127,8 +167,8 @@ export default function GruposProfesorPage() {
     worksheet.addRow([]); // Espacio
     const infoRows = [
       ['DOCENTE:', professorName.toUpperCase(), '', 'NIVEL:', selectedAsignacion.niveles?.nombre?.toUpperCase()],
-      ['CARRERA:', selectedAsignacion.carreras?.nombre?.toUpperCase(), '', 'GRUPO:', `${selectedAsignacion.grupos?.grados?.nombre} - ${selectedAsignacion.grupos?.nombre}`.toUpperCase()],
-      ['FECHA:', new Date().toLocaleDateString('es-MX').toUpperCase(), '', 'TURNO:', selectedAsignacion.grupos?.turno?.toUpperCase() || 'N/A']
+      ['CARRERA:', selectedAsignacion.carreras?.nombre?.toUpperCase(), '', 'GRUPO:', `${getGradosNombres(selectedAsignacion.grado_id)} - ${getGruposNombres(selectedAsignacion.grupo_id)}`.toUpperCase()],
+      ['FECHA:', new Date().toLocaleDateString('es-MX').toUpperCase(), '', 'TURNO:', getGrupoTurno(selectedAsignacion.grupo_id).toUpperCase()]
     ];
 
     infoRows.forEach(row => {
@@ -180,7 +220,7 @@ export default function GruposProfesorPage() {
     // Exportar
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    saveAs(blob, `Lista_Asistencia_${selectedAsignacion.grupos?.grados?.nombre}_${selectedAsignacion.grupos?.nombre}.xlsx`);
+    saveAs(blob, `Lista_Asistencia_${getGradosNombres(selectedAsignacion.grado_id)}_${getGruposNombres(selectedAsignacion.grupo_id)}.xlsx`);
     
     toast({ title: "Excel Generado", description: "La lista se ha descargado correctamente." });
   };
@@ -239,7 +279,7 @@ export default function GruposProfesorPage() {
 
     doc.setFont('helvetica', 'normal');
     doc.text(selectedAsignacion.niveles?.nombre?.toUpperCase() || '', 210, infoY);
-    doc.text(`${selectedAsignacion.grupos?.grados?.nombre} - ${selectedAsignacion.grupos?.nombre}`.toUpperCase(), 210, infoY + 7);
+    doc.text(`${getGradosNombres(selectedAsignacion.grado_id)} - ${getGruposNombres(selectedAsignacion.grupo_id)}`.toUpperCase(), 210, infoY + 7);
     doc.text(new Date().toLocaleDateString('es-MX').toUpperCase(), 210, infoY + 14);
 
     // 4. Tabla de Asistencia
@@ -286,7 +326,7 @@ export default function GruposProfesorPage() {
     });
 
     // 5. Finalizar y Descargar
-    doc.save(`Lista_Asistencia_${selectedAsignacion.grupos?.grados?.nombre}_${selectedAsignacion.grupos?.nombre}.pdf`);
+    doc.save(`Lista_Asistencia_${getGradosNombres(selectedAsignacion.grado_id)}_${getGruposNombres(selectedAsignacion.grupo_id)}.pdf`);
     toast({ title: "PDF Generado", description: "Listo para imprimir (Horizontal)" });
   };
 
@@ -346,7 +386,7 @@ export default function GruposProfesorPage() {
                       <div className="h-10 w-10 rounded-xl bg-slate-50 flex items-center justify-center text-slate-400 font-black text-lg">G</div>
                       <div>
                         <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest leading-none">Grado y Grupo</p>
-                        <p className="text-lg font-black text-slate-700 uppercase tracking-tight">{asig.grupos?.grados?.nombre} - {asig.grupos?.nombre}</p>
+                        <p className="text-lg font-black text-slate-700 uppercase tracking-tight">{getGradosNombres(asig.grado_id)} - {getGruposNombres(asig.grupo_id)}</p>
                       </div>
                     </div>
                   </div>
@@ -372,11 +412,11 @@ export default function GruposProfesorPage() {
                 <div className="flex flex-wrap items-center gap-6 mt-6">
                    <div className="flex items-center gap-3 px-4 py-2 rounded-2xl bg-white/5 border border-white/10">
                       <IdCard className="h-5 w-5 text-primary" />
-                      <span className="font-black uppercase tracking-tight text-lg">{selectedAsignacion.grupos?.grados?.nombre}</span>
+                      <span className="font-black uppercase tracking-tight text-lg">{getGradosNombres(selectedAsignacion.grado_id)}</span>
                    </div>
                    <div className="flex items-center gap-3 px-4 py-2 rounded-2xl bg-white/5 border border-white/10">
                       <Users className="h-5 w-5 text-primary" />
-                      <span className="font-black uppercase tracking-tight text-lg">Grupo {selectedAsignacion.grupos?.nombre}</span>
+                      <span className="font-black uppercase tracking-tight text-lg">Grupo {getGruposNombres(selectedAsignacion.grupo_id)}</span>
                    </div>
                 </div>
               </div>

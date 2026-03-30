@@ -17,21 +17,21 @@ const supabaseAdmin = createClient(
 
 const prepareForUpsert = (data: any) => {
   const cleanData = { ...data };
-  
+
   if (!cleanData.id || cleanData.id === '' || cleanData.id === 'new') {
     delete cleanData.id;
   }
 
   const blacklist = [
-    'niveles', 
-    'carreras', 
-    'grados', 
+    'niveles',
+    'carreras',
+    'grados',
     'groups',
     'grupos',
-    'materias', 
-    'profiles', 
-    'unidades', 
-    'temas', 
+    'materias',
+    'profiles',
+    'unidades',
+    'temas',
     'ejercicios',
     'slides',
     'resources',
@@ -233,7 +233,7 @@ export async function upsertSlide(slide: any) {
   try {
     const cleanData = prepareForUpsert(slide);
     const { data, error } = await supabaseAdmin.from('slides').upsert(cleanData).select().single();
-    
+
     // Manejo especial de error si la columna no existe en el DB
     if (error && error.code === 'PGRST204') {
       console.warn("La columna created_by o estilo no existe en slides. Reintentando sin ellas...");
@@ -329,7 +329,7 @@ export async function replaceProfesorInAssignments(oldProfesorId: string, newPro
       .from('asignaciones_profesor')
       .update({ profesor_id: newProfesorId })
       .eq('profesor_id', oldProfesorId);
-    
+
     if (errorAsig) throw errorAsig;
 
     // 2. Transferir propiedad del contenido
@@ -357,7 +357,7 @@ export async function replaceProfesorInAssignments(oldProfesorId: string, newPro
 export async function getAlumnosVigentes() {
   try {
     const hoy = new Date().toISOString().split('T')[0];
-    
+
     const { data, error } = await supabaseAdmin
       .from('profiles')
       .select('id, nombre, apellidos, email, matricula, fecha_expiracion, estatus, rol, carrera_id, grupo_id, carreras(nombre, nivel_id, niveles(nombre))')
@@ -374,7 +374,7 @@ export async function getAlumnosVigentes() {
         .eq('estatus', 'activo')
         .gte('fecha_expiracion', hoy)
         .order('nombre');
-      
+
       return { data: fb, error: null };
     }
 
