@@ -51,7 +51,7 @@ export default function ClientStudentPlayer({ exercise }: { exercise: any }) {
     <div className="fixed inset-0 z-[100] bg-slate-50 overflow-hidden flex flex-col">
       <ActivityPreview 
         exercise={exercise} 
-        onClose={() => router.push('/dashboard/alumno/materias')} 
+        onClose={() => router.back()} 
         onComplete={handleComplete}
       />
       {saving && (
