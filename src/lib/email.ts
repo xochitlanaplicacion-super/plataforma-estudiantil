@@ -4,8 +4,8 @@ import nodemailer from 'nodemailer';
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: process.env.GMAIL_USER || 'ieemilianozapata@gmail.com',
-    pass: process.env.GMAIL_APP_PASSWORD || 'hznuhunfisewlvgq',
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_APP_PASSWORD,
   },
 });
 
@@ -29,8 +29,8 @@ interface ReminderEmailData {
 
 export async function sendWelcomeEmail(data: WelcomeEmailData) {
   try {
-    const user = process.env.GMAIL_USER || 'ieemilianozapata@gmail.com';
-    const pass = process.env.GMAIL_APP_PASSWORD || 'hznuhunfisewlvgq';
+    const user = process.env.GMAIL_USER;
+    const pass = process.env.GMAIL_APP_PASSWORD;
 
     if (!user || !pass) {
       console.warn('⚠️ Credenciales de Gmail no configuradas.');
@@ -159,7 +159,7 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
 
 export async function sendDocumentReminderEmail(data: ReminderEmailData) {
   try {
-    const user = process.env.GMAIL_USER || 'ieemilianozapata@gmail.com';
+    const user = process.env.GMAIL_USER;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://institutoeducativoemilianozapata.vercel.app';
     const logoUrl = `${appUrl}/images/logo_zapata.png`;
 
