@@ -63,9 +63,9 @@ export default async function AlumnoDashboard() {
 
   // KPIs
   const totalMaterias = materias.length;
-  const promedio = 9.4; // Ficticio por ahora, pendiente de calificaciones reales
+  const promedio = 9.4; // TODO: Implementar cálculo real de promedio desde calificaciones
   const creditos = totalMaterias * 10;
-  const totalTareas = 4; // Ficticio por ahora
+  const totalTareas = (data?.pendientes?.length || 0);
 
   return (
     <div className="space-y-12 pb-16 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -217,74 +217,38 @@ export default async function AlumnoDashboard() {
         <div className="bg-card border border-border rounded-2xl md:rounded-3xl overflow-hidden shadow-sm">
           <div className="divide-y divide-border">
             
-            {/* Tarea de ejemplo 1 */}
-            <div className="p-4 md:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 md:gap-6 hover:bg-muted/20 transition-colors">
-              <div className="flex items-start md:items-center gap-4 flex-1">
-                <div className="h-10 w-10 md:h-12 md:w-12 shrink-0 rounded-full bg-red-100 flex items-center justify-center text-red-600">
-                  <AlertTriangle className="w-5 h-5 md:w-6 md:h-6" />
-                </div>
-                <div>
-                  <h6 className="font-bold text-foreground tracking-tight text-sm md:text-base">Investigación Académica I</h6>
-                  <p className="text-xs md:text-sm text-muted-foreground font-medium mt-0.5">
-                    Metodología • Vence: Hoy 23:59 hrs
-                  </p>
-                </div>
+            {data?.pendientes?.length === 0 ? (
+              <div className="p-12 text-center text-muted-foreground italic text-sm">
+                No tienes tareas pendientes publicadas en este momento.
               </div>
-              <div className="flex items-center justify-between md:justify-end gap-4 w-full md:w-auto mt-2 md:mt-0 pt-2 md:pt-0 border-t md:border-t-0 border-border">
-                <span className="px-3 md:px-4 py-1.5 bg-red-600 text-white text-[9px] md:text-[10px] font-black uppercase tracking-widest rounded-full">
-                  URGENTE
-                </span>
-                <Link href="#" className="flex-1 md:flex-none text-center px-4 md:px-6 py-2 bg-primary text-primary-foreground rounded-full font-bold text-xs md:text-sm hover:opacity-90 active:scale-95 transition-all outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2">
-                  Ver Ejercicio
-                </Link>
-              </div>
-            </div>
-
-            {/* Tarea de ejemplo 2 */}
-            <div className="p-4 md:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 md:gap-6 hover:bg-muted/20 transition-colors">
-              <div className="flex items-start md:items-center gap-4 flex-1">
-                <div className="h-10 w-10 md:h-12 md:w-12 shrink-0 rounded-full bg-[#f3d57f]/30 flex items-center justify-center text-[#755B00]">
-                  <Clock className="w-5 h-5 md:w-6 md:h-6" />
-                </div>
-                <div>
-                  <h6 className="font-bold text-foreground tracking-tight text-sm md:text-base">Ensayo Reporte Lectura</h6>
-                  <p className="text-xs md:text-sm text-muted-foreground font-medium mt-0.5">
-                    Comunicación • Vence: Próximo Miércoles
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center justify-between md:justify-end gap-4 w-full md:w-auto mt-2 md:mt-0 pt-2 md:pt-0 border-t md:border-t-0 border-border">
-                <span className="px-3 md:px-4 py-1.5 bg-orange-500 text-white text-[9px] md:text-[10px] font-black uppercase tracking-widest rounded-full">
-                  PRÓXIMA
-                </span>
-                <Link href="#" className="flex-1 md:flex-none text-center px-4 md:px-6 py-2 bg-primary text-primary-foreground rounded-full font-bold text-xs md:text-sm hover:opacity-90 active:scale-95 transition-all outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2">
-                  Ver Ejercicio
-                </Link>
-              </div>
-            </div>
-
-            {/* Tarea de ejemplo 3 */}
-            <div className="p-4 md:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 md:gap-6 hover:bg-muted/20 transition-colors">
-              <div className="flex items-start md:items-center gap-4 flex-1">
-                <div className="h-10 w-10 md:h-12 md:w-12 shrink-0 rounded-full bg-green-100 flex items-center justify-center text-green-700">
-                  <CheckCircle2 className="w-5 h-5 md:w-6 md:h-6" />
-                </div>
-                <div>
-                  <h6 className="font-bold text-foreground tracking-tight text-sm md:text-base">Cuestionario Unidad 2</h6>
-                  <p className="text-xs md:text-sm text-muted-foreground font-medium mt-0.5">
-                    Laboratorio • Vence: Fin de Mes
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center justify-between md:justify-end gap-4 w-full md:w-auto mt-2 md:mt-0 pt-2 md:pt-0 border-t md:border-t-0 border-border">
-                <span className="px-3 md:px-4 py-1.5 bg-green-600 text-white text-[9px] md:text-[10px] font-black uppercase tracking-widest rounded-full">
-                  A TIEMPO
-                </span>
-                <Link href="#" className="flex-1 md:flex-none text-center px-4 md:px-6 py-2 bg-primary text-primary-foreground rounded-full font-bold text-xs md:text-sm hover:opacity-90 active:scale-95 transition-all outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2">
-                  Ver Ejercicio
-                </Link>
-              </div>
-            </div>
+            ) : (
+              data.pendientes.map((tarea: any, idx: number) => {
+                const isUrgent = idx === 0; // Ejemplo de lógica: la más reciente es la "urgente"
+                return (
+                  <div key={tarea.id} className="p-4 md:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 md:gap-6 hover:bg-muted/20 transition-colors">
+                    <div className="flex items-start md:items-center gap-4 flex-1">
+                      <div className={`h-10 w-10 md:h-12 md:w-12 shrink-0 rounded-full flex items-center justify-center ${isUrgent ? 'bg-red-100 text-red-600' : 'bg-[#f3d57f]/30 text-[#755B00]'}`}>
+                        {isUrgent ? <AlertTriangle className="w-5 h-5 md:w-6 md:h-6" /> : <Clock className="w-5 h-5 md:w-6 md:h-6" />}
+                      </div>
+                      <div>
+                        <h6 className="font-bold text-foreground tracking-tight text-sm md:text-base">{tarea.titulo}</h6>
+                        <p className="text-xs md:text-sm text-muted-foreground font-medium mt-0.5">
+                          {tarea.materia} • {tarea.tema}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-between md:justify-end gap-4 w-full md:w-auto mt-2 md:mt-0 pt-2 md:pt-0 border-t md:border-t-0 border-border">
+                      <span className={`px-3 md:px-4 py-1.5 text-white text-[9px] md:text-[10px] font-black uppercase tracking-widest rounded-full ${isUrgent ? 'bg-red-600' : 'bg-orange-500'}`}>
+                        {isUrgent ? 'NUEVA' : 'PRÓXIMA'}
+                      </span>
+                      <Link href={`/dashboard/alumno/ejercicios/${tarea.id}`} className="flex-1 md:flex-none text-center px-4 md:px-6 py-2 bg-primary text-primary-foreground rounded-full font-bold text-xs md:text-sm hover:opacity-90 active:scale-95 transition-all outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2">
+                        Ver Ejercicio
+                      </Link>
+                    </div>
+                  </div>
+                );
+              })
+            )}
 
           </div>
           

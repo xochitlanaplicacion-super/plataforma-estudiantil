@@ -13,13 +13,16 @@ const supabaseAdmin = createClient(
 
 export async function getAlumnoDashboardData(userId: string) {
   try {
-    // 1. Perfil del alumno
+    // 1. Perfil del alumno completo
     const { data: profile, error: profileErr } = await supabaseAdmin
       .from('profiles')
       .select(`
         id, nombre, apellidos, estatus, matricula, grupo_id, carrera_id,
-        grupos (nombre, turno, grados(nombre)),
-        carreras (nombre)
+        grupos (
+          id, nombre, turno, 
+          grados (id, nombre)
+        ),
+        carreras (id, nombre)
       `)
       .eq('id', userId)
       .single();
@@ -36,61 +39,91 @@ export async function getAlumnoDashboardData(userId: string) {
       };
     }
 
-    // 2. Materias del grupo
-    const { data: grupoMaterias, error: gmErr } = await supabaseAdmin
-      .from('grupo_materias')
-      .select(`
-        materia_id,
-        materias (id, nombre, clave)
-      `)
-      .eq('grupo_id', profile.grupo_id)
-      .eq('activo', true);
-
-    if (gmErr) throw gmErr;
-
-    // 3. Obtener profesores para las materias del grupo
-    const materiaIds = grupoMaterias?.map(gm => gm.materia_id) || [];
-    
-    // Obtenemos todos los profesores asignados a este grupo
+    // 2. MATERIAS ASIGNADAS AL GRUPO (Usando asignaciones_profesor como fuente de verdad)
+    // Cada asignación tiene un solo grupo_id (normalizado, sin CSV)
     const { data: asignaciones, error: asigErr } = await supabaseAdmin
       .from('asignaciones_profesor')
       .select(`
         materia_id,
         profesor_id,
+        grupo_id,
+        materias (id, nombre, clave),
         profiles!asignaciones_profesor_profesor_id_fkey(nombre, apellidos)
       `)
       .eq('grupo_id', profile.grupo_id)
       .eq('activo', true);
 
-    // Mapear los profesores a cada materia
-    const materiasAsignadas = grupoMaterias?.map((gm: any) => {
-      const asignacion = asignaciones?.find(a => a.materia_id === gm.materia_id);
-      return {
-        id: gm.materias?.id,
-        nombre: gm.materias?.nombre,
-        clave: gm.materias?.clave,
-        profesor: (() => {
-          if (!asignacion?.profiles) return 'Profesor por asignar';
-          const prof = Array.isArray(asignacion.profiles) ? asignacion.profiles[0] : asignacion.profiles;
-          return `${(prof as any).nombre} ${(prof as any).apellidos}`;
-        })(),
-        profesor_id: asignacion?.profesor_id || null
-      };
-    }) || [];
+    if (asigErr) throw asigErr;
 
-    // 4. Últimos ejercicios o tareas (simplificado por ahora, se obtendrán todos los ejercicios de la carrera o un límite)
-    // Para simplificar, buscamos temas que tengan material
-    const { data: ultimosEjercicios } = await supabaseAdmin
-      .from('ejercicios')
-      .select('id, titulo, tipo, created_at, tema_id')
-      .eq('publicado', true)
-      .order('created_at', { ascending: false })
-      .limit(5);
+    // Formatear la lista de materias
+    const materiasAsignadas = asignaciones?.map((asig: any) => ({
+      id: asig.materias?.id,
+      nombre: asig.materias?.nombre,
+      clave: asig.materias?.clave,
+      profesor: asig.profiles 
+        ? `${asig.profiles.nombre} ${asig.profiles.apellidos}`
+        : 'Profesor por asignar',
+      profesor_id: asig.profesor_id || null
+    })) || [];
+
+    const materiaIds = materiasAsignadas.map(m => m.id).filter(Boolean);
+
+    // 3. OBTENER EJERCICIOS REALES
+    // Flujo: materias -> unidades -> temas -> ejercicios
+    let ejerciciosPublicados: any[] = [];
+    
+    if (materiaIds.length > 0) {
+      const { data: unidades } = await supabaseAdmin
+        .from('unidades')
+        .select('id, materia_id')
+        .in('materia_id', materiaIds)
+        .eq('activo', true);
+
+      const unidadIds = unidades?.map(u => u.id) || [];
+
+      if (unidadIds.length > 0) {
+        const { data: temas } = await supabaseAdmin
+          .from('temas')
+          .select('id, titulo, unidad_id')
+          .in('unidad_id', unidadIds);
+
+        const temaIds = temas?.map(t => t.id) || [];
+
+        if (temaIds.length > 0) {
+          const { data: ejercicios } = await supabaseAdmin
+            .from('ejercicios')
+            .select(`
+              id, titulo, tipo, created_at, tema_id,
+              temas (
+                titulo,
+                unidades (
+                  materias (nombre)
+                )
+              )
+            `)
+            .in('tema_id', temaIds)
+            .order('created_at', { ascending: false })
+            .limit(10);
+
+          ejerciciosPublicados = ejercicios || [];
+        }
+      }
+    }
+
+    // Formatear pendientes para la UI
+    const pendientes = ejerciciosPublicados.map(ej => ({
+      id: ej.id,
+      titulo: ej.titulo,
+      tipo: ej.tipo,
+      fecha: ej.created_at,
+      materia: ej.temas?.unidades?.materias?.nombre || 'General',
+      tema: ej.temas?.titulo || ''
+    }));
 
     return {
       profile,
       materiasAsignadas,
-      pendientes: ultimosEjercicios || []
+      pendientes
     };
 
   } catch (error: any) {

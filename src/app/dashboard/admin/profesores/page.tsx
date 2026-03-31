@@ -131,8 +131,8 @@ export default function AsignacionProfesores() {
   }, [dialog.data.carrera_id]);
 
   const handleEdit = (asig: any) => {
-    setSelGrados(asig.grado_id ? asig.grado_id.split(',').filter(Boolean) : []);
-    setSelGrupos(asig.grupo_id ? asig.grupo_id.split(',').filter(Boolean) : []);
+    setSelGrados(asig.grado_id ? [asig.grado_id] : []);
+    setSelGrupos(asig.grupo_id ? [asig.grupo_id] : []);
     setDialog({
       open: true,
       data: {
@@ -154,18 +154,45 @@ export default function AsignacionProfesores() {
       return;
     }
 
-    const finalData = {
-      ...dialog.data,
-      grado_id: selGrados.join(','),
-      grupo_id: selGrupos.join(',')
-    };
-
-    const { error } = await upsertAsignacionProfesor(finalData);
-    if (!error) {
-      toast({ title: "Asignación guardada" });
-      setDialog({ ...dialog, open: false });
-      fetchData();
+    // NORMALIZADO: crear 1 fila por cada combinación grupo-materia
+    if (dialog.data.id) {
+      // Editando una asignación existente: actualizar con el primer grupo/grado seleccionado
+      const finalData = {
+        ...dialog.data,
+        grado_id: selGrados[0] || null,
+        grupo_id: selGrupos[0] || null
+      };
+      const { error } = await upsertAsignacionProfesor(finalData);
+      if (error) {
+        toast({ variant: "destructive", title: "Error", description: "No se pudo guardar la asignación." });
+        return;
+      }
+    } else {
+      // Creando nueva(s): una fila por cada grupo seleccionado
+      const gruposParaCrear = selGrupos.length > 0 ? selGrupos : [null];
+      let hasError = false;
+      for (const grupoId of gruposParaCrear) {
+        const finalData = {
+          profesor_id: dialog.data.profesor_id,
+          nivel_id: dialog.data.nivel_id,
+          carrera_id: dialog.data.carrera_id,
+          materia_id: dialog.data.materia_id,
+          grado_id: selGrados[0] || null,
+          grupo_id: grupoId,
+          activo: dialog.data.activo
+        };
+        const { error } = await upsertAsignacionProfesor(finalData);
+        if (error) { hasError = true; break; }
+      }
+      if (hasError) {
+        toast({ variant: "destructive", title: "Error", description: "Hubo un problema al guardar una asignación." });
+        return;
+      }
     }
+
+    toast({ title: "Asignación guardada", description: selGrupos.length > 1 ? `Se crearon ${selGrupos.length} asignaciones (una por grupo).` : undefined });
+    setDialog({ ...dialog, open: false });
+    fetchData();
   };
 
   const handleDelete = async (id: string) => {
@@ -321,13 +348,13 @@ export default function AsignacionProfesores() {
                             </div>
                             
                             <div className="flex flex-wrap gap-1">
-                              {asig.grado_id ? asig.grado_id.split(',').filter(Boolean).map((gid: string, i: number) => (
-                                <Badge key={i} variant="outline" className="text-[9px] bg-amber-50 border-amber-200 text-amber-700">Gdo</Badge>
-                              )) : <Badge variant="outline" className="text-[9px] bg-slate-50">Gral.</Badge>}
+                              {asig.grado_id ? (
+                                <Badge variant="outline" className="text-[9px] bg-amber-50 border-amber-200 text-amber-700">Gdo</Badge>
+                              ) : <Badge variant="outline" className="text-[9px] bg-slate-50">Gral.</Badge>}
                               
-                              {asig.grupo_id ? asig.grupo_id.split(',').filter(Boolean).map((gpid: string, i: number) => (
-                                <Badge key={i} variant="secondary" className="text-[9px] bg-blue-50 text-blue-700 border-blue-100">Gp</Badge>
-                              )) : <Badge variant="secondary" className="text-[9px]">Todos</Badge>}
+                              {asig.grupo_id ? (
+                                <Badge variant="secondary" className="text-[9px] bg-blue-50 text-blue-700 border-blue-100">Gp</Badge>
+                              ) : <Badge variant="secondary" className="text-[9px]">Todos</Badge>}
                             </div>
                           </CardContent>
                         </Card>
