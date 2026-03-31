@@ -1,4 +1,7 @@
+'use server';
+
 import { createClient } from '@supabase/supabase-js';
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
@@ -132,4 +135,36 @@ export async function getAlumnoDashboardData(userId: string) {
     console.error('Error fetching alumno dashboard:', error.message);
     return { error: error.message };
   }
+}
+
+export async function saveExerciseResult(ejercicioId: string, aciertos: number, total: number, calificacion: number) {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) {
+    return { error: 'No user authenticated' };
+  }
+
+  const { data, error } = await supabase
+    .from('resultados_ejercicios')
+    .upsert({
+      alumno_id: user.id,
+      ejercicio_id: ejercicioId,
+      calificacion: calificacion,
+      aciertos: aciertos,
+      total_preguntas: total,
+      estado: 'completado',
+      fecha_completado: new Date().toISOString()
+    }, { 
+      onConflict: 'alumno_id, ejercicio_id'
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Error saving exercise result:', error);
+    return { error: error.message };
+  }
+
+  return { success: true, data };
 }
