@@ -113,18 +113,17 @@ export async function getAlumnoDashboardData(userId: string) {
       }
     }
 
-    // 4. FILTRAR ACTIVIDADES QUE EL ALUMNO YA HIZO
-    const { data: hechos } = await supabaseAdmin
+    const hechos = (await supabaseAdmin
       .from('resultados_ejercicios')
-      .select('ejercicio_id')
-      .eq('alumno_id', userId);
+      .select('ejercicio_id, calificacion, aciertos, total_preguntas')
+      .eq('alumno_id', userId)).data || [];
 
-    const hechosIds = new Set(hechos?.map(h => h.ejercicio_id) || []);
+    const hechosMap = new Map(hechos.map(h => [h.ejercicio_id, h]));
 
-    // Formatear pendientes para la UI (solo los que NO están en hechosIds)
-    const pendientes = ejerciciosPublicados
-      .filter(ej => !hechosIds.has(ej.id))
-      .map(ej => ({
+    // Formatear todos los ejercicios con su estado/nota
+    const todosLosEjercicios = ejerciciosPublicados.map(ej => {
+      const resultado = hechosMap.get(ej.id);
+      return {
         id: ej.id,
         titulo: ej.titulo,
         tipo: ej.tipo,
@@ -132,13 +131,22 @@ export async function getAlumnoDashboardData(userId: string) {
         fecha_entrega: ej.fecha_entrega,
         materia: ej.temas?.unidades?.materias?.nombre || 'General',
         materia_id: ej.temas?.unidades?.materia_id,
-        tema: ej.temas?.titulo || ''
-      }));
+        tema: ej.temas?.titulo || '',
+        completado: !!resultado,
+        calificacion: resultado?.calificacion || null,
+        aciertos: resultado?.aciertos || 0,
+        total_preguntas: resultado?.total_preguntas || 0
+      };
+    });
+
+    // Pendientes son solo los NO completados
+    const pendientes = todosLosEjercicios.filter(ej => !ej.completado);
 
     return {
       profile,
       materiasAsignadas,
-      pendientes
+      pendientes,
+      todosLosEjercicios
     };
 
   } catch (error: any) {

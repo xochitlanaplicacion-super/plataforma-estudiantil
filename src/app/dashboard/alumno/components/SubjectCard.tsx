@@ -164,28 +164,52 @@ export function SubjectCard({ materia, exercises, promedio, progreso }: SubjectC
                 {exercises.length === 0 ? (
                   <p className="text-[10px] md:text-xs italic text-muted-foreground p-4 bg-white/50 rounded-2xl border border-dashed text-center">No hay actividades publicadas aún.</p>
                 ) : (
-                  currentBatch.map((ex) => {
+                  currentBatch.map((ex: any) => {
                     const deadline = ex.fecha_entrega ? new Date(ex.fecha_entrega) : null;
                     const isExpired = deadline ? deadline < now : false;
-                    
+                    const isPerfect = ex.calificacion >= 100;
+                    const isCompleted = ex.completado;
+
                     return (
                       <Link 
                         key={ex.id} 
                         href={`/dashboard/alumno/ejercicios/${ex.id}`}
                         className={cn(
                           "flex items-center justify-between p-4 rounded-2xl border transition-all group/item shadow-sm",
-                          isExpired ? "bg-slate-50/50 border-slate-100 opacity-80" : "bg-white border-border hover:border-primary/40 hover:shadow-md"
+                          isPerfect 
+                            ? "bg-blue-50/50 border-blue-200 hover:border-blue-400" 
+                            : isCompleted
+                              ? "bg-emerald-50/30 border-emerald-100 hover:border-emerald-300"
+                              : isExpired 
+                                ? "bg-slate-50/50 border-slate-100 opacity-80" 
+                                : "bg-white border-border hover:border-primary/40 hover:shadow-md"
                         )}
                       >
                         <div className="flex items-center gap-3 overflow-hidden">
                           <div className={cn(
-                            "p-2 rounded-xl shrink-0",
-                            isExpired ? "bg-slate-100 text-slate-400" : "bg-primary/5 text-primary"
+                            "p-2 rounded-xl shrink-0 transition-colors",
+                            isPerfect 
+                              ? "bg-blue-600 text-white" 
+                              : isCompleted 
+                                ? "bg-emerald-600 text-white"
+                                : isExpired 
+                                  ? "bg-slate-100 text-slate-400" 
+                                  : "bg-primary/5 text-primary group-hover/item:bg-primary group-hover/item:text-white"
                           )}>
-                            {isExpired ? <Clock className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+                            {isPerfect ? <FileCheck className="w-4 h-4" /> : isCompleted ? <FileCheck className="w-4 h-4" /> : isExpired ? <Clock className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
                           </div>
                           <div className="flex flex-col min-w-0">
-                            <span className="text-[12px] md:text-[13px] font-bold text-slate-700 truncate">{ex.titulo}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-[12px] md:text-[13px] font-bold text-slate-700 truncate">{ex.titulo}</span>
+                              {isCompleted && (
+                                <span className={cn(
+                                  "text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-tighter",
+                                  isPerfect ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"
+                                )}>
+                                  Nota: {Number(ex.calificacion).toFixed(1)}
+                                </span>
+                              )}
+                            </div>
                             {deadline && (
                               <span className="text-[9px] font-black uppercase text-muted-foreground tracking-widest mt-0.5">
                                 LIM: {deadline.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}
@@ -195,11 +219,15 @@ export function SubjectCard({ materia, exercises, promedio, progreso }: SubjectC
                         </div>
                         <span className={cn(
                           "text-[10px] md:text-[11px] font-black px-4 py-2 rounded-full uppercase shrink-0 transition-all",
-                          isExpired 
-                            ? "bg-slate-200 text-slate-500" 
-                            : "bg-primary text-white group-hover/item:scale-105"
+                          isPerfect 
+                            ? "bg-blue-600 text-white shadow-lg shadow-blue-200" 
+                            : isCompleted
+                              ? "bg-emerald-600 text-white"
+                              : isExpired 
+                                ? "bg-slate-200 text-slate-500" 
+                                : "bg-primary text-white group-hover/item:scale-105 shadow-lg shadow-primary/20"
                         )}>
-                          {isExpired ? 'Ver actividad' : 'Realizar'}
+                          {isPerfect ? 'Revisar' : isCompleted ? 'Reintentar' : isExpired ? 'Vencido' : 'Realizar'}
                         </span>
                       </Link>
                     );

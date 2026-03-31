@@ -60,7 +60,7 @@ export default async function MisMateriasPage() {
               <SubjectCard 
                 key={materia.id} 
                 materia={materia} 
-                exercises={data.pendientes || []} 
+                exercises={data.todosLosEjercicios || []} 
                 promedio={promedio}
                 progreso={progreso}
               />
