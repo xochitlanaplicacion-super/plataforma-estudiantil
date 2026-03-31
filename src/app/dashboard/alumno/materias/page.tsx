@@ -2,6 +2,7 @@ import React from 'react';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getAlumnoDashboardData } from '@/lib/actions/alumno';
 import { redirect } from 'next/navigation';
+import { BookOpen } from 'lucide-react';
 import { SubjectCard } from '../components/SubjectCard';
 
 export default async function MisMateriasPage() {
