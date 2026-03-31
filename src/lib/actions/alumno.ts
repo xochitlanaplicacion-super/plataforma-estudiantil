@@ -137,7 +137,7 @@ export async function getAlumnoDashboardData(userId: string) {
   }
 }
 
-export async function saveExerciseResult(ejercicioId: string, aciertos: number, total: number, calificacion: number) {
+export async function saveExerciseResult(ejercicioId: string, aciertos: number, total: number, calificacionIntento: number) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -145,14 +145,38 @@ export async function saveExerciseResult(ejercicioId: string, aciertos: number, 
     return { error: 'No user authenticated' };
   }
 
+  // 1. Obtener registro existente para este alumno y ejercicio
+  const { data: existing } = await supabase
+    .from('resultados_ejercicios')
+    .select('*')
+    .eq('alumno_id', user.id)
+    .eq('ejercicio_id', ejercicioId)
+    .single();
+
+  // 2. Si ya está bloqueado (sacó 100 antes), no promediar más
+  if (existing?.bloqueado) {
+    return { success: true, data: existing, message: 'Calificación perfecta ya registrada.' };
+  }
+
+  // 3. Cálculos de promedio acumulado
+  const nuevosIntentos = (existing?.intentos || 0) + 1;
+  const nuevaSuma = (Number(existing?.suma_calificaciones) || 0) + calificacionIntento;
+  const nuevaCalificacionPromedio = Math.min(100, nuevaSuma / nuevosIntentos);
+  
+  // 4. Determinar si bloqueamos (si el promedio es 100)
+  const debeBloquear = nuevaCalificacionPromedio >= 100;
+
   const { data, error } = await supabase
     .from('resultados_ejercicios')
     .upsert({
       alumno_id: user.id,
       ejercicio_id: ejercicioId,
-      calificacion: calificacion,
+      calificacion: nuevaCalificacionPromedio, // Guardamos el promedio
       aciertos: aciertos,
       total_preguntas: total,
+      intentos: nuevosIntentos,
+      suma_calificaciones: nuevaSuma,
+      bloqueado: debeBloquear,
       estado: 'completado',
       fecha_completado: new Date().toISOString()
     }, { 

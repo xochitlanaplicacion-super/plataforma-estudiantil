@@ -11,9 +11,13 @@ export default function ClientStudentPlayer({ exercise }: { exercise: any }) {
   const router = useRouter();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
+  const [hasProcessed, setHasProcessed] = useState(false);
+  const [finalScore, setFinalScore] = useState<number | null>(null);
 
   const handleComplete = async (score: number, total: number) => {
+    if (hasProcessed) return;
     try {
+      setHasProcessed(true);
       setSaving(true);
       const percentage = (score / total) * 100;
       
@@ -25,16 +29,19 @@ export default function ClientStudentPlayer({ exercise }: { exercise: any }) {
           description: "No se pudo guardar la calificación. Intenta de nuevo.",
           variant: "destructive"
         });
+        setHasProcessed(false);
       } else {
+        setFinalScore(res.data.calificacion);
         confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
         toast({
           title: "¡Actividad guardada!",
-          description: `Obtuviste ${score} de ${total} aciertos.`,
+          description: `Promedio acumulado: ${res.data.calificacion.toFixed(1)}%`,
           variant: "default"
         });
       }
     } catch (e) {
       console.error(e);
+      setHasProcessed(false);
     } finally {
       setSaving(false);
     }

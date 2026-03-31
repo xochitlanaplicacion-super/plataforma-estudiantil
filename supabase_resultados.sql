@@ -7,6 +7,9 @@ CREATE TABLE IF NOT EXISTS public.resultados_ejercicios (
     calificacion numeric(5,2) DEFAULT 0,
     aciertos integer DEFAULT 0,
     total_preguntas integer DEFAULT 0,
+    intentos integer DEFAULT 0,
+    suma_calificaciones numeric(10,2) DEFAULT 0,
+    bloqueado boolean DEFAULT false,
     estado text DEFAULT 'completado',
     fecha_completado timestamp with time zone DEFAULT now(),
     

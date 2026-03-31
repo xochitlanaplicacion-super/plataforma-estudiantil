@@ -198,9 +198,13 @@ export const ActivityPreview = ({ exercise, onClose, onComplete }: { exercise: a
   const [totalSteps, setTotalSteps] = useState(0);
   const [finished, setSuccess] = useState(false);
 
+  const hasCompleted = useRef(false);
   useEffect(() => {
-    if (finished && onComplete) onComplete(score, totalSteps);
-  }, [finished, onComplete]); // Use stable values from render when finished is true
+    if (finished && onComplete && !hasCompleted.current) {
+      hasCompleted.current = true;
+      onComplete(score, totalSteps);
+    }
+  }, [finished, onComplete, score, totalSteps]); // Dependency array updated for clarity
   
   const [selectedOption, setSelectedOption] = useState<any>(null);
   const [shuffledItems, setShuffledItems] = useState<any[]>([]);
