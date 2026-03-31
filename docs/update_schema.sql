@@ -23,6 +23,11 @@ ALTER TABLE unidades ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES profile
 ALTER TABLE temas ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES profiles(id);
 ALTER TABLE ejercicios ADD COLUMN IF NOT EXISTS created_by UUID REFERENCES profiles(id);
 
+-- 5. Campo de Fecha de Entrega para Actividades (Permite reciclar actividades entre ciclos)
+-- El profesor DEBE ingresar esta fecha al crear/editar una actividad.
+-- Para reciclar una actividad, basta con actualizar esta fecha sin recrear el contenido.
+ALTER TABLE ejercicios ADD COLUMN IF NOT EXISTS fecha_entrega TIMESTAMP WITH TIME ZONE;
+
 -- 4. Políticas de Seguridad (RLS)
 ALTER TABLE slides ENABLE ROW LEVEL SECURITY;
 

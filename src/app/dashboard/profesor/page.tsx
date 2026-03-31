@@ -46,7 +46,8 @@ import {
   AlertCircle,
   ArrowRight,
   RotateCcw,
-  XCircle
+  XCircle,
+  CalendarClock
 } from 'lucide-react';
 
 import { 
@@ -1608,6 +1609,12 @@ export default function ProfesorDashboard() {
       return;
     }
 
+    // Validación obligatoria: fecha de entrega en ejercicios
+    if (dialog.type === 'ejercicio' && (!d.fecha_entrega || d.fecha_entrega.trim() === '')) {
+      toast({ variant: "destructive", title: "Fecha de entrega requerida", description: "Debes establecer una fecha límite de entrega para la actividad. Este campo es obligatorio." });
+      return;
+    }
+
     try {
       if (dialog.type === 'unidad') {
         if (!selectedMateria?.id) { toast({ variant: "destructive", title: "Error", description: "No hay materia seleccionada." }); return; }
@@ -1631,6 +1638,8 @@ export default function ProfesorDashboard() {
         if (dialog.type === 'unidad') fetchUnidades(selectedMateria.id);
         if (dialog.type === 'tema') fetchTemas(selectedUnidad.id);
         if (dialog.type === 'ejercicio') fetchEjercicios(selectedTema.id);
+      } else if (result?.error) {
+        toast({ variant: "destructive", title: "Error al guardar", description: result.error.message || "Ocurrió un error inesperado." });
       }
     } catch (e) { console.error(e); }
   };
@@ -1950,20 +1959,38 @@ export default function ProfesorDashboard() {
                    <Button variant="ghost" size="sm" onClick={() => setCurrentTab('temas')} className="text-primary font-black uppercase text-[10px]"><ArrowLeft size={14} /> Volver</Button>
                    <CardTitle className="text-2xl font-black uppercase text-slate-800 flex items-center gap-3"><Sparkles className="text-amber-500" /> Actividades de {selectedTema?.titulo}</CardTitle>
                  </div>
-                 <Button size="lg" className="rounded-2xl bg-amber-500 text-white font-black uppercase tracking-widest gap-2" onClick={() => setDialog({ open: true, type: 'ejercicio', data: { titulo: '', tipo: 'crucigrama', contenido: initActivityContent('crucigrama'), orden: ejercicios.length + 1 } })}><Plus size={18} /> Nueva Actividad</Button>
+                 <Button size="lg" className="rounded-2xl bg-amber-500 text-white font-black uppercase tracking-widest gap-2" onClick={() => setDialog({ open: true, type: 'ejercicio', data: { titulo: '', tipo: 'crucigrama', contenido: initActivityContent('crucigrama'), orden: ejercicios.length + 1, fecha_entrega: '' } })}><Plus size={18} /> Nueva Actividad</Button>
                </CardHeader>
                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                  <Table>
-                   <TableHeader className="bg-slate-50/50"><TableRow><TableHead className="font-black uppercase text-[10px]">Orden</TableHead><TableHead className="font-black uppercase text-[10px]">Actividad</TableHead><TableHead className="font-black uppercase text-[10px]">Tipo</TableHead><TableHead className="text-right font-black uppercase text-[10px]">Acciones</TableHead></TableRow></TableHeader>
+                   <TableHeader className="bg-slate-50/50"><TableRow><TableHead className="font-black uppercase text-[10px]">Orden</TableHead><TableHead className="font-black uppercase text-[10px]">Actividad</TableHead><TableHead className="font-black uppercase text-[10px]">Tipo</TableHead><TableHead className="font-black uppercase text-[10px]"><span className="flex items-center gap-1"><CalendarClock size={12} />Fecha Límite</span></TableHead><TableHead className="text-right font-black uppercase text-[10px]">Acciones</TableHead></TableRow></TableHeader>
                    <TableBody>
                      {ejercicios.map((e) => {
                        const template = ACTIVITY_TEMPLATES.find(t => t.id === e.tipo);
+                       const fechaEntrega = e.fecha_entrega ? new Date(e.fecha_entrega) : null;
+                       const fechaStr = fechaEntrega ? fechaEntrega.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : null;
+                       const isVencida = fechaEntrega ? fechaEntrega < new Date() : false;
+                       const isProxima = fechaEntrega ? (fechaEntrega.getTime() - new Date().getTime()) < 3 * 24 * 60 * 60 * 1000 && !isVencida : false;
                        return (
                         <TableRow key={e.id}>
                           <TableCell className="font-black text-slate-400">{e.orden}</TableCell>
                           <TableCell className="font-bold text-slate-700 uppercase tracking-tight">{e.titulo}</TableCell>
                           <TableCell>
                             <Badge className={cn("text-[9px] font-black uppercase text-white", template?.color)}>{template?.label}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            {fechaStr ? (
+                              <div className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase",
+                                isVencida ? "bg-red-100 text-red-700" : isProxima ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"
+                              )}>
+                                <CalendarClock size={11} />
+                                {fechaStr}
+                                {isVencida && <span className="ml-1 text-[8px]">VENCIDA</span>}
+                                {isProxima && <span className="ml-1 text-[8px]">PRÓXIMA</span>}
+                              </div>
+                            ) : (
+                              <span className="text-[10px] font-bold text-red-500 flex items-center gap-1"><CalendarClock size={11} />Sin fecha</span>
+                            )}
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex justify-end gap-2">
@@ -2012,6 +2039,32 @@ export default function ProfesorDashboard() {
                 <Input type="number" className="h-12 rounded-xl" value={dialog.data.orden || 1} onChange={e => setDialog({...dialog, data: {...dialog.data, orden: parseInt(e.target.value)}})} />
               </div>
             </div>
+
+            {dialog.type === 'ejercicio' && (
+              <div className="p-5 rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50/60 space-y-3">
+                <label className="text-[10px] font-black uppercase text-amber-700 tracking-widest flex items-center gap-2">
+                  <CalendarClock size={14} className="text-amber-600" />
+                  Fecha Límite de Entrega *
+                  <span className="ml-auto text-[9px] font-bold bg-amber-200 text-amber-800 px-2 py-0.5 rounded-full">OBLIGATORIO</span>
+                </label>
+                <p className="text-[10px] text-amber-600 font-medium">
+                  El alumno podrá realizar la actividad hasta esta fecha. Para reciclar la actividad en un nuevo ciclo, edítala y cambia únicamente esta fecha.
+                </p>
+                <Input
+                  id="fecha-entrega-input"
+                  type="date"
+                  className={cn("h-12 rounded-xl font-bold text-slate-700 border-2", (!dialog.data.fecha_entrega || dialog.data.fecha_entrega === '') ? 'border-amber-400 bg-white focus-visible:ring-amber-400' : 'border-emerald-400 bg-white')}
+                  value={dialog.data.fecha_entrega ? dialog.data.fecha_entrega.split('T')[0] : ''}
+                  min={new Date().toISOString().split('T')[0]}
+                  onChange={e => setDialog({...dialog, data: {...dialog.data, fecha_entrega: e.target.value ? new Date(e.target.value + 'T23:59:59').toISOString() : ''}})}
+                />
+                {(!dialog.data.fecha_entrega || dialog.data.fecha_entrega === '') && (
+                  <p className="text-[10px] font-black text-amber-700 flex items-center gap-1.5">
+                    <AlertCircle size={11} /> Este campo es obligatorio para poder guardar la actividad.
+                  </p>
+                )}
+              </div>
+            )}
 
             <div className="space-y-2">
               <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Descripción / Instrucciones (Opcional)</label>
