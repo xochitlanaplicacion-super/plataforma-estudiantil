@@ -113,17 +113,27 @@ export async function getAlumnoDashboardData(userId: string) {
       }
     }
 
-    // Formatear pendientes para la UI
-    const pendientes = ejerciciosPublicados.map(ej => ({
-      id: ej.id,
-      titulo: ej.titulo,
-      tipo: ej.tipo,
-      fecha: ej.created_at,
-      fecha_entrega: ej.fecha_entrega,
-      materia: ej.temas?.unidades?.materias?.nombre || 'General',
-      materia_id: ej.temas?.unidades?.materia_id,
-      tema: ej.temas?.titulo || ''
-    }));
+    // 4. FILTRAR ACTIVIDADES QUE EL ALUMNO YA HIZO
+    const { data: hechos } = await supabaseAdmin
+      .from('resultados_ejercicios')
+      .select('ejercicio_id')
+      .eq('alumno_id', userId);
+
+    const hechosIds = new Set(hechos?.map(h => h.ejercicio_id) || []);
+
+    // Formatear pendientes para la UI (solo los que NO están en hechosIds)
+    const pendientes = ejerciciosPublicados
+      .filter(ej => !hechosIds.has(ej.id))
+      .map(ej => ({
+        id: ej.id,
+        titulo: ej.titulo,
+        tipo: ej.tipo,
+        fecha: ej.created_at,
+        fecha_entrega: ej.fecha_entrega,
+        materia: ej.temas?.unidades?.materias?.nombre || 'General',
+        materia_id: ej.temas?.unidades?.materia_id,
+        tema: ej.temas?.titulo || ''
+      }));
 
     return {
       profile,
