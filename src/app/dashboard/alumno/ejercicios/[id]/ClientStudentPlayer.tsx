@@ -33,6 +33,8 @@ export default function ClientStudentPlayer({ exercise }: { exercise: any }) {
       } else {
         setFinalScore(res.data.calificacion);
         confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
+        // Refrescar los datos del servidor (esto hará que el ejercicio desaparezca de pendientes)
+        router.refresh();
         toast({
           title: "¡Actividad guardada!",
           description: `Promedio acumulado: ${res.data.calificacion.toFixed(1)}%`,
@@ -47,11 +49,19 @@ export default function ClientStudentPlayer({ exercise }: { exercise: any }) {
     }
   };
 
+  const handleClose = () => {
+    // Si ya se guardó, refrescamos antes de volver por seguridad
+    if (hasProcessed) {
+      router.refresh();
+    }
+    router.back();
+  };
+
   return (
     <div className="fixed inset-0 z-[100] bg-slate-50 overflow-hidden flex flex-col">
       <ActivityPreview 
         exercise={exercise} 
-        onClose={() => router.back()} 
+        onClose={handleClose} 
         onComplete={handleComplete}
       />
       {saving && (
