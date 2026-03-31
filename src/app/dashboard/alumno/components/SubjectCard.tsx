@@ -17,7 +17,9 @@ import {
   FileCheck,
   TrendingUp,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Layout,
+  ListTree
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -196,11 +198,18 @@ export function SubjectCard({ materia, exercises, promedio, progreso }: SubjectC
                                   ? "bg-slate-100 text-slate-400" 
                                   : "bg-primary/5 text-primary group-hover/item:bg-primary group-hover/item:text-white"
                           )}>
-                            {isPerfect ? <FileCheck className="w-4 h-4" /> : isCompleted ? <FileCheck className="w-4 h-4" /> : isExpired ? <Clock className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+                            {ex.tipo === 'sopa_letras' ? <ListTree className="w-4 h-4" /> : 
+                             ex.tipo === 'crucigrama' ? <Layout className="w-4 h-4" /> :
+                             ex.tipo === 'emparejamiento' ? <Activity className="w-4 h-4" /> :
+                             ex.tipo === 'quiz' ? <FileCheck className="w-4 h-4" /> :
+                             isExpired ? <Clock className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
                           </div>
                           <div className="flex flex-col min-w-0">
                             <div className="flex items-center gap-2">
                               <span className="text-[12px] md:text-[13px] font-bold text-slate-700 truncate">{ex.titulo}</span>
+                              <span className="text-[9px] font-black opacity-30 px-1.5 py-0.5 rounded border border-current uppercase tracking-tighter">
+                                {ex.tipo?.replace(/_/g, ' ') || 'Ejercicio'}
+                              </span>
                               {isCompleted && (
                                 <span className={cn(
                                   "text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-tighter",
