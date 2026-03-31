@@ -48,9 +48,11 @@ interface SubjectCardProps {
     clave?: string;
   };
   exercises: Exercise[];
+  promedio: string;
+  progreso: number;
 }
 
-export function SubjectCard({ materia, exercises }: SubjectCardProps) {
+export function SubjectCard({ materia, exercises, promedio, progreso }: SubjectCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
@@ -78,9 +80,6 @@ export function SubjectCard({ materia, exercises }: SubjectCardProps) {
 
   const totalPages = Math.ceil(sortedExercises.length / ITEMS_PER_PAGE);
   const currentBatch = sortedExercises.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-
-  const progresoRandom = useMemo(() => Math.floor(Math.random() * (95 - 40 + 1)) + 40, []);
-  const promedioRandom = useMemo(() => (Math.random() * (10 - 7) + 7).toFixed(1), []);
 
   return (
     <div className={cn(
@@ -110,7 +109,7 @@ export function SubjectCard({ materia, exercises }: SubjectCardProps) {
               En Curso
             </span>
             <div className="flex items-center md:justify-end gap-2">
-              <span className="text-3xl md:text-4xl font-black font-headline text-foreground">{promedioRandom}</span>
+              <span className="text-3xl md:text-4xl font-black font-headline text-foreground">{promedio}</span>
               <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground leading-tight">Promedio<br/>Gral.</span>
             </div>
           </div>
@@ -211,9 +210,9 @@ export function SubjectCard({ materia, exercises }: SubjectCardProps) {
 
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 pt-6 border-t border-border/20">
               <div className="flex-1 w-full max-w-xl flex items-center gap-4">
-                <span className="text-xs font-bold text-foreground w-10 text-right">{progresoRandom}%</span>
+                <span className="text-xs font-bold text-foreground w-10 text-right">{progreso}%</span>
                 <div className="flex-1 h-2 bg-border/50 rounded-full overflow-hidden">
-                  <div className="h-full bg-primary rounded-full transition-all duration-1000 ease-out" style={{ width: `${progresoRandom}%` }}></div>
+                  <div className="h-full bg-primary rounded-full transition-all duration-1000 ease-out" style={{ width: `${progreso}%` }}></div>
                 </div>
                 <span className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground hidden sm:inline-block">Completado</span>
               </div>

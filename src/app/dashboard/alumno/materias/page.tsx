@@ -51,13 +51,21 @@ export default async function MisMateriasPage() {
          </div>
       ) : (
         <div className="space-y-6 md:space-y-8">
-          {materias.map((materia: any) => (
-            <SubjectCard 
-              key={materia.id} 
-              materia={materia} 
-              exercises={data.pendientes || []} 
-            />
-          ))}
+          {materias.map((materia: any) => {
+            // Generar datos aleatorios en el servidor para evitar desincronización de hidratación
+            const promedio = (Math.random() * (10 - 7) + 7).toFixed(1);
+            const progreso = Math.floor(Math.random() * (95 - 40 + 1)) + 40;
+
+            return (
+              <SubjectCard 
+                key={materia.id} 
+                materia={materia} 
+                exercises={data.pendientes || []} 
+                promedio={promedio}
+                progreso={progreso}
+              />
+            );
+          })}
         </div>
       )}
 
