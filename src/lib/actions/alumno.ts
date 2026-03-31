@@ -93,17 +93,17 @@ export async function getAlumnoDashboardData(userId: string) {
           const { data: ejercicios } = await supabaseAdmin
             .from('ejercicios')
             .select(`
-              id, titulo, tipo, created_at, tema_id,
+              id, titulo, tipo, created_at, tema_id, fecha_entrega,
               temas (
                 titulo,
                 unidades (
+                  materia_id,
                   materias (nombre)
                 )
               )
             `)
             .in('tema_id', temaIds)
-            .order('created_at', { ascending: false })
-            .limit(10);
+            .order('fecha_entrega', { ascending: true });
 
           ejerciciosPublicados = ejercicios || [];
         }
@@ -116,7 +116,9 @@ export async function getAlumnoDashboardData(userId: string) {
       titulo: ej.titulo,
       tipo: ej.tipo,
       fecha: ej.created_at,
+      fecha_entrega: ej.fecha_entrega,
       materia: ej.temas?.unidades?.materias?.nombre || 'General',
+      materia_id: ej.temas?.unidades?.materia_id,
       tema: ej.temas?.titulo || ''
     }));
 
