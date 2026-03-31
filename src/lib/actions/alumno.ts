@@ -163,7 +163,13 @@ export async function saveExerciseResult(ejercicioId: string, aciertos: number, 
     return { error: 'No user authenticated' };
   }
 
-  // 1. Obtener registro existente para este alumno y ejercicio
+  // 1. Obtener datos del ejercicio y registro existente para este alumno
+  const { data: exerciseData } = await supabase
+    .from('ejercicios')
+    .select('fecha_entrega')
+    .eq('id', ejercicioId)
+    .single();
+
   const { data: existing } = await supabase
     .from('resultados_ejercicios')
     .select('*')
@@ -171,7 +177,20 @@ export async function saveExerciseResult(ejercicioId: string, aciertos: number, 
     .eq('ejercicio_id', ejercicioId)
     .single();
 
-  // 2. Si ya está bloqueado (sacó 100 antes), no promediar más
+  // 2. Seguridad: Validar si el ejercicio ya venció
+  if (exerciseData?.fecha_entrega) {
+    const deadline = new Date(exerciseData.fecha_entrega);
+    const now = new Date();
+    if (now > deadline) {
+      return { 
+        success: true, 
+        isExpired: true,
+        message: 'Ejercicio vencido. Puedes practicar, pero la nota no se guardará.' 
+      };
+    }
+  }
+
+  // 3. Si ya está bloqueado (sacó 100 antes), no promediar más
   if (existing?.bloqueado) {
     return { success: true, data: existing, message: 'Calificación perfecta ya registrada.' };
   }
