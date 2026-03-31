@@ -115,7 +115,7 @@ export async function getAlumnoDashboardData(userId: string) {
 
     const hechos = (await supabaseAdmin
       .from('resultados_ejercicios')
-      .select('ejercicio_id, calificacion, aciertos, total_preguntas')
+      .select('ejercicio_id, calificacion, aciertos, total_preguntas, bloqueado')
       .eq('alumno_id', userId)).data || [];
 
     const hechosMap = new Map(hechos.map(h => [h.ejercicio_id, h]));
@@ -135,7 +135,8 @@ export async function getAlumnoDashboardData(userId: string) {
         completado: !!resultado,
         calificacion: resultado?.calificacion || null,
         aciertos: resultado?.aciertos || 0,
-        total_preguntas: resultado?.total_preguntas || 0
+        total_preguntas: resultado?.total_preguntas || 0,
+        bloqueado: resultado?.bloqueado || false
       };
     });
 
@@ -200,8 +201,9 @@ export async function saveExerciseResult(ejercicioId: string, aciertos: number, 
   const nuevaSuma = (Number(existing?.suma_calificaciones) || 0) + calificacionIntento;
   const nuevaCalificacionPromedio = Math.min(100, nuevaSuma / nuevosIntentos);
   
-  // 4. Determinar si bloqueamos (si el promedio es 100)
-  const debeBloquear = nuevaCalificacionPromedio >= 100;
+  // 4. Determinar si bloqueamos (si EN ESTE INTENTO sacó 100)
+  // Esto evita que el alumno diluya sus errores iniciales; el promedio hasta este punto será su nota final inamovible.
+  const debeBloquear = calificacionIntento >= 100;
 
   const { data, error } = await supabase
     .from('resultados_ejercicios')

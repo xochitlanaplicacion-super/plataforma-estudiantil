@@ -167,7 +167,7 @@ export function SubjectCard({ materia, exercises, promedio, progreso }: SubjectC
                   currentBatch.map((ex: any) => {
                     const deadline = ex.fecha_entrega ? new Date(ex.fecha_entrega) : null;
                     const isExpired = deadline ? deadline < now : false;
-                    const isPerfect = ex.calificacion >= 100;
+                    const isPerfect = ex.bloqueado;
                     const isCompleted = ex.completado;
 
                     return (
