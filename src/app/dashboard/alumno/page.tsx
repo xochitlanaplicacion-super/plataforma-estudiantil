@@ -66,9 +66,18 @@ export default async function AlumnoDashboard() {
 
   // KPIs
   const totalMaterias = materias.length;
-  const promedio = 9.4; // TODO: Implementar cálculo real de promedio desde calificaciones
-  const creditos = totalMaterias * 10;
   const totalTareas = (data?.pendientes?.length || 0);
+
+  // Calcular promedio y ejercicios completados reales
+  const ejerciciosCompletados = data?.todosLosEjercicios?.filter((ej: any) => ej.completado) || [];
+  const numeroCompletados = ejerciciosCompletados.length;
+  
+  // La calificación está en base 100, calculamos el promedio en base 10
+  const sumaCalificaciones = ejerciciosCompletados.reduce((acc: number, ej: any) => acc + Number(ej.calificacion || 0), 0);
+  const promedioAcumulado = numeroCompletados > 0 ? (sumaCalificaciones / numeroCompletados) / 10 : 0;
+  const promedio = numeroCompletados > 0 ? promedioAcumulado.toFixed(1) : 'N/A';
+  
+  const labelCompletados = "Completados";
 
   return (
     <div className="space-y-12 pb-16 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -130,8 +139,8 @@ export default async function AlumnoDashboard() {
               <p className="text-[10px] md:text-xs font-bold uppercase text-white/60 tracking-widest mt-1">Tareas</p>
             </div>
             <div className="text-center bg-white/5 rounded-2xl p-4 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-colors hidden md:block">
-              <p className="text-4xl md:text-5xl font-black text-[#CEA62C] font-headline tracking-tighter">{creditos}</p>
-              <p className="text-[10px] md:text-xs font-bold uppercase text-white/60 tracking-widest mt-1">Créditos</p>
+              <p className="text-4xl md:text-5xl font-black text-[#CEA62C] font-headline tracking-tighter">{numeroCompletados}</p>
+              <p className="text-[10px] md:text-xs font-bold uppercase text-white/60 tracking-widest mt-1">{labelCompletados}</p>
             </div>
           </div>
         </div>
