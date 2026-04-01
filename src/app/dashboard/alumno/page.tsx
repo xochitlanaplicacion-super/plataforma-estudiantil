@@ -64,6 +64,8 @@ export default async function AlumnoDashboard() {
   const grupoNombre = profile?.grupos?.nombre || 'N/A';
   const turno = profile?.grupos?.turno || 'N/A';
 
+  const totalMaterias = materias.length;
+
   // Tareas: solo las que NO han vencido y no se han completado
   const now = new Date();
   const pendientesValidas = data?.pendientes?.filter((ej: any) => {
