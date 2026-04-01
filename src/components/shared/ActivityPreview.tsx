@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { EntregaAlumno } from './EntregaAlumno';
 
 export interface Token {
   id: string;
@@ -192,7 +193,12 @@ function generateCrossword(inputs: WordInput[]): CrosswordData {
   };
 }
 
-export const ActivityPreview = ({ exercise, onClose, onComplete }: { exercise: any, onClose: () => void, onComplete?: (score: number, total: number) => void }) => {
+export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistente }: { 
+  exercise: any; 
+  onClose: () => void; 
+  onComplete?: (score: number, total: number) => void;
+  entregaExistente?: any;
+}) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [score, setScore] = useState(0);
   const [totalSteps, setTotalSteps] = useState(0);
@@ -516,9 +522,11 @@ export const ActivityPreview = ({ exercise, onClose, onComplete }: { exercise: a
               </a>
             </div>
           )}
-          <div className="pt-10">
-            <Button onClick={onClose} className="rounded-2xl px-10 h-14 bg-slate-800 font-black uppercase tracking-widest">Finalizar Revisión</Button>
-          </div>
+          {/* Sección de entrega de archivo del alumno */}
+          <EntregaAlumno 
+            ejercicioId={exercise.id} 
+            entregaExistente={entregaExistente}
+          />
         </div>
       );
     }

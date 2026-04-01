@@ -7,7 +7,22 @@ import { saveExerciseResult } from '@/lib/actions/alumno';
 import { useToast } from '@/hooks/use-toast';
 import confetti from 'canvas-confetti';
 
-export default function ClientStudentPlayer({ exercise }: { exercise: any }) {
+interface EntregaExistente {
+  archivo_nombre?: string | null;
+  archivo_url?: string | null;
+  archivo_path?: string | null;
+  primer_envio_en?: string | null;
+  caduca_el?: string | null;
+  calificacion_manual?: number | null;
+}
+
+export default function ClientStudentPlayer({ 
+  exercise, 
+  entregaExistente 
+}: { 
+  exercise: any; 
+  entregaExistente?: EntregaExistente | null;
+}) {
   const router = useRouter();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
@@ -33,7 +48,6 @@ export default function ClientStudentPlayer({ exercise }: { exercise: any }) {
       } else {
         setFinalScore(res.data.calificacion);
         confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
-        // Refrescar los datos del servidor (esto hará que el ejercicio desaparezca de pendientes)
         router.refresh();
         toast({
           title: "¡Actividad guardada!",
@@ -50,7 +64,6 @@ export default function ClientStudentPlayer({ exercise }: { exercise: any }) {
   };
 
   const handleClose = () => {
-    // Si ya se guardó, refrescamos antes de volver por seguridad
     if (hasProcessed) {
       router.refresh();
     }
@@ -63,6 +76,7 @@ export default function ClientStudentPlayer({ exercise }: { exercise: any }) {
         exercise={exercise} 
         onClose={handleClose} 
         onComplete={handleComplete}
+        entregaExistente={entregaExistente}
       />
       {saving && (
         <div className="absolute inset-0 z-[200] bg-white/70 backdrop-blur-sm flex items-center justify-center">
@@ -75,3 +89,4 @@ export default function ClientStudentPlayer({ exercise }: { exercise: any }) {
     </div>
   );
 }
+

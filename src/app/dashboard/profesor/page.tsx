@@ -85,6 +85,7 @@ import confetti from 'canvas-confetti';
 import { polyfill } from "mobile-drag-drop";
 import "mobile-drag-drop/default.css";
 import { ActivityPreview } from '@/components/shared/ActivityPreview';
+import { PanelEntregasProfesor } from '@/components/shared/PanelEntregasProfesor';
 
 const LOGO_URL = '/images/logo_zapata.png';
 
@@ -904,11 +905,12 @@ export default function ProfesorDashboard() {
         </Card>
       ) : (
         <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 h-14 bg-muted/50 rounded-2xl p-1 shadow-sm border mb-8">
+          <TabsList className="grid w-full grid-cols-5 h-14 bg-muted/50 rounded-2xl p-1 shadow-sm border mb-8">
             <TabsTrigger value="materias" className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white font-bold uppercase text-[10px] tracking-widest">Mis Materias</TabsTrigger>
             <TabsTrigger value="unidades" disabled={!selectedMateria} className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white font-bold uppercase text-[10px] tracking-widest">Unidades</TabsTrigger>
             <TabsTrigger value="temas" disabled={!selectedUnidad} className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white font-bold uppercase text-[10px] tracking-widest">Temas</TabsTrigger>
             <TabsTrigger value="ejercicios" disabled={!selectedTema} className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white font-bold uppercase text-[10px] tracking-widest">Actividades</TabsTrigger>
+            <TabsTrigger value="entregas" disabled={!selectedTema || ejercicios.filter(e => e.tipo === 'actividad_descriptiva').length === 0} className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white font-bold uppercase text-[10px] tracking-widest">Entregas</TabsTrigger>
           </TabsList>
 
           <TabsContent value="materias">
@@ -1038,6 +1040,19 @@ export default function ProfesorDashboard() {
                </div>
              </Card>
           </TabsContent>
+
+          <TabsContent value="entregas">
+             <Card className="rounded-[32px] border-muted/60 shadow-xl overflow-hidden min-h-[70vh] flex flex-col p-6">
+               <div className="flex items-center gap-4 mb-6">
+                 <Button variant="ghost" size="sm" onClick={() => setCurrentTab('temas')} className="text-primary font-black uppercase text-[10px]"><ArrowLeft size={14} /> Volver a Temas</Button>
+               </div>
+               <PanelEntregasProfesor 
+                 ejercicios={ejercicios.filter((e: any) => e.tipo === 'actividad_descriptiva')} 
+                 materiaId={selectedMateria?.id} 
+                 materiaNombre={selectedMateria?.nombre} 
+               />
+             </Card>
+           </TabsContent>
         </Tabs>
       )}
 
