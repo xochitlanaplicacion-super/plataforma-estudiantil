@@ -42,6 +42,8 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 
+const LOGO_URL = '/images/logo_zapata.png';
+
 const getSubjectIcon = (nombre: string) => {
   const norm = nombre.toLowerCase();
   if (norm.includes('mate') || norm.includes('calc')) return <Calculator className="w-5 h-5 md:w-6 md:h-6 text-primary" />;
@@ -647,7 +649,8 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
           </div>
           <div className="flex items-center gap-8">
             <div className="flex items-center gap-4">
-              <span className="hidden lg:block text-[10px] font-black uppercase tracking-[0.3em] text-white/40">Visor de Diapositivas</span>
+              <img src={LOGO_URL} alt="Logo" className="h-14 w-auto object-contain" />
+              <span className="hidden lg:block text-[10px] font-black uppercase tracking-[0.3em] text-white/40">IEEZ Instituto Educativo Emiliano Zapata</span>
             </div>
             <Button 
               variant="outline" 
