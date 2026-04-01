@@ -64,9 +64,14 @@ export default async function AlumnoDashboard() {
   const grupoNombre = profile?.grupos?.nombre || 'N/A';
   const turno = profile?.grupos?.turno || 'N/A';
 
-  // KPIs
-  const totalMaterias = materias.length;
-  const totalTareas = (data?.pendientes?.length || 0);
+  // Tareas: solo las que NO han vencido y no se han completado
+  const now = new Date();
+  const pendientesValidas = data?.pendientes?.filter((ej: any) => {
+    if (!ej.fecha_entrega) return true;
+    return new Date(ej.fecha_entrega) >= now;
+  }) || [];
+  
+  const totalTareas = pendientesValidas.length;
 
   // Calcular promedio y ejercicios completados reales
   const ejerciciosCompletados = data?.todosLosEjercicios?.filter((ej: any) => ej.completado) || [];
