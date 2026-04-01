@@ -1144,7 +1144,7 @@ export default function ProfesorDashboard() {
       </Dialog>
 
       {/* PREVISUALIZACIÓN DE ACTIVIDAD */}
-      {previewActivity && <ActivityPreview exercise={previewActivity} onClose={() => setPreviewActivity(null)} />}
+      {previewActivity && <ActivityPreview exercise={previewActivity} onClose={() => setPreviewActivity(null)} isPreview={true} />}
 
       {/* DIALOGO DE DIAPOSITIVAS */}
       <Dialog open={slideDialogOpen} onOpenChange={setSlideDialogOpne}>

@@ -193,11 +193,12 @@ function generateCrossword(inputs: WordInput[]): CrosswordData {
   };
 }
 
-export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistente }: { 
+export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistente, isPreview }: { 
   exercise: any; 
   onClose: () => void; 
   onComplete?: (score: number, total: number) => void;
   entregaExistente?: any;
+  isPreview?: boolean;
 }) => {
   const [currentStep, setCurrentStep] = useState(0);
   const [score, setScore] = useState(0);
@@ -526,6 +527,7 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
           <EntregaAlumno 
             ejercicioId={exercise.id} 
             entregaExistente={entregaExistente}
+            isPreview={isPreview}
           />
         </div>
       );

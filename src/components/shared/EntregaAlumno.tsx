@@ -13,6 +13,7 @@ interface EntregaAlumnoProps {
     primer_envio_en?: string | null;
     calificacion_manual?: number | null;
   } | null;
+  isPreview?: boolean;
 }
 
 const MIME_LABELS: Record<string, string> = {
@@ -48,7 +49,7 @@ function getDiasRestantes(caduca_el: string): { dias: number; horas: number; pct
   return { dias, horas, pct };
 }
 
-export function EntregaAlumno({ ejercicioId, entregaExistente }: EntregaAlumnoProps) {
+export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: EntregaAlumnoProps) {
   const [isPending, startTransition] = useTransition();
   const [archivoSeleccionado, setArchivoSeleccionado] = useState<File | null>(null);
   const [errorLocal, setErrorLocal] = useState<string | null>(null);
@@ -182,8 +183,23 @@ export function EntregaAlumno({ ejercicioId, entregaExistente }: EntregaAlumnoPr
         </div>
       )}
 
-      {/* FORMULARIO DE SUBIDA (excepto si ya fue calificado) */}
-      {!yaCalificado && (
+      {/* MODO PREVISUALIZACION (PROFESOR) */}
+      {!yaCalificado && isPreview && (
+        <div className="p-8 bg-slate-50 border-2 border-dashed border-slate-200 rounded-3xl text-center space-y-3">
+          <div className="mx-auto w-12 h-12 bg-slate-100 flex items-center justify-center rounded-full">
+            <Upload className="w-5 h-5 text-slate-400" />
+          </div>
+          <div>
+            <p className="font-black text-slate-500 uppercase tracking-widest text-sm">Modo de Vista Previa</p>
+            <p className="text-[11px] text-slate-400 font-bold uppercase mt-1">
+              La subida de archivos está deshabilitada porque eres un docente.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* FORMULARIO DE SUBIDA (ALUMNO) */}
+      {!yaCalificado && !isPreview && (
         <div className="space-y-4">
           {/* Dropzone */}
           <div
