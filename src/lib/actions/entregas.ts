@@ -168,7 +168,8 @@ export async function calificarEntregaDescriptiva(
 //    Retorna todos los alumnos que entregaron un ejercicio dado
 // -------------------------------------------------------------------
 export async function getEntregasDeEjercicio(ejercicioId: string) {
-  const { data, error } = await supabaseAdmin
+  // Obtener las entregas
+  const { data: entregasData, error } = await supabaseAdmin
     .from('resultados_ejercicios')
     .select(`
       alumno_id,
@@ -178,19 +179,36 @@ export async function getEntregasDeEjercicio(ejercicioId: string) {
       primer_envio_en,
       caduca_el,
       calificacion_manual,
-      estado,
-      profiles!alumno_id (
-        nombre,
-        apellidos,
-        email
-      )
+      estado
     `)
     .eq('ejercicio_id', ejercicioId)
     .not('archivo_url', 'is', null)
     .order('primer_envio_en', { ascending: true });
 
   if (error) return { error: error.message };
-  return { data: data || [] };
+  if (!entregasData || entregasData.length === 0) return { data: [] };
+
+  // Extraer los IDs únicos de alumnos y buscar sus perfiles en una consulta separada 
+  // (Para evitar errores si falta la Foreign Key directa entre ambas tablas)
+  const alumnoIds = Array.from(new Set(entregasData.map(e => e.alumno_id)));
+  
+  const { data: profilesData, error: profError } = await supabaseAdmin
+    .from('profiles')
+    .select('id, nombre, apellidos, email')
+    .in('id', alumnoIds);
+
+  const profilesMap = new Map();
+  if (profilesData) {
+    profilesData.forEach(p => profilesMap.set(p.id, p));
+  }
+
+  // Combinar entregas con sus perfiles
+  const result = entregasData.map(entrega => ({
+    ...entrega,
+    profiles: profilesMap.get(entrega.alumno_id) || null
+  }));
+
+  return { data: result };
 }
 
 // -------------------------------------------------------------------
