@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   BookOpen,
   Calculator,
@@ -25,10 +25,15 @@ import {
   FileSpreadsheet,
   File,
   Download,
-  FolderOpen
+  FolderOpen,
+  Play,
+  MonitorPlay,
+  X,
+  Image as ImageIcon
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Accordion,
@@ -130,11 +135,22 @@ interface Resource {
   file_path?: string;
 }
 
+interface Slide {
+  id: string;
+  tema_id: string;
+  titulo: string;
+  contenido?: string;
+  imagen_url?: string;
+  estilo?: string;
+  orden: number;
+}
+
 interface Tema {
   id: string;
   titulo: string;
   unidad_id: string;
   recursos: Resource[];
+  slides?: Slide[];
   orden?: number;
 }
 
@@ -162,9 +178,49 @@ interface SubjectCardProps {
 export function SubjectCard({ materia, exercises, unidades = [], promedio, progreso }: SubjectCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [presentationMode, setPresentationMode] = useState(false);
+  const [activeSlides, setActiveSlides] = useState<Slide[]>([]);
+  const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const ITEMS_PER_PAGE = 10;
   
   const now = useMemo(() => new Date(), []);
+
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (presentationMode) {
+      if (e.key === 'ArrowRight' || e.key === ' ') {
+        setActiveSlideIndex((prev) => Math.min(prev + 1, activeSlides.length - 1));
+      } else if (e.key === 'ArrowLeft') {
+        setActiveSlideIndex((prev) => Math.max(prev - 1, 0));
+      } else if (e.key === 'Escape') {
+        setPresentationMode(false);
+      }
+    }
+  }, [presentationMode, activeSlides.length]);
+
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      if (!document.fullscreenElement) setPresentationMode(false);
+    };
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [handleKeyDown]);
+
+  useEffect(() => {
+    if (presentationMode) {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {});
+    } else {
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    }
+  }, [presentationMode]);
+
+  const splitImageUrls = (urls: string) => {
+    if (!urls) return [];
+    return urls.split(/,(?=http|data:)/).map(u => u.trim()).filter(Boolean);
+  };
 
   // Filtrar unidades que pertenecen a esta materia
   const unidadesDeMateria = useMemo(() => 
@@ -197,9 +253,12 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
   , [sortedExercises, currentPage]);
 
   return (
+    <>
     <div className={cn(
-      "bg-card rounded-[2rem] md:rounded-[3rem] border border-border shadow-sm overflow-hidden transition-all duration-500",
-      isExpanded ? "ring-2 ring-primary/20 shadow-xl" : "hover:border-primary/20"
+      "bg-white border rounded-3xl overflow-hidden transition-all duration-500",
+      isExpanded 
+        ? "shadow-2xl shadow-primary/5 border-primary/20 ring-4 ring-primary/5 my-8 relative z-10" 
+        : "shadow-sm border-border hover:border-primary/30 hover:shadow-md"
     )}>
       <div className="p-6 md:p-10 flex flex-col md:flex-row items-center justify-between gap-8">
         <div className="flex items-center gap-6 md:gap-8 flex-1 w-full">
@@ -400,8 +459,33 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
                                 <div key={`topic-${tema.id}`} className="space-y-3">
                                   <h5 className="text-[11px] font-black text-slate-500 uppercase tracking-widest border-l-2 border-primary/30 pl-3 ml-1">{tema.titulo}</h5>
                                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pl-4">
+                                    {tema.slides && tema.slides.length > 0 && (
+                                      <button
+                                        onClick={() => {
+                                          setActiveSlides(tema.slides || []);
+                                          setActiveSlideIndex(0);
+                                          setPresentationMode(true);
+                                        }}
+                                        className="col-span-full mb-2 flex items-center justify-between p-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl shadow-md transition-all group active:scale-[0.98]"
+                                      >
+                                        <div className="flex items-center gap-3">
+                                          <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                                            <MonitorPlay className="w-5 h-5" />
+                                          </div>
+                                          <div className="flex flex-col text-left">
+                                            <span className="text-sm font-bold truncate max-w-[200px] md:max-w-[400px]">Diapositivas de la Clase</span>
+                                            <span className="text-[10px] font-black uppercase tracking-wider text-blue-100">{tema.slides.length} láminas</span>
+                                          </div>
+                                        </div>
+                                        <div className="flex items-center gap-2 pr-2 text-blue-50">
+                                          <span className="text-xs font-black uppercase tracking-widest hidden sm:block">Presentar</span>
+                                          <Play className="w-4 h-4 fill-current" />
+                                        </div>
+                                      </button>
+                                    )}
+
                                     {!tema.recursos || tema.recursos.length === 0 ? (
-                                      <p className="text-[10px] text-muted-foreground italic col-span-full">Sin recursos aún.</p>
+                                      (!tema.slides || tema.slides.length === 0) && <p className="text-[10px] text-muted-foreground italic col-span-full">Sin recursos aún.</p>
                                     ) : (
                                       tema.recursos.map((res) => (
                                         <a 
@@ -484,5 +568,98 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
         </div>
       </div>
     </div>
+    
+    {presentationMode && activeSlides.length > 0 && (
+      <div 
+        className={cn(
+          "fixed inset-0 z-[100] grid grid-rows-[1fr_auto] overflow-hidden bg-gradient-to-br", 
+          {
+            'bg-slate-900 from-slate-900 to-blue-900 text-white': !activeSlides[activeSlideIndex]?.estilo || activeSlides[activeSlideIndex]?.estilo === 'azul',
+            'bg-[#4c0519] from-[#4c0519] to-[#8B2332] text-white': activeSlides[activeSlideIndex]?.estilo === 'vino',
+            'bg-[#064e3b] from-[#064e3b] to-[#1A4A3F] text-white': activeSlides[activeSlideIndex]?.estilo === 'verde',
+            'bg-black from-black to-slate-900 text-white': activeSlides[activeSlideIndex]?.estilo === 'oscuro'
+          }
+        )}
+      >
+        <div className="absolute top-0 left-0 h-1.5 bg-blue-400/50 w-full z-50">
+          <div 
+            className="h-full bg-blue-400 transition-all duration-500 shadow-[0_0_15px_rgba(96,165,250,0.8)]" 
+            style={{ width: `${((activeSlideIndex + 1) / activeSlides.length) * 100}%` }} 
+          />
+        </div>
+        <div className="relative flex flex-col md:flex-row items-center justify-center gap-8 p-10 md:p-20 overflow-hidden">
+          <div className="flex-1 flex flex-col justify-center max-w-full overflow-hidden">
+            <h1 
+              className="font-black uppercase tracking-tight mb-6 leading-tight" 
+              style={{ fontSize: 'clamp(2rem, 8vw, 5rem)' }}
+            >
+              {activeSlides[activeSlideIndex]?.titulo}
+            </h1>
+            <div className="overflow-y-auto max-h-[50vh] pr-4 custom-scrollbar">
+              <p 
+                className="font-medium leading-relaxed opacity-90 whitespace-pre-wrap" 
+                style={{ fontSize: 'clamp(1rem, 2.5vw, 2.2rem)' }}
+              >
+                {activeSlides[activeSlideIndex]?.contenido}
+              </p>
+            </div>
+          </div>
+          <div className="flex-1 w-full h-full max-h-[60vh] md:max-h-full flex items-center justify-center">
+            {activeSlides[activeSlideIndex]?.imagen_url ? (
+              <div className={cn(
+                "grid gap-4 w-full h-full p-4", 
+                splitImageUrls(activeSlides[activeSlideIndex]?.imagen_url || '').length === 1 ? "grid-cols-1" : "grid-cols-2"
+              )}>
+                {splitImageUrls(activeSlides[activeSlideIndex]?.imagen_url || '').map((url, i) => (
+                  <div key={i} className="relative w-full h-full overflow-hidden rounded-2xl shadow-2xl border border-white/10">
+                    <img src={url} alt="Slide" className="w-full h-full object-cover" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="w-full aspect-video flex flex-col items-center justify-center bg-white/5 rounded-3xl border-2 border-dashed border-white/10 opacity-30">
+                <ImageIcon size={100} />
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="py-3 px-10 flex items-center justify-between bg-black/30 backdrop-blur-2xl border-t border-white/5 z-[110]">
+          <div className="flex gap-4">
+            <Button 
+              variant="ghost" 
+              className="h-12 w-12 rounded-full text-white hover:bg-white/10" 
+              onClick={() => setActiveSlideIndex(Math.max(0, activeSlideIndex - 1))} 
+              disabled={activeSlideIndex === 0}
+            >
+              <ChevronLeft size={32} />
+            </Button>
+            <div className="flex items-center px-4 text-xl font-black tabular-nums tracking-widest text-white/40">
+              <span className="text-white">{activeSlideIndex + 1}</span> / {activeSlides.length}
+            </div>
+            <Button 
+              variant="ghost" 
+              className="h-12 w-12 rounded-full text-white hover:bg-white/10" 
+              onClick={() => setActiveSlideIndex(Math.min(activeSlideIndex + 1, activeSlides.length - 1))} 
+              disabled={activeSlideIndex === activeSlides.length - 1}
+            >
+              <ChevronRight size={32} />
+            </Button>
+          </div>
+          <div className="flex items-center gap-8">
+            <div className="flex items-center gap-4">
+              <span className="hidden lg:block text-[10px] font-black uppercase tracking-[0.3em] text-white/40">Visor de Diapositivas</span>
+            </div>
+            <Button 
+              variant="outline" 
+              className="h-10 px-6 rounded-xl font-black uppercase tracking-widest bg-red-600/20 border-red-600/30 text-red-100 hover:bg-red-600 shadow-lg" 
+              onClick={() => setPresentationMode(false)}
+            >
+              <X size={18} className="mr-2" /> Salir (Esc)
+            </Button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

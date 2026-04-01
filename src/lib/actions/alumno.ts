@@ -129,12 +129,22 @@ export async function getAlumnoDashboardData(userId: string) {
 
           ejerciciosPublicados = ejercicios || [];
 
-          // Estructurar Árbol: Unidades -> Temas -> Recursos
+          // Obtener Presentaciones (Diapositivas)
+          const { data: slidesRaw } = await supabaseAdmin
+            .from('slides')
+            .select('*')
+            .in('tema_id', temaIds)
+            .order('orden');
+          
+          const slides = slidesRaw || [];
+
+          // Estructurar Árbol: Unidades -> Temas -> Recursos & Slides
           todasLasUnidades = unidades?.map(u => ({
             ...u,
             temas: temas?.filter(t => t.unidad_id === u.id).map(t => ({
               ...t,
-              recursos: recursos?.filter(r => r.tema_id === t.id) || []
+              recursos: recursos?.filter(r => r.tema_id === t.id) || [],
+              slides: slides?.filter(s => s.tema_id === t.id) || []
             })) || []
           })) || [];
         }
