@@ -33,13 +33,7 @@ export default async function MisMateriasPage() {
           </p>
         </div>
         
-        {/* Filtros simples (UI Decorativa por ahora según diseño) */}
-        <div className="flex flex-wrap items-center gap-2 md:gap-3 bg-muted/40 p-1 md:p-1.5 rounded-full border border-border w-full md:w-auto">
-          <button className="px-4 py-1.5 bg-primary text-primary-foreground rounded-full text-xs md:text-sm font-bold shadow-sm flex-1 md:flex-none">Todas</button>
-          <button className="px-4 py-1.5 text-muted-foreground hover:text-foreground rounded-full text-xs md:text-sm font-medium transition-colors flex-1 md:flex-none">En Curso</button>
-          <button className="px-4 py-1.5 text-muted-foreground hover:text-foreground rounded-full text-xs md:text-sm font-medium transition-colors hidden sm:block">Examen Próximo</button>
-          <button className="px-4 py-1.5 text-muted-foreground hover:text-foreground rounded-full text-xs md:text-sm font-medium transition-colors hidden sm:block">Aprobadas</button>
-        </div>
+
       </header>
 
       {/* LISTA EXPANDIDA DE MATERIAS */}

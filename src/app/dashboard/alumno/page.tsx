@@ -169,9 +169,6 @@ export default async function AlumnoDashboard() {
             <h4 className="text-xl md:text-2xl font-bold font-headline text-primary tracking-tight">Mis Materias</h4>
             <p className="text-sm md:text-base text-muted-foreground font-medium">Ciclo Escolar en curso</p>
           </div>
-          <Link href="/dashboard/alumno/horario" className="text-primary font-bold hover:underline flex items-center gap-1 text-sm md:text-base group">
-            Ver horario completo <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-          </Link>
         </div>
 
         {materias.length === 0 ? (
