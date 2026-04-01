@@ -52,17 +52,30 @@ export default async function MisMateriasPage() {
       ) : (
         <div className="space-y-6 md:space-y-8">
           {materias.map((materia: any) => {
-            // Generar datos aleatorios en el servidor para evitar desincronización de hidratación
-            const promedio = (Math.random() * (10 - 7) + 7).toFixed(1);
-            const progreso = Math.floor(Math.random() * (95 - 40 + 1)) + 40;
+            // Filtrar ejercicios que pertenecen a esta materia
+            const ejerciciosDeMateria = (data.todosLosEjercicios || []).filter(
+              (ex: any) => ex.materia_id === materia.id
+            );
+
+            // Calcular promedio de la materia (basado en intentos realizados)
+            const realizados = ejerciciosDeMateria.filter((ex: any) => ex.completado);
+            const sumaCalificaciones = realizados.reduce((acc: number, ex: any) => acc + Number(ex.calificacion || 0), 0);
+            const promedioMateria = realizados.length > 0 
+              ? ((sumaCalificaciones / realizados.length) / 10).toFixed(1) 
+              : 'N/A';
+
+            // Calcular progreso real: (Realizados / Total de la materia)
+            const progresoMateria = ejerciciosDeMateria.length > 0 
+              ? Math.round((realizados.length / ejerciciosDeMateria.length) * 100) 
+              : 0;
 
             return (
               <SubjectCard 
                 key={materia.id} 
                 materia={materia} 
-                exercises={data.todosLosEjercicios || []} 
-                promedio={promedio}
-                progreso={progreso}
+                exercises={ejerciciosDeMateria} 
+                promedio={promedioMateria}
+                progreso={progresoMateria}
               />
             );
           })}
