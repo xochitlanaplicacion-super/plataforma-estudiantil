@@ -1,13 +1,13 @@
 'use client';
 
 import React, { useState, useMemo } from 'react';
-import { 
-  BookOpen, 
-  Calculator, 
-  Languages, 
-  Atom, 
-  Building2, 
-  Activity, 
+import {
+  BookOpen,
+  Calculator,
+  Languages,
+  Atom,
+  Building2,
+  Activity,
   GraduationCap,
   Clock,
   AlertTriangle,
@@ -19,10 +19,23 @@ import {
   ChevronLeft,
   ChevronRight,
   Layout,
-  ListTree
+  ListTree,
+  FileText,
+  Presentation,
+  FileSpreadsheet,
+  File,
+  Download,
+  FolderOpen
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 
 const getSubjectIcon = (nombre: string) => {
   const norm = nombre.toLowerCase();
@@ -35,11 +48,70 @@ const getSubjectIcon = (nombre: string) => {
   return <GraduationCap className="w-5 h-5 md:w-6 md:h-6 text-primary" />;
 };
 
+const getResourceIcon = (url: string) => {
+  if (!url) return <div className="p-2 bg-slate-100 rounded-lg text-slate-400"><File className="w-4 h-4" /></div>;
+  const ext = url.split('.').pop()?.toLowerCase();
+  
+  if (ext === 'pdf') return (
+    <div className="p-2 bg-red-50 text-red-600 rounded-lg border border-red-100 shadow-sm">
+      <FileText className="w-4 h-4" />
+    </div>
+  );
+  if (['ppt', 'pptx'].includes(ext || '')) return (
+    <div className="p-2 bg-orange-50 text-orange-600 rounded-lg border border-orange-100 shadow-sm">
+      <Presentation className="w-4 h-4" />
+    </div>
+  );
+  if (['xls', 'xlsx', 'csv'].includes(ext || '')) return (
+    <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg border border-emerald-100 shadow-sm">
+      <FileSpreadsheet className="w-4 h-4" />
+    </div>
+  );
+  if (['doc', 'docx'].includes(ext || '')) return (
+    <div className="p-2 bg-blue-50 text-blue-600 rounded-lg border border-blue-100 shadow-sm">
+      <FileText className="w-4 h-4" />
+    </div>
+  );
+  
+  return (
+    <div className="p-2 bg-slate-50 text-slate-500 rounded-lg border border-slate-200">
+      <File className="w-4 h-4" />
+    </div>
+  );
+};
+
 interface Exercise {
   id: string;
   titulo: string;
   fecha_entrega: string | null;
   materia_id: string;
+  tipo?: string;
+  completado?: boolean;
+  calificacion?: number | null;
+  bloqueado?: boolean;
+}
+
+interface Resource {
+  id: string;
+  nombre: string;
+  url: string;
+  tema_id: string;
+}
+
+interface Tema {
+  id: string;
+  titulo: string;
+  unidad_id: string;
+  recursos: Resource[];
+  orden?: number;
+}
+
+interface Unidad {
+  id: string;
+  nombre: string;
+  materia_id: string;
+  orden: number;
+  temas: Tema[];
 }
 
 interface SubjectCardProps {
@@ -50,18 +122,25 @@ interface SubjectCardProps {
     clave?: string;
   };
   exercises: Exercise[];
+  unidades?: Unidad[];
   promedio: string;
   progreso: number;
 }
 
-export function SubjectCard({ materia, exercises, promedio, progreso }: SubjectCardProps) {
+export function SubjectCard({ materia, exercises, unidades = [], promedio, progreso }: SubjectCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
   
-  const now = new Date();
+  const now = useMemo(() => new Date(), []);
 
-  // Sorting logic: Active ones first, then expired ones
+  // Filtrar unidades que pertenecen a esta materia
+  const unidadesDeMateria = useMemo(() => 
+    unidades
+      .filter(u => u.materia_id === materia.id)
+      .sort((a, b) => (a.orden || 0) - (b.orden || 0))
+  , [unidades, materia.id]);
+
   const sortedExercises = useMemo(() => {
     const active = exercises.filter(ex => !ex.fecha_entrega || new Date(ex.fecha_entrega) >= now)
       .sort((a, b) => {
@@ -78,10 +157,12 @@ export function SubjectCard({ materia, exercises, promedio, progreso }: SubjectC
       });
       
     return [...active, ...expired];
-  }, [exercises]);
+  }, [exercises, now]);
 
   const totalPages = Math.ceil(sortedExercises.length / ITEMS_PER_PAGE);
-  const currentBatch = sortedExercises.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const currentBatch = useMemo(() => 
+    sortedExercises.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+  , [sortedExercises, currentPage]);
 
   return (
     <div className={cn(
@@ -123,129 +204,214 @@ export function SubjectCard({ materia, exercises, promedio, progreso }: SubjectC
                 isExpanded ? "bg-slate-100 text-slate-800" : "bg-primary text-primary-foreground hover:opacity-90 active:scale-95"
               )}
             >
-              {isExpanded ? <><ChevronUp size={16} /> Contraer</> : "Ver Ejercicios"}
+              {isExpanded ? <><ChevronUp size={16} /> Contraer</> : "Abrir Aula"}
             </button>
           </div>
         </div>
       </div>
 
-      {/* DETALLES EXPANDIBLES (ACORDEÓN) */}
+      {/* CONTENIDO EXPANDIBLE CON TABS */}
       <div className={cn(
-        "grid transition-all duration-700 ease-in-out",
+        "grid transition-all duration-700 ease-in-out border-t border-border/50",
         isExpanded ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0 pointer-events-none"
       )}>
-        <div className="overflow-hidden">
-          <div className="bg-muted/30 px-6 py-4 md:px-10 md:py-8 border-t border-border/50 flex flex-col gap-6">
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="text-[10px] md:text-[12px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
-                  <CalendarClock size={14} className="text-primary" /> Actividades de la Materia
-                </h4>
-                {totalPages > 1 && (
-                  <div className="flex items-center gap-3">
-                    <button 
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className="p-1.5 rounded-full hover:bg-white border border-transparent hover:border-border disabled:opacity-30 disabled:pointer-events-none transition-all"
-                    >
-                      <ChevronLeft size={16} />
-                    </button>
-                    <span className="text-[10px] font-bold text-muted-foreground">{currentPage} / {totalPages}</span>
-                    <button 
-                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                      className="p-1.5 rounded-full hover:bg-white border border-transparent hover:border-border disabled:opacity-30 disabled:pointer-events-none transition-all"
-                    >
-                      <ChevronRight size={16} />
-                    </button>
-                  </div>
-                )}
-              </div>
+        <div className="overflow-hidden bg-muted/20">
+          <Tabs defaultValue="ejercicios" className="w-full">
+            <div className="px-6 md:px-10 pt-6">
+              <TabsList className="bg-white/50 p-1 rounded-2xl border border-border h-auto gap-1">
+                <TabsTrigger value="ejercicios" className="rounded-xl px-6 py-2.5 data-[state=active]:bg-primary data-[state=active]:text-white font-bold text-[10px] md:text-xs uppercase tracking-widest">
+                  📝 Ejercicios
+                </TabsTrigger>
+                <TabsTrigger value="materiales" className="rounded-xl px-6 py-2.5 data-[state=active]:bg-primary data-[state=active]:text-white font-bold text-[10px] md:text-xs uppercase tracking-widest">
+                  📂 Material de Estudio
+                </TabsTrigger>
+              </TabsList>
+            </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pb-4">
-                {exercises.length === 0 ? (
-                  <p className="text-[10px] md:text-xs italic text-muted-foreground p-4 bg-white/50 rounded-2xl border border-dashed text-center">No hay actividades publicadas aún.</p>
-                ) : (
-                  currentBatch.map((ex: any) => {
-                    const deadline = ex.fecha_entrega ? new Date(ex.fecha_entrega) : null;
-                    const isExpired = deadline ? deadline < now : false;
-                    const isPerfect = ex.bloqueado;
-                    const isCompleted = ex.completado;
-
-                    return (
-                      <Link 
-                        key={ex.id} 
-                        href={`/dashboard/alumno/ejercicios/${ex.id}`}
-                        className={cn(
-                          "flex items-center justify-between p-4 rounded-2xl border transition-all group/item shadow-sm",
-                          isPerfect 
-                            ? "bg-blue-50/50 border-blue-200 hover:border-blue-400" 
-                            : isCompleted
-                              ? "bg-emerald-50/30 border-emerald-100 hover:border-emerald-300"
-                              : isExpired 
-                                ? "bg-slate-50/50 border-slate-100 opacity-80" 
-                                : "bg-white border-border hover:border-primary/40 hover:shadow-md"
-                        )}
+            {/* PESTAÑA: EJERCICIOS */}
+            <TabsContent value="ejercicios" className="px-6 py-6 md:px-10 md:py-8 space-y-6 outline-none">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[10px] md:text-[12px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                    <CalendarClock size={14} className="text-primary" /> Actividades Evaluables
+                  </h4>
+                  {totalPages > 1 && (
+                    <div className="flex items-center gap-3">
+                      <button 
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        className="p-1.5 rounded-full hover:bg-white border border-transparent hover:border-border disabled:opacity-30 disabled:pointer-events-none transition-all"
                       >
-                        <div className="flex items-center gap-3 overflow-hidden">
-                          <div className={cn(
-                            "p-2 rounded-xl shrink-0 transition-colors",
+                        <ChevronLeft size={16} />
+                      </button>
+                      <span className="text-[10px] font-bold text-muted-foreground">{currentPage} / {totalPages}</span>
+                      <button 
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        className="p-1.5 rounded-full hover:bg-white border border-transparent hover:border-border disabled:opacity-30 disabled:pointer-events-none transition-all"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {exercises.length === 0 ? (
+                    <p className="col-span-full text-[10px] md:text-xs italic text-muted-foreground p-8 bg-white/50 rounded-2xl border border-dashed text-center">No hay actividades publicadas aún.</p>
+                  ) : (
+                    currentBatch.map((ex: any) => {
+                      const deadline = ex.fecha_entrega ? new Date(ex.fecha_entrega) : null;
+                      const isExpired = deadline ? deadline < now : false;
+                      const isPerfect = ex.bloqueado;
+                      const isCompleted = ex.completado;
+
+                      return (
+                        <Link 
+                          key={`exercise-${ex.id}`} 
+                          href={`/dashboard/alumno/ejercicios/${ex.id}`}
+                          className={cn(
+                            "flex items-center justify-between p-4 rounded-2xl border transition-all group/item shadow-sm",
                             isPerfect 
-                              ? "bg-blue-600 text-white" 
-                              : isCompleted 
-                                ? "bg-emerald-600 text-white"
+                              ? "bg-blue-50/50 border-blue-200 hover:border-blue-400" 
+                              : isCompleted
+                                ? "bg-emerald-50/30 border-emerald-100 hover:border-emerald-300"
                                 : isExpired 
-                                  ? "bg-slate-100 text-slate-400" 
-                                  : "bg-primary/5 text-primary group-hover/item:bg-primary group-hover/item:text-white"
-                          )}>
-                            {ex.tipo === 'sopa_letras' ? <ListTree className="w-4 h-4" /> : 
-                             ex.tipo === 'crucigrama' ? <Layout className="w-4 h-4" /> :
-                             ex.tipo === 'emparejamiento' ? <Activity className="w-4 h-4" /> :
-                             ex.tipo === 'quiz' ? <FileCheck className="w-4 h-4" /> :
-                             isExpired ? <Clock className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
-                          </div>
-                          <div className="flex flex-col min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="text-[12px] md:text-[13px] font-bold text-slate-700 truncate">{ex.titulo}</span>
-                              <span className="text-[9px] font-black opacity-30 px-1.5 py-0.5 rounded border border-current uppercase tracking-tighter">
-                                {ex.tipo?.replace(/_/g, ' ') || 'Ejercicio'}
-                              </span>
-                              {isCompleted && (
-                                <span className={cn(
-                                  "text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-tighter",
-                                  isPerfect ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"
-                                )}>
-                                  Nota: {Number(ex.calificacion).toFixed(1)}
+                                  ? "bg-slate-50/50 border-slate-100 opacity-80" 
+                                  : "bg-white border-border hover:border-primary/40 hover:shadow-md"
+                          )}
+                        >
+                          <div className="flex items-center gap-3 overflow-hidden">
+                            <div className={cn(
+                              "p-2 rounded-xl shrink-0 transition-colors",
+                              isPerfect 
+                                ? "bg-blue-600 text-white" 
+                                : isCompleted 
+                                  ? "bg-emerald-600 text-white"
+                                  : isExpired 
+                                    ? "bg-slate-100 text-slate-400" 
+                                    : "bg-primary/5 text-primary group-hover/item:bg-primary group-hover/item:text-white"
+                            )}>
+                              {ex.tipo === 'sopa_letras' ? <ListTree className="w-4 h-4" /> : 
+                               ex.tipo === 'crucigrama' ? <Layout className="w-4 h-4" /> :
+                               ex.tipo === 'emparejamiento' ? <Activity className="w-4 h-4" /> :
+                               ex.tipo === 'quiz' ? <FileCheck className="w-4 h-4" /> :
+                               isExpired ? <Clock className="w-4 h-4" /> : <AlertTriangle className="w-4 h-4" />}
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[12px] md:text-[13px] font-bold text-slate-700 truncate">{ex.titulo}</span>
+                                <span className="text-[9px] font-black opacity-30 px-1.5 py-0.5 rounded border border-current uppercase tracking-tighter">
+                                  {ex.tipo?.replace(/_/g, ' ') || 'Ejercicio'}
+                                </span>
+                                {isCompleted && (
+                                  <span className={cn(
+                                    "text-[9px] font-black px-2 py-0.5 rounded-md uppercase tracking-tighter",
+                                    isPerfect ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"
+                                  )}>
+                                    Nota: {Number(ex.calificacion).toFixed(1)}
+                                  </span>
+                                )}
+                              </div>
+                              {deadline && (
+                                <span className="text-[9px] font-black uppercase text-muted-foreground tracking-widest mt-0.5">
+                                  LIM: {deadline.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}
                                 </span>
                               )}
                             </div>
-                            {deadline && (
-                              <span className="text-[9px] font-black uppercase text-muted-foreground tracking-widest mt-0.5">
-                                LIM: {deadline.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' })}
-                              </span>
+                          </div>
+                          <span className={cn(
+                            "text-[10px] md:text-[11px] font-black px-4 py-2 rounded-full uppercase shrink-0 transition-all",
+                            isPerfect 
+                              ? "bg-blue-600 text-white shadow-lg shadow-blue-200" 
+                              : isCompleted
+                                ? "bg-emerald-600 text-white"
+                                : isExpired 
+                                  ? "bg-slate-200 text-slate-500" 
+                                  : "bg-primary text-white group-hover/item:scale-105 shadow-lg shadow-primary/20"
+                          )}>
+                            {isPerfect ? 'Revisar' : isCompleted ? 'Reintentar' : isExpired ? 'Vencido' : 'Realizar'}
+                          </span>
+                        </Link>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </TabsContent>
+
+            {/* PESTAÑA: MATERIAL DE ESTUDIO (SOLO DESCARGA) */}
+            <TabsContent value="materiales" className="px-6 py-6 md:px-10 md:py-8 outline-none">
+              <div className="space-y-4">
+                <h4 className="text-[10px] md:text-[12px] font-black uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+                  <FolderOpen size={14} className="text-primary" /> Temario y Documentos
+                </h4>
+
+                <Accordion type="single" collapsible className="w-full space-y-3">
+                  {unidadesDeMateria.length === 0 ? (
+                    <p className="text-[10px] md:text-xs italic text-muted-foreground p-8 bg-white/50 rounded-2xl border border-dashed text-center w-full">El profesor no ha organizado el temario aún.</p>
+                  ) : (
+                    unidadesDeMateria.map((unidad) => (
+                      <AccordionItem key={`unit-${unidad.id}`} value={unidad.id} className="bg-white rounded-2xl px-5 border border-border shadow-sm overflow-hidden">
+                        <AccordionTrigger className="hover:no-underline py-4">
+                          <div className="flex items-center gap-3">
+                            <span className="bg-primary/5 text-primary text-[10px] font-black px-2 py-0.5 rounded border border-primary/20 uppercase">Unidad {unidad.orden}</span>
+                            <span className="font-bold text-sm md:text-base text-slate-800">{unidad.nombre}</span>
+                          </div>
+                        </AccordionTrigger>
+                        <AccordionContent className="pb-4 pt-2">
+                          <div className="space-y-6">
+                            {!unidad.temas || unidad.temas.length === 0 ? (
+                              <p className="text-[10px] text-muted-foreground italic px-2">No hay temas agregados.</p>
+                            ) : (
+                              unidad.temas.sort((a, b) => (a.orden || 0) - (b.orden || 0)).map((tema) => (
+                                <div key={`topic-${tema.id}`} className="space-y-3">
+                                  <h5 className="text-[11px] font-black text-slate-500 uppercase tracking-widest border-l-2 border-primary/30 pl-3 ml-1">{tema.titulo}</h5>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pl-4">
+                                    {!tema.recursos || tema.recursos.length === 0 ? (
+                                      <p className="text-[10px] text-muted-foreground italic col-span-full">Sin recursos aún.</p>
+                                    ) : (
+                                      tema.recursos.map((res) => (
+                                        <div 
+                                          key={`resource-${res.id}`}
+                                          className="flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-xl hover:border-primary/40 hover:shadow-sm transition-all group"
+                                        >
+                                          <div className="flex items-center gap-3 overflow-hidden">
+                                            <div className="shrink-0">
+                                              {getResourceIcon(res.url)}
+                                            </div>
+                                            <span className="text-xs font-bold text-slate-700 truncate max-w-[120px] md:max-w-[180px]" title={res.nombre}>
+                                              {res.nombre}
+                                            </span>
+                                          </div>
+                                          <a 
+                                            href={res.url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            download={res.nombre}
+                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black uppercase tracking-tighter hover:bg-emerald-600 hover:text-white transition-all shadow-sm active:scale-95"
+                                          >
+                                            <Download size={12} strokeWidth={3} />
+                                            <span className="hidden sm:inline">Descargar</span>
+                                          </a>
+                                        </div>
+                                      ))
+                                    )}
+                                  </div>
+                                </div>
+                              ))
                             )}
                           </div>
-                        </div>
-                        <span className={cn(
-                          "text-[10px] md:text-[11px] font-black px-4 py-2 rounded-full uppercase shrink-0 transition-all",
-                          isPerfect 
-                            ? "bg-blue-600 text-white shadow-lg shadow-blue-200" 
-                            : isCompleted
-                              ? "bg-emerald-600 text-white"
-                              : isExpired 
-                                ? "bg-slate-200 text-slate-500" 
-                                : "bg-primary text-white group-hover/item:scale-105 shadow-lg shadow-primary/20"
-                        )}>
-                          {isPerfect ? 'Revisar' : isCompleted ? 'Reintentar' : isExpired ? 'Vencido' : 'Realizar'}
-                        </span>
-                      </Link>
-                    );
-                  })
-                )}
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))
+                  )}
+                </Accordion>
               </div>
-            </div>
+            </TabsContent>
 
-            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 pt-6 border-t border-border/20">
+            {/* BARRA DE PROGRESO INFERIOR */}
+            <div className="px-6 py-6 md:px-10 md:py-8 border-t border-border/20 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
               <div className="flex-1 w-full max-w-xl flex items-center gap-4">
                 <span className="text-xs font-bold text-foreground w-10 text-right">{progreso}%</span>
                 <div className="flex-1 h-2 bg-border/50 rounded-full overflow-hidden">
@@ -265,7 +431,7 @@ export function SubjectCard({ materia, exercises, promedio, progreso }: SubjectC
                 </div>
               </div>
             </div>
-          </div>
+          </Tabs>
         </div>
       </div>
     </div>

@@ -1,11 +1,11 @@
 import React from 'react';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getAlumnoDashboardData } from '@/lib/actions/alumno';
-import { 
-  BookOpen, 
-  CalendarDays, 
-  Users, 
-  Sun, 
+import {
+  BookOpen,
+  CalendarDays,
+  Users,
+  Sun,
   GraduationCap,
   Calculator,
   Languages,
@@ -55,7 +55,7 @@ export default async function AlumnoDashboard() {
   const data = await getAlumnoDashboardData(user.id) as any;
   const profile = data?.profile;
   const materias = data?.materiasAsignadas || [];
-  
+
   // Data fallbacks
   const isLoading = !profile;
   const nombreCompleto = profile ? `${profile.nombre} ${profile.apellidos}` : 'Cargando...';
@@ -72,23 +72,23 @@ export default async function AlumnoDashboard() {
     if (!ej.fecha_entrega) return true;
     return new Date(ej.fecha_entrega) >= now;
   }) || [];
-  
+
   const totalTareas = pendientesValidas.length;
 
   // Calcular promedio y ejercicios completados reales
   const ejerciciosCompletados = data?.todosLosEjercicios?.filter((ej: any) => ej.completado) || [];
   const numeroCompletados = ejerciciosCompletados.length;
-  
+
   // La calificación está en base 100, calculamos el promedio en base 10
   const sumaCalificaciones = ejerciciosCompletados.reduce((acc: number, ej: any) => acc + Number(ej.calificacion || 0), 0);
   const promedioAcumulado = numeroCompletados > 0 ? (sumaCalificaciones / numeroCompletados) / 10 : 0;
   const promedio = numeroCompletados > 0 ? promedioAcumulado.toFixed(1) : 'N/A';
-  
+
   const labelCompletados = "Completados";
 
   return (
     <div className="space-y-12 pb-16 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-      
+
       {/* HEADER TOP (Mobile/Tablet View adjustment since Sidebar handles desktop) */}
       <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 py-4 md:py-0">
         <div>
@@ -113,24 +113,24 @@ export default async function AlumnoDashboard() {
             </h3>
             <div className="flex flex-wrap gap-x-6 gap-y-3 text-white/85 font-medium text-sm md:text-base">
               <p className="flex items-center gap-2">
-                <GraduationCap className="w-4 h-4 md:w-5 md:h-5 opacity-80" /> 
+                <GraduationCap className="w-4 h-4 md:w-5 md:h-5 opacity-80" />
                 {carrera}
               </p>
               <p className="flex items-center gap-2">
-                <CalendarDays className="w-4 h-4 md:w-5 md:h-5 opacity-80" /> 
+                <CalendarDays className="w-4 h-4 md:w-5 md:h-5 opacity-80" />
                 {semestre}
               </p>
               <p className="flex items-center gap-2">
-                <Users className="w-4 h-4 md:w-5 md:h-5 opacity-80" /> 
+                <Users className="w-4 h-4 md:w-5 md:h-5 opacity-80" />
                 Grupo: {grupoNombre}
               </p>
               <p className="flex items-center gap-2">
-                <Sun className="w-4 h-4 md:w-5 md:h-5 opacity-80" /> 
+                <Sun className="w-4 h-4 md:w-5 md:h-5 opacity-80" />
                 Turno: <span className="capitalize">{turno}</span>
               </p>
             </div>
           </div>
-          
+
           {/* KPI Metrics */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-2 gap-4 md:gap-6 w-full lg:w-auto mt-6 lg:mt-0">
             <div className="text-center bg-white/5 rounded-2xl p-4 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-colors">
@@ -191,7 +191,7 @@ export default async function AlumnoDashboard() {
 
               return (
                 <div key={materia.id} className={`bg-card/40 p-6 md:p-8 rounded-2xl md:rounded-3xl shadow-sm border border-border outline outline-transparent hover:outline-primary/10 border-l-4 ${colorClass.split(' ')[0]} transition-all hover:-translate-y-1 hover:shadow-md cursor-pointer group`}>
-                  
+
                   <div className="flex justify-between items-start mb-6">
                     <span className={`px-3 py-1 ${estado.bg} ${estado.text} rounded-full text-[10px] font-bold uppercase tracking-wider`}>
                       {estado.badge}
@@ -200,14 +200,14 @@ export default async function AlumnoDashboard() {
                       {getSubjectIcon(materia.nombre)}
                     </div>
                   </div>
-                  
+
                   <h5 className="text-lg md:text-xl font-bold text-foreground mb-1 tracking-tight truncate" title={materia.nombre}>
                     {materia.nombre}
                   </h5>
                   <p className="text-xs md:text-sm text-muted-foreground font-medium mb-6">
                     {materia.profesor}
                   </p>
-                  
+
                   <div className="flex items-center justify-between text-xs text-muted-foreground bg-muted/40 p-3 rounded-xl border border-muted">
                     <div className="flex items-center gap-1.5 font-medium">
                       <Clock4 className="w-3.5 h-3.5 opacity-70" /> Horario Fijo
@@ -229,12 +229,12 @@ export default async function AlumnoDashboard() {
           <h4 className="text-xl md:text-2xl font-bold font-headline text-primary tracking-tight">Tareas Pendientes</h4>
           <p className="text-sm md:text-base text-muted-foreground font-medium">Actividades para esta semana</p>
         </div>
-        
+
         <div className="bg-card border border-border rounded-2xl md:rounded-3xl overflow-hidden shadow-sm">
           <PaginationTasks tasks={data?.pendientes || []} />
         </div>
       </section>
-      
+
     </div>
   );
 }

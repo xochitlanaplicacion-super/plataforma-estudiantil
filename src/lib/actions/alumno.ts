@@ -42,8 +42,7 @@ export async function getAlumnoDashboardData(userId: string) {
       };
     }
 
-    // 2. MATERIAS ASIGNADAS AL GRUPO (Usando asignaciones_profesor como fuente de verdad)
-    // Cada asignación tiene un solo grupo_id (normalizado, sin CSV)
+    // 2. MATERIAS ASIGNADAS AL GRUPO
     const { data: asignaciones, error: asigErr } = await supabaseAdmin
       .from('asignaciones_profesor')
       .select(`
@@ -58,12 +57,11 @@ export async function getAlumnoDashboardData(userId: string) {
 
     if (asigErr) throw asigErr;
 
-    // Formatear la lista de materias
     const materiasAsignadas = asignaciones?.map((asig: any) => ({
       id: asig.materias?.id,
       nombre: asig.materias?.nombre,
       clave: asig.materias?.clave,
-      profesor: asig.profiles 
+      profesor: asig.profiles
         ? `${asig.profiles.nombre} ${asig.profiles.apellidos}`
         : 'Profesor por asignar',
       profesor_id: asig.profesor_id || null
@@ -71,28 +69,39 @@ export async function getAlumnoDashboardData(userId: string) {
 
     const materiaIds = materiasAsignadas.map(m => m.id).filter(Boolean);
 
-    // 3. OBTENER EJERCICIOS REALES
-    // Flujo: materias -> unidades -> temas -> ejercicios
+    // 3. OBTENER ESTRUCTURA COMPLETA (Unidades, Temas, Recursos y Ejercicios)
+    let todasLasUnidades: any[] = [];
     let ejerciciosPublicados: any[] = [];
-    
+
     if (materiaIds.length > 0) {
+      // Obtener Unidades
       const { data: unidades } = await supabaseAdmin
         .from('unidades')
-        .select('id, materia_id')
+        .select('*')
         .in('materia_id', materiaIds)
-        .eq('activo', true);
+        .eq('activo', true)
+        .order('orden');
 
       const unidadIds = unidades?.map(u => u.id) || [];
 
       if (unidadIds.length > 0) {
+        // Obtener Temas
         const { data: temas } = await supabaseAdmin
           .from('temas')
-          .select('id, titulo, unidad_id')
-          .in('unidad_id', unidadIds);
+          .select('*')
+          .in('unidad_id', unidadIds)
+          .order('orden');
 
         const temaIds = temas?.map(t => t.id) || [];
 
         if (temaIds.length > 0) {
+          // Obtener Recursos (Materiales)
+          const { data: recursos } = await supabaseAdmin
+            .from('resources')
+            .select('*')
+            .in('tema_id', temaIds);
+
+          // Obtener Ejercicios
           const { data: ejercicios } = await supabaseAdmin
             .from('ejercicios')
             .select(`
@@ -109,6 +118,15 @@ export async function getAlumnoDashboardData(userId: string) {
             .order('fecha_entrega', { ascending: true });
 
           ejerciciosPublicados = ejercicios || [];
+
+          // Estructurar Árbol: Unidades -> Temas -> Recursos
+          todasLasUnidades = unidades?.map(u => ({
+            ...u,
+            temas: temas?.filter(t => t.unidad_id === u.id).map(t => ({
+              ...t,
+              recursos: recursos?.filter(r => r.tema_id === t.id) || []
+            })) || []
+          })) || [];
         }
       }
     }
@@ -140,14 +158,14 @@ export async function getAlumnoDashboardData(userId: string) {
       };
     });
 
-    // Pendientes son solo los NO completados
     const pendientes = todosLosEjercicios.filter(ej => !ej.completado);
 
     return {
       profile,
       materiasAsignadas,
       pendientes,
-      todosLosEjercicios
+      todosLosEjercicios,
+      unidades: todasLasUnidades
     };
 
   } catch (error: any) {
@@ -183,10 +201,10 @@ export async function saveExerciseResult(ejercicioId: string, aciertos: number, 
     const deadline = new Date(exerciseData.fecha_entrega);
     const now = new Date();
     if (now > deadline) {
-      return { 
-        success: true, 
+      return {
+        success: true,
         isExpired: true,
-        message: 'Ejercicio vencido. Puedes practicar, pero la nota no se guardará.' 
+        message: 'Ejercicio vencido. Puedes practicar, pero la nota no se guardará.'
       };
     }
   }
@@ -200,9 +218,8 @@ export async function saveExerciseResult(ejercicioId: string, aciertos: number, 
   const nuevosIntentos = (existing?.intentos || 0) + 1;
   const nuevaSuma = (Number(existing?.suma_calificaciones) || 0) + calificacionIntento;
   const nuevaCalificacionPromedio = Math.min(100, nuevaSuma / nuevosIntentos);
-  
+
   // 4. Determinar si bloqueamos (si EN ESTE INTENTO sacó 100)
-  // Esto evita que el alumno diluya sus errores iniciales; el promedio hasta este punto será su nota final inamovible.
   const debeBloquear = calificacionIntento >= 100;
 
   const { data, error } = await supabase
@@ -210,7 +227,7 @@ export async function saveExerciseResult(ejercicioId: string, aciertos: number, 
     .upsert({
       alumno_id: user.id,
       ejercicio_id: ejercicioId,
-      calificacion: nuevaCalificacionPromedio, // Guardamos el promedio
+      calificacion: nuevaCalificacionPromedio,
       aciertos: aciertos,
       total_preguntas: total,
       intentos: nuevosIntentos,
@@ -218,7 +235,7 @@ export async function saveExerciseResult(ejercicioId: string, aciertos: number, 
       bloqueado: debeBloquear,
       estado: 'completado',
       fecha_completado: new Date().toISOString()
-    }, { 
+    }, {
       onConflict: 'alumno_id, ejercicio_id'
     })
     .select()
