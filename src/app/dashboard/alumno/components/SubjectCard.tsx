@@ -48,36 +48,66 @@ const getSubjectIcon = (nombre: string) => {
   return <GraduationCap className="w-5 h-5 md:w-6 md:h-6 text-primary" />;
 };
 
-const getResourceIcon = (url: string) => {
-  if (!url) return <div className="p-2 bg-slate-100 rounded-lg text-slate-400"><File className="w-4 h-4" /></div>;
-  const ext = url.split('.').pop()?.toLowerCase();
+const getFileExtension = (url: string, tipo?: string): string => {
+  if (tipo) return tipo.toLowerCase().replace('.', '');
+  if (!url) return '';
+  // Extract extension from URL, ignoring query params
+  const cleanUrl = url.split('?')[0];
+  return cleanUrl.split('.').pop()?.toLowerCase() || '';
+};
+
+const getResourceIcon = (url: string, tipo?: string) => {
+  const ext = getFileExtension(url, tipo);
   
   if (ext === 'pdf') return (
-    <div className="p-2 bg-red-50 text-red-600 rounded-lg border border-red-100 shadow-sm">
-      <FileText className="w-4 h-4" />
+    <div className="p-2.5 bg-red-50 text-red-600 rounded-xl border border-red-100 shadow-sm">
+      <FileText className="w-5 h-5" />
     </div>
   );
-  if (['ppt', 'pptx'].includes(ext || '')) return (
-    <div className="p-2 bg-orange-50 text-orange-600 rounded-lg border border-orange-100 shadow-sm">
-      <Presentation className="w-4 h-4" />
+  if (['ppt', 'pptx'].includes(ext)) return (
+    <div className="p-2.5 bg-orange-50 text-orange-600 rounded-xl border border-orange-100 shadow-sm">
+      <Presentation className="w-5 h-5" />
     </div>
   );
-  if (['xls', 'xlsx', 'csv'].includes(ext || '')) return (
-    <div className="p-2 bg-emerald-50 text-emerald-600 rounded-lg border border-emerald-100 shadow-sm">
-      <FileSpreadsheet className="w-4 h-4" />
+  if (['xls', 'xlsx', 'csv'].includes(ext)) return (
+    <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl border border-emerald-100 shadow-sm">
+      <FileSpreadsheet className="w-5 h-5" />
     </div>
   );
-  if (['doc', 'docx'].includes(ext || '')) return (
-    <div className="p-2 bg-blue-50 text-blue-600 rounded-lg border border-blue-100 shadow-sm">
-      <FileText className="w-4 h-4" />
+  if (['doc', 'docx'].includes(ext)) return (
+    <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl border border-blue-100 shadow-sm">
+      <FileText className="w-5 h-5" />
+    </div>
+  );
+  if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'].includes(ext)) return (
+    <div className="p-2.5 bg-purple-50 text-purple-600 rounded-xl border border-purple-100 shadow-sm">
+      <File className="w-5 h-5" />
+    </div>
+  );
+  if (['zip', 'rar', '7z', 'tar'].includes(ext)) return (
+    <div className="p-2.5 bg-amber-50 text-amber-600 rounded-xl border border-amber-100 shadow-sm">
+      <FolderOpen className="w-5 h-5" />
     </div>
   );
   
   return (
-    <div className="p-2 bg-slate-50 text-slate-500 rounded-lg border border-slate-200">
-      <File className="w-4 h-4" />
+    <div className="p-2.5 bg-slate-100 text-slate-500 rounded-xl border border-slate-200">
+      <File className="w-5 h-5" />
     </div>
   );
+};
+
+const getFileTypeLabel = (url: string, tipo?: string): string => {
+  const ext = getFileExtension(url, tipo).toUpperCase();
+  if (!ext) return 'ARCHIVO';
+  const labels: Record<string, string> = {
+    'PDF': 'PDF', 'DOC': 'Word', 'DOCX': 'Word',
+    'XLS': 'Excel', 'XLSX': 'Excel', 'CSV': 'CSV',
+    'PPT': 'PowerPoint', 'PPTX': 'PowerPoint',
+    'JPG': 'Imagen', 'JPEG': 'Imagen', 'PNG': 'Imagen', 'GIF': 'Imagen',
+    'ZIP': 'ZIP', 'RAR': 'RAR'
+  };
+  return labels[ext] || ext;
 };
 
 interface Exercise {
@@ -96,6 +126,8 @@ interface Resource {
   nombre: string;
   url: string;
   tema_id: string;
+  tipo?: string;
+  file_path?: string;
 }
 
 interface Tema {
@@ -372,29 +404,46 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
                                       <p className="text-[10px] text-muted-foreground italic col-span-full">Sin recursos aún.</p>
                                     ) : (
                                       tema.recursos.map((res) => (
-                                        <div 
+                                        <a 
                                           key={`resource-${res.id}`}
-                                          className="flex items-center justify-between p-2.5 bg-white border border-slate-200 rounded-xl hover:border-primary/40 hover:shadow-sm transition-all group"
+                                          href={res.url || '#'}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          download
+                                          onClick={(e) => {
+                                            if (!res.url) {
+                                              e.preventDefault();
+                                              return;
+                                            }
+                                          }}
+                                          className={cn(
+                                            "flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-xl transition-all group/res select-none",
+                                            res.url 
+                                              ? "hover:border-primary/40 hover:shadow-md cursor-pointer active:scale-[0.98]" 
+                                              : "opacity-50 cursor-not-allowed"
+                                          )}
                                         >
-                                          <div className="flex items-center gap-3 overflow-hidden">
-                                            <div className="shrink-0">
-                                              {getResourceIcon(res.url)}
-                                            </div>
-                                            <span className="text-xs font-bold text-slate-700 truncate max-w-[120px] md:max-w-[180px]" title={res.nombre}>
+                                          <div className="shrink-0">
+                                            {getResourceIcon(res.url, res.tipo)}
+                                          </div>
+                                          <div className="flex flex-col min-w-0 flex-1">
+                                            <span className="text-xs font-bold text-slate-700 truncate" title={res.nombre}>
                                               {res.nombre}
                                             </span>
+                                            <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">
+                                              {getFileTypeLabel(res.url, res.tipo)}
+                                            </span>
                                           </div>
-                                          <a 
-                                            href={res.url}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            download={res.nombre}
-                                            className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-600 rounded-lg text-[10px] font-black uppercase tracking-tighter hover:bg-emerald-600 hover:text-white transition-all shadow-sm active:scale-95"
-                                          >
+                                          <div className={cn(
+                                            "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tighter shrink-0 transition-all shadow-sm",
+                                            res.url
+                                              ? "bg-emerald-50 text-emerald-600 group-hover/res:bg-emerald-600 group-hover/res:text-white"
+                                              : "bg-slate-100 text-slate-400"
+                                          )}>
                                             <Download size={12} strokeWidth={3} />
                                             <span className="hidden sm:inline">Descargar</span>
-                                          </a>
-                                        </div>
+                                          </div>
+                                        </a>
                                       ))
                                     )}
                                   </div>

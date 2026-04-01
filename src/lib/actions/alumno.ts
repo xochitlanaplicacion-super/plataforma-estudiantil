@@ -96,10 +96,20 @@ export async function getAlumnoDashboardData(userId: string) {
 
         if (temaIds.length > 0) {
           // Obtener Recursos (Materiales)
-          const { data: recursos } = await supabaseAdmin
+          const { data: recursosRaw } = await supabaseAdmin
             .from('resources')
             .select('*')
             .in('tema_id', temaIds);
+
+          // Mapear campos de la BD (titulo, archivo_url, tipo) a los esperados por el frontend (nombre, url, tipo)
+          const recursos = recursosRaw?.map(r => ({
+            id: r.id,
+            nombre: r.titulo || r.nombre || 'Archivo sin nombre',
+            url: r.archivo_url || r.url || '',
+            tema_id: r.tema_id,
+            tipo: r.tipo || '',
+            file_path: r.file_path || ''
+          })) || [];
 
           // Obtener Ejercicios
           const { data: ejercicios } = await supabaseAdmin
