@@ -29,7 +29,10 @@ import {
   Play,
   MonitorPlay,
   X,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Youtube,
+  AlertCircle,
+  ExternalLink
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
@@ -41,6 +44,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 const LOGO_URL = '/images/logo_zapata.png';
 
@@ -153,6 +157,7 @@ interface Tema {
   unidad_id: string;
   recursos: Resource[];
   slides?: Slide[];
+  videos?: any[];
   orden?: number;
 }
 
@@ -183,6 +188,7 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
   const [presentationMode, setPresentationMode] = useState(false);
   const [activeSlides, setActiveSlides] = useState<Slide[]>([]);
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
+  const [activeVideo, setActiveVideo] = useState<any>(null);
   const ITEMS_PER_PAGE = 10;
   
   const now = useMemo(() => new Date(), []);
@@ -248,6 +254,13 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
       
     return [...active, ...expired];
   }, [exercises, now]);
+
+  const getYouTubeId = (url: string) => {
+    if (!url) return null;
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2].length === 11) ? match[2] : null;
+  };
 
   const totalPages = Math.ceil(sortedExercises.length / ITEMS_PER_PAGE);
   const currentBatch = useMemo(() => 
@@ -486,6 +499,48 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
                                       </button>
                                     )}
 
+                                    {tema.videos && tema.videos.length > 0 && (
+                                      <div className="col-span-full grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+                                        {tema.videos.map((vid: any, vIdx: number) => (
+                                          <button
+                                            key={`video-${tema.id}-${vIdx}`}
+                                            onClick={() => setActiveVideo(vid)}
+                                            className="flex items-start gap-3 p-3 bg-red-50/30 border border-red-100 rounded-2xl hover:border-red-400 hover:bg-white hover:shadow-xl transition-all group/vid active:scale-[0.98] text-left"
+                                          >
+                                            <div className="shrink-0 relative overflow-hidden rounded-xl shadow-lg group-hover/vid:scale-105 transition-transform w-[100px] aspect-video bg-red-600">
+                                              {vid.url && getYouTubeId(vid.url) ? (
+                                                <>
+                                                  <img 
+                                                    src={`https://img.youtube.com/vi/${getYouTubeId(vid.url)}/hqdefault.jpg`} 
+                                                    alt={vid.titulo}
+                                                    className="w-full h-full object-cover opacity-90 group-hover/vid:opacity-100 transition-opacity"
+                                                  />
+                                                  <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover/vid:bg-black/0 transition-colors">
+                                                    <div className="p-1 bg-red-600 rounded-full text-white shadow-xl">
+                                                      <Play size={10} fill="currentColor" />
+                                                    </div>
+                                                  </div>
+                                                </>
+                                              ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-white">
+                                                  <Youtube size={20} />
+                                                </div>
+                                              )}
+                                            </div>
+                                            <div className="flex flex-col min-w-0 flex-1 pr-2">
+                                              <span className="text-xs font-black text-slate-800 uppercase tracking-tight truncate line-clamp-1">{vid.titulo || 'Video de Clase'}</span>
+                                              {vid.descripcion && (
+                                                <span className="text-[9px] font-bold text-slate-500 leading-tight mt-0.5 line-clamp-2">{vid.descripcion}</span>
+                                              )}
+                                              <div className="flex items-center gap-1 mt-2 text-red-600 font-black text-[8px] uppercase tracking-widest opacity-70 group-hover/vid:opacity-100 transition-opacity">
+                                                <Play size={8} fill="currentColor" /> Ver Video
+                                              </div>
+                                            </div>
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+
                                     {!tema.recursos || tema.recursos.length === 0 ? (
                                       (!tema.slides || tema.slides.length === 0) && <p className="text-[10px] text-muted-foreground italic col-span-full">Sin recursos aún.</p>
                                     ) : (
@@ -663,6 +718,67 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
         </div>
       </div>
     )}
+      {/* REPRODUCTOR DE VIDEO MODAL */}
+      <Dialog open={!!activeVideo} onOpenChange={(open) => !open && setActiveVideo(null)}>
+        <DialogContent className="max-w-4xl w-[95vw] sm:w-full p-0 overflow-hidden bg-black border-none gap-0 rounded-[32px]">
+          <DialogHeader className="p-4 sm:p-6 bg-white shrink-0">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 overflow-hidden">
+                <div className="h-10 w-10 shrink-0 rounded-2xl bg-red-600 text-white flex items-center justify-center shadow-lg shadow-red-200 animate-pulse-slow">
+                  <Youtube size={20} />
+                </div>
+                <div className="flex flex-col min-w-0">
+                  <DialogTitle className="text-sm sm:text-base font-black uppercase tracking-tight text-slate-800 truncate">{activeVideo?.titulo || 'Reproduciendo Video'}</DialogTitle>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <img src={LOGO_URL} alt="Logo IEEZ" className="h-4 sm:h-5 w-auto object-contain shrink-0" />
+                    <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] truncate">Instituto Educativo Emiliano Zapata</p>
+                  </div>
+                </div>
+              </div>
+              <Button variant="ghost" size="icon" className="shrink-0 rounded-full hover:bg-slate-100 ml-2" onClick={() => setActiveVideo(null)}>
+                <X size={20} />
+              </Button>
+            </div>
+          </DialogHeader>
+          
+          <div className="aspect-video w-full bg-slate-900 flex items-center justify-center relative group">
+            {activeVideo && getYouTubeId(activeVideo.url) ? (
+              <iframe
+                width="100%"
+                height="100%"
+                src={`https://www.youtube.com/embed/${getYouTubeId(activeVideo.url)}?autoplay=1`}
+                title={activeVideo.titulo}
+                frameBorder="0"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowFullScreen
+                className="w-full h-full shadow-2xl"
+              ></iframe>
+            ) : (
+              <div className="flex flex-col items-center gap-4 text-white">
+                <AlertCircle size={48} className="text-red-500" />
+                <div className="text-center">
+                  <p className="font-black uppercase tracking-widest text-sm">No se pudo cargar el video</p>
+                  <p className="text-xs text-slate-400 mt-1">El formato de la URL no es válido para el reproductor integrado.</p>
+                  <Button 
+                    variant="link" 
+                    className="text-red-400 hover:text-red-300 font-bold uppercase text-[10px] mt-4"
+                    onClick={() => window.open(activeVideo?.url, '_blank')}
+                  >
+                    Ver en sitio externo <ExternalLink size={12} className="ml-2" />
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+          
+          {activeVideo?.descripcion && (
+            <div className="p-6 bg-white border-t">
+              <label className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] mb-2 block">Información del Video</label>
+              <p className="text-sm text-slate-600 font-medium leading-relaxed">{activeVideo.descripcion}</p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

@@ -45,8 +45,9 @@ const prepareForUpsert = (data: any) => {
       return;
     }
     if (cleanData[key] !== null && typeof cleanData[key] === 'object' && !(cleanData[key] instanceof Date)) {
-      delete cleanData[key];
-      return;
+      if (key !== 'videos' && key !== 'slides') {
+        delete cleanData[key];
+      }
     }
     // IMPORTANTE: Aseguramos que undefined sea null, pero preservamos strings (incluso vacíos)
     if (cleanData[key] === undefined) {

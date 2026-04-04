@@ -47,7 +47,11 @@ import {
   ArrowRight,
   RotateCcw,
   XCircle,
-  CalendarClock
+  CalendarClock,
+  Youtube,
+  Video,
+  PlusCircle,
+  ExternalLink
 } from 'lucide-react';
 
 import { 
@@ -1116,6 +1120,94 @@ export default function ProfesorDashboard() {
               <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Descripción / Instrucciones (Opcional)</label>
               <textarea rows={4} className="w-full p-4 rounded-xl bg-slate-50 border-slate-200 text-sm outline-none" value={dialog.data.descripcion || ''} onChange={e => setDialog({...dialog, data: {...dialog.data, descripcion: e.target.value}})} />
             </div>
+
+            {dialog.type === 'tema' && (
+              <div className="space-y-6 pt-4 border-t border-slate-100">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black uppercase text-primary tracking-[0.2em] flex items-center gap-2"><Youtube size={14} /> Videos del Tema</label>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="h-8 rounded-lg font-black uppercase text-[9px] gap-2 border-primary/20 text-primary hover:bg-primary/5"
+                    onClick={() => {
+                      const currentVideos = Array.isArray(dialog.data.videos) ? dialog.data.videos : [];
+                      setDialog({...dialog, data: {...dialog.data, videos: [...currentVideos, { titulo: '', url: '', descripcion: '' }]}});
+                    }}
+                  >
+                    <PlusCircle size={14} /> Agregar Video
+                  </Button>
+                </div>
+                
+                <div className="space-y-4">
+                  {(!dialog.data.videos || dialog.data.videos.length === 0) ? (
+                    <div className="bg-slate-50 rounded-2xl p-6 text-center border-2 border-dashed border-slate-200 flex flex-col items-center gap-2">
+                      <Video className="text-slate-300" size={24} />
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">No hay videos vinculados a este tema.</p>
+                    </div>
+                  ) : (
+                    dialog.data.videos.map((vid: any, idx: number) => (
+                      <div key={idx} className="p-5 rounded-2xl border-2 border-slate-100 bg-white shadow-sm space-y-4 relative group/vid">
+                        <button 
+                          className="absolute top-4 right-4 h-8 w-8 rounded-full bg-red-50 text-red-500 flex items-center justify-center opacity-0 group-hover/vid:opacity-100 transition-all hover:bg-red-500 hover:text-white"
+                          onClick={() => {
+                            const newVideos = [...dialog.data.videos];
+                            newVideos.splice(idx, 1);
+                            setDialog({...dialog, data: {...dialog.data, videos: newVideos}});
+                          }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mr-8">
+                          <div className="space-y-1.5">
+                            <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Título del Video</label>
+                            <Input 
+                              placeholder="Ej: Clase de Introducción" 
+                              className="h-10 rounded-xl text-xs font-bold" 
+                              value={vid.titulo || ''} 
+                              onChange={e => {
+                                const newVideos = [...dialog.data.videos];
+                                newVideos[idx].titulo = e.target.value;
+                                setDialog({...dialog, data: {...dialog.data, videos: newVideos}});
+                              }} 
+                            />
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">URL (YouTube / Vimeo)</label>
+                            <div className="relative">
+                              <Input 
+                                placeholder="https://youtube.com/watch?v=..." 
+                                className="h-10 rounded-xl text-xs pl-9" 
+                                value={vid.url || ''} 
+                                onChange={e => {
+                                  const newVideos = [...dialog.data.videos];
+                                  newVideos[idx].url = e.target.value;
+                                  setDialog({...dialog, data: {...dialog.data, videos: newVideos}});
+                                }} 
+                              />
+                              <ExternalLink className="absolute left-3 top-3 text-slate-300" size={14} />
+                            </div>
+                          </div>
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-[9px] font-black uppercase text-slate-400 tracking-wider">Descripción del Video (Opcional)</label>
+                          <Input 
+                            placeholder="Breve explicación de lo que el alumno verá en este video..." 
+                            className="h-10 rounded-xl text-xs italic" 
+                            value={vid.descripcion || ''} 
+                            onChange={e => {
+                              const newVideos = [...dialog.data.videos];
+                              newVideos[idx].descripcion = e.target.value;
+                              setDialog({...dialog, data: {...dialog.data, videos: newVideos}});
+                            }} 
+                          />
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            )}
 
             {dialog.type === 'ejercicio' && (
               <div className="space-y-10">

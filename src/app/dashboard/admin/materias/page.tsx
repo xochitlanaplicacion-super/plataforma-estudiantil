@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { BookOpen, ListTree, FileText, Sparkles, ChevronRight, Plus, Edit, Trash2, Loader2, ArrowLeft, AlertCircle } from 'lucide-react';
+import { BookOpen, ListTree, FileText, Sparkles, ChevronRight, Plus, Edit, Trash2, Loader2, ArrowLeft, AlertCircle, Youtube, Video, PlusCircle, ExternalLink } from 'lucide-react';
 import { getNiveles, getCarreras, getMaterias, getUnidades, getTemas, getEjercicios, upsertMateria, upsertUnidad, upsertTema, upsertEjercicio, deleteMateria, deleteUnidad, deleteTema, deleteEjercicio } from '@/lib/actions/academic';
 import { useToast } from '@/hooks/use-toast';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
@@ -327,6 +327,59 @@ export default function MateriasUnidades() {
                      else setDialog({...dialog, data: {...dialog.data, orden: parseInt(val)}});
                    }} 
                  />
+               </div>
+             )}
+
+             {dialog.type === 'tema' && (
+               <div className="space-y-4 pt-4 border-t border-slate-100">
+                 <div className="flex items-center justify-between">
+                   <label className="text-xs font-bold uppercase flex items-center gap-2"><Youtube size={14} className="text-red-500" /> Videos del Tema</label>
+                   <Button 
+                     variant="outline" 
+                     size="sm" 
+                     className="h-7 px-2 rounded-lg font-bold uppercase text-[9px] gap-1 border-primary/20 text-primary hover:bg-primary/5"
+                     onClick={() => {
+                       const currentVideos = Array.isArray(dialog.data.videos) ? dialog.data.videos : [];
+                       setDialog({...dialog, data: {...dialog.data, videos: [...currentVideos, { titulo: '', url: '', descripcion: '' }]}});
+                     }}
+                   >
+                     <PlusCircle size={12} /> Añadir
+                   </Button>
+                 </div>
+                 <div className="space-y-3">
+                   {(!dialog.data.videos || dialog.data.videos.length === 0) ? (
+                     <p className="text-[10px] text-slate-400 italic text-center py-2 bg-slate-50 rounded-xl border border-dashed">No hay videos vinculados.</p>
+                   ) : (
+                     dialog.data.videos.map((vid: any, idx: number) => (
+                       <div key={idx} className="p-3 rounded-xl border border-slate-100 bg-slate-50/50 space-y-2 relative">
+                         <button 
+                           className="absolute top-2 right-2 h-6 w-6 rounded-full bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-500 hover:text-white transition-colors"
+                           onClick={() => {
+                             const newVideos = [...dialog.data.videos];
+                             newVideos.splice(idx, 1);
+                             setDialog({...dialog, data: {...dialog.data, videos: newVideos}});
+                           }}
+                         >
+                           <Trash2 size={12} />
+                         </button>
+                         <div className="grid grid-cols-1 gap-2 pr-6">
+                           <Input placeholder="Título del Video" className="h-8 text-[11px] font-bold" value={vid.titulo || ''} onChange={e => {
+                             const newV = [...dialog.data.videos]; newV[idx].titulo = e.target.value; setDialog({...dialog, data: {...dialog.data, videos: newV}});
+                           }} />
+                           <div className="relative">
+                             <Input placeholder="URL YouTube/Vimeo" className="h-8 text-[11px] pl-7" value={vid.url || ''} onChange={e => {
+                               const newV = [...dialog.data.videos]; newV[idx].url = e.target.value; setDialog({...dialog, data: {...dialog.data, videos: newV}});
+                             }} />
+                             <ExternalLink className="absolute left-2 top-2 text-slate-300" size={12} />
+                           </div>
+                           <Input placeholder="Descripción (opcional)" className="h-8 text-[11px] italic" value={vid.descripcion || ''} onChange={e => {
+                             const newV = [...dialog.data.videos]; newV[idx].descripcion = e.target.value; setDialog({...dialog, data: {...dialog.data, videos: newV}});
+                           }} />
+                         </div>
+                       </div>
+                     ))
+                   )}
+                 </div>
                </div>
              )}
           </div>
