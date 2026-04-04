@@ -4,11 +4,59 @@ import { cn } from '@/lib/utils';
 import confetti from 'canvas-confetti';
 import { 
   ArrowLeft, RotateCcw, X, XCircle, ChevronLeft, ChevronRight,
-  CheckCircle2, Play, HelpCircle, CheckCircle, Eye, EyeOff, AlertCircle, FileText, Layout, Hash, ListTree
+  CheckCircle2, Play, HelpCircle, CheckCircle, Eye, EyeOff, AlertCircle, FileText, Layout, Hash, ListTree,
+  Smartphone
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { EntregaAlumno } from './EntregaAlumno';
+import { useIsMobile } from '@/hooks/use-mobile';
+
+// --- MOBILE DRAG INSTRUCTIONS POPUP ---
+function MobileDragTip({ type, onDismiss }: { type: string; onDismiss: () => void }) {
+  const tips: Record<string, { title: string; steps: string[] }> = {
+    completar_espacios: {
+      title: 'Completa el Texto',
+      steps: ['1. Toca una palabra del banco', '2. Toca el espacio vacío donde va', '3. Para moverla, tócala y luego toca otro espacio'],
+    },
+    emparejamiento: {
+      title: 'Relación de Columnas',
+      steps: ['1. Toca un concepto de la izquierda', '2. Toca la definición correspondiente a la derecha', '3. El concepto se vinculará automáticamente'],
+    },
+    ordenar_secuencia: {
+      title: 'Ordenar Pasos',
+      steps: ['1. Toca la tarjeta que quieras mover', '2. Toca otra tarjeta para intercambiar posiciones', '3. Repite hasta tener el orden correcto'],
+    },
+  };
+  const tip = tips[type];
+  if (!tip) return null;
+  return (
+    <div className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm animate-in fade-in duration-300 p-4">
+      <div className="bg-white rounded-[28px] shadow-2xl w-full max-w-sm p-6 space-y-5 animate-in slide-in-from-bottom-4 duration-500">
+        <div className="flex items-center gap-3">
+          <div className="h-11 w-11 rounded-2xl bg-primary/10 flex items-center justify-center shrink-0">
+            <Smartphone className="text-primary" size={22} />
+          </div>
+          <div>
+            <h3 className="font-black text-sm uppercase tracking-tight text-slate-800">{tip.title}</h3>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Instrucciones Táctiles</p>
+          </div>
+        </div>
+        <div className="space-y-3 pl-2">
+          {tip.steps.map((step, i) => (
+            <p key={i} className="text-sm text-slate-600 font-semibold flex items-start gap-2">
+              <span className="text-primary font-black">{step.split('.')[0]}.</span>
+              <span>{step.split('. ').slice(1).join('. ')}</span>
+            </p>
+          ))}
+        </div>
+        <Button onClick={onDismiss} className="w-full h-12 rounded-2xl bg-primary text-white font-black uppercase text-xs tracking-widest shadow-lg">
+          ¡Entendido!
+        </Button>
+      </div>
+    </div>
+  );
+}
 
 export interface Token {
   id: string;
@@ -213,6 +261,8 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
     }
   }, [finished, onComplete, score, totalSteps]); // Dependency array updated for clarity
   
+  const isMobile = useIsMobile();
+  const [mobileTipDismissed, setMobileTipDismissed] = useState<Record<string, boolean>>({});
   const [selectedOption, setSelectedOption] = useState<any>(null);
   const [shuffledItems, setShuffledItems] = useState<any[]>([]);
   const [sequenceItems, setSequenceItems] = useState<string[]>([]);
@@ -220,6 +270,9 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
   const [currentLeft, setCurrentLeft] = useState<string | null>(null);
   const [isFlipped, setIsFlipped] = useState(false);
   const [fillAnswers, setFillAnswers] = useState<Record<number, string>>({});
+  // Mobile tap-to-select states
+  const [tapSelectedLeft, setTapSelectedLeft] = useState<string | null>(null);
+  const [tapSelectedSeqIdx, setTapSelectedSeqIdx] = useState<number | null>(null);
   
   const [sopaGrid, setSopaGrid] = useState<string[][]>([]);
   const [foundWords, setFoundWords] = useState<string[]>([]);
@@ -596,38 +649,58 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
         });
       };
 
+      const handleTapLeft = (left: string) => {
+        if (matchedPairs[left]) return;
+        setTapSelectedLeft(prev => prev === left ? null : left);
+      };
+      const handleTapRight = (right: string) => {
+        if (!tapSelectedLeft) return;
+        const existingKey = Object.keys(matchedPairs).find(k => matchedPairs[k] === right);
+        setMatchedPairs(prev => {
+          const newPairs = { ...prev };
+          if (existingKey) delete newPairs[existingKey];
+          newPairs[tapSelectedLeft] = right;
+          return newPairs;
+        });
+        setTapSelectedLeft(null);
+      };
+
       return (
         <div className="max-w-5xl mx-auto space-y-10 py-10 animate-in fade-in zoom-in-95 duration-500">
+          {isMobile && !mobileTipDismissed['emparejamiento'] && (
+            <MobileDragTip type="emparejamiento" onDismiss={() => setMobileTipDismissed(p => ({...p, emparejamiento: true}))} />
+          )}
           <div className="text-center space-y-3 bg-white p-8 rounded-[32px] shadow-sm border-2 border-purple-50">
             <h3 className="text-3xl font-black text-slate-800 uppercase tracking-widest flex items-center justify-center gap-3"><Layout className="text-purple-600"/> Relación de Columnas</h3>
-            <p className="text-slate-500 font-bold uppercase text-xs tracking-widest">Arrastra los conceptos (Izquierda) hacia su definición correspondiente (Derecha).</p>
+            <p className="text-slate-500 font-bold uppercase text-xs tracking-widest">{isMobile ? 'Toca un concepto, luego toca su definición.' : 'Arrastra los conceptos (Izquierda) hacia su definición correspondiente (Derecha).'}</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
             <div className="space-y-4 bg-purple-50/50 p-6 rounded-[32px] border-2 border-purple-100">
-              <h4 className="text-[10px] font-black text-purple-600 uppercase tracking-widest mb-6 text-center">Conceptos (Arrastra estos)</h4>
+              <h4 className="text-[10px] font-black text-purple-600 uppercase tracking-widest mb-6 text-center">{isMobile ? 'Conceptos (Toca uno)' : 'Conceptos (Arrastra estos)'}</h4>
               {leftItems.map((left: string, i: number) => {
                 const isMatched = !!matchedPairs[left];
+                const isTapSelected = tapSelectedLeft === left;
                 return (
-                  <div key={i} draggable={!isMatched} onDragStart={(e) => handleDragStartMatch(e, left)} className={cn("w-full p-6 py-5 rounded-2xl border-2 font-black transition-all text-center", isMatched ? "bg-slate-100 border-slate-200 text-slate-400 opacity-50 select-none" : "bg-white border-purple-200 text-purple-700 cursor-grab active:cursor-grabbing hover:border-purple-400 hover:shadow-lg hover:-translate-y-1 shadow-sm")}>
+                  <div key={i} draggable={!isMatched} onDragStart={(e) => handleDragStartMatch(e, left)} onClick={() => handleTapLeft(left)} className={cn("w-full p-6 py-5 rounded-2xl border-2 font-black transition-all text-center", isMatched ? "bg-slate-100 border-slate-200 text-slate-400 opacity-50 select-none" : isTapSelected ? "bg-purple-100 border-purple-500 text-purple-800 ring-4 ring-purple-300 animate-pulse shadow-xl scale-[1.03]" : "bg-white border-purple-200 text-purple-700 cursor-grab active:cursor-grabbing hover:border-purple-400 hover:shadow-lg hover:-translate-y-1 shadow-sm")}>
                     {left}
                   </div>
                 );
               })}
             </div>
             <div className="space-y-4 bg-slate-50/50 p-6 rounded-[32px] border-2 border-slate-100">
-              <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-6 text-center">Definiciones (Suelta aquí)</h4>
+              <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-6 text-center">{isMobile ? 'Definiciones (Toca para emparejar)' : 'Definiciones (Suelta aquí)'}</h4>
               {rightItems.map((right: string, i: number) => {
                 const matchedLeft = Object.keys(matchedPairs).find(k => matchedPairs[k] === right);
                 return (
-                  <div key={i} onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDropMatch(e, right)} className={cn("w-full min-h-[80px] p-6 rounded-2xl border-4 border-dashed transition-all flex flex-col items-center justify-center gap-3", matchedLeft ? "bg-purple-100/50 border-purple-300" : "bg-white border-slate-200 hover:border-purple-300")}>
+                  <div key={i} onDragOver={(e) => e.preventDefault()} onDrop={(e) => handleDropMatch(e, right)} onClick={() => handleTapRight(right)} className={cn("w-full min-h-[80px] p-6 rounded-2xl border-4 border-dashed transition-all flex flex-col items-center justify-center gap-3", matchedLeft ? "bg-purple-100/50 border-purple-300" : tapSelectedLeft ? "bg-purple-50 border-purple-400 shadow-lg" : "bg-white border-slate-200 hover:border-purple-300")}>
                     <p className="font-semibold text-slate-600 text-sm text-center leading-relaxed">{right}</p>
                     {matchedLeft ? (
                       <div className="w-full mt-2 py-3 px-4 bg-purple-600 text-white rounded-xl font-black text-sm text-center shadow-md animate-in zoom-in-50 duration-200">
                         {matchedLeft}
                       </div>
                     ) : (
-                      <div className="w-full mt-2 py-3 bg-slate-100 rounded-xl font-black text-[10px] uppercase text-slate-400 text-center tracking-widest">
-                        Soltar Aquí
+                      <div className={cn("w-full mt-2 py-3 rounded-xl font-black text-[10px] uppercase text-center tracking-widest", tapSelectedLeft ? "bg-purple-100 text-purple-600 animate-pulse" : "bg-slate-100 text-slate-400")}>
+                        {tapSelectedLeft ? 'Toca Para Vincular' : 'Soltar Aquí'}
                       </div>
                     )}
                   </div>
@@ -661,27 +734,47 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
         setSequenceItems(newItems);
       };
 
+      const handleTapSeq = (idx: number) => {
+        if (tapSelectedSeqIdx === null) {
+          setTapSelectedSeqIdx(idx);
+        } else {
+          if (tapSelectedSeqIdx !== idx) {
+            const newItems = [...sequenceItems];
+            [newItems[tapSelectedSeqIdx], newItems[idx]] = [newItems[idx], newItems[tapSelectedSeqIdx]];
+            setSequenceItems(newItems);
+          }
+          setTapSelectedSeqIdx(null);
+        }
+      };
+
       return (
         <div className="max-w-3xl mx-auto space-y-10 py-10 animate-in fade-in zoom-in-95 duration-500">
+          {isMobile && !mobileTipDismissed['ordenar_secuencia'] && (
+            <MobileDragTip type="ordenar_secuencia" onDismiss={() => setMobileTipDismissed(p => ({...p, ordenar_secuencia: true}))} />
+          )}
           <div className="text-center space-y-3 bg-white p-8 rounded-[32px] shadow-sm border-2 border-orange-50">
             <h3 className="text-3xl font-black text-slate-800 uppercase tracking-widest flex items-center justify-center gap-3"><Hash className="text-orange-600"/> Ordenar Pasos</h3>
-            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Arrastra y suelta las tarjetas para organizar la secuencia en el orden correcto.</p>
+            <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{isMobile ? 'Toca una tarjeta, luego toca otra para intercambiar posiciones.' : 'Arrastra y suelta las tarjetas para organizar la secuencia en el orden correcto.'}</p>
           </div>
           <div className="space-y-4 bg-orange-50/30 p-8 rounded-[40px] border-2 border-orange-100/50">
-            {sequenceItems.map((item, i) => (
-              <div 
-                key={i} 
-                draggable 
-                onDragStart={(e) => handleDragStartSeq(e, i)}
-                onDragOver={handleDragOverSeq}
-                onDrop={(e) => handleDropSeq(e, i)}
-                className="flex items-center gap-6 p-6 bg-white border-2 border-slate-100 rounded-3xl shadow-md cursor-grab active:cursor-grabbing hover:border-orange-400 hover:shadow-xl hover:-translate-y-1 transition-all group"
-              >
-                <div className="h-12 w-12 rounded-2xl bg-orange-100 text-orange-600 flex items-center justify-center font-black text-xl shadow-inner group-hover:bg-orange-500 group-hover:text-white transition-colors">{i + 1}</div>
-                <span className="flex-1 font-black text-slate-700 uppercase text-lg">{item}</span>
-                <ListTree className="text-slate-200 group-hover:text-orange-300 w-6 h-6"/>
-              </div>
-            ))}
+            {sequenceItems.map((item, i) => {
+              const isTapSelected = tapSelectedSeqIdx === i;
+              return (
+                <div 
+                  key={i} 
+                  draggable 
+                  onDragStart={(e) => handleDragStartSeq(e, i)}
+                  onDragOver={handleDragOverSeq}
+                  onDrop={(e) => handleDropSeq(e, i)}
+                  onClick={() => handleTapSeq(i)}
+                  className={cn("flex items-center gap-6 p-6 bg-white border-2 rounded-3xl shadow-md cursor-grab active:cursor-grabbing hover:border-orange-400 hover:shadow-xl hover:-translate-y-1 transition-all group", isTapSelected ? "border-orange-500 ring-4 ring-orange-300 bg-orange-50 scale-[1.02] animate-pulse shadow-xl" : "border-slate-100")}
+                >
+                  <div className={cn("h-12 w-12 rounded-2xl flex items-center justify-center font-black text-xl shadow-inner transition-colors", isTapSelected ? "bg-orange-500 text-white" : "bg-orange-100 text-orange-600 group-hover:bg-orange-500 group-hover:text-white")}>{i + 1}</div>
+                  <span className="flex-1 font-black text-slate-700 uppercase text-lg">{item}</span>
+                  <ListTree className={cn("w-6 h-6", isTapSelected ? "text-orange-500" : "text-slate-200 group-hover:text-orange-300")}/>
+                </div>
+              );
+            })}
           </div>
           <div className="flex justify-center mt-10">
             <Button onClick={finishGradedActivity} className="px-12 h-16 rounded-[32px] bg-orange-500 hover:bg-orange-600 text-white font-black uppercase text-lg tracking-widest shadow-xl hover:-translate-y-1 transition-all"><CheckCircle2 className="w-6 h-6 mr-3"/> Verificar Orden</Button>
@@ -859,12 +952,16 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
 
 
 export function CompletarEspaciosPreview({ content, onFinish }: { content: any, onFinish: (score: number, total: number) => void }) {
+  const isMobile = useIsMobile();
+  const [mobileTipShown, setMobileTipShown] = useState(false);
   const [appState, setAppState] = useState<'PLAY' | 'RESULT'>('PLAY');
   const [tokens] = useState<Token[]>(content.tokens || []);
   const [placed, setPlaced] = useState<Record<string, string>>({});
   const [bank, setBank] = useState<string[]>([]);
   const [resultsMap, setResultsMap] = useState<Record<string, boolean>>({});
   const [score, setScore] = useState(0);
+  // Mobile tap-to-select
+  const [tapSelectedWord, setTapSelectedWord] = useState<{ wordId: string; sourceBlankId: string | null } | null>(null);
 
   useEffect(() => {
     const missing = tokens.filter((t) => t.isMissing && t.text.trim() !== "").map((t) => t.id);
@@ -910,6 +1007,46 @@ export function CompletarEspaciosPreview({ content, onFinish }: { content: any, 
     } catch (err) {}
   };
 
+  // --- MOBILE TAP HANDLERS ---
+  const handleTapBankWord = (wordId: string) => {
+    if (tapSelectedWord?.wordId === wordId && tapSelectedWord?.sourceBlankId === null) {
+      setTapSelectedWord(null); // deselect
+    } else {
+      setTapSelectedWord({ wordId, sourceBlankId: null });
+    }
+  };
+
+  const handleTapPlacedWord = (wordId: string, blankId: string) => {
+    if (tapSelectedWord?.wordId === wordId && tapSelectedWord?.sourceBlankId === blankId) {
+      setTapSelectedWord(null);
+    } else {
+      setTapSelectedWord({ wordId, sourceBlankId: blankId });
+    }
+  };
+
+  const handleTapBlank = (targetBlankId: string) => {
+    if (!tapSelectedWord) return;
+    const { wordId, sourceBlankId } = tapSelectedWord;
+    setPlaced((prev) => {
+      const newPlaced = { ...prev };
+      if (sourceBlankId) delete newPlaced[sourceBlankId];
+      else setBank((prevBank) => prevBank.filter((id) => id !== wordId));
+      const existingWordId = newPlaced[targetBlankId];
+      if (existingWordId) setBank((prevBank) => [...prevBank, existingWordId]);
+      newPlaced[targetBlankId] = wordId;
+      return newPlaced;
+    });
+    setTapSelectedWord(null);
+  };
+
+  const handleTapReturnToBank = () => {
+    if (!tapSelectedWord || !tapSelectedWord.sourceBlankId) return;
+    const { wordId, sourceBlankId } = tapSelectedWord;
+    setPlaced((prev) => { const newPlaced = { ...prev }; delete newPlaced[sourceBlankId]; return newPlaced; });
+    setBank((prevBank) => { if (!prevBank.includes(wordId)) return [...prevBank, wordId]; return prevBank; });
+    setTapSelectedWord(null);
+  };
+
   const handleEvaluate = () => {
     let correct = 0;
     const results: Record<string, boolean> = {};
@@ -928,37 +1065,74 @@ export function CompletarEspaciosPreview({ content, onFinish }: { content: any, 
   if (appState === 'PLAY') {
     return (
       <div className="w-full max-w-6xl mx-auto space-y-8 animate-in slide-in-from-bottom-4 duration-500 py-6">
-        <div className="flex items-center justify-between bg-white px-10 py-6 rounded-[32px] shadow-xl border-2 border-indigo-100">
-          <h2 className="text-2xl font-black text-slate-800 flex items-center gap-4 uppercase tracking-widest"><RotateCcw className="text-indigo-600 w-8 h-8" /> Completa el Texto</h2>
-          <Button onClick={handleEvaluate} disabled={Object.keys(placed).length !== missingTokens.length} className="px-10 h-14 bg-indigo-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest hover:bg-indigo-700 shadow-xl disabled:opacity-50 transition-all">
-            <CheckCircle2 className="w-5 h-5 mr-3" /> Revisar Respuestas
+        {isMobile && !mobileTipShown && (
+          <MobileDragTip type="completar_espacios" onDismiss={() => setMobileTipShown(true)} />
+        )}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white px-6 sm:px-10 py-6 rounded-[32px] shadow-xl border-2 border-indigo-100">
+          <h2 className="text-lg sm:text-2xl font-black text-slate-800 flex items-center gap-4 uppercase tracking-widest"><RotateCcw className="text-indigo-600 w-6 h-6 sm:w-8 sm:h-8" /> Completa el Texto</h2>
+          <Button onClick={handleEvaluate} disabled={Object.keys(placed).length !== missingTokens.length} className="px-6 sm:px-10 h-12 sm:h-14 bg-indigo-600 text-white rounded-2xl font-black text-xs sm:text-sm uppercase tracking-widest hover:bg-indigo-700 shadow-xl disabled:opacity-50 transition-all">
+            <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 mr-2 sm:mr-3" /> Revisar
           </Button>
         </div>
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8 items-start">
-          <div className="lg:col-span-3 bg-white p-12 rounded-[40px] shadow-2xl border-2 border-slate-100 leading-[3.5] text-2xl font-medium text-slate-700 max-h-[600px] overflow-y-auto custom-scrollbar">
+          <div className="lg:col-span-3 bg-white p-6 sm:p-12 rounded-[32px] sm:rounded-[40px] shadow-2xl border-2 border-slate-100 leading-[2.5] sm:leading-[3.5] text-base sm:text-2xl font-medium text-slate-700 max-h-[600px] overflow-y-auto custom-scrollbar">
             <div className="flex flex-wrap items-center">
               {tokens.map((token) => {
                 if (!token.text.trim()) return <span key={token.id} className="w-2">{token.text}</span>;
                 if (!token.isMissing) return <span key={token.id} className="text-slate-800 px-1 font-semibold">{token.text}</span>;
                 const placedWordId = placed[token.id];
+                const isBlankTargetable = !!tapSelectedWord && !placedWordId;
                 return (
-                  <div key={token.id} onDragOver={handleDragOver} onDrop={(e) => handleDropOnBlank(e, token.id)} className={cn("min-w-[120px] h-14 flex items-center justify-center border-b-4 rounded-t-xl transition-all px-4 mx-2 align-middle inline-flex shadow-sm", placedWordId ? "border-indigo-600 bg-indigo-50 shadow-inner" : "border-slate-300 bg-slate-50")}>
+                  <div 
+                    key={token.id} 
+                    onDragOver={handleDragOver} 
+                    onDrop={(e) => handleDropOnBlank(e, token.id)} 
+                    onClick={() => {
+                      if (placedWordId) handleTapPlacedWord(placedWordId, token.id);
+                      else handleTapBlank(token.id);
+                    }}
+                    className={cn(
+                      "min-w-[80px] sm:min-w-[120px] h-10 sm:h-14 flex items-center justify-center border-b-4 rounded-t-xl transition-all px-2 sm:px-4 mx-1 sm:mx-2 align-middle inline-flex shadow-sm", 
+                      placedWordId 
+                        ? (tapSelectedWord?.wordId === placedWordId ? "border-indigo-600 bg-indigo-100 shadow-lg ring-4 ring-indigo-300 animate-pulse" : "border-indigo-600 bg-indigo-50 shadow-inner") 
+                        : isBlankTargetable 
+                          ? "border-indigo-500 bg-indigo-100/50 animate-pulse shadow-lg cursor-pointer" 
+                          : "border-slate-300 bg-slate-50"
+                    )}
+                  >
                     {placedWordId ? (
-                      <div draggable onDragStart={(e) => handleDragStart(e, placedWordId, token.id)} className="cursor-grab active:cursor-grabbing font-black text-indigo-700 select-none tracking-wider text-xl">{tokens.find(t=>t.id===placedWordId)?.text}</div>
-                    ) : <span className="text-slate-400 text-[10px] font-black uppercase tracking-widest">Arrastra aquí</span>}
+                      <div draggable onDragStart={(e) => handleDragStart(e, placedWordId, token.id)} className="cursor-grab active:cursor-grabbing font-black text-indigo-700 select-none tracking-wider text-sm sm:text-xl">{tokens.find(t=>t.id===placedWordId)?.text}</div>
+                    ) : <span className={cn("text-[8px] sm:text-[10px] font-black uppercase tracking-widest", isBlankTargetable ? "text-indigo-600" : "text-slate-400")}>{isBlankTargetable ? 'Toca Aquí' : (isMobile ? 'Toca' : 'Arrastra aquí')}</span>}
                   </div>
                 );
               })}
             </div>
           </div>
-          <div onDragOver={handleDragOver} onDrop={handleDropOnBank} className="lg:col-span-1 bg-indigo-50/70 p-8 rounded-[32px] border-4 border-dashed border-indigo-200/60 flex flex-col min-h-[500px] shadow-inner">
-            <h3 className="text-xs font-black tracking-widest uppercase text-indigo-900 mb-8 text-center border-b-2 border-indigo-200/50 pb-4">Palabras Disponibles</h3>
-            <div className="flex flex-col gap-4 flex-1">
-              {bank.length === 0 ? <div className="text-center text-slate-400 italic text-xs font-bold mt-10 uppercase bg-white/50 p-4 rounded-xl">Todas colocadas</div> : bank.map((wordId) => (
-                <div key={wordId} draggable onDragStart={(e) => handleDragStart(e, wordId, null)} className="bg-white px-6 py-4 rounded-2xl shadow-lg border-2 border-indigo-100 text-center font-black text-slate-700 cursor-grab active:cursor-grabbing hover:border-indigo-500 hover:shadow-xl hover:-translate-y-1 transition-all select-none text-lg">
-                  {tokens.find(t=>t.id===wordId)?.text}
-                </div>
-              ))}
+          <div 
+            onDragOver={handleDragOver} 
+            onDrop={handleDropOnBank} 
+            onClick={() => handleTapReturnToBank()}
+            className="lg:col-span-1 bg-indigo-50/70 p-4 sm:p-8 rounded-[32px] border-4 border-dashed border-indigo-200/60 flex flex-col min-h-[200px] lg:min-h-[500px] shadow-inner"
+          >
+            <h3 className="text-[10px] sm:text-xs font-black tracking-widest uppercase text-indigo-900 mb-4 sm:mb-8 text-center border-b-2 border-indigo-200/50 pb-4">{isMobile ? 'Palabras (Toca una)' : 'Palabras Disponibles'}</h3>
+            <div className="flex flex-row flex-wrap lg:flex-col gap-3 sm:gap-4 flex-1">
+              {bank.length === 0 ? <div className="text-center text-slate-400 italic text-xs font-bold mt-4 sm:mt-10 uppercase bg-white/50 p-4 rounded-xl w-full">Todas colocadas</div> : bank.map((wordId) => {
+                const isTapSelected = tapSelectedWord?.wordId === wordId && tapSelectedWord?.sourceBlankId === null;
+                return (
+                  <div 
+                    key={wordId} 
+                    draggable 
+                    onDragStart={(e) => handleDragStart(e, wordId, null)} 
+                    onClick={(e) => { e.stopPropagation(); handleTapBankWord(wordId); }}
+                    className={cn(
+                      "bg-white px-4 sm:px-6 py-3 sm:py-4 rounded-2xl shadow-lg border-2 text-center font-black text-slate-700 cursor-grab active:cursor-grabbing hover:border-indigo-500 hover:shadow-xl hover:-translate-y-1 transition-all select-none text-sm sm:text-lg",
+                      isTapSelected ? "border-indigo-500 ring-4 ring-indigo-300 bg-indigo-50 scale-[1.05] animate-pulse shadow-xl" : "border-indigo-100"
+                    )}
+                  >
+                    {tokens.find(t=>t.id===wordId)?.text}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
