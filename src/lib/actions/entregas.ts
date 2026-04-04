@@ -11,7 +11,7 @@ const supabaseAdmin = createClient(
 );
 
 const BUCKET = 'entregas-alumnos';
-const EXPIRY_DAYS = 5;
+const EXPIRY_DAYS = 10;
 
 const ALLOWED_MIME = [
   'application/pdf',

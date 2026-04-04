@@ -41,7 +41,7 @@ function getIconForName(nombre: string) {
 function getDiasRestantes(caduca_el: string): { dias: number; horas: number; pct: number } {
   const ahora = Date.now();
   const caduca = new Date(caduca_el).getTime();
-  const totalMs = 5 * 24 * 60 * 60 * 1000;
+  const totalMs = 10 * 24 * 60 * 60 * 1000;
   const restanteMs = Math.max(0, caduca - ahora);
   const dias = Math.floor(restanteMs / (1000 * 60 * 60 * 24));
   const horas = Math.floor((restanteMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
