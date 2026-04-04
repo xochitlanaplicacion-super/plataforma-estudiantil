@@ -6,10 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { BookOpen, ListTree, FileText, Sparkles, ChevronRight, Plus, Edit, Trash2, Loader2, ArrowLeft } from 'lucide-react';
+import { BookOpen, ListTree, FileText, Sparkles, ChevronRight, Plus, Edit, Trash2, Loader2, ArrowLeft, AlertCircle } from 'lucide-react';
 import { getNiveles, getCarreras, getMaterias, getUnidades, getTemas, getEjercicios, upsertMateria, upsertUnidad, upsertTema, upsertEjercicio, deleteMateria, deleteUnidad, deleteTema, deleteEjercicio } from '@/lib/actions/academic';
 import { useToast } from '@/hooks/use-toast';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 
@@ -34,6 +34,11 @@ export default function MateriasUnidades() {
 
   // Dialog State
   const [dialog, setDialog] = useState<any>({ open: false, type: '', data: {} });
+
+  // Safe Delete State
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [deleteConfirmData, setDeleteConfirmData] = useState<any>(null);
+  const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
 
   useEffect(() => {
     getNiveles().then(({ data }) => data && setNiveles(data));
@@ -88,7 +93,15 @@ export default function MateriasUnidades() {
     }
   };
 
-  const handleDelete = async (type: string, id: string) => {
+  const promptDelete = (type: string, id: string, title?: string) => {
+    setDeleteConfirmData({ type, id, title: title || 'este elemento' });
+    setDeleteConfirmInput('');
+    setDeleteConfirmOpen(true);
+  };
+
+  const executeDelete = async () => {
+    if (!deleteConfirmData) return;
+    const { type, id } = deleteConfirmData;
     let error;
     if (type === 'materia') ({ error } = await deleteMateria(id));
     if (type === 'unidad') ({ error } = await deleteUnidad(id));
@@ -96,11 +109,20 @@ export default function MateriasUnidades() {
     if (type === 'ejercicio') ({ error } = await deleteEjercicio(id));
 
     if (!error) {
-      toast({ title: "Eliminado correctamente" });
+      toast({ title: "Eliminado con éxito", variant: "default" });
       if (type === 'materia') { getMaterias(selCarrera).then(r => r.data && setMaterias(r.data)); setSelectedMateria(null); }
       if (type === 'unidad') { fetchUnidades(selectedMateria.id); setSelectedUnidad(null); }
       if (type === 'tema') { fetchTemas(selectedUnidad.id); setSelectedTema(null); }
       if (type === 'ejercicio') fetchEjercicios(selectedTema.id);
+      setDeleteConfirmOpen(false);
+      setDialog({ ...dialog, open: false });
+    } else {
+      toast({ 
+        title: "Error al borrar", 
+        description: error.message || "Existen registros dependientes. Asegúrate de tener activa la opción de Borrado en Cascada.", 
+        variant: "destructive" 
+      });
+      setDeleteConfirmOpen(false);
     }
   };
 
@@ -264,21 +286,7 @@ export default function MateriasUnidades() {
                          <TableCell className="text-right">
                            <div className="flex justify-end gap-1">
                              <Button variant="ghost" size="icon" onClick={() => setDialog({ open: true, type: 'ejercicio', data: e })}><Edit size={14}/></Button>
-                             <AlertDialog>
-                               <AlertDialogTrigger asChild>
-                                 <Button variant="ghost" size="icon" className="text-destructive"><Trash2 size={14}/></Button>
-                               </AlertDialogTrigger>
-                               <AlertDialogContent>
-                                 <AlertDialogHeader>
-                                   <AlertDialogTitle>¿Eliminar actividad {e.titulo}?</AlertDialogTitle>
-                                   <AlertDialogDescription>Esta acción no se puede deshacer.</AlertDialogDescription>
-                                 </AlertDialogHeader>
-                                 <AlertDialogFooter>
-                                   <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                   <AlertDialogAction className="bg-destructive" onClick={() => handleDelete('ejercicio', e.id)}>Eliminar</AlertDialogAction>
-                                 </AlertDialogFooter>
-                               </AlertDialogContent>
-                             </AlertDialog>
+                             <Button variant="ghost" size="icon" className="text-destructive" onClick={() => promptDelete('ejercicio', e.id, e.titulo)}><Trash2 size={14}/></Button>
                            </div>
                          </TableCell>
                        </TableRow>
@@ -324,9 +332,52 @@ export default function MateriasUnidades() {
           </div>
           <DialogFooter>
              {dialog.data.id && (
-               <Button variant="ghost" className="text-destructive mr-auto" onClick={() => { handleDelete(dialog.type, dialog.data.id); setDialog({...dialog, open: false}); }}>Eliminar</Button>
+               <Button variant="ghost" className="text-destructive mr-auto" onClick={() => { promptDelete(dialog.type, dialog.data.id, dialog.data.titulo || dialog.data.nombre); setDialog({...dialog, open: false}); }}>Eliminar</Button>
              )}
              <Button onClick={handleSave}>Guardar Cambios</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG DE CONFIRMACIÓN DE BORRADO SEGURO */}
+      <Dialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+        <DialogContent className="max-w-md w-[95vw] max-h-[90vh] overflow-y-auto rounded-[32px] p-6 sm:p-8 border-none shadow-2xl custom-scrollbar">
+          <DialogHeader className="flex flex-col items-center text-center">
+            <div className="h-20 w-20 bg-destructive/10 text-destructive rounded-3xl flex items-center justify-center mb-6 rotate-3">
+              <AlertCircle size={40} />
+            </div>
+            <DialogTitle className="text-3xl font-black uppercase tracking-tight text-slate-800">¿Estás seguro?</DialogTitle>
+            <DialogDescription className="text-slate-500 text-lg leading-relaxed pt-4">
+              Estás a punto de borrar irremediablemente este elemento: 
+              <span className="font-black text-slate-900 block my-3 text-xl italic underline decoration-destructive/30">"{deleteConfirmData?.title}"</span>
+              Esta acción eliminará <span className="text-destructive font-black underline">TODO</span> el contenido atado a él (unidades, asignaciones, ejercicios, entregas de alumnos) y <span className="font-black text-slate-900">no se puede deshacer.</span>
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-6 py-8">
+            <div className="bg-slate-50 p-6 rounded-2xl border-2 border-slate-100">
+              <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] text-center mb-4">
+                Escribe <span className="text-destructive">BORRAR</span> para confirmar
+              </p>
+              <Input 
+                value={deleteConfirmInput} 
+                onChange={e => setDeleteConfirmInput(e.target.value)}
+                placeholder="BORRAR"
+                className="h-16 text-center text-2xl font-black tracking-[0.5em] uppercase border-none bg-white shadow-inner focus-visible:ring-destructive rounded-xl"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="flex flex-col sm:flex-row gap-4">
+            <Button variant="ghost" className="flex-1 rounded-2xl h-16 font-bold uppercase tracking-widest text-slate-400 hover:text-slate-600" onClick={() => setDeleteConfirmOpen(false)}>Cancelar</Button>
+            <Button 
+              variant="destructive" 
+              className="flex-1 rounded-2xl h-16 font-black uppercase tracking-widest gap-3 shadow-xl shadow-destructive/20 disabled:opacity-20 transition-all active:scale-95"
+              disabled={deleteConfirmInput !== 'BORRAR'}
+              onClick={executeDelete}
+            >
+              <Trash2 size={20} /> Confirmar Destrucción
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
