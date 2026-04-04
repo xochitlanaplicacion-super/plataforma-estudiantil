@@ -15,7 +15,8 @@ import {
   SidebarInset,
   SidebarFooter,
   SidebarGroup,
-  SidebarGroupLabel
+  SidebarGroupLabel,
+  SidebarTrigger
 } from '@/components/ui/sidebar';
 import { 
   LayoutDashboard, 
@@ -159,25 +160,26 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
       </Sidebar>
       <SidebarInset className="bg-slate-50/50 overflow-hidden">
         <div className="h-full flex flex-col overflow-hidden">
-          <header className="h-16 border-b bg-white flex items-center px-8 justify-between shrink-0 shadow-sm z-10 w-full">
+          <header className="h-16 border-b bg-white flex items-center px-4 md:px-8 justify-between shrink-0 shadow-sm z-10 w-full">
              <div className="flex items-center gap-2">
-               <span className="text-sm text-muted-foreground">Módulo:</span>
+               <SidebarTrigger className="md:hidden -ml-2 text-primary" />
+               <span className="text-sm text-muted-foreground hidden sm:inline-block">Módulo:</span>
                <span className="text-sm font-semibold text-primary capitalize">{pathname.split('/').pop()?.replace('-', ' ') || 'Inicio'}</span>
              </div>
-             <div className="flex items-center gap-6">
-               <span className="text-xs font-bold text-muted-foreground uppercase hidden md:inline-block">{formattedDate}</span>
-               <div className="flex items-center gap-4 bg-muted/30 p-1 rounded-full border border-border/50">
-                <div className="flex items-center gap-2 pl-2">
-                  <Avatar className="h-8 w-8 border-2 border-white shadow-sm shrink-0">
+             <div className="flex items-center gap-2 sm:gap-6">
+               <span className="text-xs font-bold text-muted-foreground uppercase hidden lg:inline-block">{formattedDate}</span>
+               <div className="flex items-center gap-2 sm:gap-4 bg-muted/30 p-1 rounded-full border border-border/50">
+                <div className="flex items-center gap-2 pl-1 sm:pl-2">
+                  <Avatar className="h-7 w-7 sm:h-8 sm:w-8 border-2 border-white shadow-sm shrink-0">
                     <AvatarFallback className="bg-primary text-primary-foreground font-bold text-[10px]">{getInitials(userName)}</AvatarFallback>
                   </Avatar>
-                  <div className="flex flex-col pr-2">
-                    <span className="text-[11px] font-bold text-gray-900 leading-tight truncate max-w-[150px]">{userName}</span>
-                    <span className="text-[9px] text-primary/80 uppercase font-bold tracking-tight">{userRole}</span>
+                  <div className="flex flex-col pr-1 sm:pr-2">
+                    <span className="text-[10px] sm:text-[11px] font-bold text-gray-900 leading-tight md:truncate max-w-[80px] sm:max-w-[150px] line-clamp-1">{userName}</span>
+                    <span className="text-[8px] sm:text-[9px] text-primary/80 uppercase font-bold tracking-tight">{userRole}</span>
                   </div>
                 </div>
-                <Separator orientation="vertical" className="h-6" />
-                <Button variant="ghost" size="icon" onClick={handleLogout} className="h-8 w-8 rounded-full text-muted-foreground hover:text-destructive"><LogOut className="h-4 w-4" /></Button>
+                <Separator orientation="vertical" className="h-6 hidden sm:block" />
+                <Button variant="ghost" size="icon" onClick={handleLogout} className="h-7 w-7 sm:h-8 sm:w-8 rounded-full text-muted-foreground hover:text-destructive shrink-0"><LogOut className="h-3 w-3 sm:h-4 sm:w-4" /></Button>
               </div>
              </div>
           </header>
