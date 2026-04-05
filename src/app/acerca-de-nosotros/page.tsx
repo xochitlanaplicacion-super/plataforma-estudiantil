@@ -96,24 +96,24 @@ const Navbar = ({ theme }: { theme: any }) => {
       <div className="container mx-auto px-4 lg:px-8 flex justify-between items-center">
         <a href="#inicio" className="flex items-center gap-4 group">
           <div className="relative h-16 w-16 md:h-20 md:w-20 transition-transform duration-300 group-hover:scale-105">
-            <img 
-              src={LOGO_URL} 
-              alt="Logo IEEZ" 
+            <img
+              src={LOGO_URL}
+              alt="Logo IEEZ"
               className="w-full h-full object-contain drop-shadow-md"
             />
           </div>
           <div className="flex flex-col">
             <span className={cn(
-              "font-extrabold text-xl md:text-2xl leading-none transition-colors duration-300", 
+              "font-extrabold text-xl md:text-2xl leading-none transition-colors duration-300",
               scrolled ? theme.textPrimary : "text-white"
             )}>
               IEEZ
             </span>
             <span className={cn(
-              "text-[10px] md:text-[11px] uppercase font-bold tracking-[0.1em] transition-colors duration-300", 
+              "text-[10px] md:text-[11px] uppercase font-bold tracking-[0.1em] transition-colors duration-300",
               scrolled ? "text-gray-600" : "text-gray-200"
             )}>
-              Instituto Educativo<br/>Emiliano Zapata
+              Instituto Educativo<br />Emiliano Zapata
             </span>
           </div>
         </a>
@@ -138,8 +138,8 @@ const Navbar = ({ theme }: { theme: any }) => {
             href="/"
             className={cn(
               "px-8 py-3 rounded-full font-bold text-sm uppercase tracking-widest transition-all duration-300 transform hover:scale-105 hover:shadow-xl",
-              scrolled 
-                ? "text-white shadow-lg" 
+              scrolled
+                ? "text-white shadow-lg"
                 : "bg-white text-gray-900 hover:bg-gray-100"
             )}
             style={scrolled ? { backgroundColor: theme.primary } : {}}
@@ -195,8 +195,8 @@ const Hero = ({ theme }: { theme: any }) => {
   return (
     <section id="inicio" className="relative min-h-screen flex items-center pt-20 overflow-hidden" style={{ backgroundColor: theme.primary }}>
       <div className="absolute inset-0 z-0">
-        <div 
-          className="absolute inset-0 z-10 opacity-80" 
+        <div
+          className="absolute inset-0 z-10 opacity-80"
           style={{ background: `linear-gradient(to right, ${theme.primary}, ${theme.primary}CC, transparent)` }}
         />
         <img
@@ -219,24 +219,24 @@ const Hero = ({ theme }: { theme: any }) => {
               Bachillerato | Capacitaciones
             </span>
           </motion.div>
-          
+
           <motion.h1 variants={fadeUp} className="text-5xl md:text-8xl font-black leading-tight mb-8 uppercase drop-shadow-2xl">
             LA EDUCACIÓN ES EL PRIMER PASO HACIA EL <span className={cn("block mt-4 text-transparent bg-clip-text bg-gradient-to-r inline-block border-b-8", theme.gradient)} style={{ borderBottomColor: theme.accent }}>éxito</span>
           </motion.h1>
-          
+
           <motion.p variants={fadeUp} className="text-xl md:text-2xl text-gray-100 mb-12 max-w-2xl font-medium leading-relaxed">
             Formación integral para jóvenes y adultos. Concluye tus estudios con validez oficial SEP en un ambiente de excelencia.
           </motion.p>
-          
+
           <motion.div variants={fadeUp} className="flex flex-col sm:flex-row gap-6">
-            <a 
-              href="/preregistro" 
+            <a
+              href="/preregistro"
               className="px-10 py-5 bg-white text-gray-900 font-black rounded-xl text-center transition-all duration-300 shadow-2xl hover:scale-105 flex justify-center items-center gap-3 uppercase tracking-widest"
             >
               Inicia Hoy <GraduationCap size={24} />
             </a>
-            <a 
-              href="#quienes-somos" 
+            <a
+              href="#quienes-somos"
               className="px-10 py-5 bg-black/30 hover:bg-black/40 backdrop-blur-md text-white font-black rounded-xl text-center transition-all duration-300 border border-white/30 uppercase tracking-widest"
             >
               Leer Más
@@ -253,7 +253,7 @@ const About = ({ theme }: { theme: any }) => {
     <section id="quienes-somos" className="py-32 bg-gray-50">
       <div className="container mx-auto px-4 lg:px-8">
         <div className="flex flex-col lg:flex-row gap-20 items-center">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, x: -50 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true, margin: "-100px" }}
@@ -261,10 +261,10 @@ const About = ({ theme }: { theme: any }) => {
             className="lg:w-1/2 relative"
           >
             <div className="relative rounded-3xl overflow-hidden shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] aspect-square md:aspect-video">
-              <img 
-                src="/images/about-team.jpeg" 
-                alt="Graduación y directivos" 
-                className="w-full h-full object-cover object-right contrast-110 saturate-105 brightness-105" 
+              <img
+                src="/images/about-team.jpeg"
+                alt="Graduación y directivos"
+                className="w-full h-full object-cover object-right contrast-110 saturate-105 brightness-105"
               />
               <div className="absolute inset-0 bg-blue-900/10 mix-blend-multiply"></div>
             </div>
@@ -281,7 +281,7 @@ const About = ({ theme }: { theme: any }) => {
             </div>
           </motion.div>
 
-          <motion.div 
+          <motion.div
             initial="hidden"
             whileInView="visible"
             viewport={{ once: true, margin: "-100px" }}
@@ -333,61 +333,44 @@ const About = ({ theme }: { theme: any }) => {
 const Programs = ({ theme }: { theme: any }) => {
   const educationalPrograms = [
     {
-      title: "PREPA JOVEN",
+      title: "Prepa Joven",
+      subtitle: "Para continuar tus estudios",
       duration: "Duración de: 4 MESES",
-      content: [
-        "Para continuar tus estudios",
-        "e ingresar a cualquier",
-        "Universidad pública o privada",
-        "Con validez oficial SEP"
-      ],
-      badge: "Inicia Hoy",
+      badge: "Excelencia Académica",
+      description: "e ingresar a cualquier Universidad pública o privada. Con validez oficial SEP.",
       image: "/images/prepa-joven.jpeg",
       icon: <Users size={20} />,
       crop: "object-top",
       delay: 0.1
     },
     {
-      title: "BACHILLERATO ADULTOS",
+      title: "Bachillerato Adultos",
+      subtitle: "Para trabajar o ingresar a la universidad",
       duration: "Duración: 2 MESES",
-      content: [
-        "Para trabajar o ingresar",
-        "a la universidad",
-        "Con validez oficial SEP"
-      ],
       badge: "Meta Cumplida",
+      description: "Con validez oficial SEP.",
       image: "/images/adultos.jpeg",
       icon: <Award size={20} />,
       crop: "object-center",
       delay: 0.2
     },
     {
-      title: "UNIVERSIDAD",
+      title: "Universidad",
+      subtitle: "LICENCIATURAS E INGENIERÍAS",
       duration: "EN 10 MESES",
-      content: [
-        "LICENCIATURAS",
-        "INGENIERÍAS",
-        "TITULACIÓN POR",
-        "EXPERIENCIA PROFESIONAL",
-        "EN 2 MESES",
-        "Título y Cédula",
-        "con validez oficial SEP"
-      ],
       badge: "Grado Superior",
+      description: "TITULACIÓN POR EXPERIENCIA PROFESIONAL EN 2 MESES. Título y Cédula con validez oficial SEP.",
       image: "/images/universidad.jpeg",
       icon: <BookOpen size={20} />,
       crop: "object-top",
       delay: 0.3
     },
     {
-      title: "CAPACITACIONES LABORALES",
+      title: "Capacitaciones",
+      subtitle: "Profesionalízate en áreas laborales",
       duration: "Duración: 4 MESES",
-      content: [
-        "Profesionalízate",
-        "en áreas laborales",
-        "Con validez oficial SEP"
-      ],
       badge: "Formación Real",
+      description: "Con validez oficial SEP.",
       image: "/images/capacitaciones.jpeg",
       icon: <Briefcase size={20} />,
       crop: "object-center",
@@ -404,7 +387,7 @@ const Programs = ({ theme }: { theme: any }) => {
   return (
     <section id="oferta-educativa" className="py-32 bg-white relative">
       <div className="container mx-auto px-4 lg:px-8 relative z-10">
-        <motion.div 
+        <motion.div
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true }}
@@ -424,7 +407,7 @@ const Programs = ({ theme }: { theme: any }) => {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-14 max-w-7xl mx-auto">
           {educationalPrograms.map((program, idx) => (
-            <motion.div 
+            <motion.div
               key={idx}
               initial={{ opacity: 0, y: 50 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -434,18 +417,18 @@ const Programs = ({ theme }: { theme: any }) => {
             >
               <div className="relative min-h-[320px] lg:min-h-[380px] overflow-hidden group">
                 {/* Image Background con Nanobanana style cropping */}
-                <img 
-                  src={program.image} 
+                <img
+                  src={program.image}
                   alt={program.title}
                   className={cn(
                     "absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110",
                     program.crop
                   )}
                 />
-                
+
                 {/* Overlays */}
                 <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-10"></div>
-                <div 
+                <div
                   className="absolute inset-0 opacity-20 group-hover:opacity-40 transition-opacity duration-500 z-10"
                   style={{ backgroundColor: idx % 2 === 0 ? theme.primary : theme.accent }}
                 ></div>
@@ -459,34 +442,41 @@ const Programs = ({ theme }: { theme: any }) => {
 
                 {/* Card Header Content */}
                 <div className="absolute inset-x-0 bottom-0 p-8 lg:p-10 z-20">
-                  <h3 className="text-3xl lg:text-4xl font-black text-white leading-tight mb-4">{program.title}</h3>
-                  <div className="space-y-1 mb-6">
-                    <p className="text-white/90 font-bold text-sm tracking-wide uppercase">{program.duration}</p>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 rounded-lg bg-white/20 backdrop-blur-sm text-white">
+                      {program.icon}
+                    </div>
+                    <span className="text-white/90 font-black text-xs tracking-widest uppercase">Duración: {program.duration}</span>
                   </div>
-                  <div className="space-y-1">
-                    {program.content.map((line, lIdx) => (
-                      <p key={lIdx} className="text-white/80 font-medium text-base leading-snug">
-                        {line}
-                      </p>
-                    ))}
+                  <h3 className="text-3xl lg:text-4xl font-black text-white leading-tight mb-2">{program.title}</h3>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
+                    <span className="text-white/80 font-bold text-xs uppercase tracking-wider">{program.subtitle}</span>
                   </div>
                 </div>
               </div>
 
               <div className="p-8 lg:p-10 flex flex-col flex-grow">
-                <a 
-                  href="/preregistro" 
-                  className="w-full relative overflow-hidden text-center text-gray-900 font-black py-4 rounded-xl border-2 border-gray-100 hover:border-transparent transition-all duration-300 uppercase tracking-widest shadow-sm hover:shadow-xl group/btn flex items-center justify-center gap-3 bg-white"
+                <p className="text-gray-600 mb-8 text-lg font-medium leading-relaxed flex-grow">
+                  {program.description}
+                </p>
+                <div className="flex items-center gap-4 text-gray-900 font-extrabold mb-10 p-5 rounded-2xl border border-gray-100 bg-gray-50 group-hover:bg-white transition-colors">
+                  <CheckCircle size={24} className="text-green-500" /> VALIDEZ OFICIAL SEP
+                </div>
+                <a
+                  href="/preregistro"
+                  className="w-full relative overflow-hidden text-center text-white font-black py-5 rounded-2xl transition-all duration-300 uppercase tracking-[0.2em] shadow-lg hover:shadow-xl group/btn flex items-center justify-center gap-3"
+                  style={{ backgroundColor: idx % 2 === 0 ? theme.primary : theme.accent }}
                 >
-                  <span className="relative z-10 transition-transform duration-300 group-hover/btn:-translate-x-1" style={{ color: idx % 2 === 0 ? theme.primary : theme.accent }}>INSCRÍBETE</span>
-                  <div className="relative z-10" style={{ color: idx % 2 === 0 ? theme.primary : theme.accent }}>{'>'}</div>
+                  <span className="relative z-10 transition-transform duration-300 group-hover/btn:-translate-x-1">INSCRÍBETE AHORA</span>
+                  <ArrowRight className="relative z-10 opacity-0 -translate-x-4 transition-all duration-300 group-hover/btn:opacity-100 group-hover/btn:translate-x-0" size={20} />
                 </a>
               </div>
             </motion.div>
           ))}
         </div>
 
-        <motion.div 
+        <motion.div
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
@@ -523,15 +513,15 @@ const Banner = ({ theme }: { theme: any }) => {
     <div className="relative h-[50vh] min-h-[500px] flex items-center justify-center overflow-hidden">
       <div className="absolute inset-0 z-0 bg-black">
         <AnimatePresence mode="popLayout">
-          <motion.img 
+          <motion.img
             key={currentIdx}
             initial={{ opacity: 0, scale: 1.05 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 1.5, ease: "easeInOut" }}
-            src={images[currentIdx]} 
-            alt="Graduación" 
-            className="absolute inset-0 w-full h-full object-cover contrast-110 saturate-105 brightness-105" 
+            src={images[currentIdx]}
+            alt="Graduación"
+            className="absolute inset-0 w-full h-full object-cover contrast-110 saturate-105 brightness-105"
           />
         </AnimatePresence>
         <div className="absolute inset-0 z-10" style={{ background: `linear-gradient(to bottom, ${theme.primary}D9, ${theme.primary}B3)` }} />
@@ -544,20 +534,20 @@ const Banner = ({ theme }: { theme: any }) => {
           transition={{ duration: 0.6 }}
         >
           <h2 className="text-5xl md:text-7xl font-black text-white mb-10 uppercase tracking-tighter drop-shadow-lg">Estudiantes que trascienden</h2>
-          <a 
-            href="/preregistro" 
+          <a
+            href="/preregistro"
             className="inline-block bg-white text-gray-900 px-12 py-5 rounded-2xl font-black uppercase tracking-widest hover:scale-105 transition-all shadow-2xl"
           >
             Únete a nuestra comunidad
           </a>
-          
+
           {/* Indicadores del carrusel */}
           <div className="flex justify-center gap-3 mt-12">
             {images.map((_, idx) => (
-              <div 
-                key={idx} 
+              <div
+                key={idx}
                 className={cn(
-                  "h-1.5 rounded-full transition-all duration-500", 
+                  "h-1.5 rounded-full transition-all duration-500",
                   currentIdx === idx ? "w-8 bg-white" : "w-3 bg-white/40"
                 )}
               />
@@ -595,7 +585,7 @@ const Contact = ({ theme }: { theme: any }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!validateEmail(formData.email)) {
       toast({ variant: "destructive", title: "Email Inválido", description: "Por favor ingresa un correo electrónico real." });
       return;
@@ -634,11 +624,11 @@ const Contact = ({ theme }: { theme: any }) => {
     <section id="contacto" className="py-32 bg-gray-50">
       <div className="container mx-auto px-4 lg:px-8">
         <div className="max-w-6xl mx-auto bg-white rounded-[40px] shadow-[0_48px_80px_-16px_rgba(0,0,0,0.12)] overflow-hidden flex flex-col lg:flex-row border border-gray-100">
-          
+
           {/* Info Side */}
           <div className="lg:w-2/5 p-16 text-white flex flex-col justify-between" style={{ backgroundColor: theme.primary }}>
             <div>
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, x: -30 }}
                 whileInView={{ opacity: 1, x: 0 }}
                 viewport={{ once: true }}
@@ -658,7 +648,7 @@ const Contact = ({ theme }: { theme: any }) => {
                       <p className="text-2xl font-bold">735 2826206</p>
                     </div>
                   </div>
-                  
+
                   <div className="flex items-center gap-6">
                     <div className="bg-white/10 p-4 rounded-2xl">
                       <Mail className="text-white" size={28} />
@@ -686,9 +676,9 @@ const Contact = ({ theme }: { theme: any }) => {
           {/* Form Side */}
           <div className="lg:w-3/5 p-16 lg:p-20">
             <h3 className="text-3xl font-black text-gray-900 mb-10 uppercase">Envíanos un mensaje</h3>
-            
+
             {submitted ? (
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, scale: 0.9 }}
                 animate={{ opacity: 1, scale: 1 }}
                 className="bg-green-50 border border-green-200 text-green-700 p-8 rounded-3xl flex items-center gap-6"
@@ -704,8 +694,8 @@ const Contact = ({ theme }: { theme: any }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-3">
                     <label className="text-sm font-black text-gray-900 uppercase tracking-widest">Nombre Completo *</label>
-                    <input 
-                      type="text" 
+                    <input
+                      type="text"
                       required
                       value={formData.name}
                       onChange={handleNameChange}
@@ -715,8 +705,8 @@ const Contact = ({ theme }: { theme: any }) => {
                   </div>
                   <div className="space-y-3">
                     <label className="text-sm font-black text-gray-900 uppercase tracking-widest">Teléfono *</label>
-                    <input 
-                      type="tel" 
+                    <input
+                      type="tel"
                       required
                       value={formData.phone}
                       onChange={handlePhoneChange}
@@ -728,27 +718,27 @@ const Contact = ({ theme }: { theme: any }) => {
                 </div>
                 <div className="space-y-3">
                   <label className="text-sm font-black text-gray-900 uppercase tracking-widest">Correo Electrónico *</label>
-                  <input 
-                    type="email" 
+                  <input
+                    type="email"
                     required
                     value={formData.email}
-                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="w-full px-6 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 transition-all text-lg"
                     placeholder="correo@ejemplo.com"
                   />
                 </div>
                 <div className="space-y-3">
                   <label className="text-sm font-black text-gray-900 uppercase tracking-widest">Cuéntanos que necesitas saber</label>
-                  <textarea 
+                  <textarea
                     rows={4}
                     value={formData.message}
-                    onChange={(e) => setFormData({...formData, message: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, message: e.target.value })}
                     className="w-full px-6 py-4 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 transition-all text-lg resize-none"
                     placeholder="Escribe tu mensaje aquí..."
                   />
                 </div>
-                <button 
-                  type="submit" 
+                <button
+                  type="submit"
                   disabled={loading}
                   className="w-full text-white font-black py-6 rounded-2xl transition-all shadow-2xl uppercase tracking-[0.3em] hover:scale-[1.02] active:scale-[0.98] flex justify-center items-center gap-2"
                   style={{ backgroundColor: theme.primary }}
@@ -770,10 +760,10 @@ const Footer = ({ theme }: { theme: any }) => {
       <div className="container mx-auto px-4 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-10">
         <div className="flex items-center gap-6">
           <div className="h-20 w-auto">
-            <img 
-              src={LOGO_URL} 
-              alt="Logo IEEZ" 
-              className="h-full w-auto object-contain" 
+            <img
+              src={LOGO_URL}
+              alt="Logo IEEZ"
+              className="h-full w-auto object-contain"
             />
           </div>
           <div className="flex flex-col">
@@ -781,12 +771,12 @@ const Footer = ({ theme }: { theme: any }) => {
             <p className="text-[10px] uppercase tracking-[0.2em] font-bold mt-2 text-white/60">Instituto Educativo Emiliano Zapata</p>
           </div>
         </div>
-        
+
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/50">
           © {new Date().getFullYear()} IEEZ. Todos los derechos reservados.
         </p>
-        
-        <button 
+
+        <button
           onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
           className="bg-white/10 hover:bg-white/20 p-5 rounded-2xl text-white transition-all shadow-xl"
           aria-label="Volver arriba"
