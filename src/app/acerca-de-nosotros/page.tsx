@@ -377,9 +377,9 @@ const Programs = ({ theme }: { theme: any }) => {
                   Excelencia Académica
                 </span>
                 <h3 className="text-3xl lg:text-4xl font-black text-white leading-tight">Preparatoria en <br/>12 meses</h3>
-                <p className="text-white/90 mt-4 font-bold text-sm uppercase tracking-wide flex items-center gap-2">
+                <div className="text-white/90 mt-4 font-bold text-sm uppercase tracking-wide flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div> Con Capacitación laboral
-                </p>
+                </div>
               </div>
             </div>
             <div className="p-10 lg:p-12 flex flex-col flex-grow">
@@ -418,9 +418,9 @@ const Programs = ({ theme }: { theme: any }) => {
                   Rápida Graduación
                 </span>
                 <h3 className="text-3xl lg:text-4xl font-black text-white leading-tight">Bachillerato <br/>General</h3>
-                <p className="text-white/90 mt-4 font-bold text-sm uppercase tracking-wide flex items-center gap-2">
+                <div className="text-white/90 mt-4 font-bold text-sm uppercase tracking-wide flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></div> En solo 6 meses
-                </p>
+                </div>
               </div>
             </div>
             <div className="p-10 lg:p-12 flex flex-col flex-grow">
