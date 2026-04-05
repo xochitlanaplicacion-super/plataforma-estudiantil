@@ -102,6 +102,23 @@ export async function createUserWithProfile(userData: any, aspiranteId?: string)
       await supabaseAdmin.from('aspirantes').update({ estatus: 'inscrito' }).eq('id', aspiranteId);
     }
 
+    // Obtener nombre de carrera si existe para el correo
+    let carreraNombre = null;
+    let nivelEstudios = userData.nivel_estudios || null;
+    
+    if (userData.carrera_id) {
+      const { data: carreraData } = await supabaseAdmin
+        .from('carreras')
+        .select('nombre, niveles(nombre)')
+        .eq('id', userData.carrera_id)
+        .single();
+      
+      if (carreraData) {
+        carreraNombre = carreraData.nombre;
+        if (!nivelEstudios) nivelEstudios = (carreraData as any).niveles?.nombre;
+      }
+    }
+
     sendWelcomeEmail({
       to: email,
       nombre: userData.nombre,
@@ -109,6 +126,9 @@ export async function createUserWithProfile(userData: any, aspiranteId?: string)
       rol: userData.rol,
       matricula: emptyToNull(userData.matricula),
       password: userData.password,
+      genero: userData.genero,
+      nivel: nivelEstudios,
+      carreraNombre: carreraNombre,
     }).catch(err => console.error("Error envío correo bienvenida:", err));
 
     revalidatePath('/dashboard/admin/crm/aspirantes');
@@ -125,7 +145,7 @@ export async function updateUserProfile(id: string, userData: any) {
   try {
     const { data: currentProfile } = await supabaseAdmin
       .from('profiles')
-      .select('estatus, password_plain, email, nombre, apellidos, rol, matricula')
+      .select('estatus, password_plain, email, nombre, apellidos, rol, matricula, genero, carrera_id')
       .eq('id', id)
       .single();
 
@@ -174,6 +194,19 @@ export async function updateUserProfile(id: string, userData: any) {
     const passwordManuallyChanged = userData.password && userData.password !== currentProfile?.password_plain;
 
     if (isReactivated || isExpiring || passwordManuallyChanged) {
+      // Intentar obtener nivel y carrera para reactivación
+      let carreraNombre = null;
+      let nivelEstudios = userData.nivel_estudios || null;
+      
+      const targetCarreraId = userData.carrera_id || currentProfile?.carrera_id;
+      if (targetCarreraId) {
+        const { data: cData } = await supabaseAdmin.from('carreras').select('nombre, niveles(nombre)').eq('id', targetCarreraId).single();
+        if (cData) {
+          carreraNombre = cData.nombre;
+          if (!nivelEstudios) nivelEstudios = (cData as any).niveles?.nombre;
+        }
+      }
+
       sendWelcomeEmail({
         to: userData.email || currentProfile?.email,
         nombre: userData.nombre || currentProfile?.nombre,
@@ -181,6 +214,9 @@ export async function updateUserProfile(id: string, userData: any) {
         rol: userData.rol || currentProfile?.rol,
         matricula: updateData.matricula || currentProfile?.matricula,
         password: finalPassword,
+        genero: userData.genero || currentProfile?.genero,
+        nivel: nivelEstudios || (updateData.matricula?.endsWith('UNI') ? 'universidad' : updateData.matricula?.endsWith('BAC') ? 'bachillerato' : 'capacitacion'),
+        carreraNombre: carreraNombre,
         isReactivation: isReactivated,
         isExpiration: isExpiring
       }).catch(err => console.error("Error envío notificación de acceso:", err));
@@ -221,6 +257,23 @@ export async function resendWelcomeEmailAction(id: string) {
     if (!profile) return { success: false, error: "Perfil no encontrado" };
     if (!profile.password_plain) return { success: false, error: "No hay una contraseña guardada para este perfil." };
     
+    // Obtener nivel y carrera para reenvío
+    let carreraNombre = null;
+    let nivelEstudios = null;
+    
+    if (profile.carrera_id) {
+      const { data: cData } = await supabaseAdmin.from('carreras').select('nombre, niveles(nombre)').eq('id', profile.carrera_id).single();
+      if (cData) {
+        carreraNombre = cData.nombre;
+        nivelEstudios = (cData as any).niveles?.nombre;
+      }
+    }
+
+    if (!nivelEstudios && profile.matricula) {
+      nivelEstudios = profile.matricula.endsWith('UNI') ? 'universidad' : 
+                     profile.matricula.endsWith('BAC') ? 'bachillerato' : 'capacitacion';
+    }
+    
     return await sendWelcomeEmail({
       to: profile.email,
       nombre: profile.nombre,
@@ -228,6 +281,9 @@ export async function resendWelcomeEmailAction(id: string) {
       rol: profile.rol,
       matricula: profile.matricula,
       password: profile.password_plain,
+      genero: profile.genero,
+      nivel: nivelEstudios,
+      carreraNombre: carreraNombre,
     });
   } catch (error: any) {
     return { success: false, error: error.message };
