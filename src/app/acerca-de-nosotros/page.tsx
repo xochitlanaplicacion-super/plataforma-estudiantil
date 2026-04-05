@@ -36,13 +36,13 @@ const themes = [
   {
     id: 'vino',
     primary: '#8B2332',
-    secondary: '#701a25',
-    accent: '#e11d48',
-    gradient: 'from-rose-700 to-pink-500',
-    light: 'bg-rose-50',
+    secondary: '#6B1A27',
+    accent: '#C41E3A',
+    gradient: 'from-[#8B2332] to-[#D42426]',
+    light: 'bg-red-50',
     textPrimary: 'text-[#8B2332]',
     bgSecondary: 'bg-[#8B2332]',
-    borderAccent: 'border-rose-500'
+    borderAccent: 'border-red-600'
   }
 ];
 
@@ -200,7 +200,7 @@ const Hero = ({ theme }: { theme: any }) => {
           style={{ background: `linear-gradient(to right, ${theme.primary}, ${theme.primary}CC, transparent)` }}
         />
         <img
-          src="/images/hero.jpg"
+          src="/images/hero-about.jpeg"
           alt="Estudiantes"
           className="w-full h-full object-cover object-center"
         />
@@ -220,8 +220,8 @@ const Hero = ({ theme }: { theme: any }) => {
             </span>
           </motion.div>
           
-          <motion.h1 variants={fadeUp} className="text-5xl md:text-8xl font-black leading-tight mb-8 uppercase">
-            LA EDUCACIÓN ES EL PRIMER PASO HACIA EL <span className="block mt-4 text-transparent bg-clip-text bg-white/40 border-b-8 border-white inline-block">éxito</span>
+          <motion.h1 variants={fadeUp} className="text-5xl md:text-8xl font-black leading-tight mb-8 uppercase drop-shadow-2xl">
+            LA EDUCACIÓN ES EL PRIMER PASO HACIA EL <span className={cn("block mt-4 text-transparent bg-clip-text bg-gradient-to-r inline-block border-b-8", theme.gradient)} style={{ borderBottomColor: theme.accent }}>éxito</span>
           </motion.h1>
           
           <motion.p variants={fadeUp} className="text-xl md:text-2xl text-gray-100 mb-12 max-w-2xl font-medium leading-relaxed">
@@ -262,9 +262,9 @@ const About = ({ theme }: { theme: any }) => {
           >
             <div className="relative rounded-3xl overflow-hidden shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] aspect-square md:aspect-video">
               <img 
-                src="/images/about.jpg" 
-                alt="Aula moderna" 
-                className="w-full h-full object-cover" 
+                src="/images/about-team.jpeg" 
+                alt="Graduación y directivos" 
+                className="w-full h-full object-cover object-right contrast-110 saturate-105 brightness-105" 
               />
               <div className="absolute inset-0 bg-blue-900/10 mix-blend-multiply"></div>
             </div>
