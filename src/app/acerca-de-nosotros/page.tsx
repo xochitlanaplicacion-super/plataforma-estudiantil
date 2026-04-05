@@ -447,30 +447,60 @@ const Programs = ({ theme }: { theme: any }) => {
 };
 
 const Banner = ({ theme }: { theme: any }) => {
+  const [currentIdx, setCurrentIdx] = useState(0);
+  const images = ["/images/grad-1.jpeg", "/images/grad-2.jpeg"];
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentIdx((prev) => (prev + 1) % images.length);
+    }, 4000);
+    return () => clearInterval(timer);
+  }, []);
+
   return (
     <div className="relative h-[50vh] min-h-[500px] flex items-center justify-center overflow-hidden">
-      <div className="absolute inset-0 z-0">
-        <div className="absolute inset-0 z-10" style={{ background: `linear-gradient(to bottom, ${theme.primary}E6, ${theme.primary}CC)` }} />
-        <img 
-          src="/images/graduation.jpg" 
-          alt="Graduación" 
-          className="w-full h-full object-cover" 
-        />
+      <div className="absolute inset-0 z-0 bg-black">
+        <AnimatePresence mode="popLayout">
+          <motion.img 
+            key={currentIdx}
+            initial={{ opacity: 0, scale: 1.05 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 1.5, ease: "easeInOut" }}
+            src={images[currentIdx]} 
+            alt="Graduación" 
+            className="absolute inset-0 w-full h-full object-cover contrast-110 saturate-105 brightness-105" 
+          />
+        </AnimatePresence>
+        <div className="absolute inset-0 z-10" style={{ background: `linear-gradient(to bottom, ${theme.primary}D9, ${theme.primary}B3)` }} />
       </div>
-      <div className="relative z-20 text-center px-6">
+      <div className="relative z-20 text-center px-6 w-full max-w-5xl mx-auto">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
           whileInView={{ opacity: 1, scale: 1 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
         >
-          <h2 className="text-5xl md:text-7xl font-black text-white mb-10 uppercase tracking-tighter">Estudiantes que trascienden</h2>
+          <h2 className="text-5xl md:text-7xl font-black text-white mb-10 uppercase tracking-tighter drop-shadow-lg">Estudiantes que trascienden</h2>
           <a 
             href="/preregistro" 
             className="inline-block bg-white text-gray-900 px-12 py-5 rounded-2xl font-black uppercase tracking-widest hover:scale-105 transition-all shadow-2xl"
           >
             Únete a nuestra comunidad
           </a>
+          
+          {/* Indicadores del carrusel */}
+          <div className="flex justify-center gap-3 mt-12">
+            {images.map((_, idx) => (
+              <div 
+                key={idx} 
+                className={cn(
+                  "h-1.5 rounded-full transition-all duration-500", 
+                  currentIdx === idx ? "w-8 bg-white" : "w-3 bg-white/40"
+                )}
+              />
+            ))}
+          </div>
         </motion.div>
       </div>
     </div>
