@@ -252,15 +252,15 @@ const About = ({ theme }: { theme: any }) => {
   return (
     <section id="quienes-somos" className="py-32 bg-gray-50">
       <div className="container mx-auto px-4 lg:px-8">
-        <div className="flex flex-col lg:flex-row gap-20 items-center">
+        <div className="flex flex-col lg:flex-row gap-12 lg:gap-20 items-center">
           <motion.div
             initial={{ opacity: 0, x: -50 }}
             whileInView={{ opacity: 1, x: 0 }}
             viewport={{ once: true, margin: "-100px" }}
             transition={{ duration: 0.8 }}
-            className="lg:w-1/2 relative"
+            className="lg:w-[55%] relative"
           >
-            <div className="relative rounded-3xl overflow-hidden shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] aspect-square md:aspect-video">
+            <div className="relative rounded-3xl overflow-hidden shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] aspect-square md:aspect-[4/3]">
               <img
                 src="/images/about-team.jpeg"
                 alt="Graduación y directivos"
@@ -286,7 +286,7 @@ const About = ({ theme }: { theme: any }) => {
             whileInView="visible"
             viewport={{ once: true, margin: "-100px" }}
             variants={staggerContainer}
-            className="lg:w-1/2"
+            className="lg:w-[45%]"
           >
             <motion.div variants={fadeUp} className="mb-6 flex items-center gap-3 font-black uppercase tracking-[0.2em] text-sm" style={{ color: theme.primary }}>
               <Users size={20} /> Quiénes somos
