@@ -333,44 +333,48 @@ const About = ({ theme }: { theme: any }) => {
 const Programs = ({ theme }: { theme: any }) => {
   const educationalPrograms = [
     {
-      title: "Prepa Joven",
-      subtitle: "PARA CONTINUAR TUS ESTUDIOS",
-      duration: "4 MESES",
+      title: "PREPA JOVEN",
+      subtitle: "",
+      duration: "Duración de: 4 MESES",
       badge: "Excelencia Académica",
-      description: "e ingresar a cualquier Universidad pública o privada. Con validez oficial SEP.",
+      description: "Para continuar tus estudios e ingresar a cualquier Universidad pública o privada",
+      validez: "Con validez oficial SEP",
       image: "/images/prepa-joven.jpeg",
       icon: <Users size={20} />,
       crop: "object-top",
       delay: 0.1
     },
     {
-      title: "Bachillerato Adultos",
-      subtitle: "PARA TRABAJAR O INGRESAR A LA UNIVERSIDAD",
-      duration: "2 MESES",
+      title: "BACHILLERATO ADULTOS",
+      subtitle: "",
+      duration: "Duración: 2 MESES",
       badge: "Meta Cumplida",
-      description: "Con validez oficial SEP.",
+      description: "Para trabajar o ingresar a la universidad",
+      validez: "Con validez oficial SEP",
       image: "/images/adultos.jpeg",
       icon: <Award size={20} />,
       crop: "object-center",
       delay: 0.2
     },
     {
-      title: "Universidad",
-      subtitle: "LICENCIATURAS E INGENIERÍAS",
+      title: "UNIVERSIDAD",
+      subtitle: "",
       duration: "EN 10 MESES",
       badge: "Grado Superior",
-      description: "TITULACIÓN POR EXPERIENCIA PROFESIONAL EN 2 MESES. Título y Cédula con validez oficial SEP.",
+      description: "LICENCIATURAS\nINGENIERÍAS\n\nTITULACIÓN POR EXPERIENCIA PROFESIONAL EN 2 MESES",
+      validez: "Titulo y Cédula con validez oficial SEP",
       image: "/images/universidad.jpeg",
       icon: <BookOpen size={20} />,
       crop: "object-top",
       delay: 0.3
     },
     {
-      title: "Capacitaciones",
-      subtitle: "PROFESIONALÍZATE EN ÁREAS LABORALES",
-      duration: "4 MESES",
+      title: "CAPACITACIONES LABORALES",
+      subtitle: "",
+      duration: "Duración: 4 MESES",
       badge: "Formación Real",
-      description: "Con validez oficial SEP.",
+      description: "Profesionalizate en áreas laborales",
+      validez: "Con validez oficial SEP",
       image: "/images/capacitaciones.jpeg",
       icon: <Briefcase size={20} />,
       crop: "object-center",
@@ -446,9 +450,7 @@ const Programs = ({ theme }: { theme: any }) => {
                     <div className="p-2 rounded-lg bg-white/20 backdrop-blur-sm text-white">
                       {program.icon}
                     </div>
-                    <span className="text-white/90 font-black text-xs tracking-widest uppercase">
-                      {program.duration.includes('EN') ? program.duration : `DURACIÓN: ${program.duration}`}
-                    </span>
+                    <span className="text-white/90 font-black text-xs tracking-widest uppercase">{program.duration}</span>
                   </div>
                   <h3 className="text-3xl lg:text-4xl font-black text-white leading-tight mb-2">{program.title}</h3>
                   <div className="flex items-center gap-2">
@@ -459,11 +461,11 @@ const Programs = ({ theme }: { theme: any }) => {
               </div>
 
               <div className="p-8 lg:p-10 flex flex-col flex-grow">
-                <p className="text-gray-600 mb-8 text-lg font-medium leading-relaxed flex-grow">
+                <p className="text-gray-600 mb-8 text-lg font-medium leading-relaxed flex-grow whitespace-pre-line">
                   {program.description}
                 </p>
                 <div className="flex items-center gap-4 text-gray-900 font-extrabold mb-10 p-5 rounded-2xl border border-gray-100 bg-gray-50 group-hover:bg-white transition-colors">
-                  <CheckCircle size={24} className="text-green-500" /> VALIDEZ OFICIAL SEP
+                  <CheckCircle size={24} className="text-green-500" /> {program.validez}
                 </div>
                 <a
                   href="/preregistro"
