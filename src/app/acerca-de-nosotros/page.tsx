@@ -334,8 +334,8 @@ const Programs = ({ theme }: { theme: any }) => {
   const educationalPrograms = [
     {
       title: "Prepa Joven",
-      subtitle: "Para continuar tus estudios",
-      duration: "Duración de: 4 MESES",
+      subtitle: "PARA CONTINUAR TUS ESTUDIOS",
+      duration: "4 MESES",
       badge: "Excelencia Académica",
       description: "e ingresar a cualquier Universidad pública o privada. Con validez oficial SEP.",
       image: "/images/prepa-joven.jpeg",
@@ -345,8 +345,8 @@ const Programs = ({ theme }: { theme: any }) => {
     },
     {
       title: "Bachillerato Adultos",
-      subtitle: "Para trabajar o ingresar a la universidad",
-      duration: "Duración: 2 MESES",
+      subtitle: "PARA TRABAJAR O INGRESAR A LA UNIVERSIDAD",
+      duration: "2 MESES",
       badge: "Meta Cumplida",
       description: "Con validez oficial SEP.",
       image: "/images/adultos.jpeg",
@@ -367,8 +367,8 @@ const Programs = ({ theme }: { theme: any }) => {
     },
     {
       title: "Capacitaciones",
-      subtitle: "Profesionalízate en áreas laborales",
-      duration: "Duración: 4 MESES",
+      subtitle: "PROFESIONALÍZATE EN ÁREAS LABORALES",
+      duration: "4 MESES",
       badge: "Formación Real",
       description: "Con validez oficial SEP.",
       image: "/images/capacitaciones.jpeg",
@@ -446,7 +446,9 @@ const Programs = ({ theme }: { theme: any }) => {
                     <div className="p-2 rounded-lg bg-white/20 backdrop-blur-sm text-white">
                       {program.icon}
                     </div>
-                    <span className="text-white/90 font-black text-xs tracking-widest uppercase">Duración: {program.duration}</span>
+                    <span className="text-white/90 font-black text-xs tracking-widest uppercase">
+                      {program.duration.includes('EN') ? program.duration : `DURACIÓN: ${program.duration}`}
+                    </span>
                   </div>
                   <h3 className="text-3xl lg:text-4xl font-black text-white leading-tight mb-2">{program.title}</h3>
                   <div className="flex items-center gap-2">
