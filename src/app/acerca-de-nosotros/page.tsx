@@ -358,67 +358,85 @@ const Programs = ({ theme }: { theme: any }) => {
           </motion.p>
         </motion.div>
 
-        <div className="flex flex-col lg:flex-row gap-10 items-center justify-center">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-14 max-w-6xl mx-auto">
+          {/* Card 1 */}
           <motion.div 
             initial={{ opacity: 0, y: 50 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.1 }}
-            className="w-full lg:w-[45%] bg-white rounded-3xl shadow-2xl overflow-hidden group hover:-translate-y-3 transition-all duration-500 border border-gray-100"
+            className="flex flex-col bg-white rounded-[2.5rem] shadow-xl hover:shadow-2xl overflow-hidden group hover:-translate-y-2 transition-all duration-500 border border-gray-100/50"
           >
-            <div className="h-60 relative p-10 flex flex-col justify-end overflow-hidden" style={{ backgroundColor: theme.primary }}>
-              <div className="absolute top-0 right-0 p-10 opacity-10 group-hover:scale-125 transition-transform duration-700">
-                <GraduationCap size={200} />
+            <div className="relative min-h-[260px] p-10 flex flex-col justify-end overflow-hidden" style={{ backgroundColor: theme.primary }}>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-0"></div>
+              <div className="absolute -top-10 -right-10 p-10 opacity-10 group-hover:scale-110 group-hover:opacity-20 transition-all duration-700">
+                <GraduationCap size={280} />
               </div>
-              <span className="text-white/60 font-black tracking-[0.3em] uppercase text-xs mb-3 relative z-10">Excelencia Académica</span>
-              <h3 className="text-4xl font-black text-white relative z-10 leading-tight">Preparatoria en 12 meses</h3>
-              <p className="text-white/80 mt-3 relative z-10 font-bold text-lg uppercase">con Capacitación laboral</p>
+              <div className="relative z-10">
+                <span className="inline-block px-4 py-1.5 bg-white/20 backdrop-blur-md rounded-full text-white font-black tracking-widest uppercase text-[10px] mb-4">
+                  Excelencia Académica
+                </span>
+                <h3 className="text-3xl lg:text-4xl font-black text-white leading-tight">Preparatoria en <br/>12 meses</h3>
+                <p className="text-white/90 mt-4 font-bold text-sm uppercase tracking-wide flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div> Con Capacitación laboral
+                </p>
+              </div>
             </div>
-            <div className="p-10">
-              <p className="text-gray-600 mb-10 text-xl font-medium">
-                Termina tu bachillerato con una formación integral preparándote para el mundo laboral real.
+            <div className="p-10 lg:p-12 flex flex-col flex-grow">
+              <p className="text-gray-600 mb-8 text-lg font-medium leading-relaxed flex-grow">
+                Termina tu bachillerato de forma integral, preparándote activamente con habilidades para el mundo laboral real.
               </p>
-              <div className="flex items-center gap-4 text-gray-900 font-black mb-10 p-5 rounded-2xl" style={{ backgroundColor: `${theme.primary}10` }}>
-                <CheckCircle className="text-blue-500" /> VALIDEZ OFICIAL SEP
+              <div className="flex items-center gap-4 text-gray-900 font-extrabold mb-10 p-5 rounded-2xl border border-gray-100 bg-gray-50 group-hover:bg-white transition-colors">
+                <CheckCircle size={24} className="text-green-500" /> VALIDEZ OFICIAL SEP
               </div>
               <a 
                 href="/preregistro" 
-                className="block w-full text-center text-white font-black py-5 rounded-2xl transition-all duration-300 uppercase tracking-widest shadow-xl hover:opacity-90"
+                className="w-full relative overflow-hidden text-center text-white font-black py-5 rounded-2xl transition-all duration-300 uppercase tracking-[0.2em] shadow-lg hover:shadow-xl group/btn flex items-center justify-center gap-3"
                 style={{ backgroundColor: theme.primary }}
               >
-                Inscríbete Ahora
+                <span className="relative z-10 transition-transform duration-300 group-hover/btn:-translate-x-1">Inscríbete Ahora</span>
+                <div className="relative z-10 opacity-0 -translate-x-4 transition-all duration-300 group-hover/btn:opacity-100 group-hover/btn:translate-x-0">→</div>
               </a>
             </div>
           </motion.div>
 
+          {/* Card 2 */}
           <motion.div 
             initial={{ opacity: 0, y: 50 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
             transition={{ duration: 0.6, delay: 0.3 }}
-            className="w-full lg:w-[45%] bg-white rounded-3xl shadow-2xl overflow-hidden group hover:-translate-y-3 transition-all duration-500 border border-gray-100"
+            className="flex flex-col bg-white rounded-[2.5rem] shadow-xl hover:shadow-2xl overflow-hidden group hover:-translate-y-2 transition-all duration-500 border border-gray-100/50"
           >
-            <div className="h-60 relative p-10 flex flex-col justify-end overflow-hidden" style={{ background: `linear-gradient(to bottom right, ${theme.primary}, ${theme.accent})` }}>
-              <div className="absolute top-0 right-0 p-10 opacity-15 group-hover:scale-125 transition-transform duration-700">
-                <Award size={200} />
+            <div className="relative min-h-[260px] p-10 flex flex-col justify-end overflow-hidden" style={{ background: `linear-gradient(135deg, ${theme.primary}, ${theme.accent})` }}>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent z-0"></div>
+              <div className="absolute -top-10 -right-10 p-10 opacity-15 group-hover:scale-110 group-hover:opacity-25 transition-all duration-700">
+                <Award size={280} />
               </div>
-              <span className="text-white/70 font-black tracking-[0.3em] uppercase text-xs mb-3 relative z-10">Rápida Graduación</span>
-              <h3 className="text-4xl font-black text-white relative z-10 leading-tight">Bachillerato General</h3>
-              <p className="text-white/90 mt-3 relative z-10 font-bold text-lg uppercase">En solo 6 meses</p>
+              <div className="relative z-10">
+                <span className="inline-block px-4 py-1.5 bg-white/20 backdrop-blur-md rounded-full text-white font-black tracking-widest uppercase text-[10px] mb-4">
+                  Rápida Graduación
+                </span>
+                <h3 className="text-3xl lg:text-4xl font-black text-white leading-tight">Bachillerato <br/>General</h3>
+                <p className="text-white/90 mt-4 font-bold text-sm uppercase tracking-wide flex items-center gap-2">
+                  <div className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></div> En solo 6 meses
+                </p>
+              </div>
             </div>
-            <div className="p-10">
-              <p className="text-gray-600 mb-10 text-xl font-medium">
-                Obtén tu certificado de preparatoria de manera rápida y legal con nuestro enfoque intensivo.
+            <div className="p-10 lg:p-12 flex flex-col flex-grow">
+              <p className="text-gray-600 mb-8 text-lg font-medium leading-relaxed flex-grow">
+                Obtén tu certificado de preparatoria de manera expedita y con toda la validez legal gracias a nuestro ritmo intensivo.
               </p>
-              <div className="flex items-center gap-4 text-gray-900 font-black mb-10 p-5 rounded-2xl" style={{ backgroundColor: `${theme.primary}10` }}>
-                <CheckCircle className="text-blue-500" /> VALIDEZ OFICIAL SEP
+              <div className="flex items-center gap-4 text-gray-900 font-extrabold mb-10 p-5 rounded-2xl border border-gray-100 bg-gray-50 group-hover:bg-white transition-colors">
+                <CheckCircle size={24} className="text-green-500" /> VALIDEZ OFICIAL SEP
               </div>
               <a 
                 href="/preregistro" 
-                className="block w-full text-center text-white font-black py-5 rounded-2xl transition-all duration-300 uppercase tracking-widest shadow-xl hover:opacity-90"
+                className="w-full relative overflow-hidden text-center text-white font-black py-5 rounded-2xl transition-all duration-300 uppercase tracking-[0.2em] shadow-lg hover:shadow-xl group/btn flex items-center justify-center gap-3"
                 style={{ backgroundColor: theme.primary }}
               >
-                Inscríbete Ahora
+                <span className="relative z-10 transition-transform duration-300 group-hover/btn:-translate-x-1">Inscríbete Ahora</span>
+                <div className="relative z-10 opacity-0 -translate-x-4 transition-all duration-300 group-hover/btn:opacity-100 group-hover/btn:translate-x-0">→</div>
               </a>
             </div>
           </motion.div>
@@ -429,12 +447,12 @@ const Programs = ({ theme }: { theme: any }) => {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.8, delay: 0.5 }}
-          className="mt-24 pt-20 border-t border-gray-100 text-center"
+          className="mt-28 md:mt-32 pt-16 border-t border-gray-200/60 text-center"
         >
-          <h3 className="text-3xl font-black text-gray-900 mb-12 uppercase tracking-widest">Modalidades:</h3>
-          <div className="flex flex-wrap justify-center gap-8">
+          <h3 className="text-sm font-black text-gray-400 mb-8 uppercase tracking-[0.3em]">Opciones de Estudio Disponibles</h3>
+          <div className="flex flex-wrap justify-center gap-4 md:gap-6">
             {modalities.map((modality, idx) => (
-              <div key={idx} className="flex items-center gap-4 px-8 py-4 bg-gray-50 text-gray-800 font-black rounded-2xl border border-gray-200 shadow-sm hover:shadow-xl hover:bg-white transition-all cursor-default">
+              <div key={idx} className="flex items-center gap-3 md:gap-4 px-6 md:px-8 py-4 bg-white text-gray-900 font-black text-sm md:text-base uppercase tracking-wider rounded-full border shadow-sm hover:shadow-md hover:-translate-y-1 transition-all cursor-default" style={{ borderColor: `${theme.primary}30` }}>
                 <span style={{ color: theme.primary }}>{modality.icon}</span>
                 {modality.name}
               </div>
