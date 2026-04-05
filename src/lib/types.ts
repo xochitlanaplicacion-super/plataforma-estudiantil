@@ -19,6 +19,7 @@ export interface User {
   password_plain?: string;
   carrera_id?: string;
   grupo_id?: string; 
+  genero?: string;
   doc_acta_nacimiento?: boolean;
   doc_certificado_estudios?: boolean;
   doc_curp?: boolean;
@@ -56,6 +57,7 @@ export interface Aspirante {
   carrera_id?: string;
   estatus?: string;
   notas?: string;
+  genero?: string;
   created_at?: string;
 }
 

@@ -34,18 +34,23 @@ const userSchema = z.object({
   nivel_estudios: z.string().optional().or(z.literal('')),
   carrera_id: z.string().optional().or(z.literal('')),
   password: z.string().min(8, "La contraseña es obligatoria (mínimo 8 caracteres)"),
+  genero: z.string().optional().or(z.literal('')),
   doc_acta_nacimiento: z.boolean().default(false),
   doc_certificado_estudios: z.boolean().default(false),
   doc_curp: z.boolean().default(false),
   doc_ine: z.boolean().default(false),
 }).refine((data) => {
-  if (data.rol === 'alumno' && !data.fecha_expiracion) {
-    return false;
-  }
+  if (data.rol === 'alumno' && !data.fecha_expiracion) return false;
   return true;
 }, {
   message: "La vigencia (fecha de expiración) es obligatoria para Alumnos.",
   path: ["fecha_expiracion"],
+}).refine((data) => {
+  if (data.rol !== 'superuser' && (!data.genero || data.genero.trim() === '')) return false;
+  return true;
+}, {
+  message: "El género es obligatorio para este rol",
+  path: ["genero"],
 });
 
 type UserFormValues = z.infer<typeof userSchema>;
@@ -85,6 +90,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
       nivel_estudios: '',
       carrera_id: '',
       password: '',
+      genero: '',
       doc_acta_nacimiento: false,
       doc_certificado_estudios: false,
       doc_curp: false,
@@ -193,6 +199,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
           nivel_estudios: detectLevel,
           carrera_id: user.carrera_id || '',
           password: user.password_plain || '',
+          genero: user.genero || '',
           doc_acta_nacimiento: !!user.doc_acta_nacimiento,
           doc_certificado_estudios: !!user.doc_certificado_estudios,
           doc_curp: !!user.doc_curp,
@@ -215,6 +222,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
           fecha_expiracion: '',
           fecha_nacimiento: prefillAspirante.fecha_nacimiento || '',
           password: '',
+          genero: prefillAspirante.genero || '',
           doc_acta_nacimiento: false,
           doc_certificado_estudios: false,
           doc_curp: false,
@@ -227,7 +235,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
         form.reset({
           nombre: '', apellidos: '', email: '', curp: '', rol: 'alumno', estatus: 'activo',
           telefono: '', matricula: '', numero_empleado: '', fecha_expiracion: '',
-          fecha_nacimiento: '', nivel_estudios: '', carrera_id: '', password: '',
+          fecha_nacimiento: '', nivel_estudios: '', carrera_id: '', password: '', genero: '',
           doc_acta_nacimiento: false, doc_certificado_estudios: false, doc_curp: false, doc_ine: false,
         });
         generatePassword();
@@ -320,6 +328,19 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
               )} />
               <FormField control={form.control} name="telefono" render={({ field }) => (
                 <FormItem><FormLabel>Teléfono</FormLabel><FormControl><Input placeholder="10 dígitos" {...field} /></FormControl><FormMessage /></FormItem>
+              )} />
+              <FormField control={form.control} name="genero" render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Género {form.watch('rol') !== 'superuser' && '*'}</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value || ''}>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Seleccionar..." /></SelectTrigger></FormControl>
+                    <SelectContent>
+                      <SelectItem value="Hombre">Hombre</SelectItem>
+                      <SelectItem value="Mujer">Mujer</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
               )} />
               
               <div className="space-y-4 md:col-span-2 mt-4">

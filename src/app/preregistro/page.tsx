@@ -23,6 +23,7 @@ const preregistroSchema = z.object({
   curp: z.string().length(18, "La CURP debe tener exactamente 18 caracteres"),
   telefono: z.string().min(10, "El teléfono debe tener al menos 10 dígitos"),
   fecha_nacimiento: z.string().min(1, "La fecha de nacimiento es obligatoria"),
+  genero: z.enum(['Hombre', 'Mujer'], { errorMap: () => ({ message: "El género es obligatorio" }) }),
   nivel: z.string().min(1, "Selecciona un nivel educativo"),
   carrera_id: z.string().optional().or(z.literal('')),
 });
@@ -44,6 +45,7 @@ export default function PreregistroPage() {
       curp: '',
       telefono: '',
       fecha_nacimiento: '',
+      genero: undefined, // Add as undefined or make it string
       nivel: '',
       carrera_id: '',
     },
@@ -241,6 +243,27 @@ export default function PreregistroPage() {
                         <FormControl>
                           <Input placeholder="10 DÍGITOS" maxLength={10} className="h-12" {...field} />
                         </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="genero"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel className="text-base">Género *</FormLabel>
+                        <Select onValueChange={field.onChange} defaultValue={field.value}>
+                          <FormControl>
+                            <SelectTrigger className="h-12">
+                              <SelectValue placeholder="Selecciona género" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="Hombre">Hombre</SelectItem>
+                            <SelectItem value="Mujer">Mujer</SelectItem>
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}

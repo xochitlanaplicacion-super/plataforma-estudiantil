@@ -95,7 +95,14 @@ export default function AspirantesCRM() {
                     <TableCell>
                       <div className="flex flex-col">
                         <span className="font-bold text-sm">{asp.nombre} {asp.apellidos}</span>
-                        <span className="text-[10px] text-muted-foreground font-mono">{asp.curp}</span>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[10px] text-muted-foreground font-mono">{asp.curp}</span>
+                          {asp.genero && (
+                            <Badge variant="outline" className={`text-[9px] h-4 px-1.5 py-0 uppercase tracking-tighter ${asp.genero === 'Mujer' ? 'text-pink-600 border-pink-200 bg-pink-50' : 'text-blue-600 border-blue-200 bg-blue-50'}`}>
+                              {asp.genero.charAt(0)}
+                            </Badge>
+                          )}
+                        </div>
                       </div>
                     </TableCell>
                     <TableCell>
