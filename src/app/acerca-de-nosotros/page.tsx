@@ -3,7 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { BookOpen, GraduationCap, Users, Clock, MapPin, Phone, Mail, ChevronUp, Menu, X, CheckCircle, Award, Loader2 } from 'lucide-react';
+import { BookOpen, GraduationCap, Users, Clock, MapPin, Phone, Mail, ChevronUp, Menu, X, CheckCircle, Award, Loader2, Briefcase, ArrowRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Variants } from 'framer-motion';
 import { createContactoRecord } from '@/lib/actions/contacto';
@@ -331,6 +331,53 @@ const About = ({ theme }: { theme: any }) => {
 };
 
 const Programs = ({ theme }: { theme: any }) => {
+  const educationalPrograms = [
+    {
+      title: "Prepa Joven",
+      subtitle: "Para continuar estudios e ingresar a la universidad",
+      duration: "4 MESES",
+      badge: "Excelencia Académica",
+      description: "Preparación intensiva diseñada para jóvenes con visión universitaria.",
+      image: "/images/prepa-joven.jpeg",
+      icon: <Users size={20} />,
+      crop: "object-top",
+      delay: 0.1
+    },
+    {
+      title: "Bachillerato Adultos",
+      subtitle: "Para trabajar o ingresar a la universidad",
+      duration: "2 MESES",
+      badge: "Meta Cumplida",
+      description: "Certificación rápida con plena validez legal para el crecimiento profesional.",
+      image: "/images/adultos.jpeg",
+      icon: <Award size={20} />,
+      crop: "object-center",
+      delay: 0.2
+    },
+    {
+      title: "Universidad",
+      subtitle: "Licenciaturas e Ingenierías",
+      duration: "10 MESES",
+      badge: "Grado Superior",
+      description: "Titulación por experiencia en 2 meses. Título y Cédula SEP.",
+      image: "/images/universidad.jpeg",
+      icon: <BookOpen size={20} />,
+      crop: "object-top",
+      delay: 0.3
+    },
+    {
+      title: "Capacitaciones",
+      subtitle: "Profesionalízate en áreas laborales",
+      duration: "4 MESES",
+      badge: "Formación Real",
+      description: "Habilidades técnicas y prácticas avaladas para el mercado de trabajo actual.",
+      image: "/images/capacitaciones.jpeg",
+      icon: <Briefcase size={20} />,
+      crop: "object-center",
+      delay: 0.4
+    }
+  ];
+
   const modalities = [
     { name: 'Presencial', icon: <Users size={20} /> },
     { name: 'Virtual', icon: <BookOpen size={20} /> },
@@ -354,92 +401,79 @@ const Programs = ({ theme }: { theme: any }) => {
             Explora nuestros programas
           </motion.h2>
           <motion.p variants={fadeUp} className="text-2xl text-gray-600 font-medium">
-            Programas diseñados para tus necesidades actuales.
+            Formación integral con validez oficial para cada etapa de tu vida.
           </motion.p>
         </motion.div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-14 max-w-6xl mx-auto">
-          {/* Card 1 */}
-          <motion.div 
-            initial={{ opacity: 0, y: 50 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.1 }}
-            className="flex flex-col bg-white rounded-[2.5rem] shadow-xl hover:shadow-2xl overflow-hidden group hover:-translate-y-2 transition-all duration-500 border border-gray-100/50"
-          >
-            <div className="relative min-h-[260px] p-10 flex flex-col justify-end overflow-hidden" style={{ backgroundColor: theme.primary }}>
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent z-0"></div>
-              <div className="absolute -top-10 -right-10 p-10 opacity-10 group-hover:scale-110 group-hover:opacity-20 transition-all duration-700">
-                <GraduationCap size={280} />
-              </div>
-              <div className="relative z-10">
-                <span className="inline-block px-4 py-1.5 bg-white/20 backdrop-blur-md rounded-full text-white font-black tracking-widest uppercase text-[10px] mb-4">
-                  Excelencia Académica
-                </span>
-                <h3 className="text-3xl lg:text-4xl font-black text-white leading-tight">Preparatoria en <br/>12 meses</h3>
-                <div className="text-white/90 mt-4 font-bold text-sm uppercase tracking-wide flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div> Con Capacitación laboral
-                </div>
-              </div>
-            </div>
-            <div className="p-10 lg:p-12 flex flex-col flex-grow">
-              <p className="text-gray-600 mb-8 text-lg font-medium leading-relaxed flex-grow">
-                Termina tu bachillerato de forma integral, preparándote activamente con habilidades para el mundo laboral real.
-              </p>
-              <div className="flex items-center gap-4 text-gray-900 font-extrabold mb-10 p-5 rounded-2xl border border-gray-100 bg-gray-50 group-hover:bg-white transition-colors">
-                <CheckCircle size={24} className="text-green-500" /> VALIDEZ OFICIAL SEP
-              </div>
-              <a 
-                href="/preregistro" 
-                className="w-full relative overflow-hidden text-center text-white font-black py-5 rounded-2xl transition-all duration-300 uppercase tracking-[0.2em] shadow-lg hover:shadow-xl group/btn flex items-center justify-center gap-3"
-                style={{ backgroundColor: theme.primary }}
-              >
-                <span className="relative z-10 transition-transform duration-300 group-hover/btn:-translate-x-1">Inscríbete Ahora</span>
-                <div className="relative z-10 opacity-0 -translate-x-4 transition-all duration-300 group-hover/btn:opacity-100 group-hover/btn:translate-x-0">→</div>
-              </a>
-            </div>
-          </motion.div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 lg:gap-14 max-w-7xl mx-auto">
+          {educationalPrograms.map((program, idx) => (
+            <motion.div 
+              key={idx}
+              initial={{ opacity: 0, y: 50 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.6, delay: program.delay }}
+              className="flex flex-col bg-white rounded-[2.5rem] shadow-xl hover:shadow-2xl overflow-hidden group hover:-translate-y-2 transition-all duration-500 border border-gray-100/50"
+            >
+              <div className="relative min-h-[320px] lg:min-h-[380px] overflow-hidden group">
+                {/* Image Background con Nanobanana style cropping */}
+                <img 
+                  src={program.image} 
+                  alt={program.title}
+                  className={cn(
+                    "absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110",
+                    program.crop
+                  )}
+                />
+                
+                {/* Overlays */}
+                <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-10"></div>
+                <div 
+                  className="absolute inset-0 opacity-20 group-hover:opacity-40 transition-opacity duration-500 z-10"
+                  style={{ backgroundColor: idx % 2 === 0 ? theme.primary : theme.accent }}
+                ></div>
 
-          {/* Card 2 */}
-          <motion.div 
-            initial={{ opacity: 0, y: 50 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ duration: 0.6, delay: 0.3 }}
-            className="flex flex-col bg-white rounded-[2.5rem] shadow-xl hover:shadow-2xl overflow-hidden group hover:-translate-y-2 transition-all duration-500 border border-gray-100/50"
-          >
-            <div className="relative min-h-[260px] p-10 flex flex-col justify-end overflow-hidden" style={{ background: `linear-gradient(135deg, ${theme.primary}, ${theme.accent})` }}>
-              <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent z-0"></div>
-              <div className="absolute -top-10 -right-10 p-10 opacity-15 group-hover:scale-110 group-hover:opacity-25 transition-all duration-700">
-                <Award size={280} />
-              </div>
-              <div className="relative z-10">
-                <span className="inline-block px-4 py-1.5 bg-white/20 backdrop-blur-md rounded-full text-white font-black tracking-widest uppercase text-[10px] mb-4">
-                  Rápida Graduación
-                </span>
-                <h3 className="text-3xl lg:text-4xl font-black text-white leading-tight">Bachillerato <br/>General</h3>
-                <div className="text-white/90 mt-4 font-bold text-sm uppercase tracking-wide flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse"></div> En solo 6 meses
+                {/* Floating Badge */}
+                <div className="absolute top-8 left-8 z-20">
+                  <span className="inline-block px-4 py-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-full text-white font-black tracking-widest uppercase text-[10px]">
+                    {program.badge}
+                  </span>
+                </div>
+
+                {/* Card Header Content */}
+                <div className="absolute inset-x-0 bottom-0 p-8 lg:p-10 z-20">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="p-2 rounded-lg bg-white/20 backdrop-blur-sm text-white">
+                      {program.icon}
+                    </div>
+                    <span className="text-white/90 font-black text-xs tracking-widest uppercase">Duración: {program.duration}</span>
+                  </div>
+                  <h3 className="text-3xl lg:text-4xl font-black text-white leading-tight mb-2">{program.title}</h3>
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
+                    <span className="text-white/80 font-bold text-xs uppercase tracking-wider">{program.subtitle}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-            <div className="p-10 lg:p-12 flex flex-col flex-grow">
-              <p className="text-gray-600 mb-8 text-lg font-medium leading-relaxed flex-grow">
-                Obtén tu certificado de preparatoria de manera expedita y con toda la validez legal gracias a nuestro ritmo intensivo.
-              </p>
-              <div className="flex items-center gap-4 text-gray-900 font-extrabold mb-10 p-5 rounded-2xl border border-gray-100 bg-gray-50 group-hover:bg-white transition-colors">
-                <CheckCircle size={24} className="text-green-500" /> VALIDEZ OFICIAL SEP
+
+              <div className="p-8 lg:p-10 flex flex-col flex-grow">
+                <p className="text-gray-600 mb-8 text-lg font-medium leading-relaxed flex-grow">
+                  {program.description}
+                </p>
+                <div className="flex items-center gap-4 text-gray-900 font-extrabold mb-10 p-5 rounded-2xl border border-gray-100 bg-gray-50 group-hover:bg-white transition-colors">
+                  <CheckCircle size={24} className="text-green-500" /> VALIDEZ OFICIAL SEP
+                </div>
+                <a 
+                  href="/preregistro" 
+                  className="w-full relative overflow-hidden text-center text-white font-black py-5 rounded-2xl transition-all duration-300 uppercase tracking-[0.2em] shadow-lg hover:shadow-xl group/btn flex items-center justify-center gap-3"
+                  style={{ backgroundColor: idx % 2 === 0 ? theme.primary : theme.accent }}
+                >
+                  <span className="relative z-10 transition-transform duration-300 group-hover/btn:-translate-x-1">Inscríbete Ahora</span>
+                  <ArrowRight className="relative z-10 opacity-0 -translate-x-4 transition-all duration-300 group-hover/btn:opacity-100 group-hover/btn:translate-x-0" size={20} />
+                </a>
               </div>
-              <a 
-                href="/preregistro" 
-                className="w-full relative overflow-hidden text-center text-white font-black py-5 rounded-2xl transition-all duration-300 uppercase tracking-[0.2em] shadow-lg hover:shadow-xl group/btn flex items-center justify-center gap-3"
-                style={{ backgroundColor: theme.primary }}
-              >
-                <span className="relative z-10 transition-transform duration-300 group-hover/btn:-translate-x-1">Inscríbete Ahora</span>
-                <div className="relative z-10 opacity-0 -translate-x-4 transition-all duration-300 group-hover/btn:opacity-100 group-hover/btn:translate-x-0">→</div>
-              </a>
-            </div>
-          </motion.div>
+            </motion.div>
+          ))}
         </div>
 
         <motion.div 
