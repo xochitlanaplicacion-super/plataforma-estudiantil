@@ -271,7 +271,7 @@ const Hero = ({ theme }: { theme: any }) => {
         >
           <motion.div variants={fadeUp} className="inline-block bg-white/20 backdrop-blur-md border border-white/30 px-6 py-2 rounded-full mb-8">
             <span className="text-sm font-bold tracking-[0.2em] uppercase">
-              Bachillerato | Capacitaciones
+              Universidad | Bachillerato | Capacitaciones
             </span>
           </motion.div>
 
