@@ -1,9 +1,16 @@
 
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import gsap from 'gsap';
+import { useGSAP } from '@gsap/react';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { BookOpen, GraduationCap, Users, Clock, MapPin, Phone, Mail, ChevronUp, Menu, X, CheckCircle, Award, Loader2, Briefcase, ArrowRight } from 'lucide-react';
+
+if (typeof window !== 'undefined') {
+  gsap.registerPlugin(useGSAP, ScrollTrigger);
+}
 import { cn } from '@/lib/utils';
 import { Variants } from 'framer-motion';
 import { createContactoRecord } from '@/lib/actions/contacto';
@@ -248,6 +255,99 @@ const Hero = ({ theme }: { theme: any }) => {
   );
 };
 
+const MissionStatement = ({ theme }: { theme: any }) => {
+  const containerRef = useRef(null);
+  const textRef = useRef(null);
+  const descRef = useRef(null);
+  const iconRightRef = useRef(null);
+  const iconLeftRef = useRef(null);
+
+  useGSAP(() => {
+    // Parallax para los iconos de fondo
+    gsap.to(iconRightRef.current, {
+      y: -100,
+      rotation: 20,
+      scrollTrigger: {
+        trigger: containerRef.current,
+        start: "top bottom",
+        end: "bottom top",
+        scrub: 1
+      }
+    });
+
+    gsap.to(iconLeftRef.current, {
+      y: 100,
+      rotation: -20,
+      scrollTrigger: {
+        trigger: containerRef.current,
+        start: "top bottom",
+        end: "bottom top",
+        scrub: 1
+      }
+    });
+
+    // Revelación del texto principal
+    gsap.from(textRef.current, {
+      opacity: 0,
+      y: 50,
+      duration: 1.2,
+      ease: "power4.out",
+      scrollTrigger: {
+        trigger: textRef.current,
+        start: "top 85%",
+        toggleActions: "play none none reverse"
+      }
+    });
+
+    // Revelación de la descripción
+    gsap.from(descRef.current, {
+      opacity: 0,
+      scale: 0.95,
+      y: 20,
+      duration: 1,
+      delay: 0.3,
+      ease: "back.out(1.7)",
+      scrollTrigger: {
+        trigger: descRef.current,
+        start: "top 90%",
+        toggleActions: "play none none reverse"
+      }
+    });
+  }, { scope: containerRef });
+
+  return (
+    <section ref={containerRef} className="py-24 md:py-32 relative overflow-hidden" style={{ backgroundColor: `${theme.primary}08` }}>
+      <div className="container mx-auto px-4 lg:px-8 relative z-10">
+        <div className="max-w-5xl mx-auto text-center">
+          <div className="mb-10 flex justify-center">
+             <div className="w-20 h-1 bg-gradient-to-r rounded-full" style={{ backgroundImage: `linear-gradient(to right, transparent, ${theme.primary}, transparent)` }}></div>
+          </div>
+          
+          <h2 ref={textRef} className="text-2xl md:text-4xl lg:text-5xl font-black text-gray-900 leading-[1.3] md:leading-tight tracking-tight">
+            Somos una institución <span style={{ color: theme.primary }}>comprometida</span> con brindar educación para estudiantes jóvenes y adultos, ofreciendo la oportunidad de concluir su <span className="underline decoration-4" style={{ textDecorationColor: `${theme.accent}60` }}>Bachillerato General</span>, <span className="underline decoration-4" style={{ textDecorationColor: `${theme.accent}60` }}>Licenciaturas</span>, <span className="underline decoration-4" style={{ textDecorationColor: `${theme.accent}60` }}>Ingenierías</span> y <span className="underline decoration-4" style={{ textDecorationColor: `${theme.accent}60` }}>Capacitaciones</span> avaladas por la <span className="font-black italic">Secretaría de Educación Pública (SEP)</span>.
+          </h2>
+          
+          <div ref={descRef} className="mt-12 text-xl md:text-2xl text-gray-600 font-medium max-w-4xl mx-auto leading-relaxed">
+            Nuestro enfoque es proporcionar un ambiente de aprendizaje flexible y accesible para aquellos que desean continuar su Educación Media Superior y Superior.
+          </div>
+
+          <div className="mt-10 flex justify-center">
+             <div className="w-20 h-1 bg-gradient-to-r rounded-full opacity-50" style={{ backgroundImage: `linear-gradient(to right, transparent, ${theme.primary}, transparent)` }}></div>
+          </div>
+        </div>
+      </div>
+      
+      {/* Decorative background elements with GSAP Parallax */}
+      <div ref={iconRightRef} className="absolute top-0 right-0 w-64 h-64 opacity-[0.04] pointer-events-none -translate-y-1/2 translate-x-1/2">
+        <BookOpen size={256} style={{ color: theme.primary }} />
+      </div>
+      <div ref={iconLeftRef} className="absolute bottom-0 left-0 w-64 h-64 opacity-[0.04] pointer-events-none translate-y-1/2 -translate-x-1/2">
+        <GraduationCap size={256} style={{ color: theme.primary }} />
+      </div>
+    </section>
+  );
+};
+
 const About = ({ theme }: { theme: any }) => {
   return (
     <section id="quienes-somos" className="py-32 bg-gray-50">
@@ -296,10 +396,7 @@ const About = ({ theme }: { theme: any }) => {
             </motion.h2>
             <motion.div variants={fadeUp} className="space-y-8 text-gray-600 text-xl leading-relaxed font-medium">
               <p>
-                Pertenecemos a una alianza de instituciones educativas autorizadas por la <strong>Secretaría de Educación Pública (SEP)</strong> para aplicar procesos de evaluación que permitan a estudiantes obtener su grado académico de forma legal y segura.
-              </p>
-              <p>
-                En <strong>Instituto Educativo Emiliano Zapata</strong> nos apasiona proporcionar programas de alta calidad. Nuestro compromiso radica en brindar una experiencia educativa excepcional.
+                En <strong>Instituto Educativo Emiliano Zapata</strong> nos apasiona proporcionar programas de alta calidad. Nuestro compromiso radica en brindar una experiencia educativa excepcional a través de procesos de evaluación seguros y legales ante la <strong>Secretaría de Educación Pública</strong>.
               </p>
             </motion.div>
 
@@ -810,6 +907,7 @@ export default function AcercaDeNosotrosPage() {
       <Navbar theme={currentTheme} />
       <main>
         <Hero theme={currentTheme} />
+        <MissionStatement theme={currentTheme} />
         <About theme={currentTheme} />
         <Banner theme={currentTheme} />
         <Programs theme={currentTheme} />
