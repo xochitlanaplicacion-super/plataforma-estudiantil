@@ -512,7 +512,7 @@ const Programs = ({ theme }: { theme: any }) => {
       badge: "Excelencia Académica",
       description: "Para continuar tus estudios e ingresar a cualquier Universidad pública o privada",
       validez: "Con validez oficial SEP",
-      image: "/images/prepa-joven.jpeg",
+      image: "/images/universidad.jpeg",
       icon: <Users size={20} />,
       crop: "object-top",
       delay: 0.1
@@ -524,7 +524,7 @@ const Programs = ({ theme }: { theme: any }) => {
       badge: "Meta Cumplida",
       description: "Para trabajar o ingresar a la universidad",
       validez: "Con validez oficial SEP",
-      image: "/images/adultos.jpeg",
+      image: "/images/capacitaciones.jpeg",
       icon: <Award size={20} />,
       crop: "object-center",
       delay: 0.2
@@ -536,9 +536,9 @@ const Programs = ({ theme }: { theme: any }) => {
       badge: "Grado Superior",
       description: "LICENCIATURAS\nINGENIERÍAS\n\nTITULACIÓN POR EXPERIENCIA PROFESIONAL EN 2 MESES",
       validez: "Titulo y Cédula con validez oficial SEP",
-      image: "/images/universidad.jpeg",
+      image: "/images/grad-2.jpeg",
       icon: <BookOpen size={20} />,
-      crop: "object-top",
+      crop: "object-center",
       delay: 0.3
     },
     {
@@ -548,7 +548,7 @@ const Programs = ({ theme }: { theme: any }) => {
       badge: "Formación Real",
       description: "Profesionalizate en áreas laborales",
       validez: "Con validez oficial SEP",
-      image: "/images/capacitaciones.jpeg",
+      image: "/images/adultos.jpeg",
       icon: <Briefcase size={20} />,
       crop: "object-center",
       delay: 0.4
