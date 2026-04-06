@@ -1,5 +1,7 @@
-
 'use server';
+
+import dns from 'node:dns';
+dns.setDefaultResultOrder('ipv4first');
 
 import { createClient } from '@supabase/supabase-js';
 

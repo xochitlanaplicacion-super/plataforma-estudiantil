@@ -141,18 +141,20 @@ const Navbar = ({ theme }: { theme: any }) => {
               </a>
             ))}
           </div>
-          <a
-            href="/"
-            className={cn(
-              "px-8 py-3 rounded-full font-bold text-sm uppercase tracking-widest transition-all duration-300 transform hover:scale-105 hover:shadow-xl",
-              scrolled
-                ? "text-white shadow-lg"
-                : "bg-white text-gray-900 hover:bg-gray-100"
-            )}
-            style={scrolled ? { backgroundColor: theme.primary } : {}}
-          >
-            Plataforma
-          </a>
+          <Magnetic intensity={0.4}>
+            <a
+              href="/"
+              className={cn(
+                "px-8 py-3 rounded-full font-bold text-sm uppercase tracking-widest transition-all duration-300 transform hover:scale-105 hover:shadow-xl",
+                scrolled
+                  ? "text-white shadow-lg"
+                  : "bg-white text-gray-900 hover:bg-gray-100"
+              )}
+              style={scrolled ? { backgroundColor: theme.primary } : {}}
+            >
+              Plataforma
+            </a>
+          </Magnetic>
         </div>
 
         {/* Mobile Toggle */}
@@ -198,6 +200,52 @@ const Navbar = ({ theme }: { theme: any }) => {
   );
 };
 
+const Magnetic = ({ children, intensity = 0.5, className }: { children: React.ReactNode, intensity?: number, className?: string }) => {
+  const ref = useRef<HTMLDivElement>(null);
+
+  useGSAP(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const xTo = gsap.utils.pipe(
+      gsap.utils.clamp(-30, 30),
+      (v) => gsap.quickTo(el, "x", { duration: 1, ease: "elastic.out(1, 0.3)" })(v)
+    );
+    const yTo = gsap.utils.pipe(
+      gsap.utils.clamp(-30, 30),
+      (v) => gsap.quickTo(el, "y", { duration: 1, ease: "elastic.out(1, 0.3)" })(v)
+    );
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const { clientX, clientY } = e;
+      const { left, top, width, height } = el.getBoundingClientRect();
+      const centerX = left + width / 2;
+      const centerY = top + height / 2;
+      
+      const distanceX = (clientX - centerX) * intensity;
+      const distanceY = (clientY - centerY) * intensity;
+      
+      xTo(distanceX);
+      yTo(distanceY);
+    };
+
+    const handleMouseLeave = () => {
+      xTo(0);
+      yTo(0);
+    };
+
+    el.addEventListener("mousemove", handleMouseMove);
+    el.addEventListener("mouseleave", handleMouseLeave);
+
+    return () => {
+      el.removeEventListener("mousemove", handleMouseMove);
+      el.removeEventListener("mouseleave", handleMouseLeave);
+    };
+  }, { scope: ref });
+
+  return <div ref={ref} className={cn("inline-block transition-transform duration-100", className)}>{children}</div>;
+};
+
 const Hero = ({ theme }: { theme: any }) => {
   return (
     <section id="inicio" className="relative min-h-screen flex items-center pt-20 overflow-hidden" style={{ backgroundColor: theme.primary }}>
@@ -235,21 +283,49 @@ const Hero = ({ theme }: { theme: any }) => {
             Formación integral para jóvenes y adultos. Concluye tus estudios con validez oficial SEP en un ambiente de excelencia.
           </motion.p>
 
-          <motion.div variants={fadeUp} className="flex flex-col sm:flex-row gap-6">
-            <a
-              href="/preregistro"
-              className="px-10 py-5 bg-white text-gray-900 font-black rounded-xl text-center transition-all duration-300 shadow-2xl hover:scale-105 flex justify-center items-center gap-3 uppercase tracking-widest"
-            >
-              Inicia Hoy <GraduationCap size={24} />
-            </a>
-            <a
-              href="#quienes-somos"
-              className="px-10 py-5 bg-black/30 hover:bg-black/40 backdrop-blur-md text-white font-black rounded-xl text-center transition-all duration-300 border border-white/30 uppercase tracking-widest"
-            >
-              Leer Más
-            </a>
+          <motion.div variants={fadeUp} className="flex flex-col sm:flex-row gap-6 relative z-10">
+            <Magnetic intensity={0.4}>
+              <a
+                href="/preregistro"
+                className="px-10 py-5 bg-white text-gray-900 font-black rounded-xl text-center transition-all duration-300 shadow-2xl hover:scale-105 flex justify-center items-center gap-3 uppercase tracking-widest"
+              >
+                Inicia Hoy <GraduationCap size={24} />
+              </a>
+            </Magnetic>
+            <Magnetic intensity={0.3}>
+              <a
+                href="#quienes-somos"
+                className="px-10 py-5 bg-black/30 hover:bg-black/40 backdrop-blur-md text-white font-black rounded-xl text-center transition-all duration-300 border border-white/30 uppercase tracking-widest"
+              >
+                Leer Más
+              </a>
+            </Magnetic>
           </motion.div>
         </motion.div>
+      </div>
+
+      {/* Hero Logo Drawing SVG Decoration */}
+      <div className="absolute right-0 bottom-0 w-full h-full pointer-events-none overflow-hidden z-10">
+        <svg viewBox="0 0 1000 1000" className="w-full h-full opacity-20">
+          <motion.path
+            d="M -100 900 Q 200 800 400 500 T 1100 100"
+            fill="none"
+            stroke="white"
+            strokeWidth="2"
+            initial={{ pathLength: 0, opacity: 0 }}
+            animate={{ pathLength: 1, opacity: 1 }}
+            transition={{ duration: 3, ease: "easeInOut", delay: 1 }}
+          />
+          <motion.path
+            d="M -100 950 Q 300 850 500 550 T 1200 150"
+            fill="none"
+            stroke={theme.accent}
+            strokeWidth="1"
+            initial={{ pathLength: 0, opacity: 0 }}
+            animate={{ pathLength: 1, opacity: 0.5 }}
+            transition={{ duration: 4, ease: "easeInOut", delay: 1.5 }}
+          />
+        </svg>
       </div>
     </section>
   );
@@ -320,23 +396,23 @@ const MissionStatement = ({ theme }: { theme: any }) => {
       <div className="container mx-auto px-4 lg:px-8 relative z-10">
         <div className="max-w-5xl mx-auto text-center">
           <div className="mb-10 flex justify-center">
-             <div className="w-20 h-1 bg-gradient-to-r rounded-full" style={{ backgroundImage: `linear-gradient(to right, transparent, ${theme.primary}, transparent)` }}></div>
+            <div className="w-20 h-1 bg-gradient-to-r rounded-full" style={{ backgroundImage: `linear-gradient(to right, transparent, ${theme.primary}, transparent)` }}></div>
           </div>
-          
+
           <h2 ref={textRef} className="text-2xl md:text-4xl lg:text-5xl font-black text-gray-900 leading-[1.3] md:leading-tight tracking-tight">
             Somos una institución <span style={{ color: theme.primary }}>comprometida</span> con brindar educación para estudiantes jóvenes y adultos, ofreciendo la oportunidad de concluir su <span className="underline decoration-4" style={{ textDecorationColor: `${theme.accent}60` }}>Bachillerato General</span>, <span className="underline decoration-4" style={{ textDecorationColor: `${theme.accent}60` }}>Licenciaturas</span>, <span className="underline decoration-4" style={{ textDecorationColor: `${theme.accent}60` }}>Ingenierías</span> y <span className="underline decoration-4" style={{ textDecorationColor: `${theme.accent}60` }}>Capacitaciones</span> avaladas por la <span className="font-black italic">Secretaría de Educación Pública (SEP)</span>.
           </h2>
-          
+
           <div ref={descRef} className="mt-12 text-xl md:text-2xl text-gray-600 font-medium max-w-4xl mx-auto leading-relaxed">
             Nuestro enfoque es proporcionar un ambiente de aprendizaje flexible y accesible para aquellos que desean continuar su Educación Media Superior y Superior.
           </div>
 
           <div className="mt-10 flex justify-center">
-             <div className="w-20 h-1 bg-gradient-to-r rounded-full opacity-50" style={{ backgroundImage: `linear-gradient(to right, transparent, ${theme.primary}, transparent)` }}></div>
+            <div className="w-20 h-1 bg-gradient-to-r rounded-full opacity-50" style={{ backgroundImage: `linear-gradient(to right, transparent, ${theme.primary}, transparent)` }}></div>
           </div>
         </div>
       </div>
-      
+
       {/* Decorative background elements with GSAP Parallax */}
       <div ref={iconRightRef} className="absolute top-0 right-0 w-64 h-64 opacity-[0.04] pointer-events-none -translate-y-1/2 translate-x-1/2">
         <BookOpen size={256} style={{ color: theme.primary }} />
@@ -564,14 +640,16 @@ const Programs = ({ theme }: { theme: any }) => {
                 <div className="flex items-center gap-4 text-gray-900 font-extrabold mb-10 p-5 rounded-2xl border border-gray-100 bg-gray-50 group-hover:bg-white transition-colors">
                   <CheckCircle size={24} className="text-green-500" /> {program.validez}
                 </div>
-                <a
-                  href="/preregistro"
-                  className="w-full relative overflow-hidden text-center text-white font-black py-5 rounded-2xl transition-all duration-300 uppercase tracking-[0.2em] shadow-lg hover:shadow-xl group/btn flex items-center justify-center gap-3"
-                  style={{ backgroundColor: idx % 2 === 0 ? theme.primary : theme.accent }}
-                >
-                  <span className="relative z-10 transition-transform duration-300 group-hover/btn:-translate-x-1">INSCRÍBETE AHORA</span>
-                  <ArrowRight className="relative z-10 opacity-0 -translate-x-4 transition-all duration-300 group-hover/btn:opacity-100 group-hover/btn:translate-x-0" size={20} />
-                </a>
+                <Magnetic intensity={0.4} className="w-full">
+                  <a
+                    href="/preregistro"
+                    className="w-full relative overflow-hidden text-center text-white font-black py-5 rounded-2xl transition-all duration-300 uppercase tracking-[0.2em] shadow-lg hover:shadow-xl group/btn flex items-center justify-center gap-3"
+                    style={{ backgroundColor: idx % 2 === 0 ? theme.primary : theme.accent }}
+                  >
+                    <span className="relative z-10 transition-transform duration-300 group-hover/btn:-translate-x-1">INSCRÍBETE AHORA</span>
+                    <ArrowRight className="relative z-10 opacity-0 -translate-x-4 transition-all duration-300 group-hover/btn:opacity-100 group-hover/btn:translate-x-0" size={20} />
+                  </a>
+                </Magnetic>
               </div>
             </motion.div>
           ))}
@@ -587,10 +665,12 @@ const Programs = ({ theme }: { theme: any }) => {
           <h3 className="text-sm font-black text-gray-400 mb-8 uppercase tracking-[0.3em]">Opciones de Estudio Disponibles</h3>
           <div className="flex flex-wrap justify-center gap-4 md:gap-6">
             {modalities.map((modality, idx) => (
-              <div key={idx} className="flex items-center gap-3 md:gap-4 px-6 md:px-8 py-4 bg-white text-gray-900 font-black text-sm md:text-base uppercase tracking-wider rounded-full border shadow-sm hover:shadow-md hover:-translate-y-1 transition-all cursor-default" style={{ borderColor: `${theme.primary}30` }}>
-                <span style={{ color: theme.primary }}>{modality.icon}</span>
-                {modality.name}
-              </div>
+              <Magnetic key={idx} intensity={0.2}>
+                <div className="flex items-center gap-3 md:gap-4 px-6 md:px-8 py-4 bg-white text-gray-900 font-black text-sm md:text-base uppercase tracking-wider rounded-full border shadow-sm hover:shadow-md transition-all cursor-default" style={{ borderColor: `${theme.primary}30` }}>
+                  <span style={{ color: theme.primary }}>{modality.icon}</span>
+                  {modality.name}
+                </div>
+              </Magnetic>
             ))}
           </div>
         </motion.div>
@@ -635,12 +715,14 @@ const Banner = ({ theme }: { theme: any }) => {
           transition={{ duration: 0.6 }}
         >
           <h2 className="text-5xl md:text-7xl font-black text-white mb-10 uppercase tracking-tighter drop-shadow-lg">Estudiantes que trascienden</h2>
-          <a
-            href="/preregistro"
-            className="inline-block bg-white text-gray-900 px-12 py-5 rounded-2xl font-black uppercase tracking-widest hover:scale-105 transition-all shadow-2xl"
-          >
-            Únete a nuestra comunidad
-          </a>
+          <Magnetic intensity={0.4}>
+            <a
+              href="/preregistro"
+              className="inline-block bg-white text-gray-900 px-12 py-5 rounded-2xl font-black uppercase tracking-widest hover:scale-105 transition-all shadow-2xl"
+            >
+              Únete a nuestra comunidad
+            </a>
+          </Magnetic>
 
           {/* Indicadores del carrusel */}
           <div className="flex justify-center gap-3 mt-12">
@@ -838,14 +920,16 @@ const Contact = ({ theme }: { theme: any }) => {
                     placeholder="Escribe tu mensaje aquí..."
                   />
                 </div>
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="w-full text-white font-black py-6 rounded-2xl transition-all shadow-2xl uppercase tracking-[0.3em] hover:scale-[1.02] active:scale-[0.98] flex justify-center items-center gap-2"
-                  style={{ backgroundColor: theme.primary }}
-                >
-                  {loading ? <Loader2 className="animate-spin" /> : "Enviar Datos"}
-                </button>
+                <Magnetic intensity={0.4} className="w-full">
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="w-full text-white font-black py-6 rounded-2xl transition-all shadow-2xl uppercase tracking-[0.3em] hover:scale-[1.02] active:scale-[0.98] flex justify-center items-center gap-2"
+                    style={{ backgroundColor: theme.primary }}
+                  >
+                    {loading ? <Loader2 className="animate-spin" /> : "Enviar Datos"}
+                  </button>
+                </Magnetic>
               </form>
             )}
           </div>
@@ -877,13 +961,15 @@ const Footer = ({ theme }: { theme: any }) => {
           © {new Date().getFullYear()} IEEZ. Todos los derechos reservados.
         </p>
 
-        <button
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="bg-white/10 hover:bg-white/20 p-5 rounded-2xl text-white transition-all shadow-xl"
-          aria-label="Volver arriba"
-        >
-          <ChevronUp size={32} />
-        </button>
+        <Magnetic intensity={0.5}>
+          <button
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            className="bg-white/10 hover:bg-white/20 p-5 rounded-2xl text-white transition-all shadow-xl"
+            aria-label="Volver arriba"
+          >
+            <ChevronUp size={32} />
+          </button>
+        </Magnetic>
       </div>
     </footer>
   );
