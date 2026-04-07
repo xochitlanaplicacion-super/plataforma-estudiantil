@@ -35,7 +35,8 @@ import {
   MessageSquare,
   ClipboardList,
   UserCog,
-  UserPlus
+  UserPlus,
+  CreditCard
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -89,7 +90,7 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
         { icon: UserPlus, label: 'Matrícula y Salones', href: '/dashboard/admin/inscripciones' },
       ]},
       { group: "Módulo 10: Reportes", items: [
-        { icon: Clock, label: 'Control de Vigencia', href: '/dashboard/admin/vigencias' },
+        { icon: CreditCard, label: 'Control de Pagos', href: '/dashboard/admin/vigencias' },
         { icon: BarChart3, label: 'Reportes y Auditoría', href: '/dashboard/admin/auditoria' },
       ]}
     ],
@@ -103,6 +104,7 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
         { icon: Users, label: 'Soporte Usuarios', href: '/dashboard/admin/usuarios' },
         { icon: UserCog, label: 'Asignar Profesores', href: '/dashboard/admin/profesores' },
         { icon: UserPlus, label: 'Matrícula y Salones', href: '/dashboard/admin/inscripciones' },
+        { icon: CreditCard, label: 'Control de Pagos', href: '/dashboard/admin/vigencias' },
       ]}
     ],
     profesor: [
@@ -115,6 +117,7 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
       { group: "Mi Portal", items: [
         { icon: LayoutDashboard, label: 'Mi Portal Educativo', href: '/dashboard/alumno' },
         { icon: BookOpen, label: 'Mis Materias', href: '/dashboard/alumno/materias' },
+        { icon: CreditCard, label: 'Mis Pagos', href: '/dashboard/alumno/pagos' },
       ]}
     ],
   };
