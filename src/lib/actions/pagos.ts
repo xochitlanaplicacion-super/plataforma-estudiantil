@@ -235,7 +235,26 @@ export async function inicializarPagosAlumno(alumnoId: string, programa: string)
     .upsert(registros, { onConflict: 'alumno_id,plan_pago_id' });
 
   if (error) return { success: false, error: error.message };
+  revalidatePath('/dashboard/admin/vigencias');
+  revalidatePath('/dashboard/alumno/pagos');
   return { success: true };
+}
+
+// ─── REASIGNAR PROGRAMA (solo cuando no hay pagos registrados aún) ────────────
+
+export async function reasignarProgramaAlumno(alumnoId: string, nuevoPrograma: string) {
+  // Solo eliminar pagos que estén en 'pendiente' (sin movimiento financiero)
+  // Si hubiera alguno pagado o abonado, NO se toca para proteger el historial
+  const { error: delError } = await supabaseAdmin
+    .from('pagos_alumno')
+    .delete()
+    .eq('alumno_id', alumnoId)
+    .eq('estatus', 'pendiente');
+
+  if (delError) return { success: false, error: delError.message };
+
+  // Ahora inicializar con el nuevo programa
+  return inicializarPagosAlumno(alumnoId, nuevoPrograma);
 }
 
 // ─── RECORDATORIO DE PAGO ──────────────────────────────────────────────────

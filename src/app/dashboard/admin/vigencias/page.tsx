@@ -19,7 +19,8 @@ import {
   getTodosLosAlumnosConPagos, getPagosAlumno, registrarPago,
   enviarRecordatorioPago, getPlanPagos, createConceptoPago,
   deleteConceptoPago, updateConceptoPago, inicializarPagosAlumno,
-  getPrograms, registrarAbono, getAbonosConcepto, deleteAbono, deletePrograma
+  getPrograms, registrarAbono, getAbonosConcepto, deleteAbono, deletePrograma,
+  reasignarProgramaAlumno
 } from '@/lib/actions/pagos';
 
 // ─── Barra de Progreso ───────────────────────────────────────────────────────
@@ -245,11 +246,18 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
   const programaDetectado = detectarPrograma();
   const programas = [...new Set(pagos.map((p: any) => p.plan_pagos?.programa as string))];
 
+  // Mostrar selector si no hay pagos aún, O si todos están pendientes sin movimiento financiero
+  const todosEnPendiente = pagos.length > 0 && pagos.every((p: any) => p.estatus === 'pendiente' && !p.monto_pagado && !p.fecha_pago);
+  const programaActual = todosEnPendiente && programas.length > 0 ? programas[0] : null;
+  const mostrarSelectorPrograma = pagos.length === 0 || todosEnPendiente;
+
   useEffect(() => {
-    if (open && !loading && pagos.length === 0 && !programaSeleccionado && programaDetectado) {
-      setProgramaSeleccionado(programaDetectado);
+    if (open && !loading && mostrarSelectorPrograma && !programaSeleccionado) {
+      // Pre-seleccionar: programa actual si ya tiene conceptos, o el detectado
+      if (programaActual) setProgramaSeleccionado(programaActual);
+      else if (programaDetectado) setProgramaSeleccionado(programaDetectado);
     }
-  }, [open, loading, pagos.length, programaSeleccionado, programaDetectado]);
+  }, [open, loading, mostrarSelectorPrograma, programaSeleccionado, programaActual, programaDetectado]);
 
   return (
     <>
@@ -265,11 +273,17 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
           </DialogHeader>
 
           {loading ? <div className="flex justify-center py-8"><Loader2 className="animate-spin" /></div>
-          : pagos.length === 0 ? (
-            <div className="text-center py-10 space-y-6 max-w-md mx-auto">
-              <div>
-                <h3 className="text-xl font-bold mb-2 text-primary flex items-center justify-center gap-2">⚠️ Atención requerida</h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">Antes de iniciar la gestión de pagos, confirma el plan a que pertenece este alumno para cargar sus conceptos.</p>
+          : mostrarSelectorPrograma ? (
+            <div className="py-8 space-y-6 max-w-md mx-auto">
+              <div className="text-center">
+                <h3 className="text-xl font-bold mb-2 text-primary flex items-center justify-center gap-2">
+                  ⚠️ Confirma la Oferta Educativa
+                </h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">
+                  {todosEnPendiente
+                    ? <>Este alumno tiene <strong>{pagos.length} conceptos asignados</strong> ({programaActual ? <span className="text-primary font-bold">{programaActual}</span> : 'programa desconocido'}) pero <strong>ningún pago registrado</strong>. Puedes reasignar la oferta educativa correcta antes de iniciar.</>  
+                    : 'Antes de iniciar la gestión de pagos, confirma el plan al que pertenece este alumno.'}
+                </p>
               </div>
               <div className="text-left space-y-2 bg-muted/30 p-5 rounded-xl border border-muted">
                 <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Oferta Educativa a asignar</Label>
@@ -282,16 +296,24 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
                 {programaDetectado && programaSeleccionado === programaDetectado && (
                   <p className="text-[10px] text-blue-600 font-bold mt-1 pl-1">✓ Autodetectado basado en la carrera del alumno.</p>
                 )}
+                {todosEnPendiente && programaSeleccionado && programaSeleccionado !== programaActual && (
+                  <p className="text-[10px] text-amber-600 font-bold mt-1 pl-1">⚠️ Se eliminarán los {pagos.length} conceptos actuales y se cargarán los de "{programaSeleccionado}".</p>
+                )}
               </div>
-              <Button 
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white h-11 font-bold" 
+              <Button
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white h-11 font-bold"
                 disabled={!programaSeleccionado || loading}
                 onClick={async () => {
                   setLoading(true);
-                  await inicializarPagosAlumno(alumno.id, programaSeleccionado);
+                  if (todosEnPendiente) {
+                    await reasignarProgramaAlumno(alumno.id, programaSeleccionado);
+                  } else {
+                    await inicializarPagosAlumno(alumno.id, programaSeleccionado);
+                  }
                   fetchPagos(); onUpdate();
                 }}>
-                <Plus size={18} className="mr-2" /> Inicializar Sistema de Pagos
+                <Plus size={18} className="mr-2" />
+                {todosEnPendiente ? 'Confirmar y Reasignar Programa' : 'Inicializar Sistema de Pagos'}
               </Button>
             </div>
           ) : (
