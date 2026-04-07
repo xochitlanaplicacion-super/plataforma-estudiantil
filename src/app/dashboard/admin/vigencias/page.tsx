@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { CreditCard, Users, CheckCircle2, Clock, Send, Plus, Trash2, Loader2, ChevronDown, ChevronUp, BarChart3, Pencil, DollarSign, Minus, Printer } from 'lucide-react';
+import { CreditCard, Users, CheckCircle2, Clock, Send, Plus, Trash2, Loader2, ChevronDown, ChevronUp, BarChart3, Pencil, DollarSign, Minus, Printer, History } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   getTodosLosAlumnosConPagos, getPagosAlumno, registrarPago,
@@ -436,28 +436,52 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
                                 <span className="text-xs font-bold text-gray-500 shrink-0">${montoPlan.toLocaleString('es-MX')}</span>
                               )}
                               <div className="flex gap-1 shrink-0">
-                                {pago.estatus !== 'pagado' && (
-                                  <Button size="sm" variant="outline" className="h-7 text-[10px] px-2 border-blue-300 text-blue-600 hover:bg-blue-50" onClick={() => setAbonoTarget(pago)}>
-                                    + Abono
-                                  </Button>
+                                {pago.estatus !== 'pagado' ? (
+                                  <>
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline" 
+                                      className="h-7 text-[10px] px-2 border-blue-300 text-blue-600 hover:bg-blue-50" 
+                                      onClick={() => setAbonoTarget(pago)}
+                                    >
+                                      + Abono
+                                    </Button>
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline" 
+                                      className={cn('h-7 text-[10px] px-2', isAbono ? 'border-blue-100 bg-blue-50/30 text-blue-200' : 'hover:bg-muted')} 
+                                      onClick={() => handleTogglePago(pago)}
+                                      disabled={isAbono}
+                                      title={isAbono ? 'Usa el botón "+ Abono" para completar el pago' : ''}
+                                    >
+                                      <CheckCircle2 size={10} />
+                                      Completo
+                                    </Button>
+                                  </>
+                                ) : (
+                                  pago.recibo ? (
+                                    <>
+                                      <Button size="sm" variant="outline" className="h-7 text-[10px] px-2 border-primary/20 text-primary hover:bg-primary/5" onClick={() => handleReimprimirRecibo(pago)}>
+                                        <Printer size={10} className="mr-1" />
+                                        Reimprimir
+                                      </Button>
+                                      <Button size="sm" variant="outline" className="h-7 text-[10px] px-2 border-red-200 text-red-500 hover:bg-red-50" onClick={() => handleTogglePago(pago)}>
+                                        <Minus size={10} />
+                                        Revertir
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline" 
+                                      className="h-7 text-[10px] px-2 border-blue-200 text-blue-600 hover:bg-blue-50" 
+                                      onClick={() => setAbonoTarget(pago)}
+                                    >
+                                      <History size={10} className="mr-1" />
+                                      Ver Abonos
+                                    </Button>
+                                  )
                                 )}
-                                {pago.estatus === 'pagado' && (
-                                  <Button size="sm" variant="outline" className="h-7 text-[10px] px-2 border-primary/20 text-primary hover:bg-primary/5" onClick={() => handleReimprimirRecibo(pago)}>
-                                    <Printer size={10} className="mr-1" />
-                                    Reimprimir
-                                  </Button>
-                                )}
-                                <Button 
-                                  size="sm" 
-                                  variant="outline" 
-                                  className={cn('h-7 text-[10px] px-2', pago.estatus === 'pagado' ? 'border-red-200 text-red-500 hover:bg-red-50' : isAbono ? 'border-blue-100 bg-blue-50/30 text-blue-300' : 'hover:bg-muted')} 
-                                  onClick={() => handleTogglePago(pago)}
-                                  disabled={isAbono}
-                                  title={isAbono ? 'Usa el botón "+ Abono" para terminar de pagar el saldo pendiente' : ''}
-                                >
-                                  {pago.estatus === 'pagado' ? <Minus size={10} /> : <CheckCircle2 size={10} />}
-                                  {pago.estatus === 'pagado' ? 'Revertir' : 'Completo'}
-                                </Button>
                               </div>
                             </div>
                           </div>
