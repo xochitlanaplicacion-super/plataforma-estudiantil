@@ -243,7 +243,10 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
       setSaving(null);
     } else {
       setEditando(pago);
-      setForm({ fecha_pago: new Date().toISOString().split('T')[0], monto_pagado: pago.plan_pagos?.monto?.toString() || '', recibo: '', notas: '' });
+      const total = Number(pago.plan_pagos?.monto || 0);
+      const pagado = Number(pago.monto_pagado || 0);
+      const saldo = Math.max(total - pagado, 0);
+      setForm({ fecha_pago: new Date().toISOString().split('T')[0], monto_pagado: saldo.toString(), recibo: '', notas: '' });
     }
   };
 
@@ -444,7 +447,14 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
                                     Reimprimir
                                   </Button>
                                 )}
-                                <Button size="sm" variant="outline" className={cn('h-7 text-[10px] px-2', pago.estatus === 'pagado' ? 'border-red-200 text-red-500 hover:bg-red-50' : 'hover:bg-muted')} onClick={() => handleTogglePago(pago)}>
+                                <Button 
+                                  size="sm" 
+                                  variant="outline" 
+                                  className={cn('h-7 text-[10px] px-2', pago.estatus === 'pagado' ? 'border-red-200 text-red-500 hover:bg-red-50' : isAbono ? 'border-blue-100 bg-blue-50/30 text-blue-300' : 'hover:bg-muted')} 
+                                  onClick={() => handleTogglePago(pago)}
+                                  disabled={isAbono}
+                                  title={isAbono ? 'Usa el botón "+ Abono" para terminar de pagar el saldo pendiente' : ''}
+                                >
                                   {pago.estatus === 'pagado' ? <Minus size={10} /> : <CheckCircle2 size={10} />}
                                   {pago.estatus === 'pagado' ? 'Revertir' : 'Completo'}
                                 </Button>
