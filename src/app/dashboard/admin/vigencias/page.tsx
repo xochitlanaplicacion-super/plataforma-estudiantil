@@ -509,9 +509,9 @@ export default function ControlVigenciasPage() {
   };
 
   const handleCrearConcepto = async () => {
-    if (!nuevoConcepto.nombre_concepto.trim() || !nuevoConcepto.programa) return;
+    if (!nuevoConcepto.nombre_concepto.trim() || !nuevoConcepto.programa || !nuevoConcepto.orden) return;
     setGuardando(true);
-    const res = await createConceptoPago({ programa: nuevoConcepto.programa, nombre_concepto: nuevoConcepto.nombre_concepto, orden: parseInt(nuevoConcepto.orden) || 99, monto: nuevoConcepto.monto ? parseFloat(nuevoConcepto.monto) : null });
+    const res = await createConceptoPago({ programa: nuevoConcepto.programa, nombre_concepto: nuevoConcepto.nombre_concepto, orden: parseInt(nuevoConcepto.orden), monto: nuevoConcepto.monto ? parseFloat(nuevoConcepto.monto) : null });
     if (res.success) { toast({ title: 'Concepto creado ✅' }); setModalConcepto(false); setNuevoConcepto({ programa: programas[0] || '', nombre_concepto: '', orden: '', monto: '' }); fetchData(); }
     else toast({ variant: 'destructive', title: 'Error', description: res.error });
     setGuardando(false);
@@ -635,7 +635,12 @@ export default function ControlVigenciasPage() {
                 <div><CardTitle>Plan de Pagos por Programa</CardTitle><CardDescription>Define conceptos y precios. Crea nuevos programas según la oferta educativa.</CardDescription></div>
                 <div className="flex gap-2">
                   <Button size="sm" variant="outline" className="gap-1" onClick={() => setModalPrograma(true)}><Plus size={16} /> Nuevo Programa</Button>
-                  <Button size="sm" className="gap-1" onClick={() => { setNuevoConcepto({ programa: programas[0] || '', nombre_concepto: '', orden: '', monto: '' }); setModalConcepto(true); }}><Plus size={16} /> Nuevo Concepto</Button>
+                  <Button size="sm" className="gap-1" onClick={() => { 
+                    const p = programas[0] || '';
+                    const maxOrden = planPagos.filter(x => x.programa === p).reduce((max, x) => Math.max(max, x.orden), 0);
+                    setNuevoConcepto({ programa: p, nombre_concepto: '', orden: (maxOrden + 1).toString(), monto: '' }); 
+                    setModalConcepto(true); 
+                  }}><Plus size={16} /> Nuevo Concepto</Button>
                 </div>
               </div>
             </CardHeader>
@@ -700,7 +705,10 @@ export default function ControlVigenciasPage() {
           <div className="space-y-4">
             <div>
               <Label>Programa</Label>
-              <Select value={nuevoConcepto.programa} onValueChange={v => setNuevoConcepto(n => ({ ...n, programa: v }))}>
+              <Select value={nuevoConcepto.programa} onValueChange={v => {
+                const maxOrden = planPagos.filter(x => x.programa === v).reduce((max, x) => Math.max(max, x.orden), 0);
+                setNuevoConcepto(n => ({ ...n, programa: v, orden: (maxOrden + 1).toString() }))
+              }}>
                 <SelectTrigger><SelectValue placeholder="Selecciona un programa" /></SelectTrigger>
                 <SelectContent>{programas.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
               </Select>
@@ -713,7 +721,7 @@ export default function ControlVigenciasPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setModalConcepto(false)}>Cancelar</Button>
-            <Button onClick={handleCrearConcepto} disabled={guardando || !nuevoConcepto.nombre_concepto.trim() || !nuevoConcepto.programa}>
+            <Button onClick={handleCrearConcepto} disabled={guardando || !nuevoConcepto.nombre_concepto.trim() || !nuevoConcepto.programa || !nuevoConcepto.orden}>
               {guardando ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />} Crear Concepto
             </Button>
           </DialogFooter>

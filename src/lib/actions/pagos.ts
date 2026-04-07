@@ -32,9 +32,27 @@ export async function createConceptoPago(data: {
   orden: number;
   monto?: number | null;
 }) {
+  const programa = data.programa.toUpperCase().trim();
+  const nombreConcepto = data.nombre_concepto.toUpperCase().trim();
+  
+  // Reajuste silencioso: Desplazar los conceptos existentes que colisionen o sean mayores al orden requerido
+  const { data: existing } = await supabaseAdmin
+    .from('plan_pagos')
+    .select('id, orden')
+    .eq('programa', programa)
+    .gte('orden', data.orden);
+
+  if (existing && existing.length > 0) {
+    // Ordenar de mayor a menor para actualizarlos sin chocar entre sí
+    existing.sort((a, b) => b.orden - a.orden);
+    for (const p of existing) {
+       await supabaseAdmin.from('plan_pagos').update({ orden: p.orden + 1 }).eq('id', p.id);
+    }
+  }
+
   const { error } = await supabaseAdmin.from('plan_pagos').insert({
-    programa: data.programa.toUpperCase().trim(),
-    nombre_concepto: data.nombre_concepto.toUpperCase().trim(),
+    programa: programa,
+    nombre_concepto: nombreConcepto,
     orden: data.orden,
     monto: data.monto || null,
   });
