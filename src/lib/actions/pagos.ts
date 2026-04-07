@@ -261,6 +261,19 @@ export async function registrarPago(data: {
         cuerpo: `Tu pago correspondiente a "${concepto.nombre_concepto}" ha sido registrado correctamente. ¡Gracias!`,
       });
     }
+  } else if (data.estatus === 'pendiente') {
+    // Si se revierte el pago, borrar notificaciones anteriores para ese concepto
+    const { data: concepto } = await supabaseAdmin
+      .from('plan_pagos')
+      .select('nombre_concepto')
+      .eq('id', data.planPagoId)
+      .single();
+    if (concepto) {
+      await supabaseAdmin.from('notificaciones').delete()
+        .eq('alumno_id', data.alumnoId)
+        .eq('tipo', 'pago_recibido')
+        .like('cuerpo', `%${concepto.nombre_concepto}%`);
+    }
   }
 
   revalidatePath('/dashboard/admin/vigencias');
@@ -559,6 +572,13 @@ export async function registrarAbono(data: {
       titulo: '✅ Pago Completado',
       cuerpo: `¡Tu concepto "${planInfo.nombre_concepto}" ha sido cubierto en su totalidad! ¡Gracias!`,
     });
+  } else if (nuevoEstatus === 'abono' && planInfo) {
+    await supabaseAdmin.from('notificaciones').insert({
+      alumno_id: data.alumnoId,
+      tipo: 'pago_recibido',
+      titulo: '✅ Abono Registrado',
+      cuerpo: `Tu abono parcial correspondiente a "${planInfo.nombre_concepto}" ha sido registrado correctamente. Saldo pendiente: $${(montoPlanTotal - sumaAbonos).toLocaleString('es-MX')}.`,
+    });
   }
 
   revalidatePath('/dashboard/admin/vigencias');
@@ -586,7 +606,7 @@ export async function deleteAbono(id: string, pagoAlumnoId: string, alumnoId: st
     .from('abonos_pago').select('monto').eq('pago_alumno_id', pagoAlumnoId);
 
   const { data: concepto } = await supabaseAdmin
-    .from('plan_pagos').select('monto').eq('id', planPagoId).single();
+    .from('plan_pagos').select('monto, nombre_concepto').eq('id', planPagoId).single();
 
   const sumaAbonos = (abonos || []).reduce((acc: number, a: any) => acc + Number(a.monto), 0);
   const montoPlan = concepto?.monto ? Number(concepto.monto) : null;
@@ -599,6 +619,15 @@ export async function deleteAbono(id: string, pagoAlumnoId: string, alumnoId: st
     monto_pagado: sumaAbonos > 0 ? sumaAbonos : null,
     updated_at: new Date().toISOString(),
   }).eq('id', pagoAlumnoId);
+
+  // Si se elimina un abono, borramos notificaciones antiguas de este concepto
+  // para evitar confusiones de estados inválidos
+  if (concepto) {
+    await supabaseAdmin.from('notificaciones').delete()
+      .eq('alumno_id', alumnoId)
+      .eq('tipo', 'pago_recibido')
+      .like('cuerpo', `%${concepto.nombre_concepto}%`);
+  }
 
   revalidatePath('/dashboard/admin/vigencias');
   revalidatePath('/dashboard/alumno/pagos');
