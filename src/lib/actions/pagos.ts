@@ -104,50 +104,49 @@ export async function getPagosAlumnoPropio(alumnoId: string) {
 }
 
 export async function getTodosLosAlumnosConPagos() {
-  // Traer todos los alumnos activos con un resumen de pagos
   const { data: alumnos, error } = await supabaseAdmin
     .from('profiles')
-    .select(`
-      id, nombre, apellidos, matricula, email, carrera_id,
-      carreras(nombre, niveles(nombre))
-    `)
+    .select(`id, nombre, apellidos, matricula, email, carrera_id, carreras(nombre, niveles(nombre))`)
     .eq('rol', 'alumno')
     .eq('estatus', 'activo')
     .order('nombre');
 
   if (error) return { success: false, error: error.message, data: [] };
 
-  // Para cada alumno, traer conteo de pagos
   const alumnosConResumen = await Promise.all(
     (alumnos || []).map(async (alumno: any) => {
-      const { count: total } = await supabaseAdmin
+      const { data: pagos } = await supabaseAdmin
         .from('pagos_alumno')
-        .select('*', { count: 'exact', head: true })
+        .select('estatus, monto_pagado, plan_pagos(monto)')
         .eq('alumno_id', alumno.id);
 
-      const { count: pagados } = await supabaseAdmin
-        .from('pagos_alumno')
-        .select('*', { count: 'exact', head: true })
-        .eq('alumno_id', alumno.id)
-        .eq('estatus', 'pagado');
+      const total = pagos?.length || 0;
+      const pagados = pagos?.filter((p: any) => p.estatus === 'pagado').length || 0;
+      const abonos = pagos?.filter((p: any) => p.estatus === 'abono').length || 0;
+      const pendientes = pagos?.filter((p: any) => p.estatus === 'pendiente').length || 0;
 
-      const { count: pendientes } = await supabaseAdmin
-        .from('pagos_alumno')
-        .select('*', { count: 'exact', head: true })
-        .eq('alumno_id', alumno.id)
-        .eq('estatus', 'pendiente');
+      // Progreso ponderado: pagados=1.0, abono=fraccion, pendiente=0
+      let ponderado = pagados;
+      pagos?.filter((p: any) => p.estatus === 'abono').forEach((p: any) => {
+        const mPlan = p.plan_pagos?.monto;
+        const mPagado = p.monto_pagado || 0;
+        ponderado += mPlan && mPlan > 0 ? Math.min(mPagado / mPlan, 0.99) : 0.5;
+      });
 
       return {
         ...alumno,
-        total_conceptos: total || 0,
-        conceptos_pagados: pagados || 0,
-        conceptos_pendientes: pendientes || 0,
+        total_conceptos: total,
+        conceptos_pagados: pagados,
+        conceptos_abono: abonos,
+        conceptos_pendientes: pendientes,
+        progreso_ponderado: ponderado,
       };
     })
   );
 
   return { success: true, data: alumnosConResumen };
 }
+
 
 export async function registrarPago(data: {
   alumnoId: string;
@@ -339,6 +338,126 @@ export async function marcarTodasLeidas(alumnoId: string) {
     .eq('alumno_id', alumnoId)
     .eq('leida', false);
   if (error) return { success: false, error: error.message };
+  revalidatePath('/dashboard/alumno/pagos');
+  return { success: true };
+}
+
+// ─── PROGRAMAS DINÁMICOS ─────────────────────────────────────────────────────
+
+export async function getPrograms() {
+  const { data, error } = await supabaseAdmin
+    .from('plan_pagos')
+    .select('programa')
+    .eq('activo', true)
+    .order('programa');
+  if (error) return { success: false, data: [] as string[] };
+  const unique = [...new Set((data || []).map((d: any) => d.programa as string))];
+  return { success: true, data: unique };
+}
+
+// ─── ABONOS PARCIALES ────────────────────────────────────────────────────────
+
+export async function registrarAbono(data: {
+  pagoAlumnoId: string;
+  alumnoId: string;
+  planPagoId: string;
+  monto: number;
+  fecha?: string;
+  recibo?: string;
+  notas?: string;
+}) {
+  // 1. Insertar el abono
+  const { error: errAbono } = await supabaseAdmin.from('abonos_pago').insert({
+    pago_alumno_id: data.pagoAlumnoId,
+    monto: data.monto,
+    fecha: data.fecha || new Date().toISOString().split('T')[0],
+    recibo: data.recibo || null,
+    notas: data.notas || null,
+  });
+  if (errAbono) return { success: false, error: errAbono.message };
+
+  // 2. Obtener suma total de abonos y el monto del plan
+  const { data: abonos } = await supabaseAdmin
+    .from('abonos_pago')
+    .select('monto')
+    .eq('pago_alumno_id', data.pagoAlumnoId);
+
+  const { data: concepto } = await supabaseAdmin
+    .from('plan_pagos')
+    .select('monto, nombre_concepto')
+    .eq('id', data.planPagoId)
+    .single();
+
+  const sumaAbonos = (abonos || []).reduce((acc: number, a: any) => acc + Number(a.monto), 0);
+  const montoPlan = concepto?.monto ? Number(concepto.monto) : null;
+
+  // 3. Calcular nuevo estatus
+  let nuevoEstatus: 'pendiente' | 'abono' | 'pagado' = 'abono';
+  if (montoPlan && sumaAbonos >= montoPlan) {
+    nuevoEstatus = 'pagado';
+  }
+
+  // 4. Actualizar pagos_alumno con la suma y el nuevo estatus
+  await supabaseAdmin
+    .from('pagos_alumno')
+    .update({
+      estatus: nuevoEstatus,
+      monto_pagado: sumaAbonos,
+      fecha_pago: nuevoEstatus === 'pagado' ? new Date().toISOString().split('T')[0] : null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', data.pagoAlumnoId);
+
+  // 5. Notificación si se completó el pago
+  if (nuevoEstatus === 'pagado' && concepto) {
+    await supabaseAdmin.from('notificaciones').insert({
+      alumno_id: data.alumnoId,
+      tipo: 'pago_recibido',
+      titulo: '✅ Pago Completado',
+      cuerpo: `¡Tu concepto "${concepto.nombre_concepto}" ha sido cubierto en su totalidad! ¡Gracias!`,
+    });
+  }
+
+  revalidatePath('/dashboard/admin/vigencias');
+  revalidatePath('/dashboard/alumno/pagos');
+  return { success: true, nuevoEstatus, sumaAbonos };
+}
+
+export async function getAbonosConcepto(pagoAlumnoId: string) {
+  const { data, error } = await supabaseAdmin
+    .from('abonos_pago')
+    .select('*')
+    .eq('pago_alumno_id', pagoAlumnoId)
+    .order('fecha', { ascending: true });
+  if (error) return { success: false, data: [] };
+  return { success: true, data: data || [] };
+}
+
+export async function deleteAbono(id: string, pagoAlumnoId: string, alumnoId: string, planPagoId: string) {
+  // Eliminar el abono
+  const { error } = await supabaseAdmin.from('abonos_pago').delete().eq('id', id);
+  if (error) return { success: false, error: error.message };
+
+  // Recalcular suma y estatus
+  const { data: abonos } = await supabaseAdmin
+    .from('abonos_pago').select('monto').eq('pago_alumno_id', pagoAlumnoId);
+
+  const { data: concepto } = await supabaseAdmin
+    .from('plan_pagos').select('monto').eq('id', planPagoId).single();
+
+  const sumaAbonos = (abonos || []).reduce((acc: number, a: any) => acc + Number(a.monto), 0);
+  const montoPlan = concepto?.monto ? Number(concepto.monto) : null;
+
+  let nuevoEstatus: 'pendiente' | 'abono' | 'pagado' =
+    sumaAbonos === 0 ? 'pendiente' : montoPlan && sumaAbonos >= montoPlan ? 'pagado' : 'abono';
+
+  await supabaseAdmin.from('pagos_alumno').update({
+    estatus: nuevoEstatus,
+    monto_pagado: sumaAbonos > 0 ? sumaAbonos : null,
+    updated_at: new Date().toISOString(),
+  }).eq('id', pagoAlumnoId);
+
+  revalidatePath('/dashboard/admin/vigencias');
   revalidatePath('/dashboard/alumno/pagos');
   return { success: true };
 }
