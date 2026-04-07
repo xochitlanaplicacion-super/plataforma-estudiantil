@@ -189,6 +189,7 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
   const [editando, setEditando] = useState<any | null>(null);
   const [abonoTarget, setAbonoTarget] = useState<any | null>(null);
   const [form, setForm] = useState({ fecha_pago: '', monto_pagado: '', recibo: '', notas: '' });
+  const [programaSeleccionado, setProgramaSeleccionado] = useState<string>('');
 
   const fetchPagos = useCallback(async () => {
     if (!alumno) return;
@@ -198,7 +199,12 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
     setLoading(false);
   }, [alumno]);
 
-  useEffect(() => { if (open) fetchPagos(); }, [open, fetchPagos]);
+  useEffect(() => { 
+    if (open) {
+      setProgramaSeleccionado('');
+      fetchPagos(); 
+    }
+  }, [open, fetchPagos]);
 
   const handleTogglePago = async (pago: any) => {
     if (pago.estatus === 'pagado') {
@@ -239,6 +245,12 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
   const programaDetectado = detectarPrograma();
   const programas = [...new Set(pagos.map((p: any) => p.plan_pagos?.programa as string))];
 
+  useEffect(() => {
+    if (open && !loading && pagos.length === 0 && !programaSeleccionado && programaDetectado) {
+      setProgramaSeleccionado(programaDetectado);
+    }
+  }, [open, loading, pagos.length, programaSeleccionado, programaDetectado]);
+
   return (
     <>
       <Dialog open={open} onOpenChange={onClose}>
@@ -254,30 +266,33 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
 
           {loading ? <div className="flex justify-center py-8"><Loader2 className="animate-spin" /></div>
           : pagos.length === 0 ? (
-            <div className="text-center py-8 space-y-4">
-              <p className="text-sm text-muted-foreground">Este alumno no tiene conceptos asignados.</p>
-              {programaDetectado && (
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                  <p className="text-sm font-bold text-blue-700 mb-3">Programa detectado automáticamente:</p>
-                  <p className="text-base font-black text-blue-900 mb-3">{programaDetectado}</p>
-                  <Button className="w-full bg-blue-600 hover:bg-blue-700 text-white" onClick={async () => {
-                    setLoading(true);
-                    await inicializarPagosAlumno(alumno.id, programaDetectado);
-                    fetchPagos(); onUpdate();
-                  }}>
-                    <Plus size={16} /> Inicializar conceptos automáticamente
-                  </Button>
-                </div>
-              )}
-              <div className="flex gap-2 flex-wrap justify-center">
-                {programasDisponibles.filter((p: string) => p !== programaDetectado).map((prog: string) => (
-                  <Button key={prog} size="sm" variant="outline" onClick={async () => {
-                    setLoading(true);
-                    await inicializarPagosAlumno(alumno.id, prog);
-                    fetchPagos(); onUpdate();
-                  }}>{prog}</Button>
-                ))}
+            <div className="text-center py-10 space-y-6 max-w-md mx-auto">
+              <div>
+                <h3 className="text-xl font-bold mb-2 text-primary flex items-center justify-center gap-2">⚠️ Atención requerida</h3>
+                <p className="text-sm text-muted-foreground leading-relaxed">Antes de iniciar la gestión de pagos, confirma el plan a que pertenece este alumno para cargar sus conceptos.</p>
               </div>
+              <div className="text-left space-y-2 bg-muted/30 p-5 rounded-xl border border-muted">
+                <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Oferta Educativa a asignar</Label>
+                <Select value={programaSeleccionado} onValueChange={setProgramaSeleccionado}>
+                  <SelectTrigger className="w-full bg-white h-11"><SelectValue placeholder="Selecciona el programa..." /></SelectTrigger>
+                  <SelectContent>
+                    {programasDisponibles.map((p: string) => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+                {programaDetectado && programaSeleccionado === programaDetectado && (
+                  <p className="text-[10px] text-blue-600 font-bold mt-1 pl-1">✓ Autodetectado basado en la carrera del alumno.</p>
+                )}
+              </div>
+              <Button 
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white h-11 font-bold" 
+                disabled={!programaSeleccionado || loading}
+                onClick={async () => {
+                  setLoading(true);
+                  await inicializarPagosAlumno(alumno.id, programaSeleccionado);
+                  fetchPagos(); onUpdate();
+                }}>
+                <Plus size={18} className="mr-2" /> Inicializar Sistema de Pagos
+              </Button>
             </div>
           ) : (
             <div className="space-y-6">
