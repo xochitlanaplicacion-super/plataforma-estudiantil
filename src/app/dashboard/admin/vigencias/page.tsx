@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { CreditCard, Users, CheckCircle2, Clock, Send, Plus, Trash2, Loader2, ChevronDown, ChevronUp, BarChart3, Pencil, DollarSign, Minus } from 'lucide-react';
+import { CreditCard, Users, CheckCircle2, Clock, Send, Plus, Trash2, Loader2, ChevronDown, ChevronUp, BarChart3, Pencil, DollarSign, Minus, Printer } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   getTodosLosAlumnosConPagos, getPagosAlumno, registrarPago,
@@ -113,6 +113,19 @@ function ModalAbono({ pago, alumno, alumnoId, open, onClose, onSuccess }: any) {
     setLoading(false);
   };
 
+  const handleReimprimirAbono = (abono: any) => {
+    generarReciboPDF({
+      estudiante: `${alumno.nombre} ${alumno.apellidos}`.trim(),
+      nivel: alumno?.carreras?.niveles?.nombre || '',
+      carrera: alumno?.carreras?.nombre || '',
+      ofertaEducativa: pago?.plan_pagos?.programa || 'OFERTA NO ESPECIFICADA',
+      concepto: `ABONO: ${pago?.plan_pagos?.nombre_concepto}`,
+      monto: Number(abono.monto),
+      folio: abono.recibo,
+      fecha: abono.fecha,
+    });
+  };
+
   const handleDeleteAbono = async (abonoId: string) => {
     if (!confirm('¿Eliminar este abono?')) return;
     const res = await deleteAbono(abonoId, pago.id, alumnoId, pago.plan_pago_id);
@@ -157,7 +170,10 @@ function ModalAbono({ pago, alumno, alumnoId, open, onClose, onSuccess }: any) {
                     <span className="text-[10px] text-muted-foreground ml-2">{new Date(a.fecha + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
                     {a.recibo && <span className="text-[10px] text-muted-foreground ml-1">· #{a.recibo}</span>}
                   </div>
-                  <Button size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground hover:text-destructive shrink-0" onClick={() => handleDeleteAbono(a.id)}><Trash2 size={10} /></Button>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground hover:text-blue-600" onClick={() => handleReimprimirAbono(a)}><Printer size={10} /></Button>
+                    <Button size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteAbono(a.id)}><Trash2 size={10} /></Button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -259,6 +275,19 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
     }
     else toast({ variant: 'destructive', title: 'Error', description: res.error });
     setSaving(null);
+  };
+
+  const handleReimprimirRecibo = (pago: any) => {
+    generarReciboPDF({
+      estudiante: `${alumno.nombre} ${alumno.apellidos}`.trim(),
+      nivel: alumno?.carreras?.niveles?.nombre || '',
+      carrera: alumno?.carreras?.nombre || '',
+      ofertaEducativa: pago?.plan_pagos?.programa || 'OFERTA NO ESPECIFICADA',
+      concepto: pago?.plan_pagos?.nombre_concepto || 'PAGO',
+      monto: Number(pago.monto_pagado),
+      folio: pago.recibo,
+      fecha: pago.fecha_pago,
+    });
   };
 
   const detectarPrograma = () => {
@@ -407,6 +436,12 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
                                 {pago.estatus !== 'pagado' && (
                                   <Button size="sm" variant="outline" className="h-7 text-[10px] px-2 border-blue-300 text-blue-600 hover:bg-blue-50" onClick={() => setAbonoTarget(pago)}>
                                     + Abono
+                                  </Button>
+                                )}
+                                {pago.estatus === 'pagado' && (
+                                  <Button size="sm" variant="outline" className="h-7 text-[10px] px-2 border-primary/20 text-primary hover:bg-primary/5" onClick={() => handleReimprimirRecibo(pago)}>
+                                    <Printer size={10} className="mr-1" />
+                                    Reimprimir
                                   </Button>
                                 )}
                                 <Button size="sm" variant="outline" className={cn('h-7 text-[10px] px-2', pago.estatus === 'pagado' ? 'border-red-200 text-red-500 hover:bg-red-50' : 'hover:bg-muted')} onClick={() => handleTogglePago(pago)}>
