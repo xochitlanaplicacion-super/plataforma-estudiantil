@@ -182,7 +182,6 @@ export async function getEntregasDeEjercicio(ejercicioId: string) {
       estado
     `)
     .eq('ejercicio_id', ejercicioId)
-    .not('archivo_url', 'is', null)
     .order('primer_envio_en', { ascending: true });
 
   if (error) return { error: error.message };
