@@ -3,7 +3,9 @@ import { numeroALetras } from '../utils/numeroALetras';
 
 interface ReciboData {
   estudiante: string;
-  ofertaEducativa: string;
+  nivel: string;           // Ej: "UNIVERSIDAD", "BACHILLERATO", "CAPACITACIONES"
+  carrera: string;         // Ej: "INGENIERÍA EN SISTEMAS", "PSICOLOGÍA", "PREPA ADULTOS"
+  ofertaEducativa: string; // Fallback combinado (se usa si nivel/carrera vacíos)
   concepto: string;
   monto: number;
   folio: string;
@@ -15,7 +17,6 @@ const meses = [
   'Jul.', 'Ago.', 'Sep.', 'Oct.', 'Nov.', 'Dic.'
 ];
 
-// Helper para cargar imagen de forma asíncrona y poder inyectarla en jsPDF
 const loadImage = (url: string): Promise<HTMLImageElement> => {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -26,13 +27,32 @@ const loadImage = (url: string): Promise<HTMLImageElement> => {
   });
 };
 
+// Función utilitaria: ajusta la fuente hasta que TODAS las palabras quepan
+// en el ancho máximo sin cortarse, y retorna las líneas ya divididas.
+function fitText(doc: jsPDF, text: string, maxWidth: number, startSize: number, minSize: number): { lines: string[]; fontSize: number } {
+  let fs = startSize;
+  doc.setFontSize(fs);
+  
+  const words = text.split(' ');
+  // Reducir fuente hasta que la palabra más larga quepa
+  while (fs > minSize) {
+    doc.setFontSize(fs);
+    const longestWord = words.reduce((a, b) => doc.getTextWidth(a) > doc.getTextWidth(b) ? a : b, '');
+    if (doc.getTextWidth(longestWord) <= maxWidth) break;
+    fs -= 0.3;
+  }
+  
+  doc.setFontSize(fs);
+  const lines = doc.splitTextToSize(text, maxWidth);
+  return { lines, fontSize: fs };
+}
+
 export async function generarReciboPDF(data: ReciboData) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
   
-  // Constantes de diseño
-  const width = doc.internal.pageSize.getWidth(); // 215.9 mm
-  const colorGuinda = [139, 35, 50] as const; // #8B2332
-  const colorOro = [212, 175, 55] as const;   // #D4AF37
+  const width = doc.internal.pageSize.getWidth(); // ~215.9 mm
+  const colorGuinda = [139, 35, 50] as const;
+  const colorOro = [212, 175, 55] as const;
   const colorFondoLetras = [240, 240, 240] as const;
   
   const dateObj = new Date(data.fecha + 'T00:00:00'); 
@@ -40,138 +60,152 @@ export async function generarReciboPDF(data: ReciboData) {
   const mes = meses[dateObj.getMonth()];
   const anio = dateObj.getFullYear().toString();
 
-  // Intentamos pre-cargar el logo institucional
+  // Cargar logo
   let imgLogo: HTMLImageElement | null = null;
   try {
     imgLogo = await loadImage('/images/logo_zapata.png');
   } catch (err) {
-    console.warn("No se pudo cargar el logotipo de Zapata:", err);
+    console.warn('No se pudo cargar el logotipo:', err);
   }
 
-  // --- DIBUJADO DE CADA RECIBO (1/4 DE PÁGINA) ---
+  // Textos del nivel y carrera
+  const textoNivel = (data.nivel || '').toUpperCase().trim();
+  const textoCarrera = (data.carrera || data.ofertaEducativa || '').toUpperCase().trim();
+
+  // ── Columna izquierda: logo + textos ──
+  // El logo va de x=12 a x=34 (22mm de ancho), centrado en x=23
+  // El texto debe caber en esos 22mm para NO salirse del marco dorado (x=10)
+  const logoX = 12;
+  const logoW = 22;
+  const logoCenter = logoX + logoW / 2; // 23
+  const textMaxW = logoW; // 22mm - texto no puede ser más ancho que el logo
+
   const drawRecibo = (yOffset: number) => {
-    const h = 65; // Alto total de la caja del recibo
-    // 1. Caja externa con estilo creativo
-    doc.setDrawColor(colorOro[0], colorOro[1], colorOro[2]); // Borde dorado
+    const h = 65;
+
+    // 1. Caja dorada exterior
+    doc.setDrawColor(colorOro[0], colorOro[1], colorOro[2]);
     doc.setLineWidth(0.7);
     doc.roundedRect(10, yOffset + 5, width - 20, h, 2, 2);
     
-    // Franja Superior Guinda (Detalle corporativo)
+    // Franja guinda superior
     doc.setFillColor(colorGuinda[0], colorGuinda[1], colorGuinda[2]);
     doc.setDrawColor(colorGuinda[0], colorGuinda[1], colorGuinda[2]);
     doc.roundedRect(10, yOffset + 5, width - 20, 3, 2, 2, 'F');
-    // Para que la franja inferior de este detalle sea recta y no redonda:
     doc.rect(10, yOffset + 7, width - 20, 1, 'F');
 
-    // 2. Logotipo Institucional y Oferta
+    // 2. Logotipo
     if (imgLogo) {
-      // Ajustamos el tamaño asumiendo q es proporcional. Lo ponemos aprox 20x22 mm
-      doc.addImage(imgLogo, 'PNG', 12, yOffset + 10, 22, 22);
+      doc.addImage(imgLogo, 'PNG', logoX, yOffset + 10, logoW, 20);
     } else {
       doc.setDrawColor(200);
       doc.setLineWidth(0.2);
-      doc.rect(12, yOffset + 10, 22, 22);
+      doc.rect(logoX, yOffset + 10, logoW, 20);
     }
     
-    // Nombre del programa o carrera (algoritmo dinámico para no cortar palabras)
-    let fontSize = 7;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(fontSize);
-    
-    // Obtenemos la palabra más larga del string y reducimos la fuente hasta que quepa sin romperse
-    const textoCarrera = data.ofertaEducativa.toUpperCase();
-    const maxWord = textoCarrera.split(' ').reduce((a,b) => doc.getTextWidth(a) > doc.getTextWidth(b) ? a : b, "");
-    
-    while (doc.getTextWidth(maxWord) > 34 && fontSize > 3.5) {
-      fontSize -= 0.5;
-      doc.setFontSize(fontSize);
+    // 3. Nivel educativo (debajo del logo, centrado, en guinda)
+    let cursorY = yOffset + 33;
+    if (textoNivel) {
+      doc.setFont('helvetica', 'bold');
+      const nivelFit = fitText(doc, textoNivel, textMaxW, 6, 4);
+      doc.setFontSize(nivelFit.fontSize);
+      doc.setTextColor(colorGuinda[0], colorGuinda[1], colorGuinda[2]);
+      doc.text(nivelFit.lines, logoCenter, cursorY, { align: 'center' });
+      cursorY += nivelFit.lines.length * (nivelFit.fontSize * 0.45);
+    }
+
+    // 4. Carrera (debajo del nivel, más pequeña, en gris oscuro)
+    if (textoCarrera && textoCarrera !== textoNivel) {
+      doc.setFont('helvetica', 'normal');
+      const carreraFit = fitText(doc, textoCarrera, textMaxW, 5.5, 3.5);
+      doc.setFontSize(carreraFit.fontSize);
+      doc.setTextColor(80);
+      doc.text(carreraFit.lines, logoCenter, cursorY + 1, { align: 'center' });
     }
     
-    const ofertaText = doc.splitTextToSize(textoCarrera, 35);
+    // 5. Título RECIBO OFICIAL
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
     doc.setTextColor(colorGuinda[0], colorGuinda[1], colorGuinda[2]);
-    // El texto se dibuja un poco más abajo calculando las líneas
-    doc.text(ofertaText, 23, yOffset + 35, { align: "center" });
-    
-    // 3. Título RECIBO
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(colorGuinda[0], colorGuinda[1], colorGuinda[2]);
-    doc.text("RECIBO OFICIAL", width / 2 + 10, yOffset + 16, { align: "center", charSpace: 1 });
+    doc.text('RECIBO OFICIAL', width / 2 + 10, yOffset + 15, { align: 'center', charSpace: 0.8 });
 
-    // 4. Folio destacado (Alineado a la derecha dinámico)
-    doc.setFontSize(12);
-    doc.setTextColor(220, 38, 38); // Rojo
-    doc.setFont("helvetica", "bold");
-    doc.text(data.folio, width - 15, yOffset + 16, { align: "right" });
-    
-    // El ancho estricto del texto del folio
-    const folioWidth = doc.getTextWidth(data.folio);
-    doc.setFontSize(10);
-    doc.setTextColor(50);
-    doc.text(`Nº FOLIO:`, width - 15 - folioWidth - 3, yOffset + 16, { align: "right" });
-    
-    // 5. Lugar y Fecha
-    doc.setTextColor(50);
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.text("En Yautepec, Morelos.", width/2 + 10, yOffset + 22, { align: "center" });
-    doc.text(`A  ${dia}  de  ${mes}  del ${anio}.`, width/2 + 10, yOffset + 27, { align: "center" });
-
-    // Líneas separadoras generales
-    doc.setLineWidth(0.1);
-    doc.setDrawColor(220);
-    
-    // 6. Datos del Estudiante
-    doc.setFontSize(9);
-    doc.setTextColor(0);
-    doc.text("Estudiante:", 45, yOffset + 38);
-    doc.setFont("helvetica", "bold");
-    doc.text(data.estudiante, 68, yOffset + 38);
-    doc.line(65, yOffset + 39, width - 15, yOffset + 39);
-
-    // 7. Concepto y Monto (Misma línea para ahorrar espacio)
-    doc.setFont("helvetica", "normal");
-    doc.text("Concepto:", 45, yOffset + 46);
-    doc.setFont("helvetica", "bold");
-    
-    // Cortamos formato de texto por si es muy largo
-    const txtConcepto = data.concepto.length > 35 ? data.concepto.substring(0, 32) + '...' : data.concepto;
-    doc.text(txtConcepto, 65, yOffset + 46);
-    doc.line(62, yOffset + 47, width - 60, yOffset + 47);
-
-    doc.setFont("helvetica", "normal");
-    const montoFormateado = Number(data.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 });
-    doc.text("Total: $", width - 52, yOffset + 46);
-    doc.setFont("helvetica", "bold");
-    doc.text(montoFormateado, width - 38, yOffset + 46);
-    doc.line(width - 40, yOffset + 47, width - 15, yOffset + 47);
-
-    // 8. Cantidad con Letra
-    doc.setFillColor(colorFondoLetras[0], colorFondoLetras[1], colorFondoLetras[2]);
-    doc.roundedRect(45, yOffset + 51, width - 90, 8, 1.5, 1.5, 'F');
-    doc.setFontSize(7);
-    doc.setTextColor(120);
-    doc.setFont("helvetica", "normal");
-    doc.text("Cantidad con Letra", 47, yOffset + 54);
-    
+    // 6. Folio (alineado a la derecha, sin empalmes)
     doc.setFontSize(8);
-    doc.setTextColor(0);
-    doc.setFont("helvetica", "bold");
-    doc.text(numeroALetras(data.monto), 47, yOffset + 58);
+    doc.setTextColor(80);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Nº FOLIO:', width - 15, yOffset + 12, { align: 'right' });
+    
+    doc.setFontSize(11);
+    doc.setTextColor(220, 38, 38);
+    doc.setFont('helvetica', 'bold');
+    doc.text(data.folio, width - 15, yOffset + 17, { align: 'right' });
+    
+    // 7. Lugar y Fecha
+    doc.setTextColor(60);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Yautepec, Morelos.', width / 2 + 10, yOffset + 22, { align: 'center' });
+    doc.text(`${dia} de ${mes} del ${anio}`, width / 2 + 10, yOffset + 26, { align: 'center' });
 
-    // 9. Recuadro "Autoriza" simplificado y sin el cuadro tan tosco
-    doc.setFontSize(7);
-    doc.setTextColor(50);
-    doc.setFont("helvetica", "normal");
-    doc.text("Sello / Firma de Autorización", width - 30, yOffset + 68, { align: "center" });
-    doc.setDrawColor(0);
+    // Separador sutil
+    doc.setDrawColor(210);
+    doc.setLineWidth(0.15);
+    doc.line(40, yOffset + 30, width - 15, yOffset + 30);
+    
+    // 8. Estudiante
+    doc.setFontSize(9);
+    doc.setTextColor(0);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Estudiante:', 42, yOffset + 36);
+    doc.setFont('helvetica', 'bold');
+    doc.text(data.estudiante, 64, yOffset + 36);
+    doc.setDrawColor(180);
+    doc.line(62, yOffset + 37, width - 15, yOffset + 37);
+
+    // 9. Concepto + Monto
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text('Concepto:', 42, yOffset + 44);
+    doc.setFont('helvetica', 'bold');
+    const maxConceptoW = width - 42 - 65 - 5; // espacio disponible
+    const txtConcepto = data.concepto.length > 30 ? data.concepto.substring(0, 28) + '...' : data.concepto;
+    doc.text(txtConcepto, 62, yOffset + 44);
+    doc.setDrawColor(180);
+    doc.line(60, yOffset + 45, width - 60, yOffset + 45);
+
+    const montoFormateado = Number(data.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 });
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text('Total: $', width - 50, yOffset + 44);
+    doc.setFont('helvetica', 'bold');
+    doc.text(montoFormateado, width - 36, yOffset + 44);
+    doc.line(width - 38, yOffset + 45, width - 15, yOffset + 45);
+
+    // 10. Cantidad con Letra
+    doc.setFillColor(colorFondoLetras[0], colorFondoLetras[1], colorFondoLetras[2]);
+    doc.roundedRect(42, yOffset + 49, width - 85, 8, 1.5, 1.5, 'F');
+    doc.setFontSize(6);
+    doc.setTextColor(140);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Cantidad con Letra:', 44, yOffset + 52);
+    
+    doc.setFontSize(7.5);
+    doc.setTextColor(0);
+    doc.setFont('helvetica', 'bold');
+    doc.text(numeroALetras(data.monto), 44, yOffset + 56);
+
+    // 11. Sello / Firma
+    doc.setFontSize(6.5);
+    doc.setTextColor(80);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Sello / Firma de Autorización', width - 30, yOffset + 68, { align: 'center' });
+    doc.setDrawColor(100);
     doc.setLineWidth(0.2);
     doc.line(width - 45, yOffset + 65, width - 15, yOffset + 65);
   };
 
-  // Dibujar recibo 1 (Mitad de arriba, cuarto 1)
+  // Dos recibos en la mitad superior (cada uno ~1/4 de página)
   drawRecibo(5);
-  // Dibujar recibo 2 (Mitad de arriba, cuarto 2) -> Espaciado de ~75mm
   drawRecibo(80);
 
   doc.save(`Recibo_${data.folio}_${data.estudiante.replace(/\s+/g, '_')}.pdf`);

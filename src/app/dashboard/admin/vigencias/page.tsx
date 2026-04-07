@@ -100,7 +100,9 @@ function ModalAbono({ pago, alumno, alumnoId, open, onClose, onSuccess }: any) {
       if (res.folio && alumno) {
         generarReciboPDF({
           estudiante: `${alumno.nombre} ${alumno.apellidos}`.trim(),
-          ofertaEducativa: alumno?.carreras?.nombre || pago?.plan_pagos?.programa || 'OFERTA NO ESPECIFICADA',
+          nivel: alumno?.carreras?.niveles?.nombre || '',
+          carrera: alumno?.carreras?.nombre || '',
+          ofertaEducativa: pago?.plan_pagos?.programa || 'OFERTA NO ESPECIFICADA',
           concepto: `ABONO: ${pago?.plan_pagos?.nombre_concepto}`,
           monto: montoNum,
           folio: res.folio,
@@ -245,7 +247,9 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
       if (res.folio && alumno) {
         generarReciboPDF({
           estudiante: `${alumno.nombre} ${alumno.apellidos}`.trim(),
-          ofertaEducativa: alumno?.carreras?.nombre || editando?.plan_pagos?.programa || 'OFERTA NO ESPECIFICADA',
+          nivel: alumno?.carreras?.niveles?.nombre || '',
+          carrera: alumno?.carreras?.nombre || '',
+          ofertaEducativa: editando?.plan_pagos?.programa || 'OFERTA NO ESPECIFICADA',
           concepto: editando?.plan_pagos?.nombre_concepto || 'PAGO',
           monto: montoPagar,
           folio: res.folio,
