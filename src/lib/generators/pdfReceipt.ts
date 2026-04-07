@@ -11,122 +11,152 @@ interface ReciboData {
 }
 
 const meses = [
-  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  'Ene.', 'Feb.', 'Mar.', 'Abr.', 'May.', 'Jun.',
+  'Jul.', 'Ago.', 'Sep.', 'Oct.', 'Nov.', 'Dic.'
 ];
 
-export async function generarReciboPDF(data: ReciboData) {
-  // Inicializamos jsPDF en orientación Portait, unidades en milímetros, tamaño Letter
-  const doc = new jsPDF({
-    orientation: 'portrait',
-    unit: 'mm',
-    format: 'letter'
+// Helper para cargar imagen de forma asíncrona y poder inyectarla en jsPDF
+const loadImage = (url: string): Promise<HTMLImageElement> => {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'Anonymous';
+    img.src = url;
+    img.onload = () => resolve(img);
+    img.onerror = (e) => reject(e);
   });
+};
 
-  const width = doc.internal.pageSize.getWidth();
-  const height = doc.internal.pageSize.getHeight();
-  const halfHeight = height / 2;
-
-  // Procesamos fecha
-  const dateObj = new Date(data.fecha + 'T00:00:00'); // Evitar desfase de zona horaria
+export async function generarReciboPDF(data: ReciboData) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
+  
+  // Constantes de diseño
+  const width = doc.internal.pageSize.getWidth(); // 215.9 mm
+  const colorGuinda = [139, 35, 50] as const; // #8B2332
+  const colorOro = [212, 175, 55] as const;   // #D4AF37
+  const colorFondoLetras = [240, 240, 240] as const;
+  
+  const dateObj = new Date(data.fecha + 'T00:00:00'); 
   const dia = dateObj.getDate().toString().padStart(2, '0');
   const mes = meses[dateObj.getMonth()];
   const anio = dateObj.getFullYear().toString();
 
-  // Función interna para dibujar un recibo individual en una posición Y base (yOffset)
+  // Intentamos pre-cargar el logo institucional
+  let imgLogo: HTMLImageElement | null = null;
+  try {
+    imgLogo = await loadImage('/images/logo_zapata.png');
+  } catch (err) {
+    console.warn("No se pudo cargar el logotipo de Zapata:", err);
+  }
+
+  // --- DIBUJADO DE CADA RECIBO (1/4 DE PÁGINA) ---
   const drawRecibo = (yOffset: number) => {
-    // 1. Diseño Base: Recuadro externo del recibo con bordes redondeados
-    doc.setDrawColor(0);
-    doc.setLineWidth(0.5);
-    doc.roundedRect(10, yOffset + 10, width - 20, 115, 3, 3); // Caja exterior
-
-    // 2. Escudo Genérico y Oferta Educativa (Izquierda)
-    doc.setDrawColor(50);
-    doc.setLineWidth(0.3);
-    doc.roundedRect(15, yOffset + 15, 30, 30, 2, 2); // Escudo mock
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "bold");
-    doc.text("ESCUDO/LOGO", 30, yOffset + 30, { align: "center" });
+    const h = 65; // Alto total de la caja del recibo
+    // 1. Caja externa con estilo creativo
+    doc.setDrawColor(colorOro[0], colorOro[1], colorOro[2]); // Borde dorado
+    doc.setLineWidth(0.7);
+    doc.roundedRect(10, yOffset + 5, width - 20, h, 2, 2);
     
-    // Oferta Educativa destacada bajo el escudo
+    // Franja Superior Guinda (Detalle corporativo)
+    doc.setFillColor(colorGuinda[0], colorGuinda[1], colorGuinda[2]);
+    doc.setDrawColor(colorGuinda[0], colorGuinda[1], colorGuinda[2]);
+    doc.roundedRect(10, yOffset + 5, width - 20, 3, 2, 2, 'F');
+    // Para que la franja inferior de este detalle sea recta y no redonda:
+    doc.rect(10, yOffset + 7, width - 20, 1, 'F');
+
+    // 2. Logotipo Institucional y Oferta
+    if (imgLogo) {
+      // Ajustamos el tamaño asumiendo q es proporcional. Lo ponemos aprox 20x22 mm
+      doc.addImage(imgLogo, 'PNG', 12, yOffset + 10, 22, 22);
+    } else {
+      doc.setDrawColor(200);
+      doc.setLineWidth(0.2);
+      doc.rect(12, yOffset + 10, 22, 22);
+    }
+    
+    // Nombre del programa (abajo del logo, pequeño para caber)
     const ofertaText = doc.splitTextToSize(data.ofertaEducativa.toUpperCase(), 35);
-    doc.setFontSize(9);
-    doc.setTextColor(20, 100, 150);
-    doc.text(ofertaText, 30, yOffset + 50, { align: "center" });
-    doc.setTextColor(0);
-
-    // Escudo derecho para replicar estilo (Opcional según diseño)
-    doc.roundedRect(width - 45, yOffset + 15, 30, 30, 2, 2);
-    doc.setFontSize(8);
+    doc.setFontSize(6.5);
+    doc.setTextColor(colorGuinda[0], colorGuinda[1], colorGuinda[2]);
     doc.setFont("helvetica", "bold");
-    doc.text("LOGOTIPO 2", width - 30, yOffset + 30, { align: "center" });
-
-    // 3. Título Centrado "RECIBO"
+    doc.text(ofertaText, 23, yOffset + 35, { align: "center" });
+    
+    // 3. Título RECIBO
     doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
-    doc.text("RECIBO", width / 2, yOffset + 25, { align: "center" });
+    doc.setTextColor(colorGuinda[0], colorGuinda[1], colorGuinda[2]);
+    doc.text("RECIBO OFICIAL", width / 2 + 10, yOffset + 16, { align: "center", charSpace: 1 });
 
-    // 4. Lugar y fecha
-    doc.setFontSize(11);
-    doc.setFont("helvetica", "normal");
-    doc.text("Lugar y fecha de expedición:", width / 2, yOffset + 35, { align: "center" });
-    doc.text(`En Yautepec, Morelos, a  ${dia}  de  ${mes}  del ${anio}.`, width / 2, yOffset + 43, { align: "center" });
-    doc.line((width/2)-20, yOffset+44, (width/2)-10, yOffset+44); // Línea dia
-    doc.line((width/2)-2, yOffset+44, (width/2)+20, yOffset+44); // Línea mes
-
-    // 5. Datos Estudiante
-    doc.text("Estudiante: ", 15, yOffset + 65);
-    doc.setFont("helvetica", "bold");
-    doc.text(data.estudiante, 38, yOffset + 64);
-    doc.setFont("helvetica", "normal");
-    doc.line(36, yOffset + 65, width - 45, yOffset + 65);
-
-    // 6. Cantidad con número
-    const montoFormateado = Number(data.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 });
-    doc.text("cantidad $ ", width / 2 - 40, yOffset + 75);
-    doc.setFont("helvetica", "bold");
-    doc.text(montoFormateado, width / 2 - 20, yOffset + 74);
-    doc.setFont("helvetica", "normal");
-    doc.text(" pesos.", width / 2 + 10, yOffset + 75);
-    doc.line((width/2)-22, yOffset+75, (width/2)+8, yOffset+75);
-
-    // 7. Cantidad con Letra (Fondo Gris)
-    doc.setFillColor(230, 230, 230);
-    doc.roundedRect(15, yOffset + 82, width - 60, 10, 2, 2, 'F');
-    doc.setFontSize(8);
-    doc.setTextColor(100);
-    doc.text("Cantidad con letra", 17, yOffset + 85);
-    doc.setTextColor(0);
+    // 4. Folio destacado (Esquina superior derecha invertida o central)
     doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
-    doc.text(numeroALetras(data.monto), 17, yOffset + 90);
-    doc.setFont("helvetica", "normal");
-
-    // 8. Concepto
-    doc.setFontSize(11);
-    doc.text("concepto: ", 15, yOffset + 105);
-    doc.setFont("helvetica", "bold");
-    doc.text(data.concepto, 35, yOffset + 104);
-    doc.setFont("helvetica", "normal");
-    doc.line(33, yOffset + 105, width - 45, yOffset + 105);
-
-    // 9. Folio (Inferior Izquierda)
+    doc.setTextColor(50);
+    doc.text(`Nº FOLIO:`, width - 42, yOffset + 16);
+    doc.setTextColor(220, 38, 38); // Rojo
     doc.setFontSize(12);
-    doc.setFont("helvetica", "bold");
-    doc.text(`Nº ${data.folio}`, 15, yOffset + 120);
-
-    // 10. Recuadro "Autoriza" (Inferior Derecha)
-    doc.setLineWidth(0.3);
-    doc.roundedRect(width - 40, yOffset + 85, 25, 30, 2, 2);
+    doc.text(data.folio, width - 22, yOffset + 16, { align: "center" });
+    
+    // 5. Lugar y Fecha
+    doc.setTextColor(50);
     doc.setFontSize(9);
-    doc.text("Autoriza", width - 27.5, yOffset + 112, { align: "center" });
-    doc.line(width - 38, yOffset + 108, width - 17, yOffset + 108); // Línea firma
+    doc.setFont("helvetica", "normal");
+    doc.text("En Yautepec, Morelos.", width/2 + 10, yOffset + 22, { align: "center" });
+    doc.text(`A  ${dia}  de  ${mes}  del ${anio}.`, width/2 + 10, yOffset + 27, { align: "center" });
+
+    // Líneas separadoras generales
+    doc.setLineWidth(0.1);
+    doc.setDrawColor(220);
+    
+    // 6. Datos del Estudiante
+    doc.setFontSize(9);
+    doc.setTextColor(0);
+    doc.text("Estudiante:", 45, yOffset + 38);
+    doc.setFont("helvetica", "bold");
+    doc.text(data.estudiante, 68, yOffset + 38);
+    doc.line(65, yOffset + 39, width - 15, yOffset + 39);
+
+    // 7. Concepto y Monto (Misma línea para ahorrar espacio)
+    doc.setFont("helvetica", "normal");
+    doc.text("Concepto:", 45, yOffset + 46);
+    doc.setFont("helvetica", "bold");
+    
+    // Cortamos formato de texto por si es muy largo
+    const txtConcepto = data.concepto.length > 35 ? data.concepto.substring(0, 32) + '...' : data.concepto;
+    doc.text(txtConcepto, 65, yOffset + 46);
+    doc.line(62, yOffset + 47, width - 60, yOffset + 47);
+
+    doc.setFont("helvetica", "normal");
+    const montoFormateado = Number(data.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 });
+    doc.text("Total: $", width - 52, yOffset + 46);
+    doc.setFont("helvetica", "bold");
+    doc.text(montoFormateado, width - 38, yOffset + 46);
+    doc.line(width - 40, yOffset + 47, width - 15, yOffset + 47);
+
+    // 8. Cantidad con Letra
+    doc.setFillColor(colorFondoLetras[0], colorFondoLetras[1], colorFondoLetras[2]);
+    doc.roundedRect(45, yOffset + 51, width - 90, 8, 1.5, 1.5, 'F');
+    doc.setFontSize(7);
+    doc.setTextColor(120);
+    doc.setFont("helvetica", "normal");
+    doc.text("Cantidad con Letra", 47, yOffset + 54);
+    
+    doc.setFontSize(8);
+    doc.setTextColor(0);
+    doc.setFont("helvetica", "bold");
+    doc.text(numeroALetras(data.monto), 47, yOffset + 58);
+
+    // 9. Recuadro "Autoriza" simplificado y sin el cuadro tan tosco
+    doc.setFontSize(7);
+    doc.setTextColor(50);
+    doc.setFont("helvetica", "normal");
+    doc.text("Sello / Firma de Autorización", width - 30, yOffset + 68, { align: "center" });
+    doc.setDrawColor(0);
+    doc.setLineWidth(0.2);
+    doc.line(width - 45, yOffset + 65, width - 15, yOffset + 65);
   };
 
-  // Dibujar los dos recibos (Copia 1 en la mitad superior, Copia 2 en la inferior)
-  drawRecibo(0);
-  drawRecibo(halfHeight);
+  // Dibujar recibo 1 (Mitad de arriba, cuarto 1)
+  drawRecibo(5);
+  // Dibujar recibo 2 (Mitad de arriba, cuarto 2) -> Espaciado de ~75mm
+  drawRecibo(80);
 
-  // Invocar la descarga automática
   doc.save(`Recibo_${data.folio}_${data.estudiante.replace(/\s+/g, '_')}.pdf`);
 }
