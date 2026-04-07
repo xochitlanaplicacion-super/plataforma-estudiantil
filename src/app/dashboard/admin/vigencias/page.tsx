@@ -502,12 +502,27 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
           <DialogHeader><DialogTitle>Registrar Pago Completo</DialogTitle><DialogDescription>{editando?.plan_pagos?.nombre_concepto}</DialogDescription></DialogHeader>
           <div className="space-y-4">
             <div><Label>Fecha de Pago</Label><Input type="date" value={form.fecha_pago} onChange={e => setForm(f => ({ ...f, fecha_pago: e.target.value }))} /></div>
-            <div><Label>Monto Pagado ($)</Label><Input type="number" value={form.monto_pagado} onChange={e => setForm(f => ({ ...f, monto_pagado: e.target.value }))} /></div>
+            <div>
+              <Label>Monto Pagado ($)</Label>
+              <Input type="number" value={form.monto_pagado} onChange={e => setForm(f => ({ ...f, monto_pagado: e.target.value }))} />
+              {editando && (
+                <p className="text-xs mt-1 font-bold text-muted-foreground">
+                  Al registrar un pago completo, la cantidad debe ser exacta. Para pagos parciales, usa la opción "+ Abono".
+                </p>
+              )}
+            </div>
             <div><Label>Notas</Label><Textarea placeholder="Opcional" value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditando(null)}>Cancelar</Button>
-            <Button onClick={handleGuardarPago} disabled={!!saving} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+            <Button 
+              onClick={handleGuardarPago} 
+              disabled={
+                !!saving || 
+                (editando && form.monto_pagado !== '' && parseFloat(form.monto_pagado) !== Math.max(0, Number(editando.plan_pagos?.monto || 0) - Number(editando.monto_pagado || 0)))
+              } 
+              className="bg-emerald-600 hover:bg-emerald-700 text-white disabled:opacity-50"
+            >
               {saving ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle2 size={16} />} Confirmar Pago
             </Button>
           </DialogFooter>
