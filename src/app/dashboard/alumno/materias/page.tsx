@@ -71,6 +71,7 @@ export default async function MisMateriasPage() {
                 unidades={data.unidades || []}
                 promedio={promedioMateria}
                 progreso={progresoMateria}
+                proximaEvaluacion={data.fechasEvaluacion?.[materia.id] || undefined}
               />
             );
           })}

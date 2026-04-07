@@ -180,9 +180,10 @@ interface SubjectCardProps {
   unidades?: Unidad[];
   promedio: string;
   progreso: number;
+  proximaEvaluacion?: string;
 }
 
-export function SubjectCard({ materia, exercises, unidades = [], promedio, progreso }: SubjectCardProps) {
+export function SubjectCard({ materia, exercises, unidades = [], promedio, progreso, proximaEvaluacion }: SubjectCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [presentationMode, setPresentationMode] = useState(false);
@@ -617,7 +618,7 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
                 </div>
                 <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                    <TrendingUp className="w-4 h-4 opacity-70" />
-                   <span>Próxima Evaluación: <strong className="text-foreground">Diciembre 2026</strong></span>
+                   <span>Próxima Evaluación: <strong className="text-foreground">{proximaEvaluacion ? new Date(proximaEvaluacion + 'T12:00:00').toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Sin fecha asignada'}</strong></span>
                 </div>
               </div>
             </div>

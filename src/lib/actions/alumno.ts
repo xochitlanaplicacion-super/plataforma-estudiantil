@@ -180,12 +180,39 @@ export async function getAlumnoDashboardData(userId: string) {
 
     const pendientes = todosLosEjercicios.filter(ej => !ej.completado);
 
+    // Obtener fechas de evaluación del grupo del alumno
+    let fechasEvaluacion: Record<string, string> = {};
+    try {
+      const { data: fechasData } = await supabaseAdmin
+        .from('fechas_evaluacion')
+        .select('materia_id, fecha_evaluacion')
+        .eq('grupo_id', profile.grupo_id);
+
+      if (fechasData) {
+        // Buscar fecha global (materia_id = null)
+        const fechaGlobal = fechasData.find(f => f.materia_id === null);
+
+        // Mapear: para cada materia, usar su fecha específica o la global
+        materiaIds.forEach(mId => {
+          const especifica = fechasData.find(f => f.materia_id === mId);
+          if (especifica) {
+            fechasEvaluacion[mId] = especifica.fecha_evaluacion;
+          } else if (fechaGlobal) {
+            fechasEvaluacion[mId] = fechaGlobal.fecha_evaluacion;
+          }
+        });
+      }
+    } catch {
+      // Si la tabla no existe aún, no bloquear nada
+    }
+
     return {
       profile,
       materiasAsignadas,
       pendientes,
       todosLosEjercicios,
-      unidades: todasLasUnidades
+      unidades: todasLasUnidades,
+      fechasEvaluacion
     };
 
   } catch (error: any) {
