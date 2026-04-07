@@ -191,6 +191,7 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
   const [abonoTarget, setAbonoTarget] = useState<any | null>(null);
   const [form, setForm] = useState({ fecha_pago: '', monto_pagado: '', recibo: '', notas: '' });
   const [programaSeleccionado, setProgramaSeleccionado] = useState<string>('');
+  const [programaConfirmado, setProgramaConfirmado] = useState(false);
 
   const fetchPagos = useCallback(async () => {
     if (!alumno) return;
@@ -203,6 +204,7 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
   useEffect(() => { 
     if (open) {
       setProgramaSeleccionado('');
+      setProgramaConfirmado(false);
       fetchPagos(); 
     }
   }, [open, fetchPagos]);
@@ -246,10 +248,10 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
   const programaDetectado = detectarPrograma();
   const programas = [...new Set(pagos.map((p: any) => p.plan_pagos?.programa as string))];
 
-  // Mostrar selector si no hay pagos aún, O si todos están pendientes sin movimiento financiero
+  // Mostrar selector si es session nueva (!programaConfirmado) Y no tiene pagos o todos están limpios
   const todosEnPendiente = pagos.length > 0 && pagos.every((p: any) => p.estatus === 'pendiente' && !p.monto_pagado && !p.fecha_pago);
   const programaActual = todosEnPendiente && programas.length > 0 ? programas[0] : null;
-  const mostrarSelectorPrograma = pagos.length === 0 || todosEnPendiente;
+  const mostrarSelectorPrograma = !programaConfirmado && (pagos.length === 0 || todosEnPendiente);
 
   useEffect(() => {
     if (open && !loading && mostrarSelectorPrograma && !programaSeleccionado) {
@@ -305,15 +307,25 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
                 disabled={!programaSeleccionado || loading}
                 onClick={async () => {
                   setLoading(true);
-                  if (todosEnPendiente) {
-                    await reasignarProgramaAlumno(alumno.id, programaSeleccionado);
-                  } else {
+                  let changed = false;
+                  if (pagos.length === 0) {
                     await inicializarPagosAlumno(alumno.id, programaSeleccionado);
+                    changed = true;
+                  } else if (todosEnPendiente && programaSeleccionado !== programaActual) {
+                    await reasignarProgramaAlumno(alumno.id, programaSeleccionado);
+                    changed = true;
                   }
-                  fetchPagos(); onUpdate();
+                  
+                  setProgramaConfirmado(true);
+                  if (changed) {
+                    await fetchPagos();
+                    onUpdate();
+                  } else {
+                    setLoading(false);
+                  }
                 }}>
                 <Plus size={18} className="mr-2" />
-                {todosEnPendiente ? 'Confirmar y Reasignar Programa' : 'Inicializar Sistema de Pagos'}
+                {todosEnPendiente && programaSeleccionado === programaActual ? 'Confirmar Oferta y Proceder' : todosEnPendiente ? 'Reasignar y Proceder' : 'Inicializar Sistema de Pagos'}
               </Button>
             </div>
           ) : (
