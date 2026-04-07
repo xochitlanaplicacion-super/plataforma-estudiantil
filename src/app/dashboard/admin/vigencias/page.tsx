@@ -22,6 +22,7 @@ import {
   getPrograms, registrarAbono, getAbonosConcepto, deleteAbono, deletePrograma,
   reasignarProgramaAlumno
 } from '@/lib/actions/pagos';
+import { generarReciboPDF } from '@/lib/generators/pdfReceipt';
 
 // ─── Barra de Progreso ───────────────────────────────────────────────────────
 function ProgressBar({ valor, total, mostrarTexto = true }: { valor: number; total: number; mostrarTexto?: boolean }) {
@@ -56,9 +57,9 @@ function ConceptProgressBar({ pagado, total }: { pagado: number; total: number }
 }
 
 // ─── Modal Abono ─────────────────────────────────────────────────────────────
-function ModalAbono({ pago, alumnoId, open, onClose, onSuccess }: any) {
+function ModalAbono({ pago, alumno, alumnoId, open, onClose, onSuccess }: any) {
   const { toast } = useToast();
-  const [form, setForm] = useState({ monto: '', fecha: new Date().toISOString().split('T')[0], recibo: '', notas: '' });
+  const [form, setForm] = useState({ monto: '', fecha: new Date().toISOString().split('T')[0], notas: '' });
   const [loading, setLoading] = useState(false);
   const [abonos, setAbonos] = useState<any[]>([]);
   const [loadingAbonos, setLoadingAbonos] = useState(false);
@@ -75,27 +76,38 @@ function ModalAbono({ pago, alumnoId, open, onClose, onSuccess }: any) {
     setLoadingAbonos(false);
   }, [pago]);
 
-  useEffect(() => { if (open) { fetchAbonos(); setForm({ monto: saldo?.toString() || '', fecha: new Date().toISOString().split('T')[0], recibo: '', notas: '' }); } }, [open, fetchAbonos]);
+  useEffect(() => { if (open) { fetchAbonos(); setForm({ monto: saldo?.toString() || '', fecha: new Date().toISOString().split('T')[0], notas: '' }); } }, [open, fetchAbonos]);
 
   const handleSubmit = async () => {
     const montoNum = parseFloat(form.monto);
     if (!montoNum || montoNum <= 0) { toast({ variant: 'destructive', title: 'Monto inválido' }); return; }
     setLoading(true);
-    const res = await registrarAbono({
+    const res: any = await registrarAbono({
       pagoAlumnoId: pago.id,
       alumnoId,
       planPagoId: pago.plan_pago_id,
       monto: montoNum,
       fecha: form.fecha,
-      recibo: form.recibo || undefined,
       notas: form.notas || undefined,
     });
     if (res.success) {
-      toast({ title: '✅ Abono registrado', description: (res as any).nuevoEstatus === 'pagado' ? '¡Concepto cubierto en su totalidad!' : `Suma actual: $${(res as any).sumaAbonos?.toLocaleString('es-MX')}` });
+      toast({ title: '✅ Abono registrado', description: res.nuevoEstatus === 'pagado' ? '¡Concepto cubierto en su totalidad!' : `Suma actual: $${res.sumaAbonos?.toLocaleString('es-MX')}` });
       fetchAbonos();
       onSuccess();
       setForm(f => ({ ...f, monto: '' }));
-    } else { toast({ variant: 'destructive', title: 'Error', description: (res as any).error }); }
+      
+      // Auto-generar Recibo PDF
+      if (res.folio && alumno) {
+        generarReciboPDF({
+          estudiante: `${alumno.nombre} ${alumno.apellidos}`.trim(),
+          ofertaEducativa: pago?.plan_pagos?.programa || 'OFERTA NO ESPECIFICADA',
+          concepto: `ABONO: ${pago?.plan_pagos?.nombre_concepto}`,
+          monto: montoNum,
+          folio: res.folio,
+          fecha: form.fecha,
+        });
+      }
+    } else { toast({ variant: 'destructive', title: 'Error', description: res.error }); }
     setLoading(false);
   };
 
@@ -163,10 +175,6 @@ function ModalAbono({ pago, alumnoId, open, onClose, onSuccess }: any) {
               <Input type="date" value={form.fecha} onChange={e => setForm(f => ({ ...f, fecha: e.target.value }))} />
             </div>
           </div>
-          <div>
-            <Label className="text-xs">No. Recibo / Folio <span className="text-muted-foreground">(opcional)</span></Label>
-            <Input placeholder="Opcional" value={form.recibo} onChange={e => setForm(f => ({ ...f, recibo: e.target.value }))} />
-          </div>
         </div>
 
         <DialogFooter>
@@ -224,13 +232,28 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
   const handleGuardarPago = async () => {
     if (!editando) return;
     setSaving(editando.id);
-    const res = await registrarPago({
+    const montoPagar = form.monto_pagado ? parseFloat(form.monto_pagado) : (editando.plan_pagos?.monto ? editando.plan_pagos.monto : 0);
+    const res: any = await registrarPago({
       alumnoId: alumno.id, planPagoId: editando.plan_pago_id, estatus: 'pagado',
-      fechaPago: form.fecha_pago, montoPagado: form.monto_pagado ? parseFloat(form.monto_pagado) : undefined,
-      recibo: form.recibo, notas: form.notas,
+      fechaPago: form.fecha_pago, montoPagado: montoPagar,
+      notas: form.notas,
     });
-    if (res.success) { toast({ title: 'Pago completo registrado ✅' }); setEditando(null); fetchPagos(); onUpdate(); }
-    else toast({ variant: 'destructive', title: 'Error', description: (res as any).error });
+    if (res.success) { 
+      toast({ title: 'Pago completo registrado ✅' }); 
+      setEditando(null); fetchPagos(); onUpdate(); 
+      // Auto-generar Recibo PDF
+      if (res.folio && alumno) {
+        generarReciboPDF({
+          estudiante: `${alumno.nombre} ${alumno.apellidos}`.trim(),
+          ofertaEducativa: editando?.plan_pagos?.programa || 'OFERTA NO ESPECIFICADA',
+          concepto: editando?.plan_pagos?.nombre_concepto || 'PAGO',
+          monto: montoPagar,
+          folio: res.folio,
+          fecha: form.fecha_pago,
+        });
+      }
+    }
+    else toast({ variant: 'destructive', title: 'Error', description: res.error });
     setSaving(null);
   };
 
@@ -407,7 +430,6 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
           <div className="space-y-4">
             <div><Label>Fecha de Pago</Label><Input type="date" value={form.fecha_pago} onChange={e => setForm(f => ({ ...f, fecha_pago: e.target.value }))} /></div>
             <div><Label>Monto Pagado ($)</Label><Input type="number" value={form.monto_pagado} onChange={e => setForm(f => ({ ...f, monto_pagado: e.target.value }))} /></div>
-            <div><Label>No. Recibo / Folio</Label><Input placeholder="Opcional" value={form.recibo} onChange={e => setForm(f => ({ ...f, recibo: e.target.value }))} /></div>
             <div><Label>Notas</Label><Textarea placeholder="Opcional" value={form.notas} onChange={e => setForm(f => ({ ...f, notas: e.target.value }))} /></div>
           </div>
           <DialogFooter>
@@ -421,7 +443,7 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
 
       {/* Modal Abono */}
       {abonoTarget && (
-        <ModalAbono pago={abonoTarget} alumnoId={alumno?.id} open={!!abonoTarget} onClose={() => setAbonoTarget(null)} onSuccess={() => { fetchPagos(); onUpdate(); }} />
+        <ModalAbono pago={abonoTarget} alumno={alumno} alumnoId={alumno?.id} open={!!abonoTarget} onClose={() => setAbonoTarget(null)} onSuccess={() => { fetchPagos(); onUpdate(); }} />
       )}
     </>
   );

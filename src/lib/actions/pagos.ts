@@ -172,9 +172,49 @@ export async function registrarPago(data: {
   estatus: 'pagado' | 'pendiente' | 'vencido';
   fechaPago?: string;
   montoPagado?: number;
-  recibo?: string;
   notas?: string;
 }) {
+  // 1. Si se está registrando como pagado, generar el folio automático (Prefijo Año + Inicial Nivel)
+  let folioGenerado = null;
+  if (data.estatus === 'pagado') {
+    const year = new Date().getFullYear().toString().slice(2); // '26'
+    let letraNivel = 'V'; // Variados
+    const { data: al } = await supabaseAdmin.from('profiles')
+      .select('carreras(niveles(nombre))').eq('id', data.alumnoId).single();
+    const alData: any = al;
+    let nombreNivel = (alData?.carreras?.niveles?.nombre || '').toUpperCase();
+    if (!nombreNivel && Array.isArray(alData?.carreras)) {
+      nombreNivel = (alData.carreras[0]?.niveles?.nombre || '').toUpperCase();
+    }
+    
+    if (nombreNivel.includes('UNIVERSIDAD')) letraNivel = 'U';
+    else if (nombreNivel.includes('BACHILLERATO') || nombreNivel.includes('PREPA')) letraNivel = 'B';
+    else if (nombreNivel.includes('CAPACITAC')) letraNivel = 'C';
+
+    const prefijo = `${year}${letraNivel}`;
+
+    // Intentar primero el SQL nativo, si no existe la RPC, usar el fallback seguro que evalúa el max de su prefijo.
+    const { data: rpcFolio, error: rpcErr } = await supabaseAdmin.rpc('generar_folio_recibo', { prefijo });
+    
+    if (!rpcErr && rpcFolio) {
+      folioGenerado = rpcFolio;
+    } else {
+      // Fallback
+      const { data: maxFolioData } = await supabaseAdmin.from('pagos_alumno').select('recibo')
+        .like('recibo', `${prefijo}-%`).order('recibo', { ascending: false }).limit(1);
+      
+      let nextNum = 1;
+      if (maxFolioData && maxFolioData.length > 0 && maxFolioData[0].recibo) {
+        const parteNumerica = maxFolioData[0].recibo.split('-')[1];
+        if (parteNumerica && !isNaN(parseInt(parteNumerica, 10))) {
+          nextNum = parseInt(parteNumerica, 10) + 1;
+        }
+      }
+      const numStr = nextNum.toString();
+      folioGenerado = `${prefijo}-${numStr.length < 5 ? numStr.padStart(5, '0') : numStr}`;
+    }
+  }
+
   const { error } = await supabaseAdmin
     .from('pagos_alumno')
     .upsert({
@@ -183,7 +223,7 @@ export async function registrarPago(data: {
       estatus: data.estatus,
       fecha_pago: data.estatus === 'pagado' ? (data.fechaPago || new Date().toISOString().split('T')[0]) : null,
       monto_pagado: data.montoPagado || null,
-      recibo: data.recibo || null,
+      recibo: folioGenerado,
       notas: data.notas || null,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'alumno_id,plan_pago_id' });
@@ -210,7 +250,7 @@ export async function registrarPago(data: {
 
   revalidatePath('/dashboard/admin/vigencias');
   revalidatePath('/dashboard/alumno/pagos');
-  return { success: true };
+  return { success: true, folio: folioGenerado };
 }
 
 // ─── INICIALIZAR PAGOS DE UN ALUMNO NUEVO ────────────────────────────────────
@@ -414,15 +454,42 @@ export async function registrarAbono(data: {
   planPagoId: string;
   monto: number;
   fecha?: string;
-  recibo?: string;
   notas?: string;
 }) {
+  const year = new Date().getFullYear().toString().slice(2);
+  let letraNivel = 'V';
+  const { data: al } = await supabaseAdmin.from('profiles').select('carreras(niveles(nombre))').eq('id', data.alumnoId).single();
+  const alData: any = al;
+  let nombreNivel = (alData?.carreras?.niveles?.nombre || '').toUpperCase();
+  if (!nombreNivel && Array.isArray(alData?.carreras)) {
+    nombreNivel = (alData.carreras[0]?.niveles?.nombre || '').toUpperCase();
+  }
+  if (nombreNivel.includes('UNIVERSIDAD')) letraNivel = 'U';
+  else if (nombreNivel.includes('BACHILLERATO') || nombreNivel.includes('PREPA')) letraNivel = 'B';
+  else if (nombreNivel.includes('CAPACITAC')) letraNivel = 'C';
+  const prefijo = `${year}${letraNivel}`;
+
+  let folioGenerado = null;
+  const { data: rpcFolio, error: rpcErr } = await supabaseAdmin.rpc('generar_folio_recibo', { prefijo });
+  if (!rpcErr && rpcFolio) {
+    folioGenerado = rpcFolio;
+  } else {
+    const { data: maxFolioData } = await supabaseAdmin.from('abonos_pago').select('recibo').like('recibo', `${prefijo}-%`).order('recibo', { ascending: false }).limit(1);
+    let nextNum = 1;
+    if (maxFolioData && maxFolioData.length > 0 && maxFolioData[0].recibo) {
+      const parteNumerica = maxFolioData[0].recibo.split('-')[1];
+      if (parteNumerica && !isNaN(parseInt(parteNumerica, 10))) nextNum = parseInt(parteNumerica, 10) + 1;
+    }
+    const numStr = nextNum.toString();
+    folioGenerado = `${prefijo}-${numStr.length < 5 ? numStr.padStart(5, '0') : numStr}`;
+  }
+
   // 1. Insertar el abono
   const { error: errAbono } = await supabaseAdmin.from('abonos_pago').insert({
     pago_alumno_id: data.pagoAlumnoId,
     monto: data.monto,
     fecha: data.fecha || new Date().toISOString().split('T')[0],
-    recibo: data.recibo || null,
+    recibo: folioGenerado,
     notas: data.notas || null,
   });
   if (errAbono) return { success: false, error: errAbono.message };
@@ -471,7 +538,7 @@ export async function registrarAbono(data: {
 
   revalidatePath('/dashboard/admin/vigencias');
   revalidatePath('/dashboard/alumno/pagos');
-  return { success: true, nuevoEstatus, sumaAbonos };
+  return { success: true, nuevoEstatus, sumaAbonos, folio: folioGenerado };
 }
 
 export async function getAbonosConcepto(pagoAlumnoId: string) {
