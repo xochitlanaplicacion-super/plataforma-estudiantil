@@ -174,6 +174,21 @@ export async function registrarPago(data: {
   montoPagado?: number;
   notas?: string;
 }) {
+  // 0. Validar monto si es un pago total
+  if (data.estatus === 'pagado' && data.montoPagado) {
+    const { data: plan } = await supabaseAdmin
+      .from('plan_pagos')
+      .select('monto')
+      .eq('id', data.planPagoId)
+      .single();
+    if (plan?.monto && data.montoPagado > plan.monto) {
+      return { 
+        success: false, 
+        error: `El monto ingresado ($${data.montoPagado.toLocaleString('es-MX')}) no puede ser superior al monto del concepto ($${plan.monto.toLocaleString('es-MX')}).` 
+      };
+    }
+  }
+
   // 1. Si se está registrando como pagado, generar el folio automático (Prefijo Año + Inicial Nivel)
   let folioGenerado = null;
   if (data.estatus === 'pagado') {
@@ -484,6 +499,28 @@ export async function registrarAbono(data: {
     folioGenerado = `${prefijo}-${numStr.length < 5 ? numStr.padStart(5, '0') : numStr}`;
   }
 
+  // 0. Validar que el abono no exceda el saldo pendiente
+  const { data: abonosPrevios } = await supabaseAdmin
+    .from('abonos_pago')
+    .select('monto')
+    .eq('pago_alumno_id', data.pagoAlumnoId);
+  const { data: planInfo } = await supabaseAdmin
+    .from('plan_pagos')
+    .select('monto, nombre_concepto')
+    .eq('id', data.planPagoId)
+    .single();
+
+  const sumaActual = (abonosPrevios || []).reduce((acc: number, a: any) => acc + Number(a.monto), 0);
+  const montoPlanTotal = planInfo?.monto ? Number(planInfo.monto) : 0;
+  const saldoPendiente = montoPlanTotal - sumaActual;
+
+  if (data.monto > saldoPendiente) {
+    return { 
+      success: false, 
+      error: `El monto ingresado ($${data.monto.toLocaleString('es-MX')}) no puede ser superior al saldo pendiente ($${saldoPendiente.toLocaleString('es-MX')}).` 
+    };
+  }
+
   // 1. Insertar el abono
   const { error: errAbono } = await supabaseAdmin.from('abonos_pago').insert({
     pago_alumno_id: data.pagoAlumnoId,
@@ -494,20 +531,8 @@ export async function registrarAbono(data: {
   });
   if (errAbono) return { success: false, error: errAbono.message };
 
-  // 2. Obtener suma total de abonos y el monto del plan
-  const { data: abonos } = await supabaseAdmin
-    .from('abonos_pago')
-    .select('monto')
-    .eq('pago_alumno_id', data.pagoAlumnoId);
-
-  const { data: concepto } = await supabaseAdmin
-    .from('plan_pagos')
-    .select('monto, nombre_concepto')
-    .eq('id', data.planPagoId)
-    .single();
-
-  const sumaAbonos = (abonos || []).reduce((acc: number, a: any) => acc + Number(a.monto), 0);
-  const montoPlan = concepto?.monto ? Number(concepto.monto) : null;
+  const sumaAbonos = sumaActual + Number(data.monto);
+  const montoPlan = montoPlanTotal;
 
   // 3. Calcular nuevo estatus
   let nuevoEstatus: 'pendiente' | 'abono' | 'pagado' = 'abono';
@@ -527,12 +552,12 @@ export async function registrarAbono(data: {
     .eq('id', data.pagoAlumnoId);
 
   // 5. Notificación si se completó el pago
-  if (nuevoEstatus === 'pagado' && concepto) {
+  if (nuevoEstatus === 'pagado' && planInfo) {
     await supabaseAdmin.from('notificaciones').insert({
       alumno_id: data.alumnoId,
       tipo: 'pago_recibido',
       titulo: '✅ Pago Completado',
-      cuerpo: `¡Tu concepto "${concepto.nombre_concepto}" ha sido cubierto en su totalidad! ¡Gracias!`,
+      cuerpo: `¡Tu concepto "${planInfo.nombre_concepto}" ha sido cubierto en su totalidad! ¡Gracias!`,
     });
   }
 
