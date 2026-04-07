@@ -73,11 +73,23 @@ export async function generarReciboPDF(data: ReciboData) {
       doc.rect(12, yOffset + 10, 22, 22);
     }
     
-    // Nombre del programa (abajo del logo, pequeño para caber)
-    const ofertaText = doc.splitTextToSize(data.ofertaEducativa.toUpperCase(), 35);
-    doc.setFontSize(6.5);
-    doc.setTextColor(colorGuinda[0], colorGuinda[1], colorGuinda[2]);
+    // Nombre del programa o carrera (algoritmo dinámico para no cortar palabras)
+    let fontSize = 7;
     doc.setFont("helvetica", "bold");
+    doc.setFontSize(fontSize);
+    
+    // Obtenemos la palabra más larga del string y reducimos la fuente hasta que quepa sin romperse
+    const textoCarrera = data.ofertaEducativa.toUpperCase();
+    const maxWord = textoCarrera.split(' ').reduce((a,b) => doc.getTextWidth(a) > doc.getTextWidth(b) ? a : b, "");
+    
+    while (doc.getTextWidth(maxWord) > 34 && fontSize > 3.5) {
+      fontSize -= 0.5;
+      doc.setFontSize(fontSize);
+    }
+    
+    const ofertaText = doc.splitTextToSize(textoCarrera, 35);
+    doc.setTextColor(colorGuinda[0], colorGuinda[1], colorGuinda[2]);
+    // El texto se dibuja un poco más abajo calculando las líneas
     doc.text(ofertaText, 23, yOffset + 35, { align: "center" });
     
     // 3. Título RECIBO
@@ -86,13 +98,17 @@ export async function generarReciboPDF(data: ReciboData) {
     doc.setTextColor(colorGuinda[0], colorGuinda[1], colorGuinda[2]);
     doc.text("RECIBO OFICIAL", width / 2 + 10, yOffset + 16, { align: "center", charSpace: 1 });
 
-    // 4. Folio destacado (Esquina superior derecha invertida o central)
+    // 4. Folio destacado (Alineado a la derecha dinámico)
+    doc.setFontSize(12);
+    doc.setTextColor(220, 38, 38); // Rojo
+    doc.setFont("helvetica", "bold");
+    doc.text(data.folio, width - 15, yOffset + 16, { align: "right" });
+    
+    // El ancho estricto del texto del folio
+    const folioWidth = doc.getTextWidth(data.folio);
     doc.setFontSize(10);
     doc.setTextColor(50);
-    doc.text(`Nº FOLIO:`, width - 42, yOffset + 16);
-    doc.setTextColor(220, 38, 38); // Rojo
-    doc.setFontSize(12);
-    doc.text(data.folio, width - 22, yOffset + 16, { align: "center" });
+    doc.text(`Nº FOLIO:`, width - 15 - folioWidth - 3, yOffset + 16, { align: "right" });
     
     // 5. Lugar y Fecha
     doc.setTextColor(50);
