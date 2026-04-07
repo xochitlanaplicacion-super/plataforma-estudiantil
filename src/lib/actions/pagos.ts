@@ -355,6 +355,20 @@ export async function getPrograms() {
   return { success: true, data: unique };
 }
 
+export async function deletePrograma(programa: string) {
+  // Al estar configurado con ON DELETE CASCADE en supabase (desde la creación de pagos_alumno y abonos_pago),
+  // simplemente borrar los conceptos del plan de este programa purgará todos los registros hijos correspondientes en cascada.
+  const { error } = await supabaseAdmin
+    .from('plan_pagos')
+    .delete()
+    .eq('programa', programa);
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath('/dashboard/admin/vigencias');
+  revalidatePath('/dashboard/alumno/pagos');
+  return { success: true };
+}
+
 // ─── ABONOS PARCIALES ────────────────────────────────────────────────────────
 
 export async function registrarAbono(data: {

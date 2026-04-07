@@ -19,7 +19,7 @@ import {
   getTodosLosAlumnosConPagos, getPagosAlumno, registrarPago,
   enviarRecordatorioPago, getPlanPagos, createConceptoPago,
   deleteConceptoPago, updateConceptoPago, inicializarPagosAlumno,
-  getPrograms, registrarAbono, getAbonosConcepto, deleteAbono
+  getPrograms, registrarAbono, getAbonosConcepto, deleteAbono, deletePrograma
 } from '@/lib/actions/pagos';
 
 // ─── Barra de Progreso ───────────────────────────────────────────────────────
@@ -431,6 +431,8 @@ export default function ControlVigenciasPage() {
   // Gestión Plan
   const [modalConcepto, setModalConcepto] = useState(false);
   const [modalPrograma, setModalPrograma] = useState(false);
+  const [modalBorrarPrograma, setModalBorrarPrograma] = useState<string | null>(null);
+  const [confirmacionBorrar, setConfirmacionBorrar] = useState('');
   const [nuevoPrograma, setNuevoPrograma] = useState('');
   const [nuevoConcepto, setNuevoConcepto] = useState({ programa: '', nombre_concepto: '', orden: '', monto: '' });
   const [guardando, setGuardando] = useState(false);
@@ -474,6 +476,20 @@ export default function ControlVigenciasPage() {
     if (res.success) toast({ title: '📧 Recordatorio enviado', description: `Se notificó a ${alumno.nombre}.` });
     else toast({ variant: 'destructive', title: 'Error', description: (res as any).error });
     setEnviandoRecordatorio(null);
+  };
+
+  const handleBorrarPrograma = async () => {
+    if (confirmacionBorrar !== 'BORRAR' || !modalBorrarPrograma) return;
+    setGuardando(true);
+    const res = await deletePrograma(modalBorrarPrograma);
+    if (res.success) {
+      toast({ title: `Programa eliminado` });
+      setModalBorrarPrograma(null);
+      setConfirmacionBorrar('');
+      fetchData();
+      if (expandedPrograma === modalBorrarPrograma) setExpandedPrograma(null);
+    } else toast({ variant: 'destructive', title: 'Error', description: res.error });
+    setGuardando(false);
   };
 
   const handleCrearPrograma = async () => {
@@ -626,14 +642,21 @@ export default function ControlVigenciasPage() {
             <CardContent className="space-y-4">
               {programasConConceptos.map(prog => (
                 <div key={prog.nombre} className="border rounded-xl overflow-hidden">
-                  <button className="w-full flex items-center justify-between px-5 py-4 bg-muted/40 hover:bg-muted/60 transition-colors" onClick={() => setExpandedPrograma(expandedPrograma === prog.nombre ? null : prog.nombre)}>
-                    <div className="flex items-center gap-3">
+                  <div className="w-full flex items-center justify-between px-5 py-4 bg-muted/40 hover:bg-muted/60 transition-colors">
+                    <button className="flex-1 flex items-center gap-3 text-left" onClick={() => setExpandedPrograma(expandedPrograma === prog.nombre ? null : prog.nombre)}>
                       <DollarSign size={16} className="text-primary" />
                       <span className="font-black text-sm uppercase tracking-wider">{prog.nombre}</span>
                       <Badge variant="outline" className="text-[10px]">{prog.conceptos.length} conceptos</Badge>
+                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => { setModalBorrarPrograma(prog.nombre); setConfirmacionBorrar(''); }}>
+                        <Trash2 size={16} />
+                      </Button>
+                      <button onClick={() => setExpandedPrograma(expandedPrograma === prog.nombre ? null : prog.nombre)}>
+                        {expandedPrograma === prog.nombre ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      </button>
                     </div>
-                    {expandedPrograma === prog.nombre ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                  </button>
+                  </div>
                   {expandedPrograma === prog.nombre && (
                     <div className="divide-y">
                       {prog.conceptos.length === 0 ? (
@@ -692,6 +715,31 @@ export default function ControlVigenciasPage() {
             <Button variant="outline" onClick={() => setModalConcepto(false)}>Cancelar</Button>
             <Button onClick={handleCrearConcepto} disabled={guardando || !nuevoConcepto.nombre_concepto.trim() || !nuevoConcepto.programa}>
               {guardando ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />} Crear Concepto
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Borrar Programa */}
+      <Dialog open={!!modalBorrarPrograma} onOpenChange={() => { setModalBorrarPrograma(null); setConfirmacionBorrar(''); }}>
+        <DialogContent>
+          <DialogHeader><DialogTitle className="text-destructive">⚠️ Borrar Programa Completo</DialogTitle>
+          <DialogDescription>
+            Estás a punto de borrar el programa <strong className="text-black">{modalBorrarPrograma}</strong>.<br/><br/>
+            Esto borrará <strong className="text-destructive">absolutamente TODO</strong>:<br/>
+            - Todos sus conceptos asociados.<br/>
+            - Todos los pagos y abonos realizados por los estudiantes vinculados a estos conceptos.<br/>
+            <br/>
+            Para confirmar, escribe la palabra "BORRAR" en mayúsculas a continuación:
+          </DialogDescription>
+          </DialogHeader>
+          <div>
+            <Input placeholder="Escribe BORRAR aquí..." value={confirmacionBorrar} onChange={e => setConfirmacionBorrar(e.target.value)} onKeyDown={e => e.key === 'Enter' && confirmacionBorrar === 'BORRAR' && handleBorrarPrograma()} />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setModalBorrarPrograma(null); setConfirmacionBorrar(''); }}>Cancelar</Button>
+            <Button variant="destructive" onClick={handleBorrarPrograma} disabled={guardando || confirmacionBorrar !== 'BORRAR'}>
+              {guardando ? <Loader2 className="animate-spin" size={16} /> : <Trash2 size={16} />} Borrar Definitivamente
             </Button>
           </DialogFooter>
         </DialogContent>
