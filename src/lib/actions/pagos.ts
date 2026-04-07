@@ -579,3 +579,18 @@ export async function deleteAbono(id: string, pagoAlumnoId: string, alumnoId: st
   revalidatePath('/dashboard/alumno/pagos');
   return { success: true };
 }
+
+export async function updateNombrePrograma(nombreAnterior: string, nombreNuevo: string) {
+  const nuevo = nombreNuevo.toUpperCase().trim();
+  if (!nuevo) return { success: false, error: 'El nombre del programa no puede estar vacío.' };
+
+  const { error } = await supabaseAdmin
+    .from('plan_pagos')
+    .update({ programa: nuevo })
+    .eq('programa', nombreAnterior);
+
+  if (error) return { success: false, error: error.message };
+  revalidatePath('/dashboard/admin/vigencias');
+  revalidatePath('/dashboard/alumno/pagos');
+  return { success: true };
+}

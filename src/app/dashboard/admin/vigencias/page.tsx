@@ -20,7 +20,7 @@ import {
   enviarRecordatorioPago, getPlanPagos, createConceptoPago,
   deleteConceptoPago, updateConceptoPago, inicializarPagosAlumno,
   getPrograms, registrarAbono, getAbonosConcepto, deleteAbono, deletePrograma,
-  reasignarProgramaAlumno
+  reasignarProgramaAlumno, updateNombrePrograma
 } from '@/lib/actions/pagos';
 import { generarReciboPDF } from '@/lib/generators/pdfReceipt';
 
@@ -542,6 +542,8 @@ export default function ControlVigenciasPage() {
   const [modalConcepto, setModalConcepto] = useState(false);
   const [modalPrograma, setModalPrograma] = useState(false);
   const [modalBorrarPrograma, setModalBorrarPrograma] = useState<string | null>(null);
+  const [modalEditarPrograma, setModalEditarPrograma] = useState<string | null>(null);
+  const [editNombreProg, setEditNombreProg] = useState('');
   const [confirmacionBorrar, setConfirmacionBorrar] = useState('');
   const [nuevoPrograma, setNuevoPrograma] = useState('');
   const [nuevoConcepto, setNuevoConcepto] = useState({ programa: '', nombre_concepto: '', orden: '', monto: '' });
@@ -598,6 +600,22 @@ export default function ControlVigenciasPage() {
       setConfirmacionBorrar('');
       fetchData();
       if (expandedPrograma === modalBorrarPrograma) setExpandedPrograma(null);
+    } else toast({ variant: 'destructive', title: 'Error', description: res.error });
+    setGuardando(false);
+  };
+
+  const handleEditarNombrePrograma = async () => {
+    if (!modalEditarPrograma || !editNombreProg.trim()) return;
+    const nuevo = editNombreProg.toUpperCase().trim();
+    if (nuevo === modalEditarPrograma) { setModalEditarPrograma(null); return; }
+    
+    setGuardando(true);
+    const res = await updateNombrePrograma(modalEditarPrograma, nuevo);
+    if (res.success) {
+      toast({ title: 'Programa renombrado ✅', description: `De "${modalEditarPrograma}" a "${nuevo}"` });
+      setModalEditarPrograma(null);
+      if (expandedPrograma === modalEditarPrograma) setExpandedPrograma(nuevo);
+      fetchData();
     } else toast({ variant: 'destructive', title: 'Error', description: res.error });
     setGuardando(false);
   };
@@ -763,11 +781,14 @@ export default function ControlVigenciasPage() {
                       <span className="font-black text-sm uppercase tracking-wider">{prog.nombre}</span>
                       <Badge variant="outline" className="text-[10px]">{prog.conceptos.length} conceptos</Badge>
                     </button>
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex items-center gap-1 shrink-0">
+                      <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-primary hover:bg-primary/10" onClick={() => { setModalEditarPrograma(prog.nombre); setEditNombreProg(prog.nombre); }}>
+                        <Pencil size={14} />
+                      </Button>
                       <Button size="icon" variant="ghost" className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10" onClick={() => { setModalBorrarPrograma(prog.nombre); setConfirmacionBorrar(''); }}>
                         <Trash2 size={16} />
                       </Button>
-                      <button onClick={() => setExpandedPrograma(expandedPrograma === prog.nombre ? null : prog.nombre)}>
+                      <button className="px-2" onClick={() => setExpandedPrograma(expandedPrograma === prog.nombre ? null : prog.nombre)}>
                         {expandedPrograma === prog.nombre ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                       </button>
                     </div>
@@ -833,6 +854,23 @@ export default function ControlVigenciasPage() {
             <Button variant="outline" onClick={() => setModalConcepto(false)}>Cancelar</Button>
             <Button onClick={handleCrearConcepto} disabled={guardando || !nuevoConcepto.nombre_concepto.trim() || !nuevoConcepto.programa || !nuevoConcepto.orden}>
               {guardando ? <Loader2 className="animate-spin" size={16} /> : <Plus size={16} />} Crear Concepto
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Editar Nombre Programa */}
+      <Dialog open={!!modalEditarPrograma} onOpenChange={() => setModalEditarPrograma(null)}>
+        <DialogContent>
+          <DialogHeader><DialogTitle>Editar Nombre del Programa</DialogTitle><DialogDescription>Se actualizará el nombre en todos los conceptos asociados. Los pagos existentes no se verán afectados.</DialogDescription></DialogHeader>
+          <div className="space-y-2">
+            <Label>Nuevo Nombre del Programa</Label>
+            <Input placeholder="Ej: UNIVERSIDAD - TITULACIÓN" value={editNombreProg} onChange={e => setEditNombreProg(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleEditarNombrePrograma()} />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setModalEditarPrograma(null)}>Cancelar</Button>
+            <Button onClick={handleEditarNombrePrograma} disabled={guardando || !editNombreProg.trim()}>
+              {guardando ? <Loader2 className="animate-spin" size={16} /> : <CheckCircle2 size={16} />} Guardar Cambios
             </Button>
           </DialogFooter>
         </DialogContent>
