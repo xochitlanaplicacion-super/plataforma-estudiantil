@@ -1,5 +1,5 @@
-
 import nodemailer from 'nodemailer';
+import { getHorariosFormateados } from '@/lib/actions/horarios';
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -248,6 +248,7 @@ export async function sendDocumentReminderEmail(data: ReminderEmailData) {
     const user = process.env.GMAIL_USER;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://institutoeducativoemilianozapata.vercel.app';
     const logoUrl = `${appUrl}/images/logo_zapata.png`;
+    const horarioString = await getHorariosFormateados();
 
     const listaFaltantes = data.faltantes.map(doc => `<li style="margin-bottom: 8px; color: #8B2332; font-weight: bold;">• ${doc}</li>`).join('');
 
@@ -269,7 +270,7 @@ export async function sendDocumentReminderEmail(data: ReminderEmailData) {
             ${listaFaltantes}
           </ul>
           <div style="background-color: #fff3cd; padding: 15px; border-radius: 6px; border-left: 4px solid #ffc107; margin: 20px 0;">
-            <p style="margin: 0; color: #856404; font-size: 13px;">Favor de presentarlos en el área de Servicios Escolares de lunes a viernes en un horario de 9:00 AM a 6:00 PM.</p>
+            <p style="margin: 0; color: #856404; font-size: 13px;">Favor de presentarlos en el área de Servicios Escolares ${horarioString}.</p>
           </div>
           <p style="color: #999; font-size: 12px; margin-top: 30px; text-align: center;">Este es un recordatorio automático. Si ya entregó estos documentos, favor de hacer caso omiso.</p>
         </div>

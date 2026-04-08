@@ -16,6 +16,7 @@ import { sendDocReminderAction } from '@/lib/actions/users';
 import { useToast } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
+import { HorariosAtencionModal } from '@/components/admin/HorariosAtencionModal';
 
 export default function AdminDashboard() {
   const { toast } = useToast();
@@ -157,11 +158,14 @@ export default function AdminDashboard() {
           <h2 className="text-3xl font-bold font-headline tracking-tight text-primary">Panel Administrativo</h2>
           <p className="text-muted-foreground">Control global de la plataforma Emiliano Zapata.</p>
         </div>
-        {stats.nuevosMensajes > 0 && (
-          <Badge className="bg-amber-100 text-amber-800 border-amber-200 animate-pulse px-4 py-1.5 rounded-full">
-            {stats.nuevosMensajes} MENSAJES PENDIENTES
-          </Badge>
-        )}
+        <div className="flex gap-4 items-center">
+          <HorariosAtencionModal />
+          {stats.nuevosMensajes > 0 && (
+            <Badge className="bg-amber-100 text-amber-800 border-amber-200 animate-pulse px-4 py-1.5 rounded-full">
+              {stats.nuevosMensajes} MENSAJES PENDIENTES
+            </Badge>
+          )}
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">

@@ -14,6 +14,7 @@ import {
   getPagosAlumnoPropio, getNotificacionesAlumno,
   marcarNotificacionLeida, marcarTodasLeidas, getAbonosConcepto
 } from '@/lib/actions/pagos';
+import { getHorariosFormateados } from '@/lib/actions/horarios';
 
 // ─── Círculo de Progreso ─────────────────────────────────────────────────────
 function CircularProgress({ pct }: { pct: number }) {
@@ -99,12 +100,14 @@ export default function MisPagosPage() {
   const [showNotifs, setShowNotifs] = useState(false);
   const [expandedPrograma, setExpandedPrograma] = useState<string | null>(null);
   const [expandedConcepto, setExpandedConcepto] = useState<string | null>(null);
+  const [horariosStr, setHorariosStr] = useState<string>("de Lunes a Viernes en un horario de 9:00 AM a 6:00 PM");
 
   const fetchData = useCallback(async (uid: string) => {
     setLoading(true);
-    const [resPagos, resNotifs] = await Promise.all([
+    const [resPagos, resNotifs, strHorarios] = await Promise.all([
       getPagosAlumnoPropio(uid),
       getNotificacionesAlumno(uid),
+      getHorariosFormateados() // Nuevo fetch
     ]);
     if (resPagos.success) {
       setPagos(resPagos.data);
@@ -112,6 +115,7 @@ export default function MisPagosPage() {
       if (programas.length > 0) setExpandedPrograma(programas[0]);
     }
     if (resNotifs.success) setNotificaciones(resNotifs.data);
+    if (strHorarios) setHorariosStr(strHorarios);
     setLoading(false);
   }, []);
 
@@ -349,7 +353,7 @@ export default function MisPagosPage() {
           <Card className="bg-blue-50 border-blue-200">
             <CardContent className="pt-5 pb-4">
               <p className="text-sm text-blue-700 font-medium leading-relaxed">
-                <strong>ℹ️ ¿Tienes dudas sobre tus pagos?</strong> Comunícate con Servicios Escolares o visita nuestras instalaciones en horario de lunes a viernes de 9:00 AM a 6:00 PM.
+                <strong>ℹ️ ¿Tienes dudas sobre tus pagos?</strong> Comunícate con Servicios Escolares o visita nuestras instalaciones {horariosStr}.
               </p>
             </CardContent>
           </Card>
