@@ -12,7 +12,12 @@ export interface HorarioBloque {
   hora_fin: string;
 }
 
-export async function updateHorarios(bloques: HorarioBloque[]) {
+export interface ConfiguracionGlobal {
+  horarios_atencion: HorarioBloque[];
+  telefono_contacto: string;
+}
+
+export async function updateConfiguracion(bloques: HorarioBloque[], telefono: string) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "No autenticado" };
@@ -24,7 +29,7 @@ export async function updateHorarios(bloques: HorarioBloque[]) {
 
   const { error } = await supabase
     .from("configuracion_sistema")
-    .upsert({ id: 1, horarios_atencion: bloques, updated_at: new Date().toISOString() });
+    .upsert({ id: 1, horarios_atencion: bloques, telefono_contacto: telefono, updated_at: new Date().toISOString() });
 
   if (error) {
     return { success: false, error: error.message };
@@ -32,14 +37,29 @@ export async function updateHorarios(bloques: HorarioBloque[]) {
 
   revalidatePath("/dashboard/admin");
   revalidatePath("/dashboard/alumno/pagos");
+  revalidatePath("/acerca-de-nosotros"); // forzar refetch
+  revalidatePath("/expired"); // forzar refetch
   return { success: true };
 }
 
-export async function getHorariosBrutos(): Promise<HorarioBloque[]> {
+export async function getConfiguracionBruta(): Promise<ConfiguracionGlobal> {
   const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase.from("configuracion_sistema").select("horarios_atencion").eq("id", 1).single();
-  if (error || !data) return [];
-  return data.horarios_atencion as HorarioBloque[];
+  const { data, error } = await supabase.from("configuracion_sistema").select("horarios_atencion, telefono_contacto").eq("id", 1).single();
+  if (error || !data) return { horarios_atencion: [], telefono_contacto: "735 2826206" };
+  return {
+    horarios_atencion: data.horarios_atencion as HorarioBloque[],
+    telefono_contacto: data.telefono_contacto
+  };
+}
+
+export async function getTelefonoFormateado(): Promise<string> {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+  const supabase = createSupabaseClient(supabaseUrl, supabaseKey);
+
+  const { data, error } = await supabase.from("configuracion_sistema").select("telefono_contacto").eq("id", 1).single();
+  if (data && data.telefono_contacto) return data.telefono_contacto;
+  return "7352826206"; // Fallback de contingencia
 }
 
 function formatTime12h(timeStr: string) {

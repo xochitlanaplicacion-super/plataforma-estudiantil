@@ -4,15 +4,17 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Clock, Plus, Trash2, CalendarDays, Save } from "lucide-react";
-import { getHorariosBrutos, updateHorarios, HorarioBloque } from "@/lib/actions/horarios";
+import { Clock, Plus, Trash2, CalendarDays, Save, Phone } from "lucide-react";
+import { getConfiguracionBruta, updateConfiguracion, HorarioBloque } from "@/lib/actions/horarios";
 import { useToast } from "@/hooks/use-toast";
+import { Input } from "@/components/ui/input";
 
 const DAYS_ORDER = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
 export function HorariosAtencionModal() {
   const [open, setOpen] = useState(false);
   const [bloques, setBloques] = useState<HorarioBloque[]>([]);
+  const [telefono, setTelefono] = useState<string>("735 2826206");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -23,9 +25,9 @@ export function HorariosAtencionModal() {
   }, [open]);
 
   const loadHorarios = async () => {
-    const data = await getHorariosBrutos();
-    if (data && data.length > 0) {
-      setBloques(data);
+    const data = await getConfiguracionBruta();
+    if (data.horarios_atencion && data.horarios_atencion.length > 0) {
+      setBloques(data.horarios_atencion);
     } else {
       // Default initial block
       setBloques([{
@@ -34,6 +36,7 @@ export function HorariosAtencionModal() {
         hora_fin: "18:00"
       }]);
     }
+    setTelefono(data.telefono_contacto);
   };
 
   const handleDaySelect = (bIndex: number, day: string) => {
@@ -74,9 +77,9 @@ export function HorariosAtencionModal() {
         }
       }
 
-      const res = await updateHorarios(bloques);
+      const res = await updateConfiguracion(bloques, telefono);
       if (res.success) {
-        toast({ title: "Horarios Guardados", description: "La plataforma responderá dinámicamente con los nuevos horarios." });
+        toast({ title: "Configuración Guardada", description: "La plataforma responderá dinámicamente con los nuevos horarios y teléfono." });
         setOpen(false);
       } else {
         toast({ variant: "destructive", title: "Error al guardar", description: res.error });
@@ -99,15 +102,30 @@ export function HorariosAtencionModal() {
       <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl flex gap-2 items-center text-primary">
-            <Clock className="w-5 h-5" /> Configurar Multi-Horarios
+            <Clock className="w-5 h-5" /> Configuración General y Horarios
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Configura los horarios de atención; se verán aplicados automáticamente en los correos y en la pantalla de pagos del estudiante.
+            Configura el teléfono base y los horarios de atención; se verán aplicados automáticamente en los correos y en pantallas de contacto.
           </p>
         </DialogHeader>
 
         <div className="space-y-6 my-4">
-          {bloques.map((b, i) => (
+          <div className="p-4 border rounded-xl bg-card shadow-sm space-y-2">
+            <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Phone className="w-4 h-4" /> Teléfono Institucional
+            </label>
+            <p className="text-xs text-muted-foreground mb-2">Este número se mostrará en correos, sitio de expiraición y contactos.</p>
+            <Input 
+              type="tel"
+              value={telefono}
+              onChange={(e) => setTelefono(e.target.value)}
+              placeholder="Ej. 735 2826206" 
+            />
+          </div>
+
+          <div className="border-t pt-4">
+            <h4 className="text-sm font-semibold mb-4 text-primary">Bloques de Horarios de Atención</h4>
+            {bloques.map((b, i) => (
             <div key={i} className="p-4 border rounded-xl bg-card shadow-sm space-y-4 relative">
               {bloques.length > 1 && (
                 <Button 
@@ -162,6 +180,7 @@ export function HorariosAtencionModal() {
           <Button variant="outline" onClick={handleAddBlock} className="w-full border-dashed border-2">
             <Plus className="mr-2 h-4 w-4" /> Agregar bloque de horario
           </Button>
+          </div>
         </div>
 
         <DialogFooter>

@@ -4,10 +4,11 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { AlertCircle, Clock, Mail, Phone } from 'lucide-react';
 import Link from 'next/link';
+import { getTelefonoFormateado } from '@/lib/actions/horarios';
 
-export default function ExpiredPage() {
+export default async function ExpiredPage() {
   const supportEmail = "instituto.edu.emilianozapata@gmail.com";
-  const supportPhone = "7352826206";
+  const supportPhone = await getTelefonoFormateado();
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">

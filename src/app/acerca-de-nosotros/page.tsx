@@ -742,11 +742,18 @@ const Banner = ({ theme }: { theme: any }) => {
   );
 }
 
+import { getTelefonoFormateado } from '@/lib/actions/horarios';
+
 const Contact = ({ theme }: { theme: any }) => {
   const { toast } = useToast();
   const [formData, setFormData] = useState({ name: '', email: '', phone: '', message: '' });
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [supportPhone, setSupportPhone] = useState("735 2826206");
+
+  useEffect(() => {
+    getTelefonoFormateado().then(setSupportPhone);
+  }, []);
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value.toUpperCase();
@@ -828,7 +835,7 @@ const Contact = ({ theme }: { theme: any }) => {
                     </div>
                     <div>
                       <p className="text-xs font-black uppercase tracking-[0.2em] mb-2 text-white/60">Teléfono</p>
-                      <p className="text-2xl font-bold">735 2826206</p>
+                      <p className="text-2xl font-bold">{supportPhone}</p>
                     </div>
                   </div>
 
