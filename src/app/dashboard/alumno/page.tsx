@@ -24,6 +24,8 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { PaginationTasks } from './components/PaginationTasks';
+import Image from 'next/image';
+import { getDatosContactoFormateados } from '@/lib/actions/horarios';
 
 // Helper for dynamic subject icons
 const getSubjectIcon = (nombre: string) => {
@@ -86,6 +88,10 @@ export default async function AlumnoDashboard() {
 
   const labelCompletados = "Completados";
 
+  const { telefono } = await getDatosContactoFormateados();
+  const rawNumber = telefono.replace(/\D/g, '');
+  const whatsappUrl = `https://wa.me/${rawNumber.length === 10 ? '52' : ''}${rawNumber}`;
+
   return (
     <div className="space-y-12 pb-16 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
@@ -99,6 +105,27 @@ export default async function AlumnoDashboard() {
             Plataforma del Instituto Educativo Emiliano Zapata
           </p>
         </div>
+
+        {/* BOTÓN WHATSAPP DINÁMICO */}
+        <a 
+          href={whatsappUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-3 bg-white hover:bg-green-50 text-green-600 border border-green-200 px-5 py-2.5 rounded-2xl shadow-sm transition-all hover:scale-105 active:scale-95 group"
+        >
+          <div className="relative w-8 h-8 shrink-0">
+            <Image 
+              src="/images/whatsapplogo.png" 
+              alt="WhatsApp" 
+              fill
+              className="object-contain"
+            />
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[10px] font-black uppercase tracking-widest text-green-500/80 leading-none mb-0.5">Soporte Escolar</span>
+            <span className="text-sm font-bold leading-none">Comunícate con nosotros</span>
+          </div>
+        </a>
       </header>
 
       {/* BANNER PRINCIPAL */}
