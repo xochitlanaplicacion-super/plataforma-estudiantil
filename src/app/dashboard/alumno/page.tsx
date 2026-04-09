@@ -90,7 +90,10 @@ export default async function AlumnoDashboard() {
 
   const { telefono } = await getDatosContactoFormateados();
   const rawNumber = telefono.replace(/\D/g, '');
-  const whatsappUrl = `https://wa.me/${rawNumber.length === 10 ? '52' : ''}${rawNumber}`;
+  
+  const matricula = profile?.matricula || '(Sin Matrícula)';
+  const preFilledText = encodeURIComponent(`Hola soy ${nombreCompleto} mi matrícula es ${matricula}: `);
+  const whatsappUrl = `https://wa.me/${rawNumber.length === 10 ? '52' : ''}${rawNumber}?text=${preFilledText}`;
 
   return (
     <div className="space-y-12 pb-16 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
