@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { Variants } from 'framer-motion';
 import { createContactoRecord } from '@/lib/actions/contacto';
 import { useToast } from '@/hooks/use-toast';
+import Image from 'next/image';
 
 // Temas disponibles (Sin Beige para esta página)
 const themes = [
@@ -986,6 +987,43 @@ const Footer = ({ theme }: { theme: any }) => {
   );
 };
 
+const FloatingWhatsApp = () => {
+  const [telefono, setTelefono] = useState("");
+
+  useEffect(() => {
+    // Ya esta importado getDatosContactoFormateados mas arriba en este mismo archivo
+    getDatosContactoFormateados().then(data => setTelefono(data.telefono));
+  }, []);
+
+  if (!telefono) return null;
+
+  const rawNumber = telefono.replace(/\D/g, '');
+  const textMessage = encodeURIComponent("Necesito más información");
+  const whatsappUrl = `https://wa.me/${rawNumber.length === 10 ? '52' : ''}${rawNumber}?text=${textMessage}`;
+
+  return (
+    <a 
+      href={whatsappUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="fixed bottom-6 right-6 md:bottom-8 md:right-8 z-[100] flex items-center gap-3 bg-white/60 backdrop-blur-xl border border-white/80 p-2.5 md:p-3 rounded-full shadow-[0_8px_30px_rgb(0,0,0,0.12)] transition-all duration-300 hover:scale-110 hover:bg-white/90 hover:shadow-[0_12px_40px_rgb(0,0,0,0.2)] group"
+      aria-label="Contactar por WhatsApp"
+    >
+      <div className="relative w-8 h-8 md:w-10 md:h-10 shrink-0 transition-transform group-hover:scale-110">
+        <Image 
+          src="/images/whatsapplogo.png" 
+          alt="WhatsApp" 
+          fill
+          className="object-contain drop-shadow-md"
+        />
+      </div>
+      <span className="pr-2 md:pr-4 py-1 text-xs md:text-sm font-bold text-gray-800 tracking-tight whitespace-nowrap">
+        Comunícate con nosotros
+      </span>
+    </a>
+  );
+};
+
 export default function AcercaDeNosotrosPage() {
   const [currentTheme, setCurrentTheme] = useState(themes[0]);
   const [mounted, setMounted] = useState(false);
@@ -1000,7 +1038,7 @@ export default function AcercaDeNosotrosPage() {
   if (!mounted) return null;
 
   return (
-    <div className="font-sans text-gray-900 bg-white selection:bg-blue-600 selection:text-white">
+    <div className="font-sans text-gray-900 bg-white selection:bg-blue-600 selection:text-white relative">
       <Navbar theme={currentTheme} />
       <main>
         <Hero theme={currentTheme} />
@@ -1011,6 +1049,7 @@ export default function AcercaDeNosotrosPage() {
         <Contact theme={currentTheme} />
       </main>
       <Footer theme={currentTheme} />
+      <FloatingWhatsApp />
     </div>
   );
 }
