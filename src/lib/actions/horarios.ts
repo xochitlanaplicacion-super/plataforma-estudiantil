@@ -15,9 +15,10 @@ export interface HorarioBloque {
 export interface ConfiguracionGlobal {
   horarios_atencion: HorarioBloque[];
   telefono_contacto: string;
+  correo_contacto: string;
 }
 
-export async function updateConfiguracion(bloques: HorarioBloque[], telefono: string) {
+export async function updateConfiguracion(bloques: HorarioBloque[], telefono: string, correo: string) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "No autenticado" };
@@ -29,7 +30,7 @@ export async function updateConfiguracion(bloques: HorarioBloque[], telefono: st
 
   const { error } = await supabase
     .from("configuracion_sistema")
-    .upsert({ id: 1, horarios_atencion: bloques, telefono_contacto: telefono, updated_at: new Date().toISOString() });
+    .upsert({ id: 1, horarios_atencion: bloques, telefono_contacto: telefono, correo_contacto: correo, updated_at: new Date().toISOString() });
 
   if (error) {
     return { success: false, error: error.message };
@@ -44,22 +45,26 @@ export async function updateConfiguracion(bloques: HorarioBloque[], telefono: st
 
 export async function getConfiguracionBruta(): Promise<ConfiguracionGlobal> {
   const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase.from("configuracion_sistema").select("horarios_atencion, telefono_contacto").eq("id", 1).single();
-  if (error || !data) return { horarios_atencion: [], telefono_contacto: "735 2826206" };
+  const { data, error } = await supabase.from("configuracion_sistema").select("horarios_atencion, telefono_contacto, correo_contacto").eq("id", 1).single();
+  if (error || !data) return { horarios_atencion: [], telefono_contacto: "735 2826206", correo_contacto: "instituto.edu.emilianozapata@gmail.com" };
   return {
     horarios_atencion: data.horarios_atencion as HorarioBloque[],
-    telefono_contacto: data.telefono_contacto
+    telefono_contacto: data.telefono_contacto,
+    correo_contacto: data.correo_contacto || "instituto.edu.emilianozapata@gmail.com"
   };
 }
 
-export async function getTelefonoFormateado(): Promise<string> {
+export async function getDatosContactoFormateados(): Promise<{telefono: string, correo: string}> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
   const supabase = createSupabaseClient(supabaseUrl, supabaseKey);
 
-  const { data, error } = await supabase.from("configuracion_sistema").select("telefono_contacto").eq("id", 1).single();
-  if (data && data.telefono_contacto) return data.telefono_contacto;
-  return "7352826206"; // Fallback de contingencia
+  const { data, error } = await supabase.from("configuracion_sistema").select("telefono_contacto, correo_contacto").eq("id", 1).single();
+  
+  return {
+    telefono: data?.telefono_contacto || "7352826206",
+    correo: data?.correo_contacto || "instituto.edu.emilianozapata@gmail.com"
+  };
 }
 
 function formatTime12h(timeStr: string) {

@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Clock, Plus, Trash2, CalendarDays, Save, Phone } from "lucide-react";
+import { Clock, Plus, Trash2, CalendarDays, Save, Phone, Mail } from "lucide-react";
 import { getConfiguracionBruta, updateConfiguracion, HorarioBloque } from "@/lib/actions/horarios";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ export function HorariosAtencionModal() {
   const [open, setOpen] = useState(false);
   const [bloques, setBloques] = useState<HorarioBloque[]>([]);
   const [telefono, setTelefono] = useState<string>("735 2826206");
+  const [correo, setCorreo] = useState<string>("instituto.edu.emilianozapata@gmail.com");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 
@@ -37,6 +38,7 @@ export function HorariosAtencionModal() {
       }]);
     }
     setTelefono(data.telefono_contacto);
+    setCorreo(data.correo_contacto);
   };
 
   const handleDaySelect = (bIndex: number, day: string) => {
@@ -77,9 +79,9 @@ export function HorariosAtencionModal() {
         }
       }
 
-      const res = await updateConfiguracion(bloques, telefono);
+      const res = await updateConfiguracion(bloques, telefono, correo);
       if (res.success) {
-        toast({ title: "Configuración Guardada", description: "La plataforma responderá dinámicamente con los nuevos horarios y teléfono." });
+        toast({ title: "Configuración Guardada", description: "La plataforma responderá dinámicamente con los nuevos horarios, teléfono y correo." });
         setOpen(false);
       } else {
         toast({ variant: "destructive", title: "Error al guardar", description: res.error });
@@ -105,22 +107,34 @@ export function HorariosAtencionModal() {
             <Clock className="w-5 h-5" /> Configuración General y Horarios
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Configura el teléfono base y los horarios de atención; se verán aplicados automáticamente en los correos y en pantallas de contacto.
+            Configura los medios de contacto y horarios de atención; se verán aplicados automáticamente en correos y pantallas.
           </p>
         </DialogHeader>
 
         <div className="space-y-6 my-4">
-          <div className="p-4 border rounded-xl bg-card shadow-sm space-y-2">
-            <label className="text-sm font-semibold text-foreground flex items-center gap-2">
-              <Phone className="w-4 h-4" /> Teléfono Institucional
-            </label>
-            <p className="text-xs text-muted-foreground mb-2">Este número se mostrará en correos, sitio de expiraición y contactos.</p>
-            <Input 
-              type="tel"
-              value={telefono}
-              onChange={(e) => setTelefono(e.target.value)}
-              placeholder="Ej. 735 2826206" 
-            />
+          <div className="grid grid-cols-2 gap-4">
+            <div className="p-4 border rounded-xl bg-card shadow-sm space-y-2">
+              <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Phone className="w-4 h-4" /> Teléfono
+              </label>
+              <Input 
+                type="tel"
+                value={telefono}
+                onChange={(e) => setTelefono(e.target.value)}
+                placeholder="Ej. 735 2826206" 
+              />
+            </div>
+            <div className="p-4 border rounded-xl bg-card shadow-sm space-y-2">
+              <label className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <Mail className="w-4 h-4" /> Correo Oficial
+              </label>
+              <Input 
+                type="email"
+                value={correo}
+                onChange={(e) => setCorreo(e.target.value)}
+                placeholder="ejemplo@escuela.edu" 
+              />
+            </div>
           </div>
 
           <div className="border-t pt-4">

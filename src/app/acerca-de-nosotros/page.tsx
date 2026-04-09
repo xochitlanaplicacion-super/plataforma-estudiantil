@@ -742,7 +742,7 @@ const Banner = ({ theme }: { theme: any }) => {
   );
 }
 
-import { getTelefonoFormateado } from '@/lib/actions/horarios';
+import { getDatosContactoFormateados } from '@/lib/actions/horarios';
 
 const Contact = ({ theme }: { theme: any }) => {
   const { toast } = useToast();
@@ -750,9 +750,13 @@ const Contact = ({ theme }: { theme: any }) => {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [supportPhone, setSupportPhone] = useState("735 2826206");
+  const [supportEmail, setSupportEmail] = useState("instituto.edu.emilianozapata@gmail.com");
 
   useEffect(() => {
-    getTelefonoFormateado().then(setSupportPhone);
+    getDatosContactoFormateados().then(data => {
+      setSupportPhone(data.telefono);
+      setSupportEmail(data.correo);
+    });
   }, []);
 
   const handleNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -845,7 +849,7 @@ const Contact = ({ theme }: { theme: any }) => {
                     </div>
                     <div>
                       <p className="text-xs font-black uppercase tracking-[0.2em] mb-2 text-white/60">Email</p>
-                      <p className="text-xl font-bold break-all">instituto.edu.emilianozapata@gmail.com</p>
+                      <p className="text-xl font-bold break-all">{supportEmail}</p>
                     </div>
                   </div>
 
