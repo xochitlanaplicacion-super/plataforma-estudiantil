@@ -3,6 +3,7 @@ import { numeroALetras } from '../utils/numeroALetras';
 
 interface ReciboData {
   estudiante: string;
+  matricula?: string;
   nivel: string;           // Ej: "UNIVERSIDAD", "BACHILLERATO", "CAPACITACIONES"
   carrera: string;         // Ej: "INGENIERÍA EN SISTEMAS", "PSICOLOGÍA", "PREPA ADULTOS"
   ofertaEducativa: string; // Fallback combinado (se usa si nivel/carrera vacíos)
@@ -158,7 +159,11 @@ export async function generarReciboPDF(data: ReciboData) {
     doc.setFont('helvetica', 'normal');
     doc.text('Estudiante:', 42, yOffset + 36);
     doc.setFont('helvetica', 'bold');
-    doc.text(data.estudiante, 64, yOffset + 36);
+    let textoEstudianteMatricula = data.estudiante;
+    if (data.matricula) {
+      textoEstudianteMatricula += ` - Matrícula: ${data.matricula}`;
+    }
+    doc.text(textoEstudianteMatricula, 64, yOffset + 36);
     doc.setDrawColor(180);
     doc.line(62, yOffset + 37, width - 15, yOffset + 37);
 

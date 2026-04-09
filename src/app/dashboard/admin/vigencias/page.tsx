@@ -100,6 +100,7 @@ function ModalAbono({ pago, alumno, alumnoId, open, onClose, onSuccess }: any) {
       if (res.folio && alumno) {
         generarReciboPDF({
           estudiante: `${alumno.nombre} ${alumno.apellidos}`.trim(),
+          matricula: alumno?.matricula,
           nivel: alumno?.carreras?.niveles?.nombre || '',
           carrera: alumno?.carreras?.nombre || '',
           ofertaEducativa: pago?.plan_pagos?.programa || 'OFERTA NO ESPECIFICADA',
@@ -116,6 +117,7 @@ function ModalAbono({ pago, alumno, alumnoId, open, onClose, onSuccess }: any) {
   const handleReimprimirAbono = (abono: any) => {
     generarReciboPDF({
       estudiante: `${alumno.nombre} ${alumno.apellidos}`.trim(),
+      matricula: alumno?.matricula,
       nivel: alumno?.carreras?.niveles?.nombre || '',
       carrera: alumno?.carreras?.nombre || '',
       ofertaEducativa: pago?.plan_pagos?.programa || 'OFERTA NO ESPECIFICADA',
@@ -266,6 +268,7 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
       if (res.folio && alumno) {
         generarReciboPDF({
           estudiante: `${alumno.nombre} ${alumno.apellidos}`.trim(),
+          matricula: alumno?.matricula,
           nivel: alumno?.carreras?.niveles?.nombre || '',
           carrera: alumno?.carreras?.nombre || '',
           ofertaEducativa: editando?.plan_pagos?.programa || 'OFERTA NO ESPECIFICADA',
@@ -283,6 +286,7 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
   const handleReimprimirRecibo = (pago: any) => {
     generarReciboPDF({
       estudiante: `${alumno.nombre} ${alumno.apellidos}`.trim(),
+      matricula: alumno?.matricula,
       nivel: alumno?.carreras?.niveles?.nombre || '',
       carrera: alumno?.carreras?.nombre || '',
       ofertaEducativa: pago?.plan_pagos?.programa || 'OFERTA NO ESPECIFICADA',
