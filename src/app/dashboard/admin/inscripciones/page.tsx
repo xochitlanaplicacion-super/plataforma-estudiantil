@@ -9,6 +9,16 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { 
   Users, 
   Search, 
@@ -49,6 +59,7 @@ export default function InscripcionAlumnos() {
   const [search, setSearch] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [adminName, setAdminName] = useState('');
+  const [studentToRemove, setStudentToRemove] = useState<any>(null);
   const supabase = createClient();
   
   // Catalogos
@@ -662,7 +673,7 @@ export default function InscripcionAlumnos() {
                               variant="ghost" 
                               size="icon" 
                               className="h-8 w-8 text-slate-300 hover:text-destructive hover:bg-red-50 transition-colors"
-                              onClick={(e) => { e.stopPropagation(); handleRemoveFromGroup(m.id); }}
+                              onClick={(e) => { e.stopPropagation(); setStudentToRemove(m); }}
                               disabled={saving}
                             >
                               <XCircle size={18} />
@@ -678,6 +689,37 @@ export default function InscripcionAlumnos() {
           </div>
         </TabsContent>
       </Tabs>
+
+      <AlertDialog open={!!studentToRemove} onOpenChange={(open) => !open && !saving && setStudentToRemove(null)}>
+        <AlertDialogContent className="sm:max-w-[425px]">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive flex items-center gap-2">
+              <XCircle className="h-5 w-5" /> ¿Retirar alumno del grupo?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="pt-2 text-sm">
+              Estás a punto de dar de baja a <span className="font-bold text-slate-800">{studentToRemove?.nombre} {studentToRemove?.apellidos}</span> de este salón.
+              <br /><br />
+              El alumno restará sin asignación de grupo para este nivel y <strong>desaparecerá de las listas de asistencia actuales</strong>. Seguirá vigente en el sistema.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogCancel disabled={saving}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 font-bold"
+              disabled={saving}
+              onClick={(e) => { 
+                e.preventDefault(); 
+                if (studentToRemove) {
+                  handleRemoveFromGroup(studentToRemove.id).then(() => setStudentToRemove(null));
+                }
+              }}
+            >
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Sí, retirar del salón
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
