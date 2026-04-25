@@ -58,6 +58,7 @@ export interface Aspirante {
   estatus?: string;
   notas?: string;
   genero?: string;
+  is_archived?: boolean;
   created_at?: string;
 }
 
