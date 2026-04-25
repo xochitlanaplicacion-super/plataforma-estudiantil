@@ -396,6 +396,11 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
                     Fecha de Expiración (Acceso) {form.watch('rol') === 'alumno' && " *"}
                   </FormLabel>
                   <FormControl><Input type="date" {...field} /></FormControl>
+                  {form.watch('rol') !== 'alumno' && (
+                    <p className="text-[9px] text-muted-foreground uppercase font-bold tracking-tight">
+                      Este campo es opcional y puede quedar vacío
+                    </p>
+                  )}
                   <FormMessage />
                 </FormItem>
               )} />
@@ -407,9 +412,10 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
               )} />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-              <div className="space-y-4 bg-muted/30 p-4 rounded-xl border border-dashed border-primary/20">
-                <h4 className="text-xs font-bold text-primary uppercase">Documentación Entregada</h4>
+            {form.watch('rol') === 'alumno' && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                <div className="space-y-4 bg-muted/30 p-4 rounded-xl border border-dashed border-primary/20">
+                  <h4 className="text-xs font-bold text-primary uppercase">Documentación Entregada</h4>
                 <div className="grid grid-cols-2 gap-2">
                   <FormField control={form.control} name="doc_acta_nacimiento" render={({ field }) => (
                     <FormItem className="flex items-center space-x-2 space-y-0 p-2 border rounded bg-white"><FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl><FormLabel className="text-[10px] cursor-pointer">Acta Nac.</FormLabel></FormItem>
@@ -463,6 +469,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
                 )} />
               </div>
             </div>
+            )}
 
             <DialogFooter className="gap-2 pt-4 border-t">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
