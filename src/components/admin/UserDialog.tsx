@@ -318,7 +318,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
                 <FormItem><FormLabel>Apellidos *</FormLabel><FormControl><Input placeholder="Ej. Sánchez Méndez" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="email" render={({ field }) => (
-                <FormItem><FormLabel>Correo Electrónico *</FormLabel><FormControl><Input type="email" placeholder="correo@ejemplo.com" {...field} disabled={!!user} /></FormControl><FormMessage /></FormItem>
+                <FormItem><FormLabel>Correo Electrónico *</FormLabel><FormControl><Input type="email" placeholder="correo@ejemplo.com" {...field} /></FormControl><FormMessage /></FormItem>
               )} />
               <FormField control={form.control} name="curp" render={({ field }) => (
                 <FormItem><FormLabel>CURP *</FormLabel><FormControl><Input className="uppercase font-mono" {...field} placeholder="18 CARACTERES" onChange={(e) => field.onChange(e.target.value.toUpperCase())} /></FormControl><FormMessage /></FormItem>

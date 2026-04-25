@@ -152,9 +152,26 @@ export async function updateUserProfile(id: string, userData: any) {
     const finalPassword = userData.password || currentProfile?.password_plain || userData.password_plain;
     const hoy = new Date().toISOString().split('T')[0];
 
+    const incomingEmail = userData.email?.toLowerCase().trim();
+    const isEmailChanging = incomingEmail && incomingEmail !== currentProfile?.email;
+
+    if (isEmailChanging) {
+      const { data: existingEmail } = await supabaseAdmin.from('profiles').select('id').eq('email', incomingEmail).maybeSingle();
+      if (existingEmail && existingEmail.id !== id) {
+        throw new Error(`El correo ${incomingEmail} ya está registrado para otro usuario.`);
+      }
+      
+      const { error: authEmailError } = await supabaseAdmin.auth.admin.updateUserById(id, {
+        email: incomingEmail,
+        email_confirm: true
+      });
+      if (authEmailError) throw new Error(`Error al actualizar el correo de acceso raíz: ${authEmailError.message}`);
+    }
+
     const updateData: any = {
       nombre: userData.nombre.toUpperCase().trim(),
       apellidos: userData.apellidos.toUpperCase().trim(),
+      email: incomingEmail || currentProfile?.email,
       curp: (userData.curp || '').toUpperCase().trim(),
       rol: userData.rol,
       estatus: userData.estatus,
