@@ -149,3 +149,20 @@ export interface Resource {
   created_by?: string;
   created_at?: string;
 }
+
+export interface MaterialApoyo {
+  id: string;
+  nivel_id: string;
+  titulo: string; // Individual file name
+  categoria?: string; // Global Title / Category
+  descripcion?: string;
+  archivo_url: string;
+  tipo_archivo: 'pdf' | 'word' | 'excel' | 'powerpoint';
+  tamano_bytes?: number;
+  publicado: boolean;
+  created_by?: string;
+  created_at?: string;
+  niveles?: { nombre: string };
+  profiles?: { nombre: string; apellidos: string };
+}
+

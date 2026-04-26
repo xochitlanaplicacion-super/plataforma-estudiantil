@@ -36,7 +36,8 @@ import {
   ClipboardList,
   UserCog,
   UserPlus,
-  CreditCard
+  CreditCard,
+  BookMarked
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -88,6 +89,7 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
         { icon: BookOpen, label: 'Materias y Unidades', href: '/dashboard/admin/materias' },
         { icon: UserCog, label: 'Asignación Profesores', href: '/dashboard/admin/profesores' },
         { icon: UserPlus, label: 'Matrícula y Salones', href: '/dashboard/admin/inscripciones' },
+        { icon: BookMarked, label: 'Material de Apoyo Oficial', href: '/dashboard/admin/material' },
       ]},
       { group: "Módulo 10: Reportes", items: [
         { icon: CreditCard, label: 'Control de Pagos', href: '/dashboard/admin/vigencias' },
@@ -104,6 +106,7 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
         { icon: Users, label: 'Soporte Usuarios', href: '/dashboard/admin/usuarios' },
         { icon: UserCog, label: 'Asignar Profesores', href: '/dashboard/admin/profesores' },
         { icon: UserPlus, label: 'Matrícula y Salones', href: '/dashboard/admin/inscripciones' },
+        { icon: BookMarked, label: 'Material de Apoyo Oficial', href: '/dashboard/admin/material' },
         { icon: CreditCard, label: 'Control de Pagos', href: '/dashboard/admin/vigencias' },
       ]}
     ],
