@@ -281,14 +281,14 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
           <div className="h-14 w-14 md:h-20 md:w-20 rounded-3xl bg-secondary/30 flex items-center justify-center shrink-0 shadow-inner">
             {getSubjectIcon(materia.nombre)}
           </div>
-          <div className="flex-1 overflow-hidden">
-            <div className="flex items-center flex-wrap gap-2 mb-1.5 md:mb-2">
-              <h3 className="text-xl md:text-3xl font-black font-headline text-foreground tracking-tight truncate">{materia.nombre}</h3>
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1.5 md:mb-2">
+              <h3 className="text-xl md:text-2xl lg:text-3xl font-black font-headline text-foreground tracking-tight leading-tight text-balance">{materia.nombre}</h3>
             </div>
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs md:text-sm font-medium text-muted-foreground uppercase tracking-widest">
-              <span className="flex items-center gap-1.5"><GraduationCap className="w-3.5 h-3.5 md:w-4 md:h-4 opacity-70" />{materia.profesor}</span>
-              <span className="hidden sm:block opacity-30 px-1">•</span>
-              <span className="flex items-center gap-1.5"><Clock className="w-3.5 h-3.5 md:w-4 md:h-4 opacity-70" />Lunes, Miér, Vier</span>
+            <div className="flex flex-col xl:flex-row xl:items-center gap-2 xl:gap-4 text-xs md:text-sm font-medium text-muted-foreground uppercase tracking-widest">
+              <span className="flex items-center gap-1.5"><GraduationCap className="w-3.5 h-3.5 md:w-4 md:h-4 opacity-70 shrink-0" /><span className="text-balance">{materia.profesor}</span></span>
+              <span className="hidden xl:block opacity-30 px-1 shrink-0">•</span>
+              <span className="flex items-center gap-1.5 shrink-0"><Clock className="w-3.5 h-3.5 md:w-4 md:h-4 opacity-70 shrink-0" />Lunes, Miér, Vier</span>
             </div>
           </div>
         </div>

@@ -225,13 +225,8 @@ export default async function AlumnoDashboard() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 md:gap-8">
             {materias.map((materia: any, idx: number) => {
-              // Valores simulados para estado de materias
-              const estados = [
-                { badge: 'EN CURSO', bg: 'bg-blue-100', text: 'text-blue-700' },
-                { badge: 'EXAMEN', bg: 'bg-[#F3D57F]', text: 'text-[#755B00]' },
-                { badge: 'APROBADA', bg: 'bg-green-100', text: 'text-green-700' }
-              ];
-              const estado = estados[idx % estados.length];
+              // Estado temporal de materias (todas fijas en "EN CURSO" por ahora)
+              const estado = { badge: 'EN CURSO', bg: 'bg-blue-100', text: 'text-blue-700' };
               const colorClass = getSubjectColorClass(idx);
 
               return (
