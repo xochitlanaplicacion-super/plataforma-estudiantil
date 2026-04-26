@@ -2,6 +2,7 @@ import React from 'react';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getAlumnoDashboardData } from '@/lib/actions/alumno';
 import { getMaterialPublicoPorNivel } from '@/lib/actions/material';
+import { getNotificacionesAlumno } from '@/lib/actions/pagos';
 import {
   BookOpen,
   CalendarDays,
@@ -26,6 +27,7 @@ import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { PaginationTasks } from './components/PaginationTasks';
 import MaterialCarousel from './components/MaterialCarousel';
+import { PaymentNotificationPopup } from './components/PaymentNotificationPopup';
 import Image from 'next/image';
 import { getDatosContactoFormateados } from '@/lib/actions/horarios';
 
@@ -105,6 +107,10 @@ export default async function AlumnoDashboard() {
     materialesData = data || [];
   }
 
+  // Obtener última notificación de pagos
+  const { data: notifications } = await getNotificacionesAlumno(user.id);
+  const latestNotification = notifications && notifications.length > 0 ? notifications[0] : null;
+
   return (
     <div className="space-y-12 pb-16 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
@@ -119,26 +125,30 @@ export default async function AlumnoDashboard() {
           </p>
         </div>
 
-        {/* BOTÓN WHATSAPP DINÁMICO */}
-        <a 
-          href={whatsappUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-3 bg-white hover:bg-green-50 text-green-600 border border-green-200 px-5 py-2.5 rounded-2xl shadow-sm transition-all hover:scale-105 active:scale-95 group"
-        >
-          <div className="relative w-8 h-8 shrink-0">
-            <Image 
-              src="/images/whatsapplogo.png" 
-              alt="WhatsApp" 
-              fill
-              className="object-contain"
-            />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-[10px] font-black uppercase tracking-widest text-green-500/80 leading-none mb-0.5">Soporte Escolar</span>
-            <span className="text-sm font-bold leading-none">Comunícate con nosotros</span>
-          </div>
-        </a>
+        {/* ACCIONES DEL HEADER: NOTIFICACIÓN Y WHATSAPP */}
+        <div className="flex items-center gap-4">
+          <PaymentNotificationPopup latestNotification={latestNotification} />
+          
+          <a 
+            href={whatsappUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 bg-white hover:bg-green-50 text-green-600 border border-green-200 px-5 py-2.5 rounded-2xl shadow-sm transition-all hover:scale-105 active:scale-95 group"
+          >
+            <div className="relative w-8 h-8 shrink-0">
+              <Image 
+                src="/images/whatsapplogo.png" 
+                alt="WhatsApp" 
+                fill
+                className="object-contain"
+              />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-[10px] font-black uppercase tracking-widest text-green-500/80 leading-none mb-0.5">Soporte Escolar</span>
+              <span className="text-sm font-bold leading-none">Comunícate con nosotros</span>
+            </div>
+          </a>
+        </div>
       </header>
 
       {/* BANNER PRINCIPAL */}
