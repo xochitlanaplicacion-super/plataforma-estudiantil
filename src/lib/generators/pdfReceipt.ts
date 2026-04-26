@@ -172,9 +172,14 @@ export async function generarReciboPDF(data: ReciboData) {
     doc.setFontSize(9);
     doc.text('Concepto:', 42, yOffset + 44);
     doc.setFont('helvetica', 'bold');
-    const maxConceptoW = width - 42 - 65 - 5; // espacio disponible
-    const txtConcepto = data.concepto.length > 30 ? data.concepto.substring(0, 28) + '...' : data.concepto;
-    doc.text(txtConcepto, 62, yOffset + 44);
+    const maxConceptoW = (width - 50) - 64; // espacio entre "Concepto:" y "Total: $"
+    const conceptoFit = fitText(doc, data.concepto, maxConceptoW, 9, 5.5);
+    doc.setFontSize(conceptoFit.fontSize);
+    doc.text(conceptoFit.lines[0], 62, yOffset + 44);
+    if (conceptoFit.lines.length > 1) {
+      doc.setFontSize(conceptoFit.fontSize - 0.5);
+      doc.text(conceptoFit.lines[1], 62, yOffset + 47.5);
+    }
     doc.setDrawColor(180);
     doc.line(60, yOffset + 45, width - 60, yOffset + 45);
 

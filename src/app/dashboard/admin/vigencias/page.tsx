@@ -330,11 +330,12 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>💳 {alumno?.nombre} {alumno?.apellidos}</DialogTitle>
-            <DialogDescription className="flex flex-wrap gap-2 mt-1">
+            <DialogDescription className="sr-only">Gestión de pagos del alumno</DialogDescription>
+            <div className="flex flex-wrap gap-2 mt-1 text-sm text-muted-foreground">
               <Badge variant="outline">{alumno?.matricula || 'Sin matrícula'}</Badge>
               <Badge variant="secondary">{alumno?.carreras?.nombre || '—'}</Badge>
               <Badge variant="secondary">{alumno?.carreras?.niveles?.nombre || '—'}</Badge>
-            </DialogDescription>
+            </div>
           </DialogHeader>
 
           {loading ? <div className="flex justify-center py-8"><Loader2 className="animate-spin" /></div>
@@ -418,13 +419,13 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
                             pago.estatus === 'pagado' ? 'bg-emerald-50 border-emerald-200' :
                             isAbono ? 'bg-blue-50 border-blue-200' : 'bg-white border-dashed border-gray-200'
                           )}>
-                            <div className="flex items-center gap-3">
-                              {saving === pago.id ? <Loader2 size={18} className="animate-spin shrink-0" /> :
-                               pago.estatus === 'pagado' ? <CheckCircle2 size={18} className="text-emerald-500 shrink-0 cursor-pointer" onClick={() => handleTogglePago(pago)} /> :
-                               isAbono ? <div className="w-[18px] h-[18px] rounded-full border-2 border-blue-400 bg-blue-100 shrink-0" /> :
-                               <Clock size={18} className="text-gray-400 shrink-0" />}
+                            <div className="flex items-start gap-3">
+                              {saving === pago.id ? <Loader2 size={18} className="animate-spin shrink-0 mt-0.5" /> :
+                               pago.estatus === 'pagado' ? <CheckCircle2 size={18} className="text-emerald-500 shrink-0 cursor-pointer mt-0.5" onClick={() => handleTogglePago(pago)} /> :
+                               isAbono ? <div className="w-[18px] h-[18px] rounded-full border-2 border-blue-400 bg-blue-100 shrink-0 mt-0.5" /> :
+                               <Clock size={18} className="text-gray-400 shrink-0 mt-0.5" />}
                               <div className="flex-1 min-w-0">
-                                <p className={cn('text-sm font-bold', pago.estatus === 'pagado' ? 'text-emerald-700' : isAbono ? 'text-blue-700' : 'text-gray-700')}>
+                                <p className={cn('text-sm font-bold break-words', pago.estatus === 'pagado' ? 'text-emerald-700' : isAbono ? 'text-blue-700' : 'text-gray-700')}>
                                   {pago.plan_pagos?.nombre_concepto}
                                 </p>
                                 {isAbono && montoPlan && <ConceptProgressBar pagado={montoPagado} total={montoPlan} />}
