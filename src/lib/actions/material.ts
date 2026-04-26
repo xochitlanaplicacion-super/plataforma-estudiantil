@@ -38,6 +38,39 @@ export async function getMaterialPorNivel(nivelId: string) {
   return { data, error };
 }
 
+// --- MATERIAL PÚBLICO PARA ALUMNOS (solo publicado=true) ---
+export async function getMaterialPublicoPorNivel(nivelId: string) {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('material_apoyo')
+      .select('id, titulo, categoria, descripcion, archivo_url, tipo_archivo, tamano_bytes, created_at')
+      .eq('nivel_id', nivelId)
+      .eq('publicado', true)
+      .order('categoria')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return { data: data || [], error: null };
+  } catch (error: any) {
+    console.error('Error getMaterialPublicoPorNivel:', error.message);
+    return { data: [], error: error.message };
+  }
+}
+
+// --- GENERAR URL FIRMADA PARA PREVIEW (más corta, sin forzar descarga) ---
+export async function generateSignedUrlPreview(path: string) {
+  try {
+    const { data, error } = await supabaseAdmin.storage
+      .from('material-apoyo')
+      .createSignedUrl(path, 3600); // Sin opción download, para abrir inline
+
+    if (error) throw error;
+    return { success: true, signedUrl: data.signedUrl };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
 // --- SUBIR MATERIAL (CARGA MASIVA) ---
 export async function uploadMaterial(formData: FormData, userId: string) {
   try {

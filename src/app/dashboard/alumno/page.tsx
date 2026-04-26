@@ -1,6 +1,7 @@
 import React from 'react';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getAlumnoDashboardData } from '@/lib/actions/alumno';
+import { getMaterialPublicoPorNivel } from '@/lib/actions/material';
 import {
   BookOpen,
   CalendarDays,
@@ -24,6 +25,7 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { cn } from '@/lib/utils';
 import { PaginationTasks } from './components/PaginationTasks';
+import MaterialCarousel from './components/MaterialCarousel';
 import Image from 'next/image';
 import { getDatosContactoFormateados } from '@/lib/actions/horarios';
 
@@ -94,6 +96,14 @@ export default async function AlumnoDashboard() {
   const matricula = profile?.matricula || '(Sin Matrícula)';
   const preFilledText = encodeURIComponent(`Hola soy ${nombreCompleto} mi matrícula es ${matricula}: `);
   const whatsappUrl = `https://wa.me/${rawNumber.length === 10 ? '52' : ''}${rawNumber}?text=${preFilledText}`;
+
+  // Obtener material de apoyo público para el nivel del alumno
+  const nivelId = (profile?.carreras as any)?.nivel_id;
+  let materialesData: any[] = [];
+  if (nivelId) {
+    const { data } = await getMaterialPublicoPorNivel(nivelId);
+    materialesData = data || [];
+  }
 
   return (
     <div className="space-y-12 pb-16 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -191,6 +201,11 @@ export default async function AlumnoDashboard() {
           </svg>
         </div>
       </section>
+
+      {/* MATERIAL DE APOYO - CARRUSEL */}
+      {materialesData.length > 0 && (
+        <MaterialCarousel materiales={materialesData} />
+      )}
 
       {/* MIS MATERIAS GRID */}
       <section className="space-y-6 md:space-y-8">
