@@ -39,7 +39,6 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
   useEffect(() => {
     if (!userId || isMessagingPage) return;
 
-    // Verificar si el admin tiene mensajes sin leer al iniciar sesión
     const checkUnread = async () => {
       if (isAdmin) {
         const { count, error } = await supabase
@@ -53,13 +52,35 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
           setAdminUnreadCount(count);
           setIsAdminPopupOpen(true);
         }
+      } else {
+        // Alumnos y Profesores: buscar mensajes no leídos al iniciar sesión
+        const { data, error } = await supabase
+          .from('mensajes_internos')
+          .select('*, perfiles:remitente_id(nombre, apellidos)')
+          .eq('tipo_destino', 'INDIVIDUAL')
+          .eq('destinatario_id', userId)
+          .eq('leido', false)
+          .order('created_at', { ascending: true });
+
+        if (!error && data && data.length > 0) {
+          const formattedMsgs = data.map(m => ({
+            ...m,
+            remitenteNombre: m.perfiles ? `${(m.perfiles as any).nombre} ${(m.perfiles as any).apellidos}` : 'Usuario'
+          }));
+          
+          const latestMsg = formattedMsgs[formattedMsgs.length - 1];
+          setMessages(formattedMsgs);
+          setActiveChatId(latestMsg.remitente_id);
+          setActiveChatName(latestMsg.remitenteNombre);
+          setIsOpen(true);
+        }
       }
     };
 
     checkUnread();
 
     // Suscripción a Realtime
-    const channel = supabase.channel('global_chat_notifications')
+    const channel = supabase.channel(`chat_notifications_${userId}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensajes_internos' }, async (payload) => {
         const msg = payload.new;
 
@@ -90,17 +111,18 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
         const { data: remitente } = await supabase.from('profiles').select('nombre, apellidos, rol').eq('id', msg.remitente_id).single();
         const remitenteNombre = remitente ? `${remitente.nombre} ${remitente.apellidos}` : 'Usuario';
 
-        // Lógica de visualización
+        // Forzar la apertura del popup al recibir mensaje nuevo
         if (isAdmin) {
           setAdminUnreadCount(prev => prev + 1);
           setAdminLatestSender(remitenteNombre);
-          setIsAdminPopupOpen(true);
+          setIsAdminPopupOpen(false); // trigger re-render bounce
+          setTimeout(() => setIsAdminPopupOpen(true), 50);
         } else {
-          // Popup flotante para alumnos y profesores
           setMessages(prev => [...prev, { ...msg, remitenteNombre }]);
           setActiveChatId(msg.remitente_id);
           setActiveChatName(remitenteNombre);
-          setIsOpen(true);
+          setIsOpen(false); // trigger re-render bounce
+          setTimeout(() => setIsOpen(true), 50);
         }
       })
       .subscribe();
@@ -108,7 +130,7 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [userId, isMessagingPage, isAdmin, supabase, toast, router]);
+  }, [userId, isMessagingPage, isAdmin]);
 
   const handleReply = async () => {
     if (!replyText.trim() || !activeChatId) return;
