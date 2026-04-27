@@ -87,7 +87,34 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
           setIsAdminPopupOpen(true);
         }
       } else {
-        // Alumnos y Profesores: buscar mensajes no leídos al iniciar sesión
+        // Alumnos y Profesores: primero buscar comunicados no vistos al iniciar sesión
+        const { data: vistosData } = await supabase
+          .from('mensajes_vistos')
+          .select('mensaje_id')
+          .eq('usuario_id', userId);
+
+        const idsVistos = (vistosData || []).map((v: any) => v.mensaje_id);
+
+        // Buscar todos los comunicados (no individuales), excluyendo los ya vistos
+        const { data: comunicadosPendientes } = await supabase
+          .from('mensajes_internos')
+          .select('*, perfiles:remitente_id(nombre, apellidos)')
+          .neq('tipo_destino', 'INDIVIDUAL')
+          .order('created_at', { ascending: false });
+
+        const comunicadosNoVistos = (comunicadosPendientes || []).filter(
+          (c: any) => !idsVistos.includes(c.id)
+        );
+
+        if (comunicadosNoVistos.length > 0) {
+          const latest = comunicadosNoVistos[0];
+          const remitente = latest.perfiles as any;
+          const remitenteNombre = remitente ? `${remitente.nombre} ${remitente.apellidos}` : 'Control Escolar';
+          setActiveAviso({ id: latest.id, contenido: latest.contenido, remitente: remitenteNombre, tipo: latest.tipo_destino });
+          setIsAvisoOpen(true);
+        }
+
+        // Buscar mensajes privados no leídos al iniciar sesión
         const { data, error } = await supabase
           .from('mensajes_internos')
           .select('*, perfiles:remitente_id(nombre, apellidos)')
