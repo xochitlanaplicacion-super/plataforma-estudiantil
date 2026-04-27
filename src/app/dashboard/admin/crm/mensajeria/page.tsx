@@ -1,0 +1,282 @@
+'use client';
+
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
+import { MessageSquare, Send, Users, Megaphone, Search, Check, CheckCheck, Trash2, ArrowLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { useToast } from '@/hooks/use-toast';
+import { createClient } from '@/lib/supabase/client';
+import { cn } from '@/lib/utils';
+import {
+  enviarMensaje, obtenerComunicados, obtenerListaChats, obtenerConversacion,
+  obtenerEstructuraAcademica, eliminarMensaje, marcarComoLeido, type TipoDestino,
+} from '@/lib/actions/mensajes';
+
+export default function MensajeriaInterna() {
+  const { toast } = useToast();
+  const supabase = createClient();
+  const [adminId, setAdminId] = useState('');
+  const [tab, setTab] = useState('comunicados');
+  const [comunicados, setComunicados] = useState<any[]>([]);
+  const [showNuevo, setShowNuevo] = useState(false);
+  const [nuevoTipo, setNuevoTipo] = useState<TipoDestino>('GLOBAL');
+  const [nuevoDestinoId, setNuevoDestinoId] = useState('');
+  const [nuevoContenido, setNuevoContenido] = useState('');
+  const [estructura, setEstructura] = useState<any>({ niveles: [], carreras: [], grupos: [], usuarios: [] });
+  const [chats, setChats] = useState<any[]>([]);
+  const [chatActivo, setChatActivo] = useState<string | null>(null);
+  const [chatNombre, setChatNombre] = useState('');
+  const [mensajesChat, setMensajesChat] = useState<any[]>([]);
+  const [nuevoMsg, setNuevoMsg] = useState('');
+  const [busquedaChat, setBusquedaChat] = useState('');
+  const [showNuevoChat, setShowNuevoChat] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { supabase.auth.getUser().then(({ data }) => { if (data.user) setAdminId(data.user.id); }); }, []);
+
+  const cargarDatos = useCallback(async () => {
+    if (!adminId) return;
+    const [comRes, chatRes, estRes] = await Promise.all([obtenerComunicados(), obtenerListaChats(adminId), obtenerEstructuraAcademica()]);
+    if (comRes.success) setComunicados(comRes.data);
+    if (chatRes.success) setChats(chatRes.data);
+    if (estRes.success) setEstructura(estRes);
+  }, [adminId]);
+
+  useEffect(() => { cargarDatos(); }, [cargarDatos]);
+
+  // ═══ REALTIME ═══
+  useEffect(() => {
+    if (!adminId) return;
+    const channel = supabase.channel('mensajes-admin')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensajes_internos' }, (payload) => {
+        const msg = payload.new as any;
+        if (msg.tipo_destino === 'INDIVIDUAL' && (msg.destinatario_id === adminId || msg.remitente_id === adminId)) {
+          setMensajesChat(prev => [...prev, msg]);
+          if (msg.destinatario_id === adminId && !msg.leido) marcarComoLeido(msg.id);
+          // Actualizar lista de chats
+          cargarDatos();
+          setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+        }
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'mensajes_internos' }, (payload) => {
+        const msg = payload.new as any;
+        if (msg.tipo_destino === 'INDIVIDUAL') setMensajesChat(prev => prev.map(m => m.id === msg.id ? msg : m));
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'mensajes_internos' }, (payload) => {
+        const old = payload.old as any;
+        setMensajesChat(prev => prev.filter(m => m.id !== old.id));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [adminId, cargarDatos]);
+
+  const cargarChat = async (userId: string, nombre: string) => {
+    setChatActivo(userId); setChatNombre(nombre);
+    const res = await obtenerConversacion(adminId, userId);
+    if (res.success) {
+      setMensajesChat(res.data);
+      for (const m of res.data) { if (m.destinatario_id === adminId && !m.leido) await marcarComoLeido(m.id); }
+    }
+    setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+  };
+
+  const enviarComunicado = async () => {
+    if (!nuevoContenido.trim()) return;
+    const res = await enviarMensaje({ remitente_id: adminId, tipo_destino: nuevoTipo, destino_id: nuevoTipo === 'GLOBAL' ? null : nuevoDestinoId || null, contenido: nuevoContenido });
+    if (res.success) { toast({ title: '📢 Comunicado enviado' }); setShowNuevo(false); setNuevoContenido(''); setNuevoDestinoId(''); cargarDatos(); }
+    else toast({ variant: 'destructive', title: 'Error', description: res.error });
+  };
+
+  const enviarMsgChat = async () => {
+    if (!nuevoMsg.trim() || !chatActivo) return;
+    const res = await enviarMensaje({ remitente_id: adminId, destinatario_id: chatActivo, tipo_destino: 'INDIVIDUAL', contenido: nuevoMsg });
+    if (res.success) { setNuevoMsg(''); /* Realtime lo agrega */ }
+  };
+
+  const borrarMensajeChat = async (id: string) => {
+    const res = await eliminarMensaje(id);
+    if (res.success) { setMensajesChat(prev => prev.filter(m => m.id !== id)); toast({ title: 'Mensaje eliminado' }); }
+  };
+
+  const iniciarNuevoChat = async (userId: string, nombre: string) => {
+    setShowNuevoChat(false); setChatActivo(userId); setChatNombre(nombre);
+    const res = await obtenerConversacion(adminId, userId);
+    if (res.success) setMensajesChat(res.data);
+    setTab('chats');
+  };
+
+  const borrarComunicado = async (id: string) => { const res = await eliminarMensaje(id); if (res.success) { toast({ title: 'Eliminado' }); cargarDatos(); } };
+
+  const fmt = (f: string) => { const d = new Date(f); return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) + ' ' + d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }); };
+
+  const chatsFiltrados = chats.filter(c => c.nombre.toLowerCase().includes(busquedaChat.toLowerCase()) || c.matricula?.toLowerCase().includes(busquedaChat.toLowerCase()));
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-3xl font-black tracking-tight text-primary flex items-center gap-2"><MessageSquare size={28} /> Mensajería Interna</h2>
+        <p className="text-muted-foreground">Comunicados globales y chat directo con alumnos y profesores.</p>
+      </div>
+      <Tabs value={tab} onValueChange={setTab}>
+        <TabsList className="mb-4">
+          <TabsTrigger value="comunicados">📢 Comunicados</TabsTrigger>
+          <TabsTrigger value="chats">💬 Chats Individuales</TabsTrigger>
+        </TabsList>
+        <TabsContent value="comunicados">
+          <div className="flex justify-between items-center mb-4">
+            <Badge variant="outline" className="text-sm font-bold">{comunicados.length} comunicados</Badge>
+            <Button onClick={() => setShowNuevo(true)} className="rounded-xl gap-2"><Megaphone size={16} /> Nuevo Comunicado</Button>
+          </div>
+          <div className="space-y-3">
+            {comunicados.map(c => {
+              const pctColor = c.pctVistos >= 80 ? 'text-emerald-600' : c.pctVistos >= 50 ? 'text-amber-600' : 'text-red-500';
+              return (
+                <Card key={c.id} className="rounded-2xl border-l-4" style={{ borderLeftColor: c.tipo_destino === 'GLOBAL' ? '#6366f1' : c.tipo_destino === 'NIVEL' ? '#8b5cf6' : c.tipo_destino === 'CARRERA' ? '#0ea5e9' : '#f59e0b' }}>
+                  <CardContent className="p-4 flex items-start gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge variant="secondary" className="text-[9px] font-black uppercase">{c.tipo_destino}</Badge>
+                        <span className="text-xs font-bold text-primary">{c.destinoNombre}</span>
+                        <span className="text-[10px] text-muted-foreground ml-auto">{fmt(c.created_at)}</span>
+                      </div>
+                      <p className="text-sm leading-relaxed">{c.contenido}</p>
+                      <div className="flex items-center gap-3 mt-2">
+                        <span className={cn('text-xs font-black', pctColor)}>{c.vistos}/{c.totalDestinatarios} vistos ({c.pctVistos}%)</span>
+                        <div className="flex-1 max-w-[200px] h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                          <div className={cn('h-full rounded-full', c.pctVistos >= 80 ? 'bg-emerald-500' : c.pctVistos >= 50 ? 'bg-amber-400' : 'bg-red-500')} style={{ width: `${c.pctVistos}%` }} />
+                        </div>
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="icon" className="text-red-400 hover:text-red-600 shrink-0" onClick={() => borrarComunicado(c.id)}><Trash2 size={16} /></Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
+            {comunicados.length === 0 && <p className="text-center text-muted-foreground py-10">No hay comunicados enviados aún.</p>}
+          </div>
+        </TabsContent>
+        <TabsContent value="chats">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border rounded-2xl overflow-hidden h-[65vh]">
+            <div className={cn("border-r flex flex-col bg-white", chatActivo ? 'hidden md:flex' : 'flex')}>
+              <div className="p-3 border-b space-y-2">
+                <div className="flex gap-2">
+                  <Input placeholder="Buscar chat..." value={busquedaChat} onChange={e => setBusquedaChat(e.target.value)} className="text-sm h-9" />
+                  <Button size="sm" variant="outline" onClick={() => setShowNuevoChat(true)} className="shrink-0 h-9"><Users size={14} /></Button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-y-auto">
+                {chatsFiltrados.map(c => (
+                  <button key={c.userId} onClick={() => cargarChat(c.userId, c.nombre)} className={cn("w-full text-left p-3 border-b hover:bg-primary/5 transition-colors flex items-center gap-3", chatActivo === c.userId && 'bg-primary/10')}>
+                    <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-black text-sm shrink-0">{c.nombre.split(' ').map((n: string) => n[0]).join('').substring(0, 2)}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between"><p className="font-bold text-sm truncate">{c.nombre}</p><span className="text-[9px] text-muted-foreground shrink-0">{fmt(c.fecha)}</span></div>
+                      <p className="text-xs text-muted-foreground truncate">{c.ultimoMensaje}</p>
+                    </div>
+                    {c.noLeidos > 0 && <Badge className="bg-emerald-500 text-white text-[10px] rounded-full h-5 w-5 flex items-center justify-center p-0">{c.noLeidos}</Badge>}
+                  </button>
+                ))}
+                {chatsFiltrados.length === 0 && <p className="text-center text-muted-foreground text-sm py-8">Sin chats aún</p>}
+              </div>
+            </div>
+            <div className={cn("md:col-span-2 flex flex-col bg-[#f0ebe3]", !chatActivo ? 'hidden md:flex' : 'flex')}>
+              {chatActivo ? (
+                <>
+                  <div className="p-3 bg-white border-b flex items-center gap-3">
+                    <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setChatActivo(null)}><ArrowLeft size={18} /></Button>
+                    <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-black text-sm">{chatNombre.split(' ').map(n => n[0]).join('').substring(0, 2)}</div>
+                    <div><p className="font-bold text-sm">{chatNombre}</p><p className="text-[10px] text-muted-foreground">Chat individual</p></div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                    {mensajesChat.map(m => {
+                      const esAdmin = m.remitente_id === adminId;
+                      return (
+                        <div key={m.id} className={cn('flex items-end gap-1 group', esAdmin ? 'justify-end' : 'justify-start')}>
+                          {esAdmin && <button onClick={() => borrarMensajeChat(m.id)} className="opacity-0 group-hover:opacity-100 transition-opacity mb-1"><Trash2 size={12} className="text-red-400 hover:text-red-600" /></button>}
+                          <div className={cn('max-w-[70%] rounded-2xl px-4 py-2 shadow-sm', esAdmin ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-white rounded-bl-md')}>
+                            <p className="text-sm whitespace-pre-wrap">{m.contenido}</p>
+                            <div className={cn('flex items-center gap-1 mt-1', esAdmin ? 'justify-end' : 'justify-start')}>
+                              <span className={cn('text-[9px]', esAdmin ? 'text-primary-foreground/60' : 'text-muted-foreground')}>{fmt(m.created_at)}</span>
+                              {esAdmin && (m.leido ? <CheckCheck size={12} className="text-blue-300" /> : <Check size={12} className="text-primary-foreground/40" />)}
+                            </div>
+                          </div>
+                          {!esAdmin && <button onClick={() => borrarMensajeChat(m.id)} className="opacity-0 group-hover:opacity-100 transition-opacity mb-1"><Trash2 size={12} className="text-red-400 hover:text-red-600" /></button>}
+                        </div>
+                      );
+                    })}
+                    <div ref={messagesEndRef} />
+                  </div>
+                  <div className="p-3 bg-white border-t flex gap-2">
+                    <Input value={nuevoMsg} onChange={e => setNuevoMsg(e.target.value)} placeholder="Escribe un mensaje..." className="flex-1" onKeyDown={e => e.key === 'Enter' && !e.shiftKey && enviarMsgChat()} />
+                    <Button onClick={enviarMsgChat} className="rounded-xl"><Send size={16} /></Button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex-1 flex items-center justify-center"><div className="text-center text-muted-foreground"><MessageSquare size={48} className="mx-auto mb-3 opacity-20" /><p className="font-bold">Selecciona un chat</p><p className="text-sm">o inicia una nueva conversación</p></div></div>
+              )}
+            </div>
+          </div>
+        </TabsContent>
+      </Tabs>
+      <Dialog open={showNuevo} onOpenChange={setShowNuevo}>
+        <DialogContent className="max-w-lg rounded-3xl">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Megaphone size={18} className="text-primary" /> Nuevo Comunicado</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <div>
+              <label className="text-xs font-black uppercase text-muted-foreground mb-1 block">Dirigido a</label>
+              <Select value={nuevoTipo} onValueChange={v => { setNuevoTipo(v as TipoDestino); setNuevoDestinoId(''); }}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="GLOBAL">🌐 Todos los usuarios</SelectItem>
+                  <SelectItem value="NIVEL">🏫 Un Nivel</SelectItem>
+                  <SelectItem value="CARRERA">📚 Una Carrera</SelectItem>
+                  <SelectItem value="GRUPO">👥 Un Grupo</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {nuevoTipo !== 'GLOBAL' && (
+              <div>
+                <label className="text-xs font-black uppercase text-muted-foreground mb-1 block">Seleccionar {nuevoTipo.toLowerCase()}</label>
+                <Select value={nuevoDestinoId} onValueChange={setNuevoDestinoId}>
+                  <SelectTrigger><SelectValue placeholder={`Elegir ${nuevoTipo.toLowerCase()}...`} /></SelectTrigger>
+                  <SelectContent>
+                    {nuevoTipo === 'NIVEL' && estructura.niveles.map((n: any) => <SelectItem key={n.id} value={n.id}>{n.nombre}</SelectItem>)}
+                    {nuevoTipo === 'CARRERA' && estructura.carreras.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}
+                    {nuevoTipo === 'GRUPO' && estructura.grupos.map((g: any) => <SelectItem key={g.id} value={g.id}>{g.nombre} {g.turno && `(${g.turno})`}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div>
+              <label className="text-xs font-black uppercase text-muted-foreground mb-1 block">Mensaje</label>
+              <Textarea value={nuevoContenido} onChange={e => setNuevoContenido(e.target.value)} placeholder="Escribe el comunicado..." className="min-h-[120px]" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowNuevo(false)} className="rounded-xl">Cancelar</Button>
+            <Button onClick={enviarComunicado} className="rounded-xl gap-2" disabled={!nuevoContenido.trim() || (nuevoTipo !== 'GLOBAL' && !nuevoDestinoId)}><Send size={14} /> Enviar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={showNuevoChat} onOpenChange={setShowNuevoChat}>
+        <DialogContent className="max-w-md rounded-3xl">
+          <DialogHeader><DialogTitle>Iniciar nuevo chat</DialogTitle></DialogHeader>
+          <Input placeholder="Buscar usuario..." className="mb-3" onChange={e => setBusquedaChat(e.target.value)} />
+          <div className="max-h-[300px] overflow-y-auto space-y-1">
+            {estructura.usuarios.filter((u: any) => u.nombre.toLowerCase().includes(busquedaChat.toLowerCase())).map((u: any) => (
+              <button key={u.id} onClick={() => iniciarNuevoChat(u.id, u.nombre)} className="w-full text-left p-2 rounded-xl hover:bg-primary/5 flex items-center gap-3">
+                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-xs">{u.nombre.split(' ').map((n: string) => n[0]).join('').substring(0, 2)}</div>
+                <div><p className="text-sm font-bold">{u.nombre}</p><p className="text-[10px] text-muted-foreground">{u.rol} · {u.carrera}</p></div>
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

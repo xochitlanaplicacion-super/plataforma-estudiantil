@@ -37,7 +37,8 @@ import {
   UserCog,
   UserPlus,
   CreditCard,
-  BookMarked
+  BookMarked,
+  Mail
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -75,8 +76,9 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
 
   const menuItems = {
     superuser: [
-      { group: "CRM: Atención a Prospectos", items: [
-        { icon: MessageSquare, label: 'Mensajes e Interesados', href: '/dashboard/admin/crm/mensajes' },
+      { group: "CRM: Atención y Prospectos", items: [
+        { icon: MessageSquare, label: 'Prospectos Landing', href: '/dashboard/admin/crm/mensajes' },
+        { icon: Mail, label: 'Mensajería Interna', href: '/dashboard/admin/crm/mensajeria' },
         { icon: ClipboardList, label: 'Pipeline Preregistros', href: '/dashboard/admin/crm/aspirantes' },
       ]},
       { group: "Módulo 1 & 2: Acceso y Usuarios", items: [
@@ -98,7 +100,8 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
     ],
     admin: [
       { group: "CRM y Atención", items: [
-        { icon: MessageSquare, label: 'Mensajes Prospectos', href: '/dashboard/admin/crm/mensajes' },
+        { icon: MessageSquare, label: 'Prospectos Landing', href: '/dashboard/admin/crm/mensajes' },
+        { icon: Mail, label: 'Mensajería Interna', href: '/dashboard/admin/crm/mensajeria' },
         { icon: ClipboardList, label: 'Preregistros', href: '/dashboard/admin/crm/aspirantes' },
       ]},
       { group: "Administración Operativa", items: [
@@ -114,6 +117,7 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
       { group: "Docencia", items: [
         { icon: LayoutDashboard, label: 'Mis Asignaturas', href: '/dashboard/profesor' },
         { icon: Users, label: 'Listas de grupos', href: '/dashboard/profesor/grupos' },
+        { icon: MessageSquare, label: 'Mensajes', href: '/dashboard/profesor/mensajes' },
       ]}
     ],
     alumno: [
@@ -121,6 +125,7 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
         { icon: LayoutDashboard, label: 'Mi Portal Educativo', href: '/dashboard/alumno' },
         { icon: BookOpen, label: 'Mis Materias', href: '/dashboard/alumno/materias' },
         { icon: CreditCard, label: 'Mis Pagos', href: '/dashboard/alumno/pagos' },
+        { icon: MessageSquare, label: 'Mensajes', href: '/dashboard/alumno/mensajes' },
       ]}
     ],
   };
