@@ -271,54 +271,62 @@ export default function MensajeriaInterna() {
                 </SelectContent>
               </Select>
             </div>
-            {nuevoTipo !== 'GLOBAL' && (
-              <div>
-                <label className="text-xs font-black uppercase text-muted-foreground mb-1 block">Seleccionar {nuevoTipo.toLowerCase()}</label>
-                <Popover open={openDestino} onOpenChange={setOpenDestino}>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" role="combobox" className="w-full justify-between font-normal">
-                      {nuevoDestinoId ? (() => {
-                        const lista = nuevoTipo === 'NIVEL' ? estructura.niveles : nuevoTipo === 'CARRERA' ? estructura.carreras : estructura.grupos;
-                        const found = lista.find((i: any) => i.id === nuevoDestinoId);
-                        return found ? (found.nombre + (found.turno ? ` (${found.turno})` : '')) : `Elegir ${nuevoTipo.toLowerCase()}...`;
-                      })() : `Elegir ${nuevoTipo.toLowerCase()}...`}
-                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
-                    <div className="p-2 border-b">
-                      <div className="relative">
-                        <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
-                        <Input
-                          placeholder="Buscar..."
-                          className="pl-8 h-8 text-xs"
-                          value={filtroDestino}
-                          onChange={e => setFiltroDestino(e.target.value)}
-                          autoFocus
-                        />
+            {nuevoTipo !== 'GLOBAL' && (() => {
+              const lista = nuevoTipo === 'NIVEL' ? estructura.niveles : nuevoTipo === 'CARRERA' ? estructura.carreras : estructura.grupos;
+              const seleccionado = lista.find((i: any) => i.id === nuevoDestinoId);
+              const filtrado = lista.filter((item: any) => {
+                const texto = item.nombre + (item.turno ? ` ${item.turno}` : '');
+                return texto.toLowerCase().includes(filtroDestino.toLowerCase());
+              });
+              return (
+                <div>
+                  <label className="text-xs font-black uppercase text-muted-foreground mb-1 block">Seleccionar {nuevoTipo.toLowerCase()}</label>
+                  <div className="relative">
+                    <button
+                      type="button"
+                      className="w-full flex items-center justify-between border rounded-md px-3 py-2 text-sm bg-white hover:bg-muted/30 transition-colors"
+                      onClick={() => { setOpenDestino(prev => !prev); setFiltroDestino(''); }}
+                    >
+                      <span className={seleccionado ? 'text-foreground' : 'text-muted-foreground'}>
+                        {seleccionado ? (seleccionado.nombre + (seleccionado.turno ? ` (${seleccionado.turno})` : '')) : `Elegir ${nuevoTipo.toLowerCase()}...`}
+                      </span>
+                      <ChevronDown className="h-4 w-4 opacity-50" />
+                    </button>
+                    {openDestino && (
+                      <div className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg">
+                        <div className="p-2 border-b">
+                          <div className="relative">
+                            <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                            <input
+                              type="text"
+                              placeholder="Buscar..."
+                              className="w-full pl-8 pr-3 h-8 text-xs border rounded-md bg-muted/20 focus:outline-none focus:ring-2 focus:ring-primary"
+                              value={filtroDestino}
+                              onChange={e => setFiltroDestino(e.target.value)}
+                              autoFocus
+                            />
+                          </div>
+                        </div>
+                        <div className="max-h-[200px] overflow-y-auto p-1">
+                          {filtrado.length === 0 && <p className="text-xs text-muted-foreground text-center py-3">Sin resultados</p>}
+                          {filtrado.map((item: any) => (
+                            <button
+                              key={item.id}
+                              type="button"
+                              className={cn('w-full text-left px-3 py-2 text-sm rounded-md hover:bg-primary/10 transition-colors flex items-center gap-2', nuevoDestinoId === item.id && 'bg-primary/10 font-bold text-primary')}
+                              onClick={() => { setNuevoDestinoId(item.id); setOpenDestino(false); setFiltroDestino(''); }}
+                            >
+                              {nuevoDestinoId === item.id && <Check size={14} className="text-primary shrink-0" />}
+                              <span>{item.nombre}{item.turno ? ` (${item.turno})` : ''}</span>
+                            </button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                    <div className="max-h-[200px] overflow-y-auto p-1">
-                      {(nuevoTipo === 'NIVEL' ? estructura.niveles : nuevoTipo === 'CARRERA' ? estructura.carreras : estructura.grupos)
-                        .filter((item: any) => {
-                          const texto = item.nombre + (item.turno ? ` ${item.turno}` : '');
-                          return texto.toLowerCase().includes(filtroDestino.toLowerCase());
-                        })
-                        .map((item: any) => (
-                          <button
-                            key={item.id}
-                            className={cn('w-full text-left px-3 py-2 text-sm rounded-md hover:bg-primary/10 transition-colors flex items-center gap-2', nuevoDestinoId === item.id && 'bg-primary/10 font-bold text-primary')}
-                            onClick={() => { setNuevoDestinoId(item.id); setOpenDestino(false); setFiltroDestino(''); }}
-                          >
-                            {nuevoDestinoId === item.id && <Check size={14} className="text-primary shrink-0" />}
-                            <span>{item.nombre}{item.turno ? ` (${item.turno})` : ''}</span>
-                          </button>
-                        ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </div>
-            )}
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
             <div>
               <label className="text-xs font-black uppercase text-muted-foreground mb-1 block">Mensaje</label>
               <Textarea value={nuevoContenido} onChange={e => setNuevoContenido(e.target.value)} placeholder="Escribe el comunicado..." className="min-h-[120px]" />
