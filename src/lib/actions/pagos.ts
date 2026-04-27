@@ -124,7 +124,7 @@ export async function getPagosAlumnoPropio(alumnoId: string) {
 export async function getTodosLosAlumnosConPagos() {
   const { data: alumnos, error } = await supabaseAdmin
     .from('profiles')
-    .select(`id, nombre, apellidos, matricula, email, carrera_id, carreras(nombre, niveles(nombre))`)
+    .select(`id, nombre, apellidos, matricula, email, carrera_id, grupo_id, carreras(nombre, niveles(nombre)), grupos(id, nombre, turno)`)
     .eq('rol', 'alumno')
     .eq('estatus', 'activo')
     .order('nombre');

@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -580,6 +580,112 @@ function ConceptoRow({ concepto, onDelete, onUpdate }: { concepto: any; onDelete
   );
 }
 
+// ─── Tarjeta KPI por Grupo ───────────────────────────────────────────────────
+function GrupoKpiCard({ grupo, turno, alumnos, total, alDia, conPendientes, sinAsignar, pct, pagadosGrupo, totalConceptosGrupo, semaforo, onGestionar, onRecordatorio, enviandoRecordatorio }: {
+  grupo: string; turno: string; alumnos: any[]; total: number; alDia: number;
+  conPendientes: number; sinAsignar: number; pct: number;
+  pagadosGrupo: number; totalConceptosGrupo: number;
+  semaforo: { bg: string; light: string; text: string; label: string; ring: string };
+  onGestionar: (a: any) => void; onRecordatorio: (a: any) => void; enviandoRecordatorio: string | null;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  return (
+    <div className={cn('rounded-2xl border-2 overflow-hidden transition-all', semaforo.light)}>
+      {/* Cabecera KPI */}
+      <button
+        onClick={() => setExpanded(e => !e)}
+        className="w-full flex items-center gap-4 px-5 py-4 hover:bg-black/5 transition-colors text-left"
+      >
+        <div className={cn('w-3 h-3 rounded-full shrink-0 shadow', semaforo.bg)} />
+        <div className="flex-1 min-w-0">
+          <p className="font-black text-sm uppercase tracking-wide">{grupo}</p>
+          {turno && <p className="text-[10px] text-muted-foreground uppercase font-semibold">{turno}</p>}
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="text-center">
+            <p className="text-lg font-black leading-none">{total}</p>
+            <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-bold">Alumnos</p>
+          </div>
+          <div className={cn('text-center px-3 py-1.5 rounded-xl', alDia === total && total > 0 ? 'bg-emerald-100' : 'bg-white/60')}>
+            <p className="text-lg font-black leading-none text-emerald-600">{alDia}</p>
+            <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-bold">Al día</p>
+          </div>
+          <div className={cn('text-center px-3 py-1.5 rounded-xl', conPendientes > 0 ? 'bg-red-50' : 'bg-white/60')}>
+            <p className={cn('text-lg font-black leading-none', conPendientes > 0 ? 'text-red-500' : 'text-muted-foreground')}>{conPendientes}</p>
+            <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-bold">Pendientes</p>
+          </div>
+          {sinAsignar > 0 && (
+            <div className="text-center px-3 py-1.5 rounded-xl bg-gray-100">
+              <p className="text-lg font-black leading-none text-gray-400">{sinAsignar}</p>
+              <p className="text-[9px] uppercase tracking-wider text-muted-foreground font-bold">Sin asignar</p>
+            </div>
+          )}
+          <div className="w-36 hidden sm:block">
+            <div className="flex justify-between mb-1">
+              <span className={cn('text-[10px] font-black', semaforo.text)}>{pagadosGrupo}/{totalConceptosGrupo} pagos</span>
+              <span className={cn('text-[10px] font-black', semaforo.text)}>{pct}%</span>
+            </div>
+            <div className="h-2 bg-white/70 rounded-full overflow-hidden border">
+              <div className={cn('h-2 rounded-full transition-all duration-700', semaforo.bg)} style={{ width: `${pct}%` }} />
+            </div>
+          </div>
+          {expanded ? <ChevronUp size={16} className="text-muted-foreground" /> : <ChevronDown size={16} className="text-muted-foreground" />}
+        </div>
+      </button>
+
+      {/* Lista colapsable de alumnos */}
+      {expanded && (
+        <div className="border-t bg-white/80">
+          <Table>
+            <TableHeader>
+              <TableRow className="bg-muted/30">
+                <TableHead className="text-xs">Alumno</TableHead>
+                <TableHead className="text-xs">Progreso de Pagos</TableHead>
+                <TableHead className="text-xs text-right">Acciones</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {alumnos.map(alumno => (
+                <TableRow key={alumno.id} className="hover:bg-muted/20">
+                  <TableCell>
+                    <div className="font-semibold text-sm">{alumno.nombre} {alumno.apellidos}</div>
+                    <div className="text-[10px] font-mono text-muted-foreground">{alumno.matricula || 'Sin matrícula'}</div>
+                  </TableCell>
+                  <TableCell className="min-w-[180px]">
+                    {alumno.total_conceptos === 0 ? (
+                      <span className="text-[10px] text-muted-foreground italic">Sin conceptos asignados</span>
+                    ) : (
+                      <>
+                        <ProgressBar valor={alumno.progreso_ponderado || 0} total={alumno.total_conceptos} />
+                        {alumno.conceptos_abono > 0 && (
+                          <span className="text-[10px] text-blue-500 font-bold">{alumno.conceptos_abono} en abono parcial</span>
+                        )}
+                      </>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                      <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => onGestionar(alumno)}>
+                        <Pencil size={12} /> Gestionar
+                      </Button>
+                      {(alumno.conceptos_pendientes > 0 || alumno.conceptos_abono > 0) && (
+                        <Button size="sm" variant="outline" className="h-8 text-xs gap-1 border-amber-400 text-amber-600 hover:bg-amber-50"
+                          disabled={enviandoRecordatorio === alumno.id} onClick={() => onRecordatorio(alumno)}>
+                          {enviandoRecordatorio === alumno.id ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />} Recordatorio
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── Página Principal ────────────────────────────────────────────────────────
 export default function ControlVigenciasPage() {
   const { toast } = useToast();
@@ -615,19 +721,52 @@ export default function ControlVigenciasPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
+  // Extraer programas reales de los alumnos cargados (carreras.nombre)
+  const programasReales = useMemo(() => {
+    const set = new Set<string>();
+    for (const a of alumnos) {
+      const nombre = a.carreras?.nombre;
+      if (nombre) set.add(nombre);
+    }
+    return Array.from(set).sort();
+  }, [alumnos]);
+
   const alumnosFiltrados = alumnos.filter(a => {
     const nombre = `${a.nombre} ${a.apellidos}`.toLowerCase();
     const matchB = nombre.includes(busqueda.toLowerCase()) || (a.matricula || '').includes(busqueda);
-    const nivel = (a.carreras?.niveles?.nombre || '').toLowerCase();
-    const carrera = (a.carreras?.nombre || '').toLowerCase();
-    const matchP = filtroPrograma === 'todos' || (
-      filtroPrograma === 'PREPA JOVEN' ? carrera.includes('joven') :
-      filtroPrograma === 'BACHILLERATO ADULTOS' ? (carrera.includes('adulto') || carrera.includes('2 meses')) :
-      filtroPrograma === 'UNIVERSIDAD - LICENCIATURA' ? nivel.includes('universidad') :
-      filtroPrograma === 'CAPACITACIONES' ? nivel.includes('capacitac') : true
-    );
+    const carrera = a.carreras?.nombre || '';
+    const matchP = filtroPrograma === 'todos' || carrera === filtroPrograma;
     return matchB && matchP;
   });
+
+  // ─── Agrupar alumnos filtrados por programa → grupo ───────────────────────
+  const alumnosPorPrograma = useMemo(() => {
+    const programaMap = new Map<string, Map<string, any[]>>();
+    for (const a of alumnosFiltrados) {
+      const prog = a.carreras?.nombre || 'Sin Programa';
+      const grupoNombre = a.grupos?.nombre || 'Sin Grupo Asignado';
+      if (!programaMap.has(prog)) programaMap.set(prog, new Map());
+      const grupoMap = programaMap.get(prog)!;
+      if (!grupoMap.has(grupoNombre)) grupoMap.set(grupoNombre, []);
+      grupoMap.get(grupoNombre)!.push(a);
+    }
+    // Convert to sorted array structure
+    return Array.from(programaMap.entries()).map(([prog, grupos]) => ({
+      programa: prog,
+      grupos: Array.from(grupos.entries()).map(([grupo, alumnos]) => {
+        const total = alumnos.length;
+        const alDia = alumnos.filter(a => a.conceptos_pendientes === 0 && a.total_conceptos > 0 && a.conceptos_abono === 0).length;
+        const conPendientes = alumnos.filter(a => a.conceptos_pendientes > 0 || a.conceptos_abono > 0).length;
+        const sinAsignar = alumnos.filter(a => a.total_conceptos === 0).length;
+        // Sumar pagos completos y total de conceptos de TODO el grupo
+        const pagadosGrupo = alumnos.reduce((sum, a) => sum + (a.conceptos_pagados || 0), 0);
+        const totalConceptosGrupo = alumnos.reduce((sum, a) => sum + (a.total_conceptos || 0), 0);
+        const pct = totalConceptosGrupo > 0 ? Math.round((pagadosGrupo / totalConceptosGrupo) * 100) : 0;
+        const turno = alumnos[0]?.grupos?.turno || '';
+        return { grupo, turno, alumnos, total, alDia, conPendientes, sinAsignar, pct, pagadosGrupo, totalConceptosGrupo };
+      }).sort((a, b) => a.pct - b.pct), // worst first
+    }));
+  }, [alumnosFiltrados]);
 
   const stats = {
     total: alumnos.length,
@@ -750,61 +889,58 @@ export default function ControlVigenciasPage() {
                   <SelectTrigger className="w-56"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todos">Todos los programas</SelectItem>
-                    {programas.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
+                    {programasReales.map(p => <SelectItem key={p} value={p}>{p}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
             </CardHeader>
             <CardContent>
-              {loading ? <div className="flex justify-center py-8"><Loader2 className="animate-spin" /></div> : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Alumno</TableHead>
-                      <TableHead>Programa</TableHead>
-                      <TableHead>Progreso de Pagos</TableHead>
-                      <TableHead className="text-right">Acciones</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {alumnosFiltrados.length === 0 ? (
-                      <TableRow><TableCell colSpan={4} className="text-center py-8 text-muted-foreground">No se encontraron alumnos.</TableCell></TableRow>
-                    ) : alumnosFiltrados.map(alumno => (
-                      <TableRow key={alumno.id} className="hover:bg-muted/30">
-                        <TableCell>
-                          <div className="font-semibold text-sm">{alumno.nombre} {alumno.apellidos}</div>
-                          <div className="text-[10px] font-mono text-muted-foreground">{alumno.matricula || 'Sin matrícula'}</div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className="text-[10px]">{alumno.carreras?.niveles?.nombre || '—'}</Badge>
-                          <div className="text-[10px] text-muted-foreground mt-1">{alumno.carreras?.nombre || '—'}</div>
-                        </TableCell>
-                        <TableCell className="min-w-[200px]">
-                          {alumno.total_conceptos === 0 ? (
-                            <span className="text-[10px] text-muted-foreground italic">Sin conceptos asignados</span>
-                          ) : (
-                            <>
-                              <ProgressBar valor={alumno.progreso_ponderado || 0} total={alumno.total_conceptos} />
-                              {alumno.conceptos_abono > 0 && (
-                                <span className="text-[10px] text-blue-500 font-bold">{alumno.conceptos_abono} en abono parcial</span>
-                              )}
-                            </>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button size="sm" variant="outline" className="h-8 text-xs gap-1" onClick={() => setAlumnoSeleccionado(alumno)}><Pencil size={12} /> Gestionar</Button>
-                            {(alumno.conceptos_pendientes > 0 || alumno.conceptos_abono > 0) && (
-                              <Button size="sm" variant="outline" className="h-8 text-xs gap-1 border-amber-400 text-amber-600 hover:bg-amber-50" disabled={enviandoRecordatorio === alumno.id} onClick={() => handleRecordatorio(alumno)}>
-                                {enviandoRecordatorio === alumno.id ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />} Recordatorio
-                              </Button>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+              {loading ? <div className="flex justify-center py-8"><Loader2 className="animate-spin" /></div> : alumnosFiltrados.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">No se encontraron alumnos.</div>
+              ) : (
+                <div className="space-y-8">
+                  {alumnosPorPrograma.map(({ programa, grupos }) => (
+                    <div key={programa}>
+                      {/* Encabezado de programa (solo visible en vista "Todos") */}
+                      {filtroPrograma === 'todos' && (
+                        <div className="flex items-center gap-2 mb-4">
+                          <div className="h-px flex-1 bg-border" />
+                          <span className="text-xs font-black uppercase tracking-widest text-muted-foreground px-2">{programa}</span>
+                          <div className="h-px flex-1 bg-border" />
+                        </div>
+                      )}
+
+                      {/* Grid de tarjetas KPI por grupo */}
+                      <div className="space-y-5">
+                        {grupos.map(({ grupo, turno, alumnos: grupoAlumnos, total, alDia, conPendientes, sinAsignar, pct, pagadosGrupo, totalConceptosGrupo }) => {
+                          const semaforo = pct >= 80 ? { bg: 'bg-emerald-500', light: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-700', label: 'Avance alto', ring: 'ring-emerald-400' }
+                            : pct >= 50 ? { bg: 'bg-amber-400', light: 'bg-amber-50 border-amber-200', text: 'text-amber-700', label: 'Avance medio', ring: 'ring-amber-400' }
+                            : { bg: 'bg-red-500', light: 'bg-red-50 border-red-200', text: 'text-red-700', label: 'Avance bajo', ring: 'ring-red-400' };
+
+                          return (
+                            <GrupoKpiCard
+                              key={grupo}
+                              grupo={grupo}
+                              turno={turno}
+                              alumnos={grupoAlumnos}
+                              total={total}
+                              alDia={alDia}
+                              conPendientes={conPendientes}
+                              sinAsignar={sinAsignar}
+                              pct={pct}
+                              pagadosGrupo={pagadosGrupo}
+                              totalConceptosGrupo={totalConceptosGrupo}
+                              semaforo={semaforo}
+                              onGestionar={setAlumnoSeleccionado}
+                              onRecordatorio={handleRecordatorio}
+                              enviandoRecordatorio={enviandoRecordatorio}
+                            />
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               )}
             </CardContent>
           </Card>
