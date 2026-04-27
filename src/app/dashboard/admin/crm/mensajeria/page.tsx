@@ -71,6 +71,11 @@ export default function MensajeriaInterna() {
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'mensajes_internos' }, (payload) => {
         const old = payload.old as any;
         setMensajesChat(prev => prev.filter(m => m.id !== old.id));
+        setComunicados(prev => prev.filter(c => c.id !== old.id));
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensajes_vistos' }, async () => {
+        const comRes = await obtenerComunicados();
+        if (comRes.success) setComunicados(comRes.data);
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -111,7 +116,11 @@ export default function MensajeriaInterna() {
     setTab('chats');
   };
 
-  const borrarComunicado = async (id: string) => { const res = await eliminarMensaje(id); if (res.success) { toast({ title: 'Eliminado' }); cargarDatos(); } };
+  const borrarComunicado = async (id: string) => {
+    if (!confirm('¿Estás seguro de que quieres borrar este comunicado? Esta acción no se puede deshacer y los usuarios ya no lo verán.')) return;
+    const res = await eliminarMensaje(id, true);
+    if (res.success) { toast({ title: 'Comunicado eliminado' }); /* Realtime update lo maneja */ }
+  };
 
   const fmt = (f: string) => { const d = new Date(f); return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) + ' ' + d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }); };
 

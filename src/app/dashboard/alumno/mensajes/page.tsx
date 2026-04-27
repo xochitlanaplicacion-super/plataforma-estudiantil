@@ -77,6 +77,11 @@ export default function MensajesAlumno() {
           setMensajesChat(prev => prev.map(m => m.id === msg.id ? msg : m));
         }
       })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'mensajes_internos' }, (payload) => {
+        const old = payload.old as any;
+        setMensajesChat(prev => prev.filter(m => m.id !== old.id));
+        setGlobales(prev => prev.filter(g => g.id !== old.id));
+      })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [userId, cargarDatos]);

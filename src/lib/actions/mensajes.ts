@@ -323,14 +323,21 @@ export async function marcarComunicadoVisto(mensajeId: string, usuarioId: string
 
 // ─── ELIMINAR MENSAJE (solo admin/superusuario) ─────────────────────────────
 
-export async function eliminarMensaje(mensajeId: string) {
+export async function eliminarMensaje(mensajeId: string, hardDelete: boolean = false) {
   try {
-    const { error } = await supabaseAdmin
-      .from('mensajes_internos')
-      .update({ contenido: '🚫 Este mensaje fue eliminado' })
-      .eq('id', mensajeId);
-
-    if (error) throw error;
+    if (hardDelete) {
+      const { error } = await supabaseAdmin
+        .from('mensajes_internos')
+        .delete()
+        .eq('id', mensajeId);
+      if (error) throw error;
+    } else {
+      const { error } = await supabaseAdmin
+        .from('mensajes_internos')
+        .update({ contenido: '🚫 Este mensaje fue eliminado' })
+        .eq('id', mensajeId);
+      if (error) throw error;
+    }
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };
