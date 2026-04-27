@@ -274,15 +274,18 @@ export default function MensajeriaInterna() {
                 <label className="text-xs font-black uppercase text-muted-foreground mb-1 block">Seleccionar {nuevoTipo.toLowerCase()}</label>
                 <Select value={nuevoDestinoId} onValueChange={setNuevoDestinoId}>
                   <SelectTrigger><SelectValue placeholder={`Elegir ${nuevoTipo.toLowerCase()}...`} /></SelectTrigger>
-                  <SelectContent>
-                    <div className="p-2 sticky top-0 bg-white z-10 border-b mb-1">
-                      <Input
-                        placeholder="Buscar..."
-                        className="h-8 text-xs"
-                        value={filtroDestino}
-                        onChange={e => setFiltroDestino(e.target.value)}
-                        onKeyDown={e => e.stopPropagation()}
-                      />
+                  <SelectContent className="max-h-[300px]">
+                    <div className="p-2 sticky top-0 bg-white z-10 mb-1 border-b" onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
+                        <Input
+                          placeholder="Buscar..."
+                          className="pl-8 h-8 text-xs bg-muted/40 border-transparent focus-visible:ring-1 focus-visible:ring-primary focus-visible:border-primary"
+                          value={filtroDestino}
+                          onChange={e => setFiltroDestino(e.target.value)}
+                          onKeyDown={e => e.stopPropagation()}
+                        />
+                      </div>
                     </div>
                     {nuevoTipo === 'NIVEL' && estructura.niveles.filter((n: any) => n.nombre.toLowerCase().includes(filtroDestino.toLowerCase())).map((n: any) => <SelectItem key={n.id} value={n.id}>{n.nombre}</SelectItem>)}
                     {nuevoTipo === 'CARRERA' && estructura.carreras.filter((c: any) => c.nombre.toLowerCase().includes(filtroDestino.toLowerCase())).map((c: any) => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}
