@@ -137,13 +137,14 @@ export default function MensajesProfesor() {
               {mensajesChat.length === 0 && <div className="text-center text-muted-foreground text-sm py-10"><MessageSquare size={32} className="mx-auto mb-2 opacity-20" /><p>Inicia una conversación con Dirección</p></div>}
               {mensajesChat.map(m => {
                 const esMio = m.remitente_id === userId;
+                const isDeleted = m.contenido === '🚫 Este mensaje fue eliminado';
                 return (
                   <div key={m.id} className={cn('flex', esMio ? 'justify-end' : 'justify-start')}>
-                    <div className={cn('max-w-[75%] rounded-2xl px-4 py-2 shadow-sm', esMio ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-white rounded-bl-md')}>
+                    <div className={cn('max-w-[75%] rounded-2xl px-4 py-2 shadow-sm', isDeleted ? 'bg-gray-100 text-gray-500 italic rounded-br-md rounded-bl-md' : esMio ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-white rounded-bl-md')}>
                       <p className="text-sm whitespace-pre-wrap">{m.contenido}</p>
                       <div className={cn('flex items-center gap-1 mt-1', esMio ? 'justify-end' : '')}>
-                        <span className={cn('text-[9px]', esMio ? 'text-primary-foreground/60' : 'text-muted-foreground')}>{fmt(m.created_at)}</span>
-                        {esMio && (m.leido ? <CheckCheck size={12} className="text-blue-300" /> : <Check size={12} className="text-primary-foreground/40" />)}
+                        <span className={cn('text-[9px]', isDeleted ? 'text-gray-400' : esMio ? 'text-primary-foreground/60' : 'text-muted-foreground')}>{fmt(m.created_at)}</span>
+                        {esMio && !isDeleted && (m.leido ? <CheckCheck size={12} className="text-blue-300" /> : <Check size={12} className="text-primary-foreground/40" />)}
                       </div>
                     </div>
                   </div>

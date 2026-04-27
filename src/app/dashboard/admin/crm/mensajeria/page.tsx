@@ -101,7 +101,7 @@ export default function MensajeriaInterna() {
 
   const borrarMensajeChat = async (id: string) => {
     const res = await eliminarMensaje(id);
-    if (res.success) { setMensajesChat(prev => prev.filter(m => m.id !== id)); toast({ title: 'Mensaje eliminado' }); }
+    if (res.success) { toast({ title: 'Mensaje eliminado' }); }
   };
 
   const iniciarNuevoChat = async (userId: string, nombre: string) => {
@@ -195,17 +195,17 @@ export default function MensajeriaInterna() {
                   <div className="flex-1 overflow-y-auto p-4 space-y-2">
                     {mensajesChat.map(m => {
                       const esAdmin = m.remitente_id === adminId;
+                      const isDeleted = m.contenido === '🚫 Este mensaje fue eliminado';
                       return (
                         <div key={m.id} className={cn('flex items-end gap-1 group', esAdmin ? 'justify-end' : 'justify-start')}>
-                          {esAdmin && <button onClick={() => borrarMensajeChat(m.id)} className="opacity-0 group-hover:opacity-100 transition-opacity mb-1"><Trash2 size={12} className="text-red-400 hover:text-red-600" /></button>}
-                          <div className={cn('max-w-[70%] rounded-2xl px-4 py-2 shadow-sm', esAdmin ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-white rounded-bl-md')}>
+                          {esAdmin && !isDeleted && <button onClick={() => borrarMensajeChat(m.id)} className="opacity-0 group-hover:opacity-100 transition-opacity mb-1"><Trash2 size={12} className="text-red-400 hover:text-red-600" /></button>}
+                          <div className={cn('max-w-[70%] rounded-2xl px-4 py-2 shadow-sm', isDeleted ? 'bg-gray-100 text-gray-500 italic rounded-br-md rounded-bl-md' : esAdmin ? 'bg-primary text-primary-foreground rounded-br-md' : 'bg-white rounded-bl-md')}>
                             <p className="text-sm whitespace-pre-wrap">{m.contenido}</p>
                             <div className={cn('flex items-center gap-1 mt-1', esAdmin ? 'justify-end' : 'justify-start')}>
-                              <span className={cn('text-[9px]', esAdmin ? 'text-primary-foreground/60' : 'text-muted-foreground')}>{fmt(m.created_at)}</span>
-                              {esAdmin && (m.leido ? <CheckCheck size={12} className="text-blue-300" /> : <Check size={12} className="text-primary-foreground/40" />)}
+                              <span className={cn('text-[9px]', isDeleted ? 'text-gray-400' : esAdmin ? 'text-primary-foreground/60' : 'text-muted-foreground')}>{fmt(m.created_at)}</span>
+                              {esAdmin && !isDeleted && (m.leido ? <CheckCheck size={12} className="text-blue-300" /> : <Check size={12} className="text-primary-foreground/40" />)}
                             </div>
                           </div>
-                          {!esAdmin && <button onClick={() => borrarMensajeChat(m.id)} className="opacity-0 group-hover:opacity-100 transition-opacity mb-1"><Trash2 size={12} className="text-red-400 hover:text-red-600" /></button>}
                         </div>
                       );
                     })}

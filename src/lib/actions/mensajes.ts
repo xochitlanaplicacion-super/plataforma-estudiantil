@@ -327,7 +327,7 @@ export async function eliminarMensaje(mensajeId: string) {
   try {
     const { error } = await supabaseAdmin
       .from('mensajes_internos')
-      .delete()
+      .update({ contenido: '🚫 Este mensaje fue eliminado' })
       .eq('id', mensajeId);
 
     if (error) throw error;
