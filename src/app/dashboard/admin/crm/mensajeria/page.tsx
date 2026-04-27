@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
@@ -24,6 +25,7 @@ export default function MensajeriaInterna() {
   const [adminId, setAdminId] = useState('');
   const [tab, setTab] = useState('comunicados');
   const [comunicados, setComunicados] = useState<any[]>([]);
+  const [comunicadoABorrar, setComunicadoABorrar] = useState<string | null>(null);
   const [showNuevo, setShowNuevo] = useState(false);
   const [nuevoTipo, setNuevoTipo] = useState<TipoDestino>('GLOBAL');
   const [nuevoDestinoId, setNuevoDestinoId] = useState('');
@@ -116,10 +118,13 @@ export default function MensajeriaInterna() {
     setTab('chats');
   };
 
-  const borrarComunicado = async (id: string) => {
-    if (!confirm('¿Estás seguro de que quieres borrar este comunicado? Esta acción no se puede deshacer y los usuarios ya no lo verán.')) return;
+  const confirmarBorrarComunicado = async () => {
+    if (!comunicadoABorrar) return;
+    const id = comunicadoABorrar;
+    setComunicados(prev => prev.filter(c => c.id !== id));
     const res = await eliminarMensaje(id, true);
-    if (res.success) { toast({ title: 'Comunicado eliminado' }); /* Realtime update lo maneja */ }
+    if (res.success) { toast({ title: 'Comunicado eliminado' }); }
+    setComunicadoABorrar(null);
   };
 
   const fmt = (f: string) => { const d = new Date(f); return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) + ' ' + d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }); };
@@ -128,6 +133,21 @@ export default function MensajeriaInterna() {
 
   return (
     <div className="space-y-6">
+      <AlertDialog open={!!comunicadoABorrar} onOpenChange={(open) => !open && setComunicadoABorrar(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción no se puede deshacer. Esto eliminará permanentemente el comunicado y los usuarios ya no podrán verlo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmarBorrarComunicado} className="bg-red-500 hover:bg-red-600 text-white">Borrar comunicado</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <div>
         <h2 className="text-3xl font-black tracking-tight text-primary flex items-center gap-2"><MessageSquare size={28} /> Mensajería Interna</h2>
         <p className="text-muted-foreground">Comunicados globales y chat directo con alumnos y profesores.</p>
@@ -162,7 +182,7 @@ export default function MensajeriaInterna() {
                         </div>
                       </div>
                     </div>
-                    <Button variant="ghost" size="icon" className="text-red-400 hover:text-red-600 shrink-0" onClick={() => borrarComunicado(c.id)}><Trash2 size={16} /></Button>
+                    <Button variant="ghost" size="icon" className="text-red-400 hover:text-red-600 shrink-0" onClick={() => setComunicadoABorrar(c.id)}><Trash2 size={16} /></Button>
                   </CardContent>
                 </Card>
               );
