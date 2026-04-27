@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
-import { enviarMensaje } from '@/lib/actions/mensajes';
+import { enviarMensaje, marcarChatComoLeido } from '@/lib/actions/mensajes';
 
 const playNotificationSound = () => {
   try {
@@ -103,6 +103,8 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
           setActiveChatId(latestMsg.remitente_id);
           setActiveChatName(latestMsg.remitenteNombre);
           setIsOpen(true);
+          // Marcar como leídos al abrir el popup
+          marcarChatComoLeido(userId, latestMsg.remitente_id);
         }
       }
     };
@@ -156,6 +158,8 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
           setActiveChatName(remitenteNombre);
           setIsOpen(false); // trigger re-render bounce
           setTimeout(() => setIsOpen(true), 50);
+          // Marcar como leídos al recibir y mostrar el popup
+          marcarChatComoLeido(userId, msg.remitente_id);
         }
       })
       .subscribe();
@@ -167,6 +171,9 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
 
   const handleReply = async () => {
     if (!replyText.trim() || !activeChatId) return;
+
+    // Marcar como leídos al responder
+    marcarChatComoLeido(userId, activeChatId);
 
     // Mostrar el mensaje optimisticamente
     setMessages(prev => [...prev, {
@@ -236,6 +243,7 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
               <button
                 onClick={() => {
                   setIsAdminPopupOpen(false);
+                  setAdminUnreadCount(0);
                   router.push('/dashboard/admin/crm/mensajeria');
                 }}
                 className="w-full py-2.5 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl text-sm transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2"
