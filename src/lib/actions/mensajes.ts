@@ -23,7 +23,7 @@ export async function obtenerAdminId() {
     const { data } = await supabaseAdmin
       .from('profiles')
       .select('id, nombre, apellidos')
-      .in('rol', ['superusuario', 'administrador'])
+      .in('rol', ['superuser', 'admin'])
       .limit(1)
       .single();
     return { success: true, id: data?.id || '', nombre: data ? `${data.nombre} ${data.apellidos}` : 'Administración' };
@@ -398,7 +398,7 @@ export async function obtenerEstructuraAcademica() {
     const { data: usuarios } = await supabaseAdmin
       .from('profiles')
       .select('id, nombre, apellidos, rol, matricula, carreras(nombre)')
-      .in('rol', ['alumno', 'profesor', 'administrador'])
+      .in('rol', ['alumno', 'profesor', 'admin'])
       .eq('estatus', 'activo')
       .order('nombre');
 
