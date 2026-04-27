@@ -161,10 +161,10 @@ export default function MensajeriaInterna() {
             {comunicados.length === 0 && <p className="text-center text-muted-foreground py-10">No hay comunicados enviados aún.</p>}
           </div>
         </TabsContent>
-        <TabsContent value="chats">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border rounded-2xl overflow-hidden h-[65vh]">
-            <div className={cn("border-r flex flex-col bg-white", chatActivo ? 'hidden md:flex' : 'flex')}>
-              <div className="p-3 border-b space-y-2">
+        <TabsContent value="chats" className="mt-0 outline-none">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-0 border rounded-2xl overflow-hidden h-[70vh] min-h-[500px]">
+            <div className={cn("border-r flex flex-col h-full overflow-hidden bg-white", chatActivo ? 'hidden md:flex' : 'flex')}>
+              <div className="p-3 border-b space-y-2 shrink-0">
                 <div className="flex gap-2">
                   <Input placeholder="Buscar chat..." value={busquedaChat} onChange={e => setBusquedaChat(e.target.value)} className="text-sm h-9" />
                   <Button size="sm" variant="outline" onClick={() => setShowNuevoChat(true)} className="shrink-0 h-9"><Users size={14} /></Button>
@@ -184,10 +184,10 @@ export default function MensajeriaInterna() {
                 {chatsFiltrados.length === 0 && <p className="text-center text-muted-foreground text-sm py-8">Sin chats aún</p>}
               </div>
             </div>
-            <div className={cn("md:col-span-2 flex flex-col bg-[#f0ebe3]", !chatActivo ? 'hidden md:flex' : 'flex')}>
+            <div className={cn("md:col-span-2 flex flex-col h-full overflow-hidden bg-[#f0ebe3]", !chatActivo ? 'hidden md:flex' : 'flex')}>
               {chatActivo ? (
                 <>
-                  <div className="p-3 bg-white border-b flex items-center gap-3">
+                  <div className="p-3 bg-white border-b flex items-center gap-3 shrink-0">
                     <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setChatActivo(null)}><ArrowLeft size={18} /></Button>
                     <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center text-primary font-black text-sm">{chatNombre.split(' ').map(n => n[0]).join('').substring(0, 2)}</div>
                     <div><p className="font-bold text-sm">{chatNombre}</p><p className="text-[10px] text-muted-foreground">Chat individual</p></div>
@@ -211,7 +211,7 @@ export default function MensajeriaInterna() {
                     })}
                     <div ref={messagesEndRef} />
                   </div>
-                  <div className="p-3 bg-white border-t flex gap-2">
+                  <div className="p-3 bg-white border-t flex gap-2 shrink-0">
                     <Input value={nuevoMsg} onChange={e => setNuevoMsg(e.target.value)} placeholder="Escribe un mensaje..." className="flex-1" onKeyDown={e => e.key === 'Enter' && !e.shiftKey && enviarMsgChat()} />
                     <Button onClick={enviarMsgChat} className="rounded-xl"><Send size={16} /></Button>
                   </div>
