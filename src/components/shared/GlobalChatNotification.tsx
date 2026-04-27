@@ -11,6 +11,36 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { enviarMensaje } from '@/lib/actions/mensajes';
 
+const playNotificationSound = () => {
+  try {
+    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioContext) return;
+    const ctx = new AudioContext();
+    
+    const playNote = (freq: number, startTime: number, duration: number, vol: number = 0.3) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, startTime);
+      
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(vol, startTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.01, startTime + duration);
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(startTime);
+      osc.stop(startTime + duration);
+    };
+
+    const now = ctx.currentTime;
+    playNote(880, now, 0.15, 0.2); // Tono 1
+    playNote(1108.73, now + 0.1, 0.25, 0.2); // Tono 2 (más alto)
+  } catch (e) {
+    // Ignorar si el navegador bloquea el auto-play
+  }
+};
+
 interface GlobalChatNotificationProps {
   userId: string;
   userRole: string;
@@ -111,6 +141,9 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
         const { data: remitente } = await supabase.from('profiles').select('nombre, apellidos, rol').eq('id', msg.remitente_id).single();
         const remitenteNombre = remitente ? `${remitente.nombre} ${remitente.apellidos}` : 'Usuario';
 
+        // Reproducir sonido
+        playNotificationSound();
+
         // Forzar la apertura del popup al recibir mensaje nuevo
         if (isAdmin) {
           setAdminUnreadCount(prev => prev + 1);
@@ -165,8 +198,8 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
     if (!isAdminPopupOpen || adminUnreadCount === 0) return null;
 
     return (
-      <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-5 fade-in duration-300 pointer-events-auto">
-        <div className="w-80 md:w-96 drop-shadow-2xl">
+      <div className="fixed top-4 right-4 md:top-auto md:bottom-6 md:right-6 z-[100] animate-in slide-in-from-top-5 md:slide-in-from-bottom-5 fade-in duration-300 pointer-events-auto">
+        <div className="w-[calc(100vw-32px)] md:w-96 drop-shadow-2xl">
           <div className="bg-white rounded-2xl overflow-hidden border border-border shadow-xl">
             {/* Header tipo WhatsApp */}
             <div className="bg-green-500 text-white px-4 py-3 flex items-center justify-between">
@@ -220,8 +253,8 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
   if (!isOpen) return null;
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-5 fade-in duration-300">
-      <Card className="w-80 shadow-2xl border-primary/20 flex flex-col overflow-hidden bg-white">
+    <div className="fixed top-4 right-4 md:top-auto md:bottom-6 md:right-6 z-[100] animate-in slide-in-from-top-5 md:slide-in-from-bottom-5 fade-in duration-300">
+      <Card className="w-[calc(100vw-32px)] md:w-80 shadow-2xl border-primary/20 flex flex-col overflow-hidden bg-white">
         {/* Header */}
         <div className="bg-primary text-primary-foreground p-3 flex justify-between items-center">
           <div className="flex items-center gap-2">
