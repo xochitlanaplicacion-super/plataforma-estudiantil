@@ -28,6 +28,10 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
   const [messages, setMessages] = useState<any[]>([]);
   const [replyText, setReplyText] = useState('');
 
+  const [adminUnreadCount, setAdminUnreadCount] = useState(0);
+  const [adminLatestSender, setAdminLatestSender] = useState<string | null>(null);
+  const [isAdminPopupOpen, setIsAdminPopupOpen] = useState(false);
+
   // Si estamos en la página de mensajería, no mostramos el popup para no duplicar interfaces
   const isMessagingPage = pathname.includes('/mensajeria') || pathname.includes('/mensajes');
   const isAdmin = userRole === 'admin' || userRole === 'superuser';
@@ -46,16 +50,8 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
           .eq('leido', false);
 
         if (!error && count && count > 0) {
-          toast({
-            title: "Tienes mensajes nuevos",
-            description: `Tienes ${count} mensaje(s) sin leer en tu bandeja.`,
-            action: (
-              <Button size="sm" onClick={() => router.push('/dashboard/admin/crm/mensajeria')}>
-                Ver mensajes
-              </Button>
-            ),
-            duration: 10000,
-          });
+          setAdminUnreadCount(count);
+          setIsAdminPopupOpen(true);
         }
       }
     };
@@ -96,16 +92,9 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
 
         // Lógica de visualización
         if (isAdmin) {
-          // Toast elegante para admin
-          toast({
-            title: `Nuevo mensaje de ${remitenteNombre}`,
-            description: msg.contenido.length > 50 ? msg.contenido.substring(0, 50) + '...' : msg.contenido,
-            action: (
-              <Button size="sm" onClick={() => router.push('/dashboard/admin/crm/mensajeria')}>
-                Responder
-              </Button>
-            ),
-          });
+          setAdminUnreadCount(prev => prev + 1);
+          setAdminLatestSender(remitenteNombre);
+          setIsAdminPopupOpen(true);
         } else {
           // Popup flotante para alumnos y profesores
           setMessages(prev => [...prev, { ...msg, remitenteNombre }]);
@@ -148,7 +137,65 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
     }
   };
 
-  if (isAdmin || isMessagingPage || !isOpen) return null;
+  if (isMessagingPage) return null;
+
+  if (isAdmin) {
+    if (!isAdminPopupOpen || adminUnreadCount === 0) return null;
+
+    return (
+      <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-5 fade-in duration-300 pointer-events-auto">
+        <div className="w-80 md:w-96 drop-shadow-2xl">
+          <div className="bg-white rounded-2xl overflow-hidden border border-border shadow-xl">
+            {/* Header tipo WhatsApp */}
+            <div className="bg-green-500 text-white px-4 py-3 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center shrink-0">
+                  <MessageSquare size={16} className="text-white" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-sm font-bold leading-tight">Mensajes Nuevos</span>
+                  <span className="text-[10px] text-green-100 font-medium">Bandeja de entrada</span>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsAdminPopupOpen(false)}
+                className="text-white/80 hover:text-white p-1 rounded-full hover:bg-white/10 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Cuerpo del mensaje */}
+            <div className="p-5 bg-[url('/images/whatsapp-bg.png')] bg-cover bg-center">
+              <div className="bg-white p-4 rounded-xl rounded-tl-none shadow-sm border border-slate-100 relative text-center">
+                <h4 className="text-sm font-bold text-slate-800 mb-1">Atención CRM</h4>
+                <p className="text-sm text-slate-600 leading-relaxed mb-2">
+                  Tienes <strong className="text-green-600">{adminUnreadCount}</strong> mensaje(s) sin leer en tu bandeja.
+                  {adminLatestSender && <span><br/><br/><span className="text-xs text-slate-400">Último mensaje de:</span><br/><b>{adminLatestSender}</b></span>}
+                </p>
+              </div>
+            </div>
+
+            {/* Botón de acción */}
+            <div className="p-3 bg-slate-50 border-t border-slate-100">
+              <button
+                onClick={() => {
+                  setIsAdminPopupOpen(false);
+                  router.push('/dashboard/admin/crm/mensajeria');
+                }}
+                className="w-full py-2.5 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl text-sm transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2"
+              >
+                <MessageSquare size={18} />
+                Ver mensajes
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isOpen) return null;
 
   return (
     <div className="fixed bottom-6 right-6 z-50 animate-in slide-in-from-bottom-5 fade-in duration-300">
