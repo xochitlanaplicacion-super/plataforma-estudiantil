@@ -4,7 +4,9 @@
 import dns from 'node:dns';
 dns.setDefaultResultOrder('ipv4first');
 
+import { unstable_noStore as noStore } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
+
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
@@ -157,6 +159,7 @@ export async function obtenerListaChats(adminId: string) {
 // ─── OBTENER COMUNICADOS GLOBALES (para el admin) ───────────────────────────
 
 export async function obtenerComunicados() {
+  noStore();
   try {
     const { data, error } = await supabaseAdmin
       .from('mensajes_internos')
