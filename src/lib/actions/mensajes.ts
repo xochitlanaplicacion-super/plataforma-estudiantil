@@ -142,6 +142,11 @@ export async function obtenerListaChats(adminId: string) {
       };
     });
 
+    result.sort((a, b) => {
+      if (b.noLeidos !== a.noLeidos) return b.noLeidos - a.noLeidos;
+      return new Date(b.fecha).getTime() - new Date(a.fecha).getTime();
+    });
+
     return { success: true, data: result };
   } catch (err: any) {
     console.error('Error obteniendo lista de chats:', err);
@@ -424,5 +429,25 @@ export async function obtenerEstructuraAcademica() {
     };
   } catch (err: any) {
     return { success: false, niveles: [], carreras: [], grupos: [], usuarios: [], error: err.message };
+  }
+}
+
+// ─── MARCAR CHAT ENTERO COMO LEÍDO (Para el Admin) ──────────────────────────
+
+export async function marcarChatComoLeido(adminId: string, remitenteId: string) {
+  try {
+    const { error } = await supabaseAdmin
+      .from('mensajes_internos')
+      .update({ leido: true })
+      .eq('tipo_destino', 'INDIVIDUAL')
+      .eq('destinatario_id', adminId)
+      .eq('remitente_id', remitenteId)
+      .eq('leido', false);
+
+    if (error) throw error;
+    return { success: true };
+  } catch (err: any) {
+    console.error('Error marcando chat como leído:', err);
+    return { success: false, error: err.message };
   }
 }

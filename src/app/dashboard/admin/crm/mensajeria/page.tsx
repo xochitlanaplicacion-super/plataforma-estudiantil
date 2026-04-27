@@ -17,7 +17,7 @@ import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import {
   enviarMensaje, obtenerComunicados, obtenerListaChats, obtenerConversacion,
-  obtenerEstructuraAcademica, eliminarMensaje, marcarComoLeido, type TipoDestino,
+  obtenerEstructuraAcademica, eliminarMensaje, marcarComoLeido, marcarChatComoLeido, type TipoDestino,
 } from '@/lib/actions/mensajes';
 
 export default function MensajeriaInterna() {
@@ -91,7 +91,8 @@ export default function MensajeriaInterna() {
     const res = await obtenerConversacion(adminId, userId);
     if (res.success) {
       setMensajesChat(res.data);
-      for (const m of res.data) { if (m.destinatario_id === adminId && !m.leido) await marcarComoLeido(m.id); }
+      await marcarChatComoLeido(adminId, userId);
+      setChats(prev => prev.map(c => c.userId === userId ? { ...c, noLeidos: 0 } : c));
     }
     setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
   };
@@ -207,7 +208,13 @@ export default function MensajeriaInterna() {
                   <button key={c.userId} onClick={() => cargarChat(c.userId, c.nombre)} className={cn("w-full text-left p-3 border-b hover:bg-primary/5 transition-colors flex items-center gap-3", chatActivo === c.userId && 'bg-primary/10')}>
                     <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center text-primary font-black text-sm shrink-0">{c.nombre.split(' ').map((n: string) => n[0]).join('').substring(0, 2)}</div>
                     <div className="flex-1 min-w-0">
-                      <div className="flex justify-between"><p className="font-bold text-sm truncate">{c.nombre}</p><span className="text-[9px] text-muted-foreground shrink-0">{fmt(c.fecha)}</span></div>
+                      <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-1.5">
+                          <p className={cn("text-sm truncate", c.noLeidos > 0 ? "font-black text-gray-900" : "font-semibold")}>{c.nombre}</p>
+                          {c.noLeidos > 0 && <div className="w-2 h-2 rounded-full bg-green-500 shrink-0" />}
+                        </div>
+                        <span className={cn("text-[9px] shrink-0", c.noLeidos > 0 ? "text-green-600 font-bold" : "text-muted-foreground")}>{fmt(c.fecha)}</span>
+                      </div>
                       <p className="text-xs text-muted-foreground truncate">{c.ultimoMensaje}</p>
                     </div>
                     {c.noLeidos > 0 && <Badge className="bg-emerald-500 text-white text-[10px] rounded-full h-5 w-5 flex items-center justify-center p-0">{c.noLeidos}</Badge>}

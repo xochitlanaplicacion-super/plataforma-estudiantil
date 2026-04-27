@@ -28,6 +28,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
     <DashboardLayout 
       userRole={profile.rol as any} 
       userName={userName}
+      userId={user.id}
     >
       {children}
     </DashboardLayout>

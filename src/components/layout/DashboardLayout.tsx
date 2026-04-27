@@ -46,14 +46,16 @@ import { Separator } from '@/components/ui/separator';
 import { UserRole } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
+import { GlobalChatNotification } from '@/components/shared/GlobalChatNotification';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
   userRole: UserRole;
   userName: string;
+  userId: string;
 }
 
-export function DashboardLayout({ children, userRole, userName }: DashboardLayoutProps) {
+export function DashboardLayout({ children, userRole, userName, userId }: DashboardLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
@@ -199,6 +201,7 @@ export function DashboardLayout({ children, userRole, userName }: DashboardLayou
           </main>
         </div>
       </SidebarInset>
+      <GlobalChatNotification userId={userId} userRole={userRole} />
     </SidebarProvider>
   );
 }
