@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { MessageSquare, Send, Users, Megaphone, Search, Check, CheckCheck, Trash2, ArrowLeft } from 'lucide-react';
+import { MessageSquare, Send, Users, Megaphone, Search, Check, CheckCheck, Trash2, ArrowLeft, ChevronDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
@@ -30,6 +31,7 @@ export default function MensajeriaInterna() {
   const [nuevoTipo, setNuevoTipo] = useState<TipoDestino>('GLOBAL');
   const [nuevoDestinoId, setNuevoDestinoId] = useState('');
   const [filtroDestino, setFiltroDestino] = useState('');
+  const [openDestino, setOpenDestino] = useState(false);
   const [nuevoContenido, setNuevoContenido] = useState('');
   const [estructura, setEstructura] = useState<any>({ niveles: [], carreras: [], grupos: [], usuarios: [] });
   const [chats, setChats] = useState<any[]>([]);
@@ -272,26 +274,49 @@ export default function MensajeriaInterna() {
             {nuevoTipo !== 'GLOBAL' && (
               <div>
                 <label className="text-xs font-black uppercase text-muted-foreground mb-1 block">Seleccionar {nuevoTipo.toLowerCase()}</label>
-                <Select value={nuevoDestinoId} onValueChange={setNuevoDestinoId}>
-                  <SelectTrigger><SelectValue placeholder={`Elegir ${nuevoTipo.toLowerCase()}...`} /></SelectTrigger>
-                  <SelectContent className="max-h-[300px]">
-                    <div className="p-2 sticky top-0 bg-white z-10 mb-1 border-b" onPointerDown={e => e.stopPropagation()} onClick={e => e.stopPropagation()}>
+                <Popover open={openDestino} onOpenChange={setOpenDestino}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" role="combobox" className="w-full justify-between font-normal">
+                      {nuevoDestinoId ? (() => {
+                        const lista = nuevoTipo === 'NIVEL' ? estructura.niveles : nuevoTipo === 'CARRERA' ? estructura.carreras : estructura.grupos;
+                        const found = lista.find((i: any) => i.id === nuevoDestinoId);
+                        return found ? (found.nombre + (found.turno ? ` (${found.turno})` : '')) : `Elegir ${nuevoTipo.toLowerCase()}...`;
+                      })() : `Elegir ${nuevoTipo.toLowerCase()}...`}
+                      <ChevronDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <div className="p-2 border-b">
                       <div className="relative">
                         <Search className="absolute left-2.5 top-2 h-3.5 w-3.5 text-muted-foreground" />
                         <Input
                           placeholder="Buscar..."
-                          className="pl-8 h-8 text-xs bg-muted/40 border-transparent focus-visible:ring-1 focus-visible:ring-primary focus-visible:border-primary"
+                          className="pl-8 h-8 text-xs"
                           value={filtroDestino}
                           onChange={e => setFiltroDestino(e.target.value)}
-                          onKeyDown={e => e.stopPropagation()}
+                          autoFocus
                         />
                       </div>
                     </div>
-                    {nuevoTipo === 'NIVEL' && estructura.niveles.filter((n: any) => n.nombre.toLowerCase().includes(filtroDestino.toLowerCase())).map((n: any) => <SelectItem key={n.id} value={n.id}>{n.nombre}</SelectItem>)}
-                    {nuevoTipo === 'CARRERA' && estructura.carreras.filter((c: any) => c.nombre.toLowerCase().includes(filtroDestino.toLowerCase())).map((c: any) => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}
-                    {nuevoTipo === 'GRUPO' && estructura.grupos.filter((g: any) => g.nombre.toLowerCase().includes(filtroDestino.toLowerCase()) || g.turno?.toLowerCase().includes(filtroDestino.toLowerCase())).map((g: any) => <SelectItem key={g.id} value={g.id}>{g.nombre} {g.turno && `(${g.turno})`}</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                    <div className="max-h-[200px] overflow-y-auto p-1">
+                      {(nuevoTipo === 'NIVEL' ? estructura.niveles : nuevoTipo === 'CARRERA' ? estructura.carreras : estructura.grupos)
+                        .filter((item: any) => {
+                          const texto = item.nombre + (item.turno ? ` ${item.turno}` : '');
+                          return texto.toLowerCase().includes(filtroDestino.toLowerCase());
+                        })
+                        .map((item: any) => (
+                          <button
+                            key={item.id}
+                            className={cn('w-full text-left px-3 py-2 text-sm rounded-md hover:bg-primary/10 transition-colors flex items-center gap-2', nuevoDestinoId === item.id && 'bg-primary/10 font-bold text-primary')}
+                            onClick={() => { setNuevoDestinoId(item.id); setOpenDestino(false); setFiltroDestino(''); }}
+                          >
+                            {nuevoDestinoId === item.id && <Check size={14} className="text-primary shrink-0" />}
+                            <span>{item.nombre}{item.turno ? ` (${item.turno})` : ''}</span>
+                          </button>
+                        ))}
+                    </div>
+                  </PopoverContent>
+                </Popover>
               </div>
             )}
             <div>
