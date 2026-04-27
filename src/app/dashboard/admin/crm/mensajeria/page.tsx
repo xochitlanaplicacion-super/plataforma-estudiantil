@@ -29,6 +29,7 @@ export default function MensajeriaInterna() {
   const [showNuevo, setShowNuevo] = useState(false);
   const [nuevoTipo, setNuevoTipo] = useState<TipoDestino>('GLOBAL');
   const [nuevoDestinoId, setNuevoDestinoId] = useState('');
+  const [filtroDestino, setFiltroDestino] = useState('');
   const [nuevoContenido, setNuevoContenido] = useState('');
   const [estructura, setEstructura] = useState<any>({ niveles: [], carreras: [], grupos: [], usuarios: [] });
   const [chats, setChats] = useState<any[]>([]);
@@ -96,7 +97,7 @@ export default function MensajeriaInterna() {
   const enviarComunicado = async () => {
     if (!nuevoContenido.trim()) return;
     const res = await enviarMensaje({ remitente_id: adminId, tipo_destino: nuevoTipo, destino_id: nuevoTipo === 'GLOBAL' ? null : nuevoDestinoId || null, contenido: nuevoContenido });
-    if (res.success) { toast({ title: '📢 Comunicado enviado' }); setShowNuevo(false); setNuevoContenido(''); setNuevoDestinoId(''); cargarDatos(); }
+    if (res.success) { toast({ title: '📢 Comunicado enviado' }); setShowNuevo(false); setNuevoContenido(''); setNuevoDestinoId(''); setFiltroDestino(''); cargarDatos(); }
     else toast({ variant: 'destructive', title: 'Error', description: res.error });
   };
 
@@ -258,7 +259,7 @@ export default function MensajeriaInterna() {
           <div className="space-y-4 py-2">
             <div>
               <label className="text-xs font-black uppercase text-muted-foreground mb-1 block">Dirigido a</label>
-              <Select value={nuevoTipo} onValueChange={v => { setNuevoTipo(v as TipoDestino); setNuevoDestinoId(''); }}>
+              <Select value={nuevoTipo} onValueChange={v => { setNuevoTipo(v as TipoDestino); setNuevoDestinoId(''); setFiltroDestino(''); }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="GLOBAL">🌐 Todos los usuarios</SelectItem>
@@ -274,9 +275,18 @@ export default function MensajeriaInterna() {
                 <Select value={nuevoDestinoId} onValueChange={setNuevoDestinoId}>
                   <SelectTrigger><SelectValue placeholder={`Elegir ${nuevoTipo.toLowerCase()}...`} /></SelectTrigger>
                   <SelectContent>
-                    {nuevoTipo === 'NIVEL' && estructura.niveles.map((n: any) => <SelectItem key={n.id} value={n.id}>{n.nombre}</SelectItem>)}
-                    {nuevoTipo === 'CARRERA' && estructura.carreras.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}
-                    {nuevoTipo === 'GRUPO' && estructura.grupos.map((g: any) => <SelectItem key={g.id} value={g.id}>{g.nombre} {g.turno && `(${g.turno})`}</SelectItem>)}
+                    <div className="p-2 sticky top-0 bg-white z-10 border-b mb-1">
+                      <Input
+                        placeholder="Buscar..."
+                        className="h-8 text-xs"
+                        value={filtroDestino}
+                        onChange={e => setFiltroDestino(e.target.value)}
+                        onKeyDown={e => e.stopPropagation()}
+                      />
+                    </div>
+                    {nuevoTipo === 'NIVEL' && estructura.niveles.filter((n: any) => n.nombre.toLowerCase().includes(filtroDestino.toLowerCase())).map((n: any) => <SelectItem key={n.id} value={n.id}>{n.nombre}</SelectItem>)}
+                    {nuevoTipo === 'CARRERA' && estructura.carreras.filter((c: any) => c.nombre.toLowerCase().includes(filtroDestino.toLowerCase())).map((c: any) => <SelectItem key={c.id} value={c.id}>{c.nombre}</SelectItem>)}
+                    {nuevoTipo === 'GRUPO' && estructura.grupos.filter((g: any) => g.nombre.toLowerCase().includes(filtroDestino.toLowerCase()) || g.turno?.toLowerCase().includes(filtroDestino.toLowerCase())).map((g: any) => <SelectItem key={g.id} value={g.id}>{g.nombre} {g.turno && `(${g.turno})`}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
