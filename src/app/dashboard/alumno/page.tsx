@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { PaginationTasks } from './components/PaginationTasks';
 import MaterialCarousel from './components/MaterialCarousel';
 import { PaymentNotificationPopup } from './components/PaymentNotificationPopup';
+import { AcreditacionNotificationPopup } from './components/AcreditacionNotificationPopup';
 import Image from 'next/image';
 import { getDatosContactoFormateados } from '@/lib/actions/horarios';
 
@@ -128,6 +129,7 @@ export default async function AlumnoDashboard() {
         {/* ACCIONES DEL HEADER: NOTIFICACIÓN Y WHATSAPP */}
         <div className="flex items-center gap-4">
           <PaymentNotificationPopup latestNotification={latestNotification} />
+          <AcreditacionNotificationPopup />
           
           <a 
             href={whatsappUrl}

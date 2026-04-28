@@ -94,6 +94,7 @@ export function DashboardLayout({ children, userRole, userName, userId }: Dashbo
         { icon: UserCog, label: 'Asignación Profesores', href: '/dashboard/admin/profesores' },
         { icon: UserPlus, label: 'Matrícula y Salones', href: '/dashboard/admin/inscripciones' },
         { icon: BookMarked, label: 'Material de Apoyo Oficial', href: '/dashboard/admin/material' },
+        { icon: FileText, label: 'Dictámenes de Acreditación', href: '/dashboard/admin/acreditaciones' },
       ]},
       { group: "Módulo 10: Reportes", items: [
         { icon: CreditCard, label: 'Control de Pagos', href: '/dashboard/admin/vigencias' },
@@ -112,6 +113,7 @@ export function DashboardLayout({ children, userRole, userName, userId }: Dashbo
         { icon: UserCog, label: 'Asignar Profesores', href: '/dashboard/admin/profesores' },
         { icon: UserPlus, label: 'Matrícula y Salones', href: '/dashboard/admin/inscripciones' },
         { icon: BookMarked, label: 'Material de Apoyo Oficial', href: '/dashboard/admin/material' },
+        { icon: FileText, label: 'Dictámenes de Acreditación', href: '/dashboard/admin/acreditaciones' },
         { icon: CreditCard, label: 'Control de Pagos', href: '/dashboard/admin/vigencias' },
       ]}
     ],
@@ -127,6 +129,7 @@ export function DashboardLayout({ children, userRole, userName, userId }: Dashbo
         { icon: LayoutDashboard, label: 'Mi Portal Educativo', href: '/dashboard/alumno' },
         { icon: BookOpen, label: 'Mis Materias', href: '/dashboard/alumno/materias' },
         { icon: CreditCard, label: 'Mis Pagos', href: '/dashboard/alumno/pagos' },
+        { icon: FileText, label: 'Documento de Acreditación', href: '/dashboard/alumno/acreditacion' },
         { icon: MessageSquare, label: 'Mensajes', href: '/dashboard/alumno/mensajes' },
       ]}
     ],
