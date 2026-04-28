@@ -244,9 +244,9 @@ export default function AcreditacionesPage() {
           nuevosResultados.push({
             fileName: original, // Siempre mostramos el nombre del archivo original (PDF o imagen)
             success: result.success,
-            curp: result.success ? (result as any).curp : undefined,
-            nombre: result.success ? (result as any).nombre : undefined,
-            engine: result.success ? (result as any).engine : undefined,
+            curp: (result as any).curp,
+            nombre: (result as any).nombre,
+            engine: (result as any).engine,
             error: !result.success ? result.error : undefined,
             warning: result.success ? (result as any).warning : undefined,
           });

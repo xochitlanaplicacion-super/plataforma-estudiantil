@@ -78,13 +78,13 @@ export default function AcreditacionAlumnoPage() {
     }
   };
 
-  const handleDescargar = () => {
+  const handleDescargar = async () => {
     if (!acreditacion) return;
     toast({
       title: "Generando Documento...",
       description: "Tu dictamen oficial se descargará en unos segundos.",
     });
-    generarDictamenPDF(acreditacion);
+    await generarDictamenPDF(acreditacion);
   };
 
   if (loading) {

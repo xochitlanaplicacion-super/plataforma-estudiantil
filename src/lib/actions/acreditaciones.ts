@@ -256,6 +256,17 @@ export async function procesarDocumentoOCR(formData: FormData) {
       validationWarning = `El documento de "${jsonData.nombres}" dice "${jsonData.resultado_final}" pero lo subiste a la zona No Aprobados.`;
     }
 
+    if (validationWarning) {
+      return {
+        success: false,
+        fileName,
+        error: validationWarning, // The mismatch message is shown as error
+        engine: engineUsed,
+        curp: curpLimpio,
+        nombre: `${jsonData.nombres} ${jsonData.primer_apellido || ''} ${jsonData.segundo_apellido || ''}`.trim(),
+      };
+    }
+
     // --- POST-PROCESO: Etapas de evaluación ---
     if (Array.isArray(jsonData.etapas_evaluacion) && jsonData.etapas_evaluacion.length > 0) {
       // 1) Encontrar la primera fecha válida en cualquier etapa
