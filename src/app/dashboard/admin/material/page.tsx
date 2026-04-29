@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Progress } from '@/components/ui/progress';
 import { useToast } from '@/hooks/use-toast';
 import { createClient } from '@/lib/supabase/client';
@@ -31,7 +32,10 @@ import {
   Loader2,
   X,
   Database,
-  FolderOpen
+  FolderOpen,
+  GraduationCap,
+  Check,
+  Search
 } from 'lucide-react';
 import {
   getNiveles,
@@ -44,6 +48,7 @@ import {
   updateCategoriaCompleta,
   deleteCategoria
 } from '@/lib/actions/material';
+import { getCarreras } from '@/lib/actions/academic';
 import { MaterialApoyo } from '@/lib/types';
 
 export default function MaterialDeApoyoPage() {
@@ -79,8 +84,17 @@ export default function MaterialDeApoyoPage() {
     newDescripcion: ''
   });
 
+  // Carreras (Programas) State
+  const [carrerasDisponibles, setCarrerasDisponibles] = useState<any[]>([]);
+  const [selectedCarreras, setSelectedCarreras] = useState<string[]>([]);
+  const [searchCarrera, setSearchCarrera] = useState('');
+
   // Tab State
   const [activeTab, setActiveTab] = useState<string>('');
+
+  // Explorador State
+  const [globalCarreras, setGlobalCarreras] = useState<Record<string, string>>({});
+  const [searchFolders, setSearchFolders] = useState('');
 
   const fetchInitialData = async () => {
     setLoading(true);
@@ -128,7 +142,48 @@ export default function MaterialDeApoyoPage() {
         { y: 0, opacity: 1, duration: 0.4, stagger: 0.1, ease: "power2.out", clearProps: "all" }
       );
     }
-  }, [activeTab, loading, materiales]);
+  }, [activeTab, loading, materiales, searchFolders]);
+
+  // Fetch carreras globales para la vista del explorador
+  useEffect(() => {
+    if (activeTab) {
+      getCarreras(activeTab).then(res => {
+        if (res.data) {
+          const map: Record<string, string> = {};
+          res.data.forEach((c: any) => { map[c.id] = c.nombre; });
+          setGlobalCarreras(map);
+        }
+      });
+    }
+  }, [activeTab]);
+
+  // Fetch carreras when uploading/appending
+  useEffect(() => {
+    if (modalUpload && form.nivel_id) {
+      getCarreras(form.nivel_id).then(res => {
+        if (res.data && res.data.length > 0) {
+          setCarrerasDisponibles(res.data);
+        } else {
+          setCarrerasDisponibles([]);
+          setSelectedCarreras([]);
+        }
+      });
+    }
+  }, [form.nivel_id, modalUpload]);
+
+  // Fetch carreras when editing
+  useEffect(() => {
+    if (modalEdit && editForm.newNivelId) {
+      getCarreras(editForm.newNivelId).then(res => {
+        if (res.data && res.data.length > 0) {
+          setCarrerasDisponibles(res.data);
+        } else {
+          setCarrerasDisponibles([]);
+          setSelectedCarreras([]);
+        }
+      });
+    }
+  }, [editForm.newNivelId, modalEdit]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
@@ -161,13 +216,16 @@ export default function MaterialDeApoyoPage() {
     setForm({ nivel_id: activeTab || (niveles[0]?.id || ''), categoria: '', descripcion: '' });
     setSelectedFiles([]);
     setUploadProgress({});
+    setSelectedCarreras([]);
+    setSearchCarrera('');
     setIsAppending(false);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const openAppendModal = (categoria: string, nivel_id: string, descripcion: string) => {
+  const openAppendModal = (categoria: string, nivel_id: string, descripcion: string, carreras_ids: string[] = []) => {
     clearForm();
     setForm({ nivel_id, categoria, descripcion: descripcion || '' });
+    setSelectedCarreras(carreras_ids || []);
     setIsAppending(true);
     setModalUpload(true);
   };
@@ -270,6 +328,7 @@ export default function MaterialDeApoyoPage() {
           tipo_archivo: getExtType(file.name),
           tamano_bytes: file.size,
           publicado: true,
+          carreras_ids: selectedCarreras.length > 0 ? selectedCarreras : null,
           created_by: userId
         });
       }
@@ -334,7 +393,7 @@ export default function MaterialDeApoyoPage() {
     }
   };
 
-  const openEditCatModal = (nivelId: string, oldCat: string, oldDesc: string) => {
+  const openEditCatModal = (nivelId: string, oldCat: string, oldDesc: string, carreras_ids: string[] = []) => {
     setEditForm({
       oldNivelId: nivelId,
       oldCategoria: oldCat,
@@ -342,6 +401,8 @@ export default function MaterialDeApoyoPage() {
       newCategoria: oldCat,
       newDescripcion: oldDesc || ''
     });
+    setSelectedCarreras(carreras_ids || []);
+    setSearchCarrera('');
     setModalEdit(true);
   };
 
@@ -356,7 +417,8 @@ export default function MaterialDeApoyoPage() {
       editForm.oldCategoria, 
       editForm.newNivelId, 
       editForm.newCategoria.trim(), 
-      editForm.newDescripcion
+      editForm.newDescripcion,
+      selectedCarreras
     );
     
     if (res.success) {
@@ -381,6 +443,133 @@ export default function MaterialDeApoyoPage() {
       toast({ variant: 'destructive', title: 'Error al eliminar', description: res.error });
       setLoading(false);
     }
+  };
+
+  const renderFolderBadges = (carrerasIds: string[] | null) => {
+    if (!carrerasIds || carrerasIds.length === 0) {
+      return <Badge variant="outline" className="bg-emerald-50/80 text-emerald-700 border-emerald-200 mt-1 font-medium hover:bg-emerald-100 transition-colors">Público / Global</Badge>;
+    }
+    
+    // Asignador de colores estático basado en UUID
+    const getBadgeColor = (id: string) => {
+      const colors = [
+        "bg-blue-50/80 text-blue-700 border-blue-200 hover:bg-blue-100",
+        "bg-purple-50/80 text-purple-700 border-purple-200 hover:bg-purple-100",
+        "bg-amber-50/80 text-amber-700 border-amber-200 hover:bg-amber-100",
+        "bg-rose-50/80 text-rose-700 border-rose-200 hover:bg-rose-100",
+        "bg-teal-50/80 text-teal-700 border-teal-200 hover:bg-teal-100",
+        "bg-indigo-50/80 text-indigo-700 border-indigo-200 hover:bg-indigo-100",
+        "bg-pink-50/80 text-pink-700 border-pink-200 hover:bg-pink-100",
+      ];
+      let sum = 0;
+      for (let i = 0; i < id.length; i++) sum += id.charCodeAt(i);
+      return colors[sum % colors.length];
+    };
+
+    const maxVisible = 2;
+    const visibleIds = carrerasIds.slice(0, maxVisible);
+    const hiddenIds = carrerasIds.slice(maxVisible);
+
+    return (
+      <div className="flex items-center gap-1.5 flex-wrap mt-1">
+        {visibleIds.map(id => (
+          <Badge key={id} variant="outline" className={cn("text-[10px] py-0 font-medium transition-colors cursor-default", getBadgeColor(id))}>
+            {globalCarreras[id] || "Cargando..."}
+          </Badge>
+        ))}
+        {hiddenIds.length > 0 && (
+          <Popover>
+            <PopoverTrigger asChild>
+              <Badge variant="outline" className="cursor-pointer hover:bg-slate-100 text-[10px] py-0 transition-colors bg-white font-medium shadow-sm">
+                +{hiddenIds.length} Más
+              </Badge>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-3 bg-white/95 backdrop-blur-md shadow-xl border-slate-200 rounded-xl" align="start">
+              <div className="space-y-3">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 border-b pb-2">
+                  <GraduationCap size={14} /> Todas las Carreras
+                </p>
+                <div className="flex flex-col gap-1.5">
+                  {hiddenIds.map(id => (
+                    <Badge key={id} variant="outline" className={cn("text-[10px] py-0 w-fit font-medium", getBadgeColor(id))}>
+                      {globalCarreras[id] || "Cargando..."}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </PopoverContent>
+          </Popover>
+        )}
+      </div>
+    );
+  };
+
+  const renderCarrerasSelector = () => {
+    if (carrerasDisponibles.length === 0) return null;
+
+    const filteredCarreras = carrerasDisponibles.filter(c => 
+      c.nombre.toLowerCase().includes(searchCarrera.toLowerCase())
+    );
+
+    const toggleCarrera = (id: string) => {
+      setSelectedCarreras(prev => 
+        prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
+      );
+    };
+
+    const selectAll = () => {
+      setSelectedCarreras(carrerasDisponibles.map(c => c.id));
+    };
+
+    const deselectAll = () => {
+      setSelectedCarreras([]);
+    };
+
+    return (
+      <div className="space-y-3 pt-3">
+        <div className="flex items-center justify-between">
+          <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+            <GraduationCap size={14} /> Selecciona Carreras (Exclusividad)
+          </Label>
+          <div className="flex gap-2">
+            <Button type="button" variant="ghost" size="sm" className="h-6 text-[10px]" onClick={selectAll}>Todos</Button>
+            <Button type="button" variant="ghost" size="sm" className="h-6 text-[10px]" onClick={deselectAll}>Ninguno</Button>
+          </div>
+        </div>
+        <p className="text-[11px] text-muted-foreground mt-0">Si no seleccionas ninguna, el material será visible globalmente para todo el Nivel.</p>
+        
+        <Input 
+          placeholder="Buscar carrera..." 
+          value={searchCarrera} 
+          onChange={(e) => setSearchCarrera(e.target.value)}
+          className="h-8 text-xs bg-white"
+        />
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto p-1 bg-slate-50/50 rounded-xl border">
+          {filteredCarreras.map(c => {
+            const isSelected = selectedCarreras.includes(c.id);
+            return (
+              <div 
+                key={c.id} 
+                onClick={() => toggleCarrera(c.id)}
+                className={cn(
+                  "flex items-start gap-2 p-2.5 rounded-lg border cursor-pointer transition-colors text-xs",
+                  isSelected ? "bg-primary/10 border-primary/50 text-primary font-medium shadow-sm" : "bg-white hover:bg-slate-50 border-slate-200"
+                )}
+              >
+                <div className={cn(
+                  "w-4 h-4 rounded-[4px] border flex items-center justify-center shrink-0 transition-colors mt-0.5",
+                  isSelected ? "bg-primary border-primary text-white" : "border-slate-300"
+                )}>
+                  {isSelected && <Check size={10} strokeWidth={4} />}
+                </div>
+                <span className="leading-tight">{c.nombre}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
   };
 
   const getFileIcon = (tipo: string) => {
@@ -484,10 +673,44 @@ export default function MaterialDeApoyoPage() {
             }, {} as Record<string, MaterialApoyo[]>);
 
             const categories = Object.entries(categoriesObj).sort((a,b) => a[0].localeCompare(b[0]));
+            
+            // Search filter
+            const filteredCategories = categories.filter(([catName, items]) => {
+              if (!searchFolders.trim()) return true;
+              const term = searchFolders.toLowerCase();
+              
+              // 1. Título
+              if (catName.toLowerCase().includes(term)) return true;
+              
+              // 2. Descripción
+              const desc = items[0]?.descripcion || '';
+              if (desc.toLowerCase().includes(term)) return true;
+              
+              // 3. Nombres de las Carreras (usando el mapa global)
+              const cIds = items[0]?.carreras_ids || [];
+              const matchCarrera = cIds.some(id => {
+                const nombre = globalCarreras[id] || '';
+                return nombre.toLowerCase().includes(term);
+              });
+              
+              return matchCarrera;
+            });
 
             return (
               <TabsContent key={nivel.id} value={nivel.id} className="mt-0 outline-none">
-                {matA.length === 0 ? (
+                {matA.length > 0 && (
+                  <div className="relative max-w-sm mb-6">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                    <Input 
+                      placeholder="Buscar por carpeta, descripción o carrera..." 
+                      className="pl-9 h-10 bg-white/60 focus:bg-white shadow-sm border-primary/20 rounded-xl"
+                      value={searchFolders}
+                      onChange={(e) => setSearchFolders(e.target.value)}
+                    />
+                  </div>
+                )}
+                
+                {filteredCategories.length === 0 ? (
                    <Card className="bg-muted/10 border-dashed shadow-none">
                     <CardContent className="p-16 flex flex-col items-center justify-center text-center">
                       <div className="h-16 w-16 bg-white rounded-full flex items-center justify-center mb-4 text-muted-foreground shadow-sm">
@@ -499,21 +722,22 @@ export default function MaterialDeApoyoPage() {
                    </Card>
                 ) : (
                   <div ref={accordionRef} className="space-y-6">
-                    {categories.map(([catName, items]) => (
+                    {filteredCategories.map(([catName, items]) => (
                       <Card key={catName} className="overflow-hidden border-primary/20 shadow-sm transition-all hover:shadow-md">
-                        <CardHeader className="bg-primary/5 p-4 md:px-6 border-b border-primary/10 flex flex-row items-center gap-3">
-                          <div className="h-10 w-10 flex items-center justify-center bg-white rounded-lg shadow-sm text-primary">
-                            <FolderOpen size={20} />
+                        <CardHeader className="bg-primary/5 p-4 md:px-6 border-b border-primary/10 flex flex-row items-start gap-4">
+                          <div className="h-12 w-12 flex shrink-0 items-center justify-center bg-white rounded-xl shadow-sm border border-primary/10 text-primary">
+                            <FolderOpen size={24} />
                           </div>
-                          <div className="flex-1">
-                            <CardTitle className="text-lg font-black text-primary flex items-center gap-2">
+                          <div className="flex-1 overflow-hidden">
+                            <CardTitle className="text-lg font-black text-primary flex items-center gap-2 truncate">
                               {catName}
                             </CardTitle>
                             {items[0]?.descripcion && (
-                              <CardDescription className="text-xs text-muted-foreground leading-tight mt-0.5 line-clamp-1">
+                              <CardDescription className="text-xs text-muted-foreground leading-tight mt-0.5 line-clamp-1 mb-1">
                                 {items[0].descripcion}
                               </CardDescription>
                             )}
+                            {renderFolderBadges(items[0]?.carreras_ids || null)}
                           </div>
                           <div className="flex items-center gap-3 shrink-0 ml-auto flex-wrap justify-end">
                             <Button 
@@ -521,7 +745,7 @@ export default function MaterialDeApoyoPage() {
                               variant="ghost" 
                               className="h-8 w-8 text-slate-400 hover:text-primary hover:bg-primary/5 transition-colors" 
                               title="Editar Atributos de Carpeta"
-                              onClick={() => openEditCatModal(nivel.id, catName, items[0]?.descripcion || '')}
+                              onClick={() => openEditCatModal(nivel.id, catName, items[0]?.descripcion || '', items[0]?.carreras_ids || [])}
                             >
                               <Edit size={14} />
                             </Button>
@@ -541,7 +765,7 @@ export default function MaterialDeApoyoPage() {
                               size="sm" 
                               variant="outline" 
                               className="h-8 shadow-sm text-primary hover:text-primary-foreground hover:bg-primary border-primary/20 transition-colors" 
-                              onClick={() => openAppendModal(catName, nivel.id, items[0]?.descripcion || '')}
+                              onClick={() => openAppendModal(catName, nivel.id, items[0]?.descripcion || '', items[0]?.carreras_ids || [])}
                             >
                               <Plus size={14} className="mr-1" /> Añadir Más
                             </Button>
@@ -717,6 +941,8 @@ export default function MaterialDeApoyoPage() {
               />
             </div>
 
+            {renderCarrerasSelector()}
+
           </div>
 
           <DialogFooter className="border-t pt-4">
@@ -763,6 +989,8 @@ export default function MaterialDeApoyoPage() {
                 onChange={e => setEditForm(f => ({ ...f, newDescripcion: e.target.value }))}
               />
             </div>
+
+            {renderCarrerasSelector()}
           </div>
           
           <DialogFooter className="border-t pt-4">

@@ -102,9 +102,11 @@ export default async function AlumnoDashboard() {
 
   // Obtener material de apoyo público para el nivel del alumno
   const nivelId = (profile?.carreras as any)?.nivel_id;
+  const carreraId = profile?.carrera_id;
+  
   let materialesData: any[] = [];
   if (nivelId) {
-    const { data } = await getMaterialPublicoPorNivel(nivelId);
+    const { data } = await getMaterialPublicoPorNivel(nivelId, carreraId);
     materialesData = data || [];
   }
 

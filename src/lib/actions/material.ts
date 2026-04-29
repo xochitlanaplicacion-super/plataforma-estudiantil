@@ -39,13 +39,20 @@ export async function getMaterialPorNivel(nivelId: string) {
 }
 
 // --- MATERIAL PÚBLICO PARA ALUMNOS (solo publicado=true) ---
-export async function getMaterialPublicoPorNivel(nivelId: string) {
+export async function getMaterialPublicoPorNivel(nivelId: string, carreraId?: string) {
   try {
-    const { data, error } = await supabaseAdmin
+    let query = supabaseAdmin
       .from('material_apoyo')
-      .select('id, titulo, categoria, descripcion, archivo_url, tipo_archivo, tamano_bytes, created_at')
+      .select('id, titulo, categoria, descripcion, archivo_url, tipo_archivo, tamano_bytes, carreras_ids, created_at')
       .eq('nivel_id', nivelId)
-      .eq('publicado', true)
+      .eq('publicado', true);
+
+    if (carreraId) {
+      // Verifica si el array contiene la carrera OR si es nulo/vacío (global)
+      query = query.or(`carreras_ids.cs.{${carreraId}},carreras_ids.is.null,carreras_ids.eq.{}`);
+    }
+
+    const { data, error } = await query
       .order('categoria')
       .order('created_at', { ascending: false });
 
@@ -78,9 +85,15 @@ export async function uploadMaterial(formData: FormData, userId: string) {
     const categoria = formData.get('categoria') as string;
     const descripcion = formData.get('descripcion') as string;
     const nivelId = formData.get('nivel_id') as string;
+    const carrerasIdsStr = formData.get('carreras_ids') as string;
 
     if (!files || files.length === 0 || !categoria || !nivelId) {
       return { success: false, error: 'Faltan datos requeridos (archivos, categoría, nivel).' };
+    }
+
+    let carreras_ids: string[] = [];
+    if (carrerasIdsStr) {
+      try { carreras_ids = JSON.parse(carrerasIdsStr); } catch(e) {}
     }
 
     const maxFileSize = 20971520; // 20 MB
@@ -137,6 +150,7 @@ export async function uploadMaterial(formData: FormData, userId: string) {
         tipo_archivo: tipoArchivo,
         tamano_bytes: file.size,
         publicado: true,
+        carreras_ids: carreras_ids.length > 0 ? carreras_ids : null,
         created_by: userId
       });
     }
@@ -193,7 +207,8 @@ export async function updateCategoriaCompleta(
   oldCategoria: string, 
   newNivelId: string, 
   newCategoria: string, 
-  newDescripcion: string | null
+  newDescripcion: string | null,
+  newCarrerasIds?: string[] | null
 ) {
   try {
     const { error } = await supabaseAdmin
@@ -201,7 +216,8 @@ export async function updateCategoriaCompleta(
       .update({ 
         categoria: newCategoria,
         nivel_id: newNivelId,
-        descripcion: newDescripcion
+        descripcion: newDescripcion,
+        carreras_ids: newCarrerasIds && newCarrerasIds.length > 0 ? newCarrerasIds : null
       })
       .match({ nivel_id: oldNivelId, categoria: oldCategoria });
     if (error) throw error;

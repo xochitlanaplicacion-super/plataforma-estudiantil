@@ -160,6 +160,7 @@ export interface MaterialApoyo {
   tipo_archivo: 'pdf' | 'word' | 'excel' | 'powerpoint';
   tamano_bytes?: number;
   publicado: boolean;
+  carreras_ids?: string[];
   created_by?: string;
   created_at?: string;
   niveles?: { nombre: string };
