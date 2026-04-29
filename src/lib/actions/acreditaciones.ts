@@ -247,7 +247,7 @@ export async function procesarDocumentoOCR(formData: FormData) {
     // Validación semántica de Estatus
     const rawResult = (jsonData.resultado_final || '').toLowerCase();
     const isApprovedDoc = /aprobado|acreditado|pas[oó]|satisfactorio/.test(rawResult);
-    const isRejectedDoc = /no aprobado|no acreditado|insatisfactorio|reprobado/.test(rawResult);
+    const isRejectedDoc = /no aprobado|no acreditado|insatisfactorio|reprobado|no present[oó]/.test(rawResult);
 
     let validationWarning: string | null = null;
     if (expectedStatus === 'APROBADO' && isRejectedDoc) {
