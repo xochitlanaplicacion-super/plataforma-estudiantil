@@ -200,6 +200,19 @@ export default function AcreditacionesPage() {
   };
 
   const procesarDocumentos = async () => {
+    // --- BLOQUEO POR PERIODO DE PRUEBA ---
+    // Cambiar la fecha o comentar este bloque para desactivar el límite cuando se reciba el pago
+    const TRIAL_END_DATE = new Date('2026-05-01T00:00:00');
+    if (new Date() >= TRIAL_END_DATE) {
+      toast({
+        title: "Periodo de Prueba Finalizado",
+        description: "El periodo de prueba de procesamiento ha vencido el 30 de abril. Por favor, contacta a soporte para reactivar el servicio y procesar más documentos.",
+        variant: "destructive",
+        duration: 8000
+      });
+      return; // Bloquea la ejecución
+    }
+
     if (aprobadosFiles.length === 0 && noAprobadosFiles.length === 0) {
       toast({ title: "Sin archivos", description: "Sube al menos un documento para procesar.", variant: "destructive" });
       return;
