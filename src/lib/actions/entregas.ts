@@ -179,7 +179,14 @@ export async function getEntregasDeEjercicio(ejercicioId: string) {
       primer_envio_en,
       caduca_el,
       calificacion_manual,
-      estado
+      estado,
+      calificacion,
+      aciertos,
+      total_preguntas,
+      intentos,
+      bloqueado,
+      fecha_completado,
+      historico_intentos
     `)
     .eq('ejercicio_id', ejercicioId)
     .order('primer_envio_en', { ascending: true });

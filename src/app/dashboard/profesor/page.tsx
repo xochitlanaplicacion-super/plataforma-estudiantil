@@ -914,7 +914,7 @@ export default function ProfesorDashboard() {
             <TabsTrigger value="unidades" disabled={!selectedMateria} className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white font-bold uppercase text-[10px] tracking-widest">Unidades</TabsTrigger>
             <TabsTrigger value="temas" disabled={!selectedUnidad} className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white font-bold uppercase text-[10px] tracking-widest">Temas</TabsTrigger>
             <TabsTrigger value="ejercicios" disabled={!selectedTema} className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white font-bold uppercase text-[10px] tracking-widest">Actividades</TabsTrigger>
-            <TabsTrigger value="entregas" disabled={!selectedTema || ejercicios.filter(e => e.tipo === 'actividad_descriptiva').length === 0} className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white font-bold uppercase text-[10px] tracking-widest">Entregas</TabsTrigger>
+            <TabsTrigger value="entregas" disabled={!selectedTema || ejercicios.length === 0} className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white font-bold uppercase text-[10px] tracking-widest">Entregas</TabsTrigger>
           </TabsList>
 
           <TabsContent value="materias">
@@ -1051,7 +1051,7 @@ export default function ProfesorDashboard() {
                  <Button variant="ghost" size="sm" onClick={() => setCurrentTab('temas')} className="text-primary font-black uppercase text-[10px]"><ArrowLeft size={14} /> Volver a Temas</Button>
                </div>
                <PanelEntregasProfesor 
-                 ejercicios={ejercicios.filter((e: any) => e.tipo === 'actividad_descriptiva')} 
+                 ejercicios={ejercicios} 
                  materiaId={selectedMateria?.id} 
                  materiaNombre={selectedMateria?.nombre} 
                />

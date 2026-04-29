@@ -221,7 +221,13 @@ export async function getAlumnoDashboardData(userId: string) {
   }
 }
 
-export async function saveExerciseResult(ejercicioId: string, aciertos: number, total: number, calificacionIntento: number) {
+export async function saveExerciseResult(
+  ejercicioId: string, 
+  aciertos: number, 
+  total: number, 
+  calificacionIntento: number,
+  detallesErrores?: any
+) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
 
@@ -261,13 +267,25 @@ export async function saveExerciseResult(ejercicioId: string, aciertos: number, 
     return { success: true, data: existing, message: 'Calificación perfecta ya registrada.' };
   }
 
-  // 3. Cálculos de promedio acumulado
+  // Cálculos de promedio acumulado
   const nuevosIntentos = (existing?.intentos || 0) + 1;
   const nuevaSuma = (Number(existing?.suma_calificaciones) || 0) + calificacionIntento;
   const nuevaCalificacionPromedio = Math.min(100, nuevaSuma / nuevosIntentos);
 
-  // 4. Determinar si bloqueamos (si EN ESTE INTENTO sacó 100)
+  // Determinar si bloqueamos (si EN ESTE INTENTO sacó 100)
   const debeBloquear = calificacionIntento >= 100;
+
+  // Actualizar el historial de intentos
+  const historicoPrevio = Array.isArray(existing?.historico_intentos) ? existing.historico_intentos : [];
+  const nuevoIntento = {
+    intento: nuevosIntentos,
+    fecha: new Date().toISOString(),
+    calificacion: calificacionIntento,
+    aciertos,
+    total_preguntas: total,
+    detalles: detallesErrores || null
+  };
+  const nuevoHistorico = [...historicoPrevio, nuevoIntento];
 
   const { data, error } = await supabase
     .from('resultados_ejercicios')
@@ -281,7 +299,8 @@ export async function saveExerciseResult(ejercicioId: string, aciertos: number, 
       suma_calificaciones: nuevaSuma,
       bloqueado: debeBloquear,
       estado: 'completado',
-      fecha_completado: new Date().toISOString()
+      fecha_completado: new Date().toISOString(),
+      historico_intentos: nuevoHistorico
     }, {
       onConflict: 'alumno_id, ejercicio_id'
     })

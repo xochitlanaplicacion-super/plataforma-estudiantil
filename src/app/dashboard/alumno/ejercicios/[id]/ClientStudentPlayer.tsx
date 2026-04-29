@@ -29,14 +29,14 @@ export default function ClientStudentPlayer({
   const [hasProcessed, setHasProcessed] = useState(false);
   const [finalScore, setFinalScore] = useState<number | null>(null);
 
-  const handleComplete = async (score: number, total: number) => {
+  const handleComplete = async (score: number, total: number, detallesErrores?: any[]) => {
     if (hasProcessed) return;
     try {
       setHasProcessed(true);
       setSaving(true);
       const percentage = (score / total) * 100;
       
-      const res = await saveExerciseResult(exercise.id, score, total, percentage);
+      const res = await saveExerciseResult(exercise.id, score, total, percentage, detallesErrores);
       
       if (res.error) {
         toast({

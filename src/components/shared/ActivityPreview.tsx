@@ -244,7 +244,7 @@ function generateCrossword(inputs: WordInput[]): CrosswordData {
 export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistente, isPreview }: { 
   exercise: any; 
   onClose: () => void; 
-  onComplete?: (score: number, total: number) => void;
+  onComplete?: (score: number, total: number, detallesErrores?: any[]) => void;
   entregaExistente?: any;
   isPreview?: boolean;
 }) => {
@@ -253,13 +253,15 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
   const [totalSteps, setTotalSteps] = useState(0);
   const [finished, setSuccess] = useState(false);
 
+  const [mistakesDetail, setMistakesDetail] = useState<any[]>([]);
+
   const hasCompleted = useRef(false);
   useEffect(() => {
     if (finished && onComplete && !hasCompleted.current) {
       hasCompleted.current = true;
-      onComplete(score, totalSteps);
+      onComplete(score, totalSteps, mistakesDetail.length > 0 ? mistakesDetail : undefined);
     }
-  }, [finished, onComplete, score, totalSteps]); // Dependency array updated for clarity
+  }, [finished, onComplete, score, totalSteps, mistakesDetail]); // Dependency array updated for clarity
   
   const isMobile = useIsMobile();
   const [mobileTipDismissed, setMobileTipDismissed] = useState<Record<string, boolean>>({});
@@ -353,8 +355,34 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
   }, [content, exercise.tipo, generateSopaGrid]);
 
   const handleNext = (isCorrect: boolean) => {
-    if (isCorrect) setScore(prev => prev + 1);
+    if (isCorrect) {
+      setScore(prev => prev + 1);
+    }
     
+    // Attempt to find the text of the selected option
+    let respuestaDada = String(selectedOption);
+    if (exercise.tipo === 'opcion_multiple' && shuffledItems[currentStep]?.options) {
+      const opt = shuffledItems[currentStep].options.find((o: any) => o.id === selectedOption);
+      if (opt) respuestaDada = opt.text;
+    } else if (exercise.tipo === 'verdadero_falso') {
+      respuestaDada = selectedOption ? 'VERDADERO' : 'FALSO';
+    }
+
+    let respuestaCorrecta = String(shuffledItems[currentStep]?.correctId || shuffledItems[currentStep]?.correct || 'Desconocida');
+    if (exercise.tipo === 'opcion_multiple' && shuffledItems[currentStep]?.options) {
+      const opt = shuffledItems[currentStep].options.find((o: any) => o.id === shuffledItems[currentStep].correctId);
+      if (opt) respuestaCorrecta = opt.text;
+    } else if (exercise.tipo === 'verdadero_falso') {
+      respuestaCorrecta = shuffledItems[currentStep]?.correct ? 'VERDADERO' : 'FALSO';
+    }
+
+    setMistakesDetail(prev => [...prev, {
+      reactivo: shuffledItems[currentStep]?.question || shuffledItems[currentStep]?.statement || shuffledItems[currentStep]?.front || `Paso ${currentStep + 1}`,
+      respuesta_dada: respuestaDada,
+      respuesta_correcta: respuestaCorrecta,
+      esCorrecto: isCorrect
+    }]);
+
     if (currentStep + 1 < totalSteps) {
       setCurrentStep(prev => prev + 1);
       setSelectedOption(null);
@@ -414,20 +442,40 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
 
   const finishGradedActivity = () => {
     let finalScore = 0;
+    const currentMistakes: any[] = [];
     if (exercise.tipo === 'emparejamiento') {
       content.items.forEach((item: any) => {
-        if (matchedPairs[item.left] === item.right) finalScore++;
+        const isCorrect = matchedPairs[item.left] === item.right;
+        if (isCorrect) {
+          finalScore++;
+        }
+        currentMistakes.push({
+          reactivo: item.left,
+          respuesta_dada: matchedPairs[item.left] || 'Sin emparejar',
+          respuesta_correcta: item.right,
+          esCorrecto: isCorrect
+        });
       });
     } else if (exercise.tipo === 'ordenar_secuencia') {
       let isPerfect = true;
       content.items.forEach((item: string, i: number) => {
-        if (sequenceItems[i] !== item) isPerfect = false;
+        const isCorrect = sequenceItems[i] === item;
+        if (!isCorrect) {
+          isPerfect = false;
+        }
+        currentMistakes.push({
+          reactivo: `Posición ${i + 1}`,
+          respuesta_dada: sequenceItems[i],
+          respuesta_correcta: item,
+          esCorrecto: isCorrect
+        });
       });
       finalScore = isPerfect ? 1 : 0;
     } else if (exercise.tipo === 'completar_espacios') {
       // Logic handled by onFinish callback of CompletarEspaciosPreview
       return;
     }
+    setMistakesDetail(prev => [...prev, ...currentMistakes]);
     setScore(finalScore);
     setSuccess(true);
   };

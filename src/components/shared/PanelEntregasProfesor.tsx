@@ -3,11 +3,18 @@
 import React, { useState, useTransition, useEffect } from 'react';
 import {
   Download, Clock, CheckCircle2, AlertTriangle, Loader2,
-  Users, FileText, ChevronDown, ChevronUp, Star, BookOpen
+  Users, FileText, ChevronDown, ChevronUp, Star, BookOpen, Activity, History, Target
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { calificarEntregaDescriptiva, getEntregasDeEjercicio } from '@/lib/actions/entregas';
 import { useToast } from '@/hooks/use-toast';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
 interface Entrega {
   alumno_id: string;
@@ -18,6 +25,11 @@ interface Entrega {
   caduca_el: string;
   calificacion_manual: number | null;
   estado: string;
+  calificacion?: number;
+  intentos?: number;
+  aciertos?: number;
+  total_preguntas?: number;
+  historico_intentos?: any[];
   profiles: {
     nombre: string;
     apellidos: string;
@@ -25,14 +37,15 @@ interface Entrega {
   } | null;
 }
 
-interface EjercicioDescriptivo {
+interface Ejercicio {
   id: string;
   titulo: string;
   fecha_entrega: string | null;
+  tipo: string;
 }
 
 interface Props {
-  ejercicios: EjercicioDescriptivo[];
+  ejercicios: Ejercicio[];
   materiaId: string;
   materiaNombre: string;
 }
@@ -52,10 +65,12 @@ function getDiasRestantes(caduca_el: string) {
 function EntregaRow({ 
   entrega, 
   ejercicioId, 
+  ejercicioTipo,
   onCalificado 
 }: { 
   entrega: Entrega; 
   ejercicioId: string;
+  ejercicioTipo: string;
   onCalificado: (alumnoId: string, cal: number) => void;
 }) {
   const { toast } = useToast();
@@ -63,7 +78,7 @@ function EntregaRow({
   const [calInput, setCalInput] = useState(
     entrega.calificacion_manual !== null ? String(entrega.calificacion_manual) : ''
   );
-  const { dias, horas, pct, vencido } = getDiasRestantes(entrega.caduca_el);
+  const { dias, horas, pct, vencido } = getDiasRestantes(entrega.caduca_el || '');
   const nombreCompleto = entrega.profiles 
     ? `${entrega.profiles.nombre} ${entrega.profiles.apellidos}` 
     : entrega.alumno_id.substring(0, 8) + '...';
@@ -84,6 +99,117 @@ function EntregaRow({
       }
     });
   };
+
+  const isAuto = ejercicioTipo !== 'actividad_descriptiva';
+
+  if (isAuto) {
+    return (
+      <div className="bg-white border border-indigo-100 rounded-2xl p-5 flex items-center justify-between gap-4 transition-all hover:border-indigo-300 hover:shadow-md">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center font-black text-sm shrink-0">
+            {(entrega.profiles?.nombre?.[0] || '?').toUpperCase()}
+          </div>
+          <div>
+            <p className="font-black text-slate-800 text-sm">{nombreCompleto}</p>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{entrega.intentos} Intentos Realizados</p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-6">
+          <div className="text-right hidden sm:block">
+            <p className="text-[10px] font-black uppercase text-indigo-400 tracking-widest mb-1">Aciertos</p>
+            <div className="flex items-center gap-1.5 text-slate-700 font-bold text-sm">
+              <Target className="w-4 h-4 text-emerald-500" />
+              {entrega.aciertos}/{entrega.total_preguntas}
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-[10px] font-black uppercase text-indigo-400 tracking-widest mb-1">Calificación</p>
+            <div className="bg-indigo-600 text-white px-3 py-1.5 rounded-xl font-black text-sm text-center">
+              {Number(entrega.calificacion || 0).toFixed(1)}
+            </div>
+          </div>
+          
+          <Dialog>
+            <DialogTrigger asChild>
+              <button className="h-10 px-4 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700 transition-all flex items-center gap-2 text-[11px] font-black uppercase tracking-widest">
+                <History className="w-4 h-4" /> Detalle
+              </button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl bg-slate-50 p-0 overflow-hidden rounded-[32px]">
+              <DialogHeader className="bg-white p-6 border-b">
+                <DialogTitle className="font-black text-xl uppercase tracking-tight text-slate-800 flex items-center gap-3">
+                  <Activity className="text-indigo-600" /> Histórico de Intentos
+                </DialogTitle>
+                <p className="text-sm font-bold text-slate-500">{nombreCompleto}</p>
+              </DialogHeader>
+              <div className="p-6 max-h-[60vh] overflow-y-auto space-y-4 custom-scrollbar">
+                {!entrega.historico_intentos || entrega.historico_intentos.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Activity className="w-12 h-12 text-slate-200 mx-auto mb-3" />
+                    <p className="font-black text-slate-500 uppercase tracking-widest text-sm">Registro en Versión Antigua</p>
+                    <p className="text-xs font-bold text-slate-400 mt-2">No hay detalles almacenados para este alumno.</p>
+                  </div>
+                ) : (
+                  entrega.historico_intentos.map((intento: any, idx: number) => (
+                    <div key={idx} className="bg-white border rounded-2xl p-5 shadow-sm">
+                      <div className="flex justify-between items-center mb-4 border-b pb-3">
+                        <h4 className="font-black text-indigo-900 uppercase tracking-widest text-sm flex items-center gap-2">
+                          <span className="bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-md text-[10px]">#{intento.intento}</span>
+                          Intento
+                        </h4>
+                        <div className="text-right">
+                          <span className="bg-indigo-600 text-white px-2 py-1 rounded-lg text-xs font-black">{Number(intento.calificacion).toFixed(1)}</span>
+                          <p className="text-[9px] text-slate-400 uppercase font-bold mt-1 tracking-widest">
+                            {new Date(intento.fecha).toLocaleString('es-MX')}
+                          </p>
+                        </div>
+                      </div>
+                      
+                      {intento.detalles && intento.detalles.length > 0 ? (
+                        <div>
+                          <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-3 flex items-center gap-1">
+                            <Activity className="w-3 h-3" /> Desglose de Respuestas ({intento.detalles.length})
+                          </p>
+                          <ul className="space-y-3">
+                            {intento.detalles.map((err: any, eIdx: number) => {
+                              const esCorrecto = err.esCorrecto !== false; // If not explicitly false, assume true (or handle legacy where missing meant false, but we'll assume modern schema)
+                              // Actually, legacy data only has mistakes. So if esCorrecto is undefined, it's an old record which means it was a mistake.
+                              const isActuallyCorrect = err.esCorrecto === true;
+                              
+                              return (
+                                <li key={eIdx} className={cn("p-3 rounded-xl border text-xs", isActuallyCorrect ? "bg-emerald-50/50 border-emerald-100" : "bg-red-50/50 border-red-100")}>
+                                  <span className="font-bold text-slate-700 block mb-1">{err.reactivo || 'Pregunta/Concepto'}</span>
+                                  <div className="flex items-center gap-4 mt-2">
+                                    {isActuallyCorrect ? (
+                                      <span className="text-emerald-600 font-bold flex-1 break-words">✓ {err.respuesta_correcta}</span>
+                                    ) : (
+                                      <>
+                                        <span className="text-red-600 font-semibold line-through opacity-70 flex-1 break-words">✗ {err.respuesta_dada || 'Vacío'}</span>
+                                        <span className="text-emerald-600 font-bold flex-1 break-words">✓ {err.respuesta_correcta}</span>
+                                      </>
+                                    )}
+                                  </div>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        </div>
+                      ) : (
+                        <p className="text-xs font-bold text-emerald-600 flex items-center gap-2 bg-emerald-50 p-3 rounded-xl">
+                          <CheckCircle2 className="w-4 h-4" /> Actividad resuelta sin registrar detalles.
+                        </p>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={cn(
@@ -226,7 +352,7 @@ export function PanelEntregasProfesor({ ejercicios, materiaNombre }: Props) {
         </div>
         <div>
           <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">
-            Entregas de Actividades Descriptivas
+            Entregas y Evaluaciones
           </h3>
           <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">{materiaNombre}</p>
         </div>
@@ -245,11 +371,14 @@ export function PanelEntregasProfesor({ ejercicios, materiaNombre }: Props) {
               className="w-full flex items-center justify-between p-5 bg-white hover:bg-slate-50 transition-all"
             >
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-amber-100 text-amber-700 rounded-xl">
-                  <BookOpen className="w-4 h-4" />
+                <div className={cn("p-2 rounded-xl text-white", ej.tipo === 'actividad_descriptiva' ? 'bg-primary' : 'bg-indigo-600')}>
+                  {ej.tipo === 'actividad_descriptiva' ? <BookOpen className="w-4 h-4" /> : <Activity className="w-4 h-4" />}
                 </div>
                 <div className="text-left">
-                  <p className="font-black text-slate-800 uppercase tracking-wide text-sm">{ej.titulo}</p>
+                  <p className="font-black text-slate-800 uppercase tracking-wide text-sm flex items-center gap-2">
+                    {ej.titulo}
+                    {ej.tipo !== 'actividad_descriptiva' && <span className="bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-md text-[9px] tracking-widest">AUTO</span>}
+                  </p>
                   {ej.fecha_entrega && (
                     <p className="text-[11px] text-slate-400 font-semibold">
                       Límite: {new Date(ej.fecha_entrega).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
@@ -286,6 +415,7 @@ export function PanelEntregasProfesor({ ejercicios, materiaNombre }: Props) {
                       key={entrega.alumno_id}
                       entrega={entrega}
                       ejercicioId={ej.id}
+                      ejercicioTipo={ej.tipo}
                       onCalificado={handleCalificado}
                     />
                   ))
