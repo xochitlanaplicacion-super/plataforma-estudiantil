@@ -525,9 +525,9 @@ const Programs = ({ theme }: { theme: any }) => {
       badge: "Meta Cumplida",
       description: "Para trabajar o ingresar a la universidad",
       validez: "Con validez oficial SEP",
-      image: "/images/capacitaciones.jpeg",
+      image: "/images/imagen2.jpeg",
       icon: <Award size={20} />,
-      crop: "object-center",
+      crop: "object-top",
       delay: 0.2
     },
     {
