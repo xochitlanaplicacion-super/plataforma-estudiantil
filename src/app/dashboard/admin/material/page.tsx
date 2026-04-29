@@ -832,13 +832,13 @@ export default function MaterialDeApoyoPage() {
 
       {/* Upload Modal (Carga Masiva) */}
       <Dialog open={modalUpload} onOpenChange={(open) => { if(!open && !uploading) setModalUpload(false); }}>
-        <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col">
+          <DialogHeader className="shrink-0">
             <DialogTitle className="flex items-center gap-2 text-xl"><UploadCloud size={24} className="text-primary"/> Carga Masiva Material</DialogTitle>
             <DialogDescription>Sube múltiples documentos de forma simultánea. Puedes seguir su progreso independiente.</DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-6 py-4">
+          <div className="grid gap-6 py-2 overflow-y-auto flex-1 pr-2 -mr-2">
             
             <div className="space-y-2">
               <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">1. Archivos Adjuntos (Múltiples permitidos)</Label>
@@ -945,7 +945,7 @@ export default function MaterialDeApoyoPage() {
 
           </div>
 
-          <DialogFooter className="border-t pt-4">
+          <DialogFooter className="border-t pt-4 shrink-0 mt-2">
             <Button variant="outline" onClick={() => setModalUpload(false)} disabled={uploading}>Cancelar</Button>
             <Button onClick={handleUploadSubmit} disabled={uploading || selectedFiles.length === 0 || !form.categoria || !form.nivel_id} className="min-w-[150px]">
               {uploading ? <Loader2 className="animate-spin" size={16} /> : `Subir ${selectedFiles.length} doc(s)`}
@@ -956,13 +956,13 @@ export default function MaterialDeApoyoPage() {
 
       {/* Edit Category Modal */}
       <Dialog open={modalEdit} onOpenChange={(open) => { if(!open && !editing) setModalEdit(false); }}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col">
+          <DialogHeader className="shrink-0">
             <DialogTitle className="flex items-center gap-2"><Edit size={20} className="text-primary"/> Editar Atributos de Carpeta</DialogTitle>
             <DialogDescription>Modificar el título, el nivel destino o la descripción actualizará todos los archivos internos en cascada.</DialogDescription>
           </DialogHeader>
 
-          <div className="grid gap-5 py-4">
+          <div className="grid gap-5 py-2 overflow-y-auto flex-1 pr-2 -mr-2">
             <div className="space-y-2">
               <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Título Global (Categoría)</Label>
               <Input 
@@ -993,7 +993,7 @@ export default function MaterialDeApoyoPage() {
             {renderCarrerasSelector()}
           </div>
           
-          <DialogFooter className="border-t pt-4">
+          <DialogFooter className="border-t pt-4 shrink-0 mt-2">
             <Button variant="outline" onClick={() => setModalEdit(false)} disabled={editing}>Cancelar</Button>
             <Button onClick={handleSaveEditCat} disabled={editing || !editForm.newCategoria || !editForm.newNivelId} className="min-w-[120px]">
               {editing ? <Loader2 className="animate-spin" size={16} /> : 'Guardar Cambios'}
