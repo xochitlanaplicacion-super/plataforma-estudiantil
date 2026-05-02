@@ -804,10 +804,10 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
 
           {/* Botón personalizado de pantalla completa — visible solo en móviles */}
           {activeVideo && getYouTubeId(activeVideo.url) && (
-            <div className="flex sm:hidden items-center justify-center py-3 bg-slate-900">
+            <div className="flex sm:hidden items-center justify-start pl-3 py-3 bg-slate-900">
               <button
                 onClick={toggleFullscreen}
-                className="flex items-center gap-2 px-6 py-2.5 bg-white/10 hover:bg-white/20 active:scale-95 text-white rounded-full text-xs font-black uppercase tracking-widest transition-all"
+                className="flex items-center gap-2 px-5 py-2.5 bg-red-600/80 hover:bg-red-600 active:scale-95 text-white rounded-full text-xs font-black uppercase tracking-widest transition-all shadow-lg shadow-red-900/50"
               >
                 <Maximize size={14} />
                 Ver en Pantalla Completa
