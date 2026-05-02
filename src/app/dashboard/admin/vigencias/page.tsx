@@ -217,6 +217,7 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
   const [saving, setSaving] = useState<string | null>(null);
   const [editando, setEditando] = useState<any | null>(null);
   const [abonoTarget, setAbonoTarget] = useState<any | null>(null);
+  const [revertTarget, setRevertTarget] = useState<any | null>(null);
   const [form, setForm] = useState({ fecha_pago: '', monto_pagado: '', recibo: '', notas: '' });
   const [programaSeleccionado, setProgramaSeleccionado] = useState<string>('');
   const [programaConfirmado, setProgramaConfirmado] = useState(false);
@@ -237,19 +238,22 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
     }
   }, [open, fetchPagos]);
 
-  const handleTogglePago = async (pago: any) => {
-    if (pago.estatus === 'pagado') {
-      setSaving(pago.id);
-      const res = await registrarPago({ alumnoId: alumno.id, planPagoId: pago.plan_pago_id, estatus: 'pendiente' });
-      if (res.success) { fetchPagos(); onUpdate(); } else toast({ variant: 'destructive', title: 'Error', description: (res as any).error });
-      setSaving(null);
-    } else {
-      setEditando(pago);
-      const total = Number(pago.plan_pagos?.monto || 0);
-      const pagado = Number(pago.monto_pagado || 0);
-      const saldo = Math.max(total - pagado, 0);
-      setForm({ fecha_pago: new Date().toISOString().split('T')[0], monto_pagado: saldo.toString(), recibo: '', notas: '' });
-    }
+  const handleTogglePago = (pago: any) => {
+    setEditando(pago);
+    const total = Number(pago.plan_pagos?.monto || 0);
+    const pagado = Number(pago.monto_pagado || 0);
+    const saldo = Math.max(total - pagado, 0);
+    setForm({ fecha_pago: new Date().toISOString().split('T')[0], monto_pagado: saldo.toString(), recibo: '', notas: '' });
+  };
+
+  const confirmarReversion = async () => {
+    if (!revertTarget) return;
+    setSaving(revertTarget.id);
+    const res = await registrarPago({ alumnoId: alumno.id, planPagoId: revertTarget.plan_pago_id, estatus: 'pendiente' });
+    if (res.success) { fetchPagos(); onUpdate(); } 
+    else toast({ variant: 'destructive', title: 'Error', description: (res as any).error });
+    setSaving(null);
+    setRevertTarget(null);
   };
 
   const handleGuardarPago = async () => {
@@ -470,7 +474,7 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
                                         <Printer size={10} className="mr-1" />
                                         Reimprimir
                                       </Button>
-                                      <Button size="sm" variant="outline" className="h-7 text-[10px] px-2 border-red-200 text-red-500 hover:bg-red-50" onClick={() => handleTogglePago(pago)}>
+                                      <Button size="sm" variant="outline" className="h-7 text-[10px] px-2 border-red-200 text-red-500 hover:bg-red-50" onClick={() => setRevertTarget(pago)}>
                                         <Minus size={10} />
                                         Revertir
                                       </Button>
@@ -538,6 +542,30 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
       {abonoTarget && (
         <ModalAbono pago={abonoTarget} alumno={alumno} alumnoId={alumno?.id} open={!!abonoTarget} onClose={() => setAbonoTarget(null)} onSuccess={() => { fetchPagos(); onUpdate(); }} />
       )}
+
+      {/* Modal Revertir Pago */}
+      <Dialog open={!!revertTarget} onOpenChange={() => setRevertTarget(null)}>
+        <DialogContent className="max-w-md border-red-200">
+          <DialogHeader>
+            <DialogTitle className="text-red-600 flex items-center gap-2">
+              ⚠️ Revertir Pago
+            </DialogTitle>
+            <DialogDescription>
+              ¿Estás seguro de que deseas revertir el pago de <strong>{revertTarget?.plan_pagos?.nombre_concepto}</strong>?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="bg-red-50 p-4 rounded-xl border border-red-100 text-sm text-red-800">
+            Si reviertes este pago, el folio actual se cancelará. Al volver a cobrarlo en el futuro, <strong>el sistema consumirá un folio nuevo de manera irreversible.</strong>
+          </div>
+          <DialogFooter className="mt-4">
+            <Button variant="outline" onClick={() => setRevertTarget(null)}>Cancelar</Button>
+            <Button variant="destructive" onClick={confirmarReversion} disabled={!!saving}>
+              {saving ? <Loader2 className="animate-spin mr-2" size={16} /> : null}
+              Sí, revertir pago
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
