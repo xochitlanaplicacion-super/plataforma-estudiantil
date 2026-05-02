@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useMemo, useEffect, useCallback } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import {
   BookOpen,
   Calculator,
@@ -28,6 +28,7 @@ import {
   FolderOpen,
   Play,
   MonitorPlay,
+  Maximize,
   X,
   Image as ImageIcon,
   Youtube,
@@ -190,6 +191,7 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
   const [activeSlides, setActiveSlides] = useState<Slide[]>([]);
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const [activeVideo, setActiveVideo] = useState<any>(null);
+  const videoContainerRef = useRef<HTMLDivElement>(null);
   const ITEMS_PER_PAGE = 10;
   
   const now = useMemo(() => new Date(), []);
@@ -225,6 +227,34 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
       if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     }
   }, [presentationMode]);
+
+  const toggleFullscreen = useCallback(() => {
+    const el = videoContainerRef.current;
+    if (!el) return;
+    if (!document.fullscreenElement) {
+      el.requestFullscreen().catch(() => {});
+    } else {
+      document.exitFullscreen().catch(() => {});
+    }
+  }, []);
+
+  // Auto-fullscreen cuando el alumno rota el celular a horizontal
+  useEffect(() => {
+    if (!activeVideo) return;
+    const handleOrientationChange = () => {
+      const isLandscape = window.matchMedia('(orientation: landscape)').matches;
+      const el = videoContainerRef.current;
+      if (!el) return;
+      if (isLandscape && !document.fullscreenElement) {
+        el.requestFullscreen().catch(() => {});
+      } else if (!isLandscape && document.fullscreenElement) {
+        document.exitFullscreen().catch(() => {});
+      }
+    };
+    const mq = window.matchMedia('(orientation: landscape)');
+    mq.addEventListener('change', handleOrientationChange);
+    return () => mq.removeEventListener('change', handleOrientationChange);
+  }, [activeVideo]);
 
   const splitImageUrls = (urls: string) => {
     if (!urls) return [];
@@ -721,7 +751,7 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
     )}
       {/* REPRODUCTOR DE VIDEO MODAL */}
       <Dialog open={!!activeVideo} onOpenChange={(open) => !open && setActiveVideo(null)}>
-        <DialogContent className="max-w-4xl w-[95vw] sm:w-full p-0 overflow-hidden bg-black border-none gap-0 rounded-[32px]">
+        <DialogContent className="max-w-4xl w-full sm:w-[95vw] p-0 overflow-hidden bg-black border-none gap-0 rounded-none sm:rounded-[32px] !translate-x-[-50%]">
           <DialogHeader className="p-4 sm:p-6 bg-white shrink-0">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3 overflow-hidden">
@@ -742,7 +772,7 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
             </div>
           </DialogHeader>
           
-          <div className="aspect-video w-full bg-slate-900 flex items-center justify-center relative group">
+          <div ref={videoContainerRef} className="aspect-video w-full bg-slate-900 flex items-center justify-center relative group">
             {activeVideo && getYouTubeId(activeVideo.url) ? (
               <iframe
                 width="100%"
@@ -771,7 +801,20 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
               </div>
             )}
           </div>
-          
+
+          {/* Botón personalizado de pantalla completa — visible solo en móviles */}
+          {activeVideo && getYouTubeId(activeVideo.url) && (
+            <div className="flex sm:hidden items-center justify-center py-3 bg-slate-900">
+              <button
+                onClick={toggleFullscreen}
+                className="flex items-center gap-2 px-6 py-2.5 bg-white/10 hover:bg-white/20 active:scale-95 text-white rounded-full text-xs font-black uppercase tracking-widest transition-all"
+              >
+                <Maximize size={14} />
+                Ver en Pantalla Completa
+              </button>
+            </div>
+          )}
+
           {activeVideo?.descripcion && (
             <div className="p-6 bg-white border-t">
               <label className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] mb-2 block">Información del Video</label>
