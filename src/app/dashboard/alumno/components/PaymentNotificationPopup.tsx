@@ -110,12 +110,15 @@ export function PaymentNotificationPopup({ latestNotification }: Props) {
       <div 
         ref={bubbleRef}
         className={cn(
-          "absolute top-full right-0 mt-4 w-80 md:w-96 drop-shadow-2xl z-50 pointer-events-auto",
+          // Móvil: fixed centrado en pantalla. Desktop: absoluto anclado al icono
+          "fixed inset-x-4 top-20 z-50 pointer-events-auto",
+          "md:absolute md:inset-x-auto md:top-full md:right-0 md:mt-4 md:w-96",
+          "w-auto drop-shadow-2xl",
           isOpen ? "block" : "hidden"
         )}
       >
-        {/* Triangulito simulando chat de whatsapp */}
-        <div className="absolute -top-2 right-4 w-0 h-0 border-l-[10px] border-l-transparent border-r-[10px] border-r-transparent border-b-[12px] border-b-green-500"></div>
+        {/* Triangulito: solo visible en desktop */}
+        <div className="hidden md:block absolute -top-2 right-4 w-0 h-0 border-l-[10px] border-l-transparent border-r-[10px] border-r-transparent border-b-[12px] border-b-green-500"></div>
         
         <div className="bg-white rounded-2xl overflow-hidden border border-border shadow-xl">
           {/* Header tipo WhatsApp */}
