@@ -137,22 +137,19 @@ export async function procesarDocumentoOCR(formData: FormData) {
       };
     }
 
-    // --- VALIDACIÓN DE CUOTA MENSUAL (BACKEND, capa de seguridad servidor) ---
-    const LIMITE_MENSUAL = 50;
-    const ahora = new Date();
-    const primerDiaMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1).toISOString();
-    const { count: docsMes } = await supabaseAdmin
-      .from('acreditaciones_alumnos')
-      .select('*', { count: 'exact', head: true })
-      .gte('created_at', primerDiaMes);
+    // --- VALIDACIÓN DE CUOTA (BACKEND, capa de seguridad servidor) ---
+    // Llama a la función RPC atómica que verifica y consume el saldo en una sola operación.
+    const { data: rpcResult, error: rpcError } = await supabaseAdmin
+      .rpc('consumir_cuota_servicio', { p_servicio: 'ocr' });
 
-    if ((docsMes ?? 0) >= LIMITE_MENSUAL) {
-      console.warn(`[CUOTA] Límite mensual de ${LIMITE_MENSUAL} documentos alcanzado. Procesados este mes: ${docsMes}`);
-      return {
-        success: false,
-        fileName,
-        error: 'CUOTA_EXCEDIDA'
-      };
+    if (rpcError) {
+      console.error('[CUOTA] Error al verificar cuota:', rpcError.message);
+      return { success: false, fileName, error: 'CUOTA_EXCEDIDA' };
+    }
+
+    if (rpcResult?.[0]?.cuota_excedida) {
+      console.warn(`[CUOTA] Saldo agotado. Usados: ${rpcResult[0].usados_nuevo} / ${rpcResult[0].limite}`);
+      return { success: false, fileName, error: 'CUOTA_EXCEDIDA' };
     }
 
     // Convertir a Base64

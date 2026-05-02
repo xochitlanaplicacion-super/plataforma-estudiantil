@@ -97,54 +97,48 @@ export default function AcreditacionesPage() {
   const [processingFile, setProcessingFile] = useState<string>('');
   const [resultados, setResultados] = useState<ResultadoArchivo[]>([]);
 
-  // --- CUOTA MENSUAL ---
-  const LIMITE_MENSUAL = 50;
+  // --- CUOTA DE SALDO FIJO (200 documentos) ---
   const [quotaCount, setQuotaCount] = useState(0);
+  const [limiteTotal, setLimiteTotal] = useState(200);
   const [showQuotaModal, setShowQuotaModal] = useState(false);
 
   useEffect(() => {
     cargarMensajes();
-    cargarCuotaMensual();
+    cargarCuotaOcr();
 
-    // --- SUSCRIPCIÓN REALTIME: actualiza la barra de cuota al instante ---
-    // Cada vez que la IA guarda un nuevo registro en acreditaciones_alumnos,
-    // la barra sube automáticamente sin recargar la página.
-    const ahora = new Date();
-    const primerDiaMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1).toISOString();
-
+    // --- SUSCRIPCIÓN REALTIME: actualiza la barra de saldo al instante ---
+    // Escucha cambios en config_cuotas_servicio para el servicio 'ocr'.
+    // Se actualiza cuando se procesa un documento O cuando el admin recarga el saldo.
     const channel = supabase
       .channel('quota-realtime')
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: 'UPDATE',
           schema: 'public',
-          table: 'acreditaciones_alumnos',
+          table: 'config_cuotas_servicio',
+          filter: 'servicio=eq.ocr',
         },
         (payload) => {
-          // Solo contar si el nuevo registro pertenece al mes actual
-          const createdAt = payload.new?.created_at;
-          if (createdAt && createdAt >= primerDiaMes) {
-            setQuotaCount(prev => prev + 1);
-          }
+          setQuotaCount(payload.new?.usados ?? 0);
+          setLimiteTotal(payload.new?.limite_total ?? 200);
         }
       )
       .subscribe();
 
-    // Limpiar la suscripción cuando el componente se desmonte
     return () => {
       supabase.removeChannel(channel);
     };
   }, []);
 
-  const cargarCuotaMensual = async () => {
-    const ahora = new Date();
-    const primerDiaMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1).toISOString();
-    const { count } = await supabase
-      .from('acreditaciones_alumnos')
-      .select('*', { count: 'exact', head: true })
-      .gte('created_at', primerDiaMes);
-    setQuotaCount(count ?? 0);
+  const cargarCuotaOcr = async () => {
+    const { data } = await supabase
+      .from('config_cuotas_servicio')
+      .select('usados, limite_total')
+      .eq('servicio', 'ocr')
+      .single();
+    setQuotaCount(data?.usados ?? 0);
+    setLimiteTotal(data?.limite_total ?? 200);
   };
 
   const cargarMensajes = async () => {
@@ -200,26 +194,13 @@ export default function AcreditacionesPage() {
   };
 
   const procesarDocumentos = async () => {
-    // --- BLOQUEO POR PERIODO DE PRUEBA ---
-    // Cambiar la fecha o comentar este bloque para desactivar el límite cuando se reciba el pago
-    const TRIAL_END_DATE = new Date('2026-05-01T00:00:00');
-    if (new Date() >= TRIAL_END_DATE) {
-      toast({
-        title: "Periodo de Prueba Finalizado",
-        description: "El periodo de prueba de procesamiento ha vencido el 30 de abril. Por favor, contacta a soporte para reactivar el servicio y procesar más documentos.",
-        variant: "destructive",
-        duration: 8000
-      });
-      return; // Bloquea la ejecución
-    }
-
     if (aprobadosFiles.length === 0 && noAprobadosFiles.length === 0) {
       toast({ title: "Sin archivos", description: "Sube al menos un documento para procesar.", variant: "destructive" });
       return;
     }
 
-    // --- VERIFICAR CUOTA MENSUAL ANTES DE PROCESAR ---
-    if (quotaCount >= LIMITE_MENSUAL) {
+    // --- VERIFICAR CUOTA ANTES DE PROCESAR ---
+    if (quotaCount >= limiteTotal) {
       setShowQuotaModal(true);
       return;
     }
@@ -349,17 +330,16 @@ export default function AcreditacionesPage() {
             <div className="px-6 py-6 space-y-4">
               <div className="flex items-center justify-between bg-red-50 rounded-xl px-4 py-3 border border-red-100">
                 <span className="text-slate-600 font-medium">Documentos procesados</span>
-                <span className="text-2xl font-bold text-red-600">{quotaCount} / {LIMITE_MENSUAL}</span>
+                <span className="text-2xl font-bold text-red-600">{quotaCount} / {limiteTotal}</span>
               </div>
               <p className="text-slate-600 text-sm leading-relaxed">
-                Has alcanzado el límite de <strong>{LIMITE_MENSUAL} documentos</strong> procesados con IA este mes. Para continuar utilizando el servicio debes actualizar tu plan.
+                Has agotado tu saldo de <strong>{limiteTotal} documentos</strong> procesados con IA. Para continuar, contacta al administrador para adquirir más créditos.
               </p>
               <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
                 <p className="text-amber-800 font-semibold text-sm">¿Qué puedes hacer?</p>
                 <ul className="text-amber-700 text-sm mt-2 space-y-1 list-disc list-inside">
-                  <li>Contacta al administrador para ampliar tu cuota</li>
-                  <li>Espera al inicio del próximo mes para que se resetee</li>
-                  <li>Considera actualizar a un plan superior</li>
+                  <li>Contacta al administrador para adquirir más documentos</li>
+                  <li>Disponible: {limiteTotal - quotaCount >= 0 ? 0 : limiteTotal - quotaCount} documentos restantes</li>
                 </ul>
               </div>
             </div>
@@ -388,20 +368,20 @@ export default function AcreditacionesPage() {
       </div>
 
       {/* Indicador de Cuota Mensual */}
-      <div className={`flex items-center justify-between rounded-xl px-4 py-3 border ${quotaCount >= LIMITE_MENSUAL ? 'bg-red-50 border-red-200' : quotaCount >= LIMITE_MENSUAL * 0.8 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
+      <div className={`flex items-center justify-between rounded-xl px-4 py-3 border ${quotaCount >= limiteTotal ? 'bg-red-50 border-red-200' : quotaCount >= limiteTotal * 0.8 ? 'bg-amber-50 border-amber-200' : 'bg-green-50 border-green-200'}`}>
         <div className="flex items-center gap-2">
-          <Cpu size={16} className={quotaCount >= LIMITE_MENSUAL ? 'text-red-500' : quotaCount >= LIMITE_MENSUAL * 0.8 ? 'text-amber-500' : 'text-green-500'} />
-          <span className="text-sm font-medium text-slate-700">Cuota mensual de procesamiento IA</span>
+          <Cpu size={16} className={quotaCount >= limiteTotal ? 'text-red-500' : quotaCount >= limiteTotal * 0.8 ? 'text-amber-500' : 'text-green-500'} />
+          <span className="text-sm font-medium text-slate-700">Saldo de procesamiento IA — <strong>{limiteTotal - quotaCount}</strong> documentos disponibles</span>
         </div>
         <div className="flex items-center gap-3">
           <div className="w-32 h-2 bg-slate-200 rounded-full overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all ${quotaCount >= LIMITE_MENSUAL ? 'bg-red-500' : quotaCount >= LIMITE_MENSUAL * 0.8 ? 'bg-amber-500' : 'bg-green-500'}`}
-              style={{ width: `${Math.min((quotaCount / LIMITE_MENSUAL) * 100, 100)}%` }}
+              className={`h-full rounded-full transition-all ${quotaCount >= limiteTotal ? 'bg-red-500' : quotaCount >= limiteTotal * 0.8 ? 'bg-amber-500' : 'bg-green-500'}`}
+              style={{ width: `${Math.min((quotaCount / limiteTotal) * 100, 100)}%` }}
             />
           </div>
-          <span className={`text-sm font-bold ${quotaCount >= LIMITE_MENSUAL ? 'text-red-600' : quotaCount >= LIMITE_MENSUAL * 0.8 ? 'text-amber-600' : 'text-green-700'}`}>
-            {quotaCount} / {LIMITE_MENSUAL}
+          <span className={`text-sm font-bold ${quotaCount >= limiteTotal ? 'text-red-600' : quotaCount >= limiteTotal * 0.8 ? 'text-amber-600' : 'text-green-700'}`}>
+            {quotaCount} / {limiteTotal}
           </span>
         </div>
       </div>
