@@ -436,9 +436,46 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
       confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
       setScore(crossword.placedWords.length);
       setTotalSteps(crossword.placedWords.length);
+      // Guardar todas las palabras como correctas ya que se completó al 100%
+      const details = crossword.placedWords.map((pw: any) => ({
+        reactivo: `${pw.number}. ${pw.clue} (${pw.direction === 'HORIZONTAL' ? 'H' : 'V'})`,
+        respuesta_dada: pw.word,
+        respuesta_correcta: pw.word,
+        esCorrecto: true
+      }));
+      setMistakesDetail(details);
       setTimeout(() => setSuccess(true), 2000);
     }
   }, [solvedCrosswordWords, crossword]);
+
+  // --- EVALUAR CRUCIGRAMA MANUALMENTE (Opción B) ---
+  const evaluarCrucigrama = () => {
+    if (!crossword) return;
+    let correctCount = 0;
+    const details: any[] = [];
+
+    crossword.placedWords.forEach((pw: any) => {
+      let userWord = '';
+      for (let i = 0; i < pw.word.length; i++) {
+        const cx = pw.direction === 'HORIZONTAL' ? pw.x - crossword.minX + i : pw.x - crossword.minX;
+        const cy = pw.direction === 'VERTICAL' ? pw.y - crossword.minY + i : pw.y - crossword.minY;
+        userWord += (userInputs[`${cx}-${cy}`] || ' ').toUpperCase();
+      }
+      const isCorrect = userWord === pw.word.toUpperCase();
+      if (isCorrect) correctCount++;
+      details.push({
+        reactivo: `${pw.number}. ${pw.clue} (${pw.direction === 'HORIZONTAL' ? 'H' : 'V'})`,
+        respuesta_dada: userWord.trim() || 'Sin respuesta',
+        respuesta_correcta: pw.word,
+        esCorrecto: isCorrect
+      });
+    });
+
+    setMistakesDetail(details);
+    setScore(correctCount);
+    setTotalSteps(crossword.placedWords.length);
+    setSuccess(true);
+  };
 
   const finishGradedActivity = () => {
     let finalScore = 0;
@@ -516,9 +553,11 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
           <div className="flex-[2] bg-white p-8 rounded-[40px] shadow-2xl border-2 border-slate-100 flex flex-col items-center">
             <div className="flex justify-between items-center w-full mb-8">
               <h3 className="text-2xl font-black text-slate-800 uppercase">Crucigrama Interactivo</h3>
-              <Button variant="ghost" onClick={() => setShowSolution(!showSolution)} className="text-indigo-600 gap-2 font-black uppercase text-xs">
-                {showSolution ? <EyeOff size={16} /> : <Eye size={16} />} {showSolution ? 'Ocultar' : 'Ver Solución'}
-              </Button>
+              {isPreview && (
+                <Button variant="ghost" onClick={() => setShowSolution(!showSolution)} className="text-indigo-600 gap-2 font-black uppercase text-xs">
+                  {showSolution ? <EyeOff size={16} /> : <Eye size={16} />} {showSolution ? 'Ocultar' : 'Ver Solución'}
+                </Button>
+              )}
             </div>
             <div className="grid gap-1 bg-slate-200 p-1 rounded-xl shadow-inner overflow-auto max-w-full" style={{ gridTemplateColumns: `repeat(${crossword.width}, minmax(0, 1fr))` }}>
               {grid.map((row, y) => row.map((cell, x) => (
@@ -600,6 +639,14 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
                   );
                 })}
               </div>
+              {!isPreview && (
+                <Button 
+                  onClick={evaluarCrucigrama} 
+                  className="w-full mt-6 h-14 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black uppercase text-xs tracking-widest shadow-lg transition-all hover:scale-[1.02]"
+                >
+                  <CheckCircle2 size={18} className="mr-2" /> Terminar y Evaluar
+                </Button>
+              )}
             </div>
           </div>
         </div>
