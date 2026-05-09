@@ -295,7 +295,9 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
     const grid = Array.from({ length: size }, () => Array(size).fill(''));
     const words = (content.words || []).filter((w: string) => w.length > 0);
 
-    words.forEach((word: string) => {
+    words.forEach((rawWord: string) => {
+      // BUG 2b FIX: Normalizar a mayúsculas para consistencia con el relleno
+      const word = rawWord.toUpperCase();
       let placed = false;
       let attempts = 0;
       while (!placed && attempts < 50) {
@@ -393,14 +395,49 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
   };
 
   const handleSopaCellClick = (r: number, c: number) => {
-    const alreadySelected = selectedSopaCells.some(cell => cell.r === r && cell.c === c);
-    let newSelection = alreadySelected 
-      ? selectedSopaCells.filter(cell => !(cell.r === r && cell.c === c))
-      : [...selectedSopaCells, { r, c }];
+    // BUG 2a+2c FIX: Validar linealidad de la selección
+    let newSelection: {r: number, c: number}[];
+
+    if (selectedSopaCells.length === 0) {
+      // Primera celda: iniciar selección
+      newSelection = [{ r, c }];
+    } else {
+      const last = selectedSopaCells[selectedSopaCells.length - 1];
+      // Si hace clic en la misma celda que la última, deseleccionar la última
+      if (last.r === r && last.c === c) {
+        newSelection = selectedSopaCells.slice(0, -1);
+      } else {
+        // Verificar si la nueva celda es adyacente y mantiene la dirección
+        const dr = r - last.r;
+        const dc = c - last.c;
+        const isAdjacent = Math.abs(dr) <= 1 && Math.abs(dc) <= 1 && (dr !== 0 || dc !== 0);
+
+        if (selectedSopaCells.length === 1 && isAdjacent) {
+          // Segunda celda: establece la dirección, solo debe ser adyacente
+          newSelection = [...selectedSopaCells, { r, c }];
+        } else if (selectedSopaCells.length >= 2 && isAdjacent) {
+          // Tercera celda en adelante: verificar que la dirección sea consistente
+          const first = selectedSopaCells[0];
+          const second = selectedSopaCells[1];
+          const dirR = second.r - first.r; // -1, 0, o 1
+          const dirC = second.c - first.c; // -1, 0, o 1
+          if (dr === dirR && dc === dirC) {
+            newSelection = [...selectedSopaCells, { r, c }];
+          } else {
+            // Dirección diferente: reiniciar selección con esta celda
+            newSelection = [{ r, c }];
+          }
+        } else {
+          // No es adyacente: reiniciar selección con esta celda
+          newSelection = [{ r, c }];
+        }
+      }
+    }
+
     setSelectedSopaCells(newSelection);
 
-    const selectedText = newSelection.map(cell => sopaGrid[cell.r][cell.c]).join('');
-    const selectedTextRev = [...newSelection].reverse().map(cell => sopaGrid[cell.r][cell.c]).join('');
+    const selectedText = newSelection.map(cell => sopaGrid[cell.r][cell.c]).join('').toUpperCase();
+    const selectedTextRev = [...newSelection].reverse().map(cell => sopaGrid[cell.r][cell.c]).join('').toUpperCase();
     const wordFound = (content.words || []).find((w: string) => 
       (w.toUpperCase() === selectedText || w.toUpperCase() === selectedTextRev) && !foundWords.includes(w)
     );
@@ -573,8 +610,19 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
                           value={userInputs[`${x}-${y}`] || ''}
                           onChange={e => {
                             const val = e.target.value.toUpperCase();
-                            const isLocked = cell.ids.some((id: string) => solvedCrosswordWords.has(id));
-                            if (isLocked) return;
+                            // BUG 1 FIX: Proteger celdas de intersección
+                            // Si TODAS las palabras de esta celda están resueltas, bloquear
+                            const allSolved = cell.ids.every((id: string) => solvedCrosswordWords.has(id));
+                            if (allSolved) return;
+                            // Si estamos borrando (val vacío) y esta celda es intersección,
+                            // verificar si la otra dirección ya está resuelta
+                            if (!val && cell.acrossId && cell.downId) {
+                              const otherDirId = direction === 'HORIZONTAL' ? cell.downId : cell.acrossId;
+                              if (otherDirId && solvedCrosswordWords.has(otherDirId)) {
+                                // La otra dirección está resuelta: no permitir borrar
+                                return;
+                              }
+                            }
                             setUserInputs(prev => ({ ...prev, [`${x}-${y}`]: val }));
                             if (val) {
                               const nextX = direction === 'HORIZONTAL' ? x + 1 : x;
@@ -592,12 +640,33 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
                             else if (cell.downId) setDirection('VERTICAL');
                           }}
                           onKeyDown={e => {
-                            if (e.key === 'Backspace' && !userInputs[`${x}-${y}`]) {
-                              const prevX = direction === 'HORIZONTAL' ? x - 1 : x;
-                              const prevY = direction === 'VERTICAL' ? y - 1 : y;
-                              if (grid[prevY]?.[prevX]?.isActive) {
-                                setFocusedCell({x: prevX, y: prevY});
-                                inputRefs.current[`${prevX}-${prevY}`]?.focus();
+                            if (e.key === 'Backspace') {
+                              // BUG 1 FIX: Proteger intersecciones al borrar con Backspace
+                              const currentVal = userInputs[`${x}-${y}`];
+                              if (currentVal) {
+                                // La celda tiene contenido: verificar si podemos borrarlo
+                                if (cell.acrossId && cell.downId) {
+                                  const otherDirId = direction === 'HORIZONTAL' ? cell.downId : cell.acrossId;
+                                  if (otherDirId && solvedCrosswordWords.has(otherDirId)) {
+                                    e.preventDefault();
+                                    // Saltar a la celda anterior sin borrar
+                                    const prevX = direction === 'HORIZONTAL' ? x - 1 : x;
+                                    const prevY = direction === 'VERTICAL' ? y - 1 : y;
+                                    if (grid[prevY]?.[prevX]?.isActive) {
+                                      setFocusedCell({x: prevX, y: prevY});
+                                      inputRefs.current[`${prevX}-${prevY}`]?.focus();
+                                    }
+                                    return;
+                                  }
+                                }
+                              } else {
+                                // Celda vacía: retroceder a la anterior
+                                const prevX = direction === 'HORIZONTAL' ? x - 1 : x;
+                                const prevY = direction === 'VERTICAL' ? y - 1 : y;
+                                if (grid[prevY]?.[prevX]?.isActive) {
+                                  setFocusedCell({x: prevX, y: prevY});
+                                  inputRefs.current[`${prevX}-${prevY}`]?.focus();
+                                }
                               }
                             } else if (e.key.startsWith('Arrow')) {
                               e.preventDefault();
