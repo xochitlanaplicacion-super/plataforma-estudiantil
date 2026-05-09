@@ -279,6 +279,7 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
   const [sopaGrid, setSopaGrid] = useState<string[][]>([]);
   const [foundWords, setFoundWords] = useState<string[]>([]);
   const [selectedSopaCells, setSelectedSopaCells] = useState<{r: number, c: number}[]>([]);
+  const [foundWordCells, setFoundWordCells] = useState<{r: number, c: number}[]>([]);
   const [crossword, setCrossword] = useState<CrosswordData | null>(null);
   const [userInputs, setUserInputs] = useState<Record<string, string>>({});
   const [showSolution, setShowSolution] = useState(false);
@@ -446,6 +447,8 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
       const newFound = [...foundWords, wordFound];
       setFoundWords(newFound);
       setScore(newFound.length);
+      // Guardar las celdas de la palabra encontrada para resaltarlas permanentemente
+      setFoundWordCells(prev => [...prev, ...newSelection]);
       setSelectedSopaCells([]);
       if (newFound.length === totalSteps) {
         setTimeout(() => setSuccess(true), 1000);
@@ -1018,13 +1021,18 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
               <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${content.size || 12}, minmax(0, 1fr))` }}>
                 {sopaGrid.map((row, r) => row.map((char, c) => {
                   const isSelected = selectedSopaCells.some(cell => cell.r === r && cell.c === c);
+                  const isFoundCell = foundWordCells.some(cell => cell.r === r && cell.c === c);
                   return (
                     <button 
                       key={`${r}-${c}`} 
                       onClick={() => handleSopaCellClick(r, c)}
                       className={cn(
                         "h-8 w-8 md:h-10 md:w-10 rounded-lg flex items-center justify-center font-black text-sm transition-all",
-                        isSelected ? "bg-indigo-600 text-white scale-110 shadow-lg" : "bg-slate-50 text-slate-400 hover:bg-indigo-100 hover:text-indigo-600"
+                        isSelected 
+                          ? "bg-indigo-600 text-white scale-110 shadow-lg" 
+                          : isFoundCell 
+                            ? "bg-emerald-500/20 text-emerald-700 border border-emerald-300 ring-1 ring-emerald-200" 
+                            : "bg-slate-50 text-slate-400 hover:bg-indigo-100 hover:text-indigo-600"
                       )}
                     >
                       {char}
