@@ -86,7 +86,6 @@ export default async function AlumnoDashboard() {
   const ejerciciosCompletados = data?.todosLosEjercicios?.filter((ej: any) => ej.completado) || [];
   const numeroCompletados = ejerciciosCompletados.length;
 
-  const now = new Date();
   const ejerciciosVencidosNoCompletados = data?.todosLosEjercicios?.filter((ej: any) => {
     if (ej.completado) return false;
     if (!ej.fecha_entrega) return false;
