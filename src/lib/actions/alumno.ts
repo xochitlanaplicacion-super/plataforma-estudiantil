@@ -153,7 +153,7 @@ export async function getAlumnoDashboardData(userId: string) {
 
     const hechos = (await supabaseAdmin
       .from('resultados_ejercicios')
-      .select('ejercicio_id, calificacion, aciertos, total_preguntas, bloqueado')
+      .select('ejercicio_id, calificacion, aciertos, total_preguntas, bloqueado, calificacion_manual')
       .eq('alumno_id', userId)).data || [];
 
     const hechosMap = new Map(hechos.map(h => [h.ejercicio_id, h]));
@@ -171,7 +171,7 @@ export async function getAlumnoDashboardData(userId: string) {
         materia_id: ej.temas?.unidades?.materia_id,
         tema: ej.temas?.titulo || '',
         completado: !!resultado,
-        calificacion: resultado?.calificacion || null,
+        calificacion: resultado?.calificacion ?? resultado?.calificacion_manual ?? null,
         aciertos: resultado?.aciertos || 0,
         total_preguntas: resultado?.total_preguntas || 0,
         bloqueado: resultado?.bloqueado || false

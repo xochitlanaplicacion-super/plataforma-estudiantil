@@ -51,11 +51,18 @@ export default async function MisMateriasPage() {
               (ex: any) => ex.materia_id === materia.id
             );
 
-            // Calcular promedio de la materia (basado en intentos realizados)
+            // Calcular promedio de la materia (basado en intentos realizados y tareas vencidas)
             const realizados = ejerciciosDeMateria.filter((ex: any) => ex.completado);
+            const vencidosNoRealizados = ejerciciosDeMateria.filter((ex: any) => {
+              if (ex.completado) return false;
+              if (!ex.fecha_entrega) return false;
+              return new Date(ex.fecha_entrega) < new Date();
+            });
+            const evaluables = realizados.length + vencidosNoRealizados.length;
+
             const sumaCalificaciones = realizados.reduce((acc: number, ex: any) => acc + Number(ex.calificacion || 0), 0);
-            const promedioMateria = realizados.length > 0
-              ? ((sumaCalificaciones / realizados.length) / 10).toFixed(1)
+            const promedioMateria = evaluables > 0
+              ? ((sumaCalificaciones / evaluables) / 10).toFixed(1)
               : 'N/A';
 
             // Calcular progreso real: (Realizados / Total de la materia)

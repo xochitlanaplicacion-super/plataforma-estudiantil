@@ -86,10 +86,19 @@ export default async function AlumnoDashboard() {
   const ejerciciosCompletados = data?.todosLosEjercicios?.filter((ej: any) => ej.completado) || [];
   const numeroCompletados = ejerciciosCompletados.length;
 
+  const now = new Date();
+  const ejerciciosVencidosNoCompletados = data?.todosLosEjercicios?.filter((ej: any) => {
+    if (ej.completado) return false;
+    if (!ej.fecha_entrega) return false;
+    return new Date(ej.fecha_entrega) < now;
+  }) || [];
+
+  const ejerciciosEvaluables = numeroCompletados + ejerciciosVencidosNoCompletados.length;
+
   // La calificación está en base 100, calculamos el promedio en base 10
   const sumaCalificaciones = ejerciciosCompletados.reduce((acc: number, ej: any) => acc + Number(ej.calificacion || 0), 0);
-  const promedioAcumulado = numeroCompletados > 0 ? (sumaCalificaciones / numeroCompletados) / 10 : 0;
-  const promedio = numeroCompletados > 0 ? promedioAcumulado.toFixed(1) : 'N/A';
+  const promedioAcumulado = ejerciciosEvaluables > 0 ? (sumaCalificaciones / ejerciciosEvaluables) / 10 : 0;
+  const promedio = ejerciciosEvaluables > 0 ? promedioAcumulado.toFixed(1) : 'N/A';
 
   const labelCompletados = "Completados";
 
