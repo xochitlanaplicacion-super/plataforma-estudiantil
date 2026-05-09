@@ -36,7 +36,7 @@ import {
   ExternalLink
 } from 'lucide-react';
 import Link from 'next/link';
-import { cn } from '@/lib/utils';
+import { cn, parseFechaLocal } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -269,18 +269,18 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
   , [unidades, materia.id]);
 
   const sortedExercises = useMemo(() => {
-    const active = exercises.filter(ex => !ex.fecha_entrega || new Date(ex.fecha_entrega) >= now)
+    const active = exercises.filter(ex => !ex.fecha_entrega || parseFechaLocal(ex.fecha_entrega) >= now)
       .sort((a, b) => {
         if (!a.fecha_entrega) return 1;
         if (!b.fecha_entrega) return -1;
-        return new Date(a.fecha_entrega).getTime() - new Date(b.fecha_entrega).getTime();
+        return parseFechaLocal(a.fecha_entrega).getTime() - parseFechaLocal(b.fecha_entrega).getTime();
       });
       
-    const expired = exercises.filter(ex => ex.fecha_entrega && new Date(ex.fecha_entrega) < now)
+    const expired = exercises.filter(ex => ex.fecha_entrega && parseFechaLocal(ex.fecha_entrega) < now)
       .sort((a, b) => {
         if (!a.fecha_entrega) return 1;
         if (!b.fecha_entrega) return -1;
-        return new Date(b.fecha_entrega).getTime() - new Date(a.fecha_entrega).getTime();
+        return parseFechaLocal(b.fecha_entrega).getTime() - parseFechaLocal(a.fecha_entrega).getTime();
       });
       
     return [...active, ...expired];
@@ -398,7 +398,7 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
                     <p className="col-span-full text-[10px] md:text-xs italic text-muted-foreground p-8 bg-white/50 rounded-2xl border border-dashed text-center">No hay actividades publicadas aún.</p>
                   ) : (
                     currentBatch.map((ex: any) => {
-                      const deadline = ex.fecha_entrega ? new Date(ex.fecha_entrega) : null;
+                      const deadline = ex.fecha_entrega ? parseFechaLocal(ex.fecha_entrega) : null;
                       const isExpired = deadline ? deadline < now : false;
                       const isPerfect = ex.bloqueado;
                       const isCompleted = ex.completado;

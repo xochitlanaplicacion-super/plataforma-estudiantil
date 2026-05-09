@@ -2,6 +2,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { parseFechaLocal } from '@/lib/utils';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
@@ -251,7 +252,7 @@ export async function saveExerciseResult(
 
   // 2. Seguridad: Validar si el ejercicio ya venció
   if (exerciseData?.fecha_entrega) {
-    const deadline = new Date(exerciseData.fecha_entrega);
+    const deadline = parseFechaLocal(exerciseData.fecha_entrega);
     const now = new Date();
     if (now > deadline) {
       return {

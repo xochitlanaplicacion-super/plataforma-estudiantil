@@ -2,6 +2,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
+import { parseFechaLocal } from '@/lib/utils';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
@@ -154,7 +155,7 @@ export async function getRendimientoAlumnos(grupoId: string) {
     ejerciciosDelGrupo.forEach(ej => {
       const resultado = misResultados.find(r => r.ejercicio_id === ej.id);
       const estaCompletado = resultado && (resultado.estado === 'completado' || resultado.calificacion !== null || resultado.calificacion_manual !== null);
-      const estaVencido = ej.fecha_entrega ? new Date(ej.fecha_entrega) < ahora : false;
+      const estaVencido = ej.fecha_entrega ? parseFechaLocal(ej.fecha_entrega) < ahora : false;
 
       if (estaCompletado) {
         evaluablesGlobal++;
@@ -186,7 +187,7 @@ export async function getRendimientoAlumnos(grupoId: string) {
       ejsDeMateria.forEach(ej => {
         const resultado = misResultados.find(r => r.ejercicio_id === ej.id);
         const estaCompletado = resultado && (resultado.estado === 'completado' || resultado.calificacion !== null || resultado.calificacion_manual !== null);
-        const estaVencido = ej.fecha_entrega ? new Date(ej.fecha_entrega) < ahora : false;
+        const estaVencido = ej.fecha_entrega ? parseFechaLocal(ej.fecha_entrega) < ahora : false;
 
         if (estaCompletado) {
           evaluablesMateria++;

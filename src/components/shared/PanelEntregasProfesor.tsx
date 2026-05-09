@@ -5,7 +5,7 @@ import {
   Download, Clock, CheckCircle2, AlertTriangle, Loader2,
   Users, FileText, ChevronDown, ChevronUp, Star, BookOpen, Activity, History, Target
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, parseFechaLocal } from '@/lib/utils';
 import { calificarEntregaDescriptiva, getEntregasDeEjercicio } from '@/lib/actions/entregas';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -381,7 +381,7 @@ export function PanelEntregasProfesor({ ejercicios, materiaNombre }: Props) {
                   </p>
                   {ej.fecha_entrega && (
                     <p className="text-[11px] text-slate-400 font-semibold">
-                      Límite: {new Date(ej.fecha_entrega).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      Límite: {parseFechaLocal(ej.fecha_entrega).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' })}
                     </p>
                   )}
                 </div>

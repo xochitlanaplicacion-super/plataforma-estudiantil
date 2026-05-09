@@ -84,7 +84,7 @@ import {
 } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription as AlertDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { cn } from '@/lib/utils';
+import { cn, parseFechaLocal } from '@/lib/utils';
 import confetti from 'canvas-confetti';
 import { polyfill } from "mobile-drag-drop";
 import "mobile-drag-drop/default.css";
@@ -1004,7 +1004,7 @@ export default function ProfesorDashboard() {
                    <TableBody>
                      {ejercicios.map((e) => {
                        const template = ACTIVITY_TEMPLATES.find(t => t.id === e.tipo);
-                       const fechaEntrega = e.fecha_entrega ? new Date(e.fecha_entrega) : null;
+                       const fechaEntrega = e.fecha_entrega ? parseFechaLocal(e.fecha_entrega) : null;
                        const fechaStr = fechaEntrega ? fechaEntrega.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) : null;
                        const isVencida = fechaEntrega ? fechaEntrega < new Date() : false;
                        const isProxima = fechaEntrega ? (fechaEntrega.getTime() - new Date().getTime()) < 3 * 24 * 60 * 60 * 1000 && !isVencida : false;
@@ -1106,7 +1106,7 @@ export default function ProfesorDashboard() {
                   className={cn("h-12 rounded-xl font-bold text-slate-700 border-2", (!dialog.data.fecha_entrega || dialog.data.fecha_entrega === '') ? 'border-amber-400 bg-white focus-visible:ring-amber-400' : 'border-emerald-400 bg-white')}
                   value={dialog.data.fecha_entrega ? dialog.data.fecha_entrega.split('T')[0] : ''}
                   min={new Date().toISOString().split('T')[0]}
-                  onChange={e => setDialog({...dialog, data: {...dialog.data, fecha_entrega: e.target.value ? new Date(e.target.value + 'T23:59:59').toISOString() : ''}})}
+                  onChange={e => setDialog({...dialog, data: {...dialog.data, fecha_entrega: e.target.value ? e.target.value + 'T23:59:59' : ''}})}
                 />
                 {(!dialog.data.fecha_entrega || dialog.data.fecha_entrega === '') && (
                   <p className="text-[10px] font-black text-amber-700 flex items-center gap-1.5">

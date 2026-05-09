@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
-import { cn } from '@/lib/utils';
+import { cn, parseFechaLocal } from '@/lib/utils';
 import { PaginationTasks } from './components/PaginationTasks';
 import MaterialCarousel from './components/MaterialCarousel';
 import { PaymentNotificationPopup } from './components/PaymentNotificationPopup';
@@ -77,7 +77,7 @@ export default async function AlumnoDashboard() {
   const now = new Date();
   const pendientesValidas = data?.pendientes?.filter((ej: any) => {
     if (!ej.fecha_entrega) return true;
-    return new Date(ej.fecha_entrega) >= now;
+    return parseFechaLocal(ej.fecha_entrega) >= now;
   }) || [];
 
   const totalTareas = pendientesValidas.length;
@@ -89,7 +89,7 @@ export default async function AlumnoDashboard() {
   const ejerciciosVencidosNoCompletados = data?.todosLosEjercicios?.filter((ej: any) => {
     if (ej.completado) return false;
     if (!ej.fecha_entrega) return false;
-    return new Date(ej.fecha_entrega) < now;
+    return parseFechaLocal(ej.fecha_entrega) < now;
   }) || [];
 
   const ejerciciosEvaluables = numeroCompletados + ejerciciosVencidosNoCompletados.length;

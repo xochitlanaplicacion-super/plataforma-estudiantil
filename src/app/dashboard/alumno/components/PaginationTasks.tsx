@@ -10,7 +10,7 @@ import {
   ChevronRight,
   ListFilter
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, parseFechaLocal } from '@/lib/utils';
 
 interface Task {
   id: string;
@@ -36,7 +36,7 @@ export function PaginationTasks({ tasks }: PaginationTasksProps) {
   const activeTasks = useMemo(() => {
     return tasks.filter(t => {
       if (!t.fecha_entrega) return true;
-      return new Date(t.fecha_entrega) >= now;
+      return parseFechaLocal(t.fecha_entrega) >= now;
     });
   }, [tasks]);
 
@@ -55,7 +55,7 @@ export function PaginationTasks({ tasks }: PaginationTasksProps) {
   return (
     <div className="divide-y divide-border">
       {currentTasks.map((tarea) => {
-        const deadline = tarea.fecha_entrega ? new Date(tarea.fecha_entrega) : null;
+        const deadline = tarea.fecha_entrega ? parseFechaLocal(tarea.fecha_entrega) : null;
         const diffTime = deadline ? deadline.getTime() - now.getTime() : Infinity;
         const diffDays = diffTime / (1000 * 60 * 60 * 24);
         

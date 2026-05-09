@@ -4,6 +4,7 @@ import { getAlumnoDashboardData } from '@/lib/actions/alumno';
 import { redirect } from 'next/navigation';
 import { BookOpen } from 'lucide-react';
 import { SubjectCard } from '../components/SubjectCard';
+import { parseFechaLocal } from '@/lib/utils';
 
 export default async function MisMateriasPage() {
   const supabase = await createServerSupabaseClient();
@@ -56,7 +57,7 @@ export default async function MisMateriasPage() {
             const vencidosNoRealizados = ejerciciosDeMateria.filter((ex: any) => {
               if (ex.completado) return false;
               if (!ex.fecha_entrega) return false;
-              return new Date(ex.fecha_entrega) < new Date();
+              return parseFechaLocal(ex.fecha_entrega) < new Date();
             });
             const evaluables = realizados.length + vencidosNoRealizados.length;
 
