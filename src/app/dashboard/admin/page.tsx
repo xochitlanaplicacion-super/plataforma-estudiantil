@@ -64,11 +64,12 @@ export default function AdminDashboard() {
         .select('*', { count: 'exact', head: true })
         .eq('estatus', 'nuevo');
 
-      // Aspirantes pendientes (No inscritos aún)
+      // Aspirantes pendientes (No inscritos aún y no archivados)
       const { count: aspirantesCount } = await supabase
         .from('aspirantes')
         .select('*', { count: 'exact', head: true })
-        .neq('estatus', 'inscrito');
+        .neq('estatus', 'inscrito')
+        .or('is_archived.eq.false,is_archived.is.null');
 
       setStats({
         alumnos: alumnosCount || 0,
