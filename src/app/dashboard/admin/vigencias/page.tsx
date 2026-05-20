@@ -111,6 +111,8 @@ function ModalAbono({ pago, alumno, alumnoId, open, onClose, onSuccess }: any) {
           folio: res.folio,
           fecha: form.fecha,
           logoUrl: inst.logo_url,
+          colorPrimario: inst.color_primario,
+          colorSecundario: inst.color_secundario,
         });
       }
     } else { toast({ variant: 'destructive', title: 'Error', description: res.error }); }
@@ -129,6 +131,8 @@ function ModalAbono({ pago, alumno, alumnoId, open, onClose, onSuccess }: any) {
       folio: abono.recibo,
       fecha: abono.fecha,
       logoUrl: inst.logo_url,
+      colorPrimario: inst.color_primario,
+      colorSecundario: inst.color_secundario,
     });
   };
 
@@ -286,6 +290,8 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
           folio: res.folio,
           fecha: form.fecha_pago,
           logoUrl: inst.logo_url,
+          colorPrimario: inst.color_primario,
+          colorSecundario: inst.color_secundario,
         });
       }
     }
@@ -305,6 +311,8 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
       folio: pago.recibo,
       fecha: pago.fecha_pago,
       logoUrl: inst.logo_url,
+      colorPrimario: inst.color_primario,
+      colorSecundario: inst.color_secundario,
     });
   };
 

@@ -12,6 +12,17 @@ interface ReciboData {
   folio: string;
   fecha: string; // ISO date YYYY-MM-DD
   logoUrl?: string; // URL dinámica del logo institucional
+  colorPrimario?: string; // Hex color for main text and borders
+  colorSecundario?: string; // Hex color for outer border
+}
+
+function hexToRgb(hex: string): [number, number, number] | null {
+  const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? [
+    parseInt(result[1], 16),
+    parseInt(result[2], 16),
+    parseInt(result[3], 16)
+  ] : null;
 }
 
 const meses = [
@@ -53,9 +64,11 @@ export async function generarReciboPDF(data: ReciboData) {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
   
   const width = doc.internal.pageSize.getWidth(); // ~215.9 mm
-  const colorGuinda = [139, 35, 50] as const;
-  const colorOro = [212, 175, 55] as const;
   const colorFondoLetras = [240, 240, 240] as const;
+
+  // Use dynamic colors if provided, otherwise fallback to the original values
+  const colorPrimario = data.colorPrimario ? (hexToRgb(data.colorPrimario) || [139, 35, 50]) : [139, 35, 50];
+  const colorSecundario = data.colorSecundario ? (hexToRgb(data.colorSecundario) || [212, 175, 55]) : [212, 175, 55];
   
   const dateObj = new Date(data.fecha + 'T00:00:00'); 
   const dia = dateObj.getDate().toString().padStart(2, '0');
@@ -88,13 +101,13 @@ export async function generarReciboPDF(data: ReciboData) {
     const h = 65;
 
     // 1. Caja dorada exterior
-    doc.setDrawColor(colorOro[0], colorOro[1], colorOro[2]);
+    doc.setDrawColor(colorSecundario[0], colorSecundario[1], colorSecundario[2]);
     doc.setLineWidth(0.7);
     doc.roundedRect(10, yOffset + 5, width - 20, h, 2, 2);
     
     // Franja guinda superior
-    doc.setFillColor(colorGuinda[0], colorGuinda[1], colorGuinda[2]);
-    doc.setDrawColor(colorGuinda[0], colorGuinda[1], colorGuinda[2]);
+    doc.setFillColor(colorPrimario[0], colorPrimario[1], colorPrimario[2]);
+    doc.setDrawColor(colorPrimario[0], colorPrimario[1], colorPrimario[2]);
     doc.roundedRect(10, yOffset + 5, width - 20, 3, 2, 2, 'F');
     doc.rect(10, yOffset + 7, width - 20, 1, 'F');
 
@@ -113,7 +126,7 @@ export async function generarReciboPDF(data: ReciboData) {
       doc.setFont('helvetica', 'bold');
       const nivelFit = fitText(doc, textoNivel, textMaxW, 6, 4);
       doc.setFontSize(nivelFit.fontSize);
-      doc.setTextColor(colorGuinda[0], colorGuinda[1], colorGuinda[2]);
+      doc.setTextColor(colorPrimario[0], colorPrimario[1], colorPrimario[2]);
       doc.text(nivelFit.lines, logoCenter, cursorY, { align: 'center' });
       cursorY += nivelFit.lines.length * (nivelFit.fontSize * 0.45);
     }
@@ -130,7 +143,7 @@ export async function generarReciboPDF(data: ReciboData) {
     // 5. Título RECIBO OFICIAL
     doc.setFontSize(13);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(colorGuinda[0], colorGuinda[1], colorGuinda[2]);
+    doc.setTextColor(colorPrimario[0], colorPrimario[1], colorPrimario[2]);
     doc.text('RECIBO OFICIAL', width / 2 + 10, yOffset + 15, { align: 'center', charSpace: 0.8 });
 
     // 6. Folio (alineado a la derecha, sin empalmes)
