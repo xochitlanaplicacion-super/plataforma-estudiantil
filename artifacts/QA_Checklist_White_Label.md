@@ -34,12 +34,12 @@ Asegúrate de tener un color llamativo asignado en el panel (ej. morado brillant
   - [X] Cambia el color primario, guarda, recarga la página, y asegúrate de que **TODA** la plataforma (botones, menús, textos) cambia de color.
 
 ## 👩‍🏫 3. Interfaz del Profesor
-- [ ] **Dashboard General (`/dashboard/profesor`)**
-  - [ ] Aparece la marca de agua dinámica o el nombre en las cabeceras.
-- [ ] **Listas y PDFs (`/dashboard/profesor/grupos`)**
-  - [ ] Al descargar la lista de asistencia de sus grupos en PDF, el logo de cabecera debe ser el oficial de la configuración, no "Zapata".
-- [ ] **Mensajería (`/dashboard/profesor/mensajes`)**
-  - [ ] La cabecera del chat dice "Chat Oficial [Siglas]".
+- [x] **Dashboard General (`/dashboard/profesor`)**
+  - [x] Aparece la marca de agua dinámica o el nombre en las cabeceras.
+- [x] **Listas y PDFs (`/dashboard/profesor/grupos`)**
+  - [x] Al descargar la lista de asistencia de sus grupos en PDF, el logo de cabecera debe ser el oficial de la configuración, no "Zapata".
+- [x] **Mensajería (`/dashboard/profesor/mensajes`)**
+  - [x] La cabecera del chat dice "Chat Oficial [Siglas]".
 
 ## 👨‍🎓 4. Interfaz del Alumno
 - [x] **Dashboard General (`/dashboard/alumno`)**
@@ -48,9 +48,9 @@ Asegúrate de tener un color llamativo asignado en el panel (ej. morado brillant
   - [x] Entra a una materia, abre una Actividad Interactiva / Juego.
   - [x] Verifica que el color del botón del juego coincida con el color primario.
   - [x] Verifica que la marca de agua o texto en el pie del visor del juego diga "Recurso oficial de [Nombre Completo]".
-- [ ] **Documento de Acreditación (OCR / jsPDF)**
-  - [ ] Entra a ver el dictamen digital.
-  - [ ] Genera el PDF de la acreditación; asegúrate de que el logo impreso en el certificado sea el logo dinámico y no el anterior.
+- [x] **Documento de Acreditación (OCR / jsPDF)**
+  - [x] Entra a ver el dictamen digital.
+  - [x] Genera el PDF de la acreditación; asegúrate de que el logo impreso en el certificado sea el logo dinámico y no el anterior.
 - [x] **Mensajería (`/dashboard/alumno/mensajes`)**
   - [x] El título del chat dice "Contacto Oficial [Siglas]".
 

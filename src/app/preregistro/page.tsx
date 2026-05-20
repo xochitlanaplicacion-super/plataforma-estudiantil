@@ -13,7 +13,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { createAspiranteRecord, getPublicCareers } from '@/lib/actions/aspirantes';
+import { createAspiranteRecord, getPublicCareers, getPublicLevels } from '@/lib/actions/aspirantes';
 import Link from 'next/link';
 import { useInstitucion } from '@/hooks/use-institucion';
 
@@ -36,6 +36,7 @@ export default function PreregistroPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [allCareers, setAllCareers] = useState<any[]>([]);
+  const [allLevels, setAllLevels] = useState<any[]>([]);
   const { config: inst } = useInstitucion();
 
   const form = useForm<PreregistroValues>({
@@ -56,25 +57,24 @@ export default function PreregistroPage() {
   const nivelWatch = form.watch('nivel');
 
   useEffect(() => {
-    async function loadCareers() {
-      const result = await getPublicCareers();
-      if (result.success && result.data) {
-        setAllCareers(result.data);
-      }
+    async function loadData() {
+      const [careersResult, levelsResult] = await Promise.all([
+        getPublicCareers(),
+        getPublicLevels(),
+      ]);
+      if (careersResult.success && careersResult.data) setAllCareers(careersResult.data);
+      if (levelsResult.success && levelsResult.data) setAllLevels(levelsResult.data);
     }
-    loadCareers();
+    loadData();
   }, []);
 
   const filteredCareers = useMemo(() => {
     if (!nivelWatch) return [];
-    return allCareers.filter(c => {
-      const levelName = c.niveles?.nombre?.toLowerCase() || '';
-      if (nivelWatch === 'universidad') return levelName.includes('universidad') || levelName.includes('superior');
-      if (nivelWatch === 'bachillerato') return levelName.includes('bachillerato') || levelName.includes('preparatoria');
-      if (nivelWatch === 'capacitacion') return levelName.includes('capacitacion') || levelName.includes('curso');
-      return false;
-    });
-  }, [allCareers, nivelWatch]);
+    // Find the selected level by name, then filter careers by its ID
+    const selectedLevel = allLevels.find(l => l.nombre === nivelWatch);
+    if (!selectedLevel) return [];
+    return allCareers.filter(c => c.niveles?.id === selectedLevel.id);
+  }, [allCareers, allLevels, nivelWatch]);
 
   // Limpiar carrera seleccionada si el nivel cambia y la carrera ya no es válida
   useEffect(() => {
@@ -283,9 +283,9 @@ export default function PreregistroPage() {
                             </SelectTrigger>
                           </FormControl>
                           <SelectContent>
-                            <SelectItem value="bachillerato">Bachillerato</SelectItem>
-                            <SelectItem value="universidad">Universidad</SelectItem>
-                            <SelectItem value="capacitacion">Capacitaciones</SelectItem>
+                            {allLevels.map(level => (
+                              <SelectItem key={level.id} value={level.nombre}>{level.nombre}</SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                         <FormMessage />

@@ -16,7 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, AlertCircle, RefreshCw, Eye, EyeOff, Sparkles, Mail } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { createUserWithProfile, updateUserProfile, resendWelcomeEmailAction } from '@/lib/actions/users';
-import { getPublicCareers } from '@/lib/actions/aspirantes';
+import { getPublicCareers, getPublicLevels } from '@/lib/actions/aspirantes';
 import { createClient } from '@/lib/supabase/client';
 import { useInstitucion } from '@/hooks/use-institucion';
 
@@ -73,6 +73,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
   const [isGenerating, setIsGenerating] = useState(false);
   const [showPassword, setShowPassword] = useState(true); // Siempre visible en edición por defecto
   const [allCareers, setAllCareers] = useState<any[]>([]);
+  const [allLevels, setAllLevels] = useState<any[]>([]);
   const { config: inst } = useInstitucion();
 
   const form = useForm<UserFormValues>({
@@ -102,15 +103,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
 
   const nivelEstudios = form.watch('nivel_estudios');
 
-  const uniqueLevels = useMemo(() => {
-    const map = new Map<string, {id: string, nombre: string}>();
-    allCareers.forEach(c => {
-      if (c.niveles && c.niveles.id) {
-        map.set(c.niveles.id, c.niveles);
-      }
-    });
-    return Array.from(map.values()).sort((a, b) => a.nombre.localeCompare(b.nombre));
-  }, [allCareers]);
+
 
   const filteredCareers = useMemo(() => {
     if (!nivelEstudios) return [];
@@ -147,7 +140,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
     if (!nivelId) return;
     setIsGenerating(true);
     try {
-      const level = uniqueLevels.find(l => l.id === nivelId);
+      const level = allLevels.find(l => l.id === nivelId);
       if (!level) return;
 
       const now = new Date();
@@ -180,11 +173,15 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
   };
 
   useEffect(() => {
-    async function loadCareers() {
-      const res = await getPublicCareers();
-      if (res.success && res.data) setAllCareers(res.data);
+    async function loadData() {
+      const [careersRes, levelsRes] = await Promise.all([
+        getPublicCareers(),
+        getPublicLevels(),
+      ]);
+      if (careersRes.success && careersRes.data) setAllCareers(careersRes.data);
+      if (levelsRes.success && levelsRes.data) setAllLevels(levelsRes.data);
     }
-    loadCareers();
+    loadData();
   }, []);
 
   useEffect(() => {
@@ -224,6 +221,14 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
         });
       } else if (prefillAspirante) {
         setShowPassword(true);
+        // Resolve aspirante's nivel (text name) to level UUID
+        let resolvedNivelId = '';
+        if (prefillAspirante.nivel && allLevels.length > 0) {
+          const match = allLevels.find(l =>
+            l.nombre.toLowerCase() === prefillAspirante.nivel.toLowerCase()
+          );
+          resolvedNivelId = match?.id || '';
+        }
         form.reset({
           nombre: prefillAspirante.nombre || '',
           apellidos: prefillAspirante.apellidos || '',
@@ -232,7 +237,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
           rol: 'alumno',
           estatus: 'activo',
           telefono: prefillAspirante.telefono || '',
-          nivel_estudios: prefillAspirante.nivel || '',
+          nivel_estudios: resolvedNivelId,
           carrera_id: prefillAspirante.carrera_id || '',
           matricula: '',
           numero_empleado: '',
@@ -246,7 +251,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
           doc_ine: false,
         });
         generatePassword();
-        if (prefillAspirante.nivel) generateMatricula(prefillAspirante.nivel);
+        if (resolvedNivelId) generateMatricula(resolvedNivelId);
       } else {
         setShowPassword(true);
         form.reset({
@@ -258,7 +263,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
         generatePassword();
       }
     }
-  }, [user, prefillAspirante, open, generatePassword]);
+  }, [user, prefillAspirante, open, generatePassword, allLevels]);
 
   const onSubmit = async (values: UserFormValues) => {
     setLoading(true);
@@ -457,7 +462,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
                     <Select onValueChange={(val) => { field.onChange(val); generateMatricula(val); }} value={field.value}>
                       <FormControl><SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Elegir Nivel" /></SelectTrigger></FormControl>
                       <SelectContent>
-                        {uniqueLevels.map(lvl => (
+                        {allLevels.map(lvl => (
                           <SelectItem key={lvl.id} value={lvl.id}>{lvl.nombre}</SelectItem>
                         ))}
                       </SelectContent>

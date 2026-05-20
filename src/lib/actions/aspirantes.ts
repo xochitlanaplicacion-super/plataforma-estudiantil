@@ -57,3 +57,18 @@ export async function getPublicCareers() {
     return { success: false, error: error.message };
   }
 }
+
+export async function getPublicLevels() {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('niveles')
+      .select('id, nombre')
+      .eq('activo', true)
+      .order('nombre');
+    
+    if (error) throw error;
+    return { success: true, data: data || [] };
+  } catch (error: any) {
+    return { success: false, data: [], error: error.message };
+  }
+}
