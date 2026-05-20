@@ -6,11 +6,13 @@ import { Button } from '@/components/ui/button';
 import { FileText, Download, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { generarDictamenPDF } from '@/lib/utils/pdfGenerator';
+import { useInstitucion } from '@/hooks/use-institucion';
 import { useToast } from '@/hooks/use-toast';
 
 export default function AcreditacionAlumnoPage() {
   const supabase = createClient();
   const { toast } = useToast();
+  const { config: inst } = useInstitucion();
   
   const [loading, setLoading] = useState(true);
   const [acreditacion, setAcreditacion] = useState<any>(null);
@@ -84,7 +86,7 @@ export default function AcreditacionAlumnoPage() {
       title: "Generando Documento...",
       description: "Tu dictamen oficial se descargará en unos segundos.",
     });
-    await generarDictamenPDF(acreditacion);
+    await generarDictamenPDF(acreditacion, inst?.logo_url);
   };
 
   if (loading) {

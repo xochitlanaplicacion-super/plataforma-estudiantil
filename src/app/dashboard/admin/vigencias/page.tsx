@@ -23,6 +23,7 @@ import {
   reasignarProgramaAlumno, updateNombrePrograma
 } from '@/lib/actions/pagos';
 import { generarReciboPDF } from '@/lib/generators/pdfReceipt';
+import { useInstitucion } from '@/hooks/use-institucion';
 
 // ─── Barra de Progreso ───────────────────────────────────────────────────────
 function ProgressBar({ valor, total, mostrarTexto = true }: { valor: number; total: number; mostrarTexto?: boolean }) {
@@ -59,6 +60,7 @@ function ConceptProgressBar({ pagado, total }: { pagado: number; total: number }
 // ─── Modal Abono ─────────────────────────────────────────────────────────────
 function ModalAbono({ pago, alumno, alumnoId, open, onClose, onSuccess }: any) {
   const { toast } = useToast();
+  const { config: inst } = useInstitucion();
   const [form, setForm] = useState({ monto: '', fecha: new Date().toISOString().split('T')[0], notas: '' });
   const [loading, setLoading] = useState(false);
   const [abonos, setAbonos] = useState<any[]>([]);
@@ -108,6 +110,7 @@ function ModalAbono({ pago, alumno, alumnoId, open, onClose, onSuccess }: any) {
           monto: montoNum,
           folio: res.folio,
           fecha: form.fecha,
+          logoUrl: inst.logo_url,
         });
       }
     } else { toast({ variant: 'destructive', title: 'Error', description: res.error }); }
@@ -125,6 +128,7 @@ function ModalAbono({ pago, alumno, alumnoId, open, onClose, onSuccess }: any) {
       monto: Number(abono.monto),
       folio: abono.recibo,
       fecha: abono.fecha,
+      logoUrl: inst.logo_url,
     });
   };
 
@@ -212,6 +216,7 @@ function ModalAbono({ pago, alumno, alumnoId, open, onClose, onSuccess }: any) {
 // ─── Modal Pagos del Alumno ──────────────────────────────────────────────────
 function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponibles }: any) {
   const { toast } = useToast();
+  const { config: inst } = useInstitucion();
   const [pagos, setPagos] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
@@ -280,6 +285,7 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
           monto: montoPagar,
           folio: res.folio,
           fecha: form.fecha_pago,
+          logoUrl: inst.logo_url,
         });
       }
     }
@@ -298,6 +304,7 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
       monto: Number(pago.monto_pagado),
       folio: pago.recibo,
       fecha: pago.fecha_pago,
+      logoUrl: inst.logo_url,
     });
   };
 

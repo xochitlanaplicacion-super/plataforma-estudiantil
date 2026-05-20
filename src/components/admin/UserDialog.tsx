@@ -18,6 +18,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { createUserWithProfile, updateUserProfile, resendWelcomeEmailAction } from '@/lib/actions/users';
 import { getPublicCareers } from '@/lib/actions/aspirantes';
 import { createClient } from '@/lib/supabase/client';
+import { useInstitucion } from '@/hooks/use-institucion';
 
 const userSchema = z.object({
   nombre: z.string().min(2, "El nombre es obligatorio"),
@@ -72,6 +73,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
   const [isGenerating, setIsGenerating] = useState(false);
   const [showPassword, setShowPassword] = useState(true); // Siempre visible en edición por defecto
   const [allCareers, setAllCareers] = useState<any[]>([]);
+  const { config: inst } = useInstitucion();
 
   const form = useForm<UserFormValues>({
     resolver: zodResolver(userSchema),
@@ -100,15 +102,19 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
 
   const nivelEstudios = form.watch('nivel_estudios');
 
+  const uniqueLevels = useMemo(() => {
+    const map = new Map<string, {id: string, nombre: string}>();
+    allCareers.forEach(c => {
+      if (c.niveles && c.niveles.id) {
+        map.set(c.niveles.id, c.niveles);
+      }
+    });
+    return Array.from(map.values()).sort((a, b) => a.nombre.localeCompare(b.nombre));
+  }, [allCareers]);
+
   const filteredCareers = useMemo(() => {
     if (!nivelEstudios) return [];
-    return allCareers.filter(c => {
-      const levelName = c.niveles?.nombre?.toLowerCase() || '';
-      if (nivelEstudios === 'universidad') return levelName.includes('universidad') || levelName.includes('superior');
-      if (nivelEstudios === 'bachillerato') return levelName.includes('bachillerato') || levelName.includes('preparatoria');
-      if (nivelEstudios === 'capacitacion') return levelName.includes('capacitacion') || levelName.includes('curso');
-      return false;
-    });
+    return allCareers.filter(c => c.niveles?.id === nivelEstudios);
   }, [allCareers, nivelEstudios]);
 
   const generatePassword = useCallback(() => {
@@ -137,14 +143,19 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
     }
   };
 
-  const generateMatricula = async (nivel: string) => {
-    if (!nivel) return;
+  const generateMatricula = async (nivelId: string) => {
+    if (!nivelId) return;
     setIsGenerating(true);
     try {
+      const level = uniqueLevels.find(l => l.id === nivelId);
+      if (!level) return;
+
       const now = new Date();
       const month = String(now.getMonth() + 1).padStart(2, '0');
       const year = String(now.getFullYear()).slice(-2);
-      let suffix = nivel === 'universidad' ? "UNI" : nivel === 'bachillerato' ? "BAC" : "CAP";
+      
+      const prefix = inst?.codigo_matricula || 'XXXXXX';
+      const suffix = level.nombre.substring(0, 3).toUpperCase();
       
       const { data } = await supabase
         .from('profiles')
@@ -154,12 +165,13 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
         .limit(1);
 
       let nextNumber = 1;
-      if (data && data.length > 0) {
-        const match = data[0].matricula.match(/IEZPTA\d{4}(\d{6})/);
+      if (data && data.length > 0 && data[0].matricula) {
+        const regex = new RegExp(`(\\d{6})${suffix}$`);
+        const match = data[0].matricula.match(regex);
         if (match) nextNumber = parseInt(match[1]) + 1;
       }
       const sequential = String(nextNumber).padStart(6, '0');
-      form.setValue('matricula', `IEZPTA${month}${year}${sequential}${suffix}`);
+      form.setValue('matricula', `${prefix}${month}${year}${sequential}${suffix}`);
     } catch (err) {
       console.error(err);
     } finally {
@@ -180,9 +192,14 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
       setDbError(null);
       if (user) {
         setShowPassword(true);
-        const detectLevel = user.matricula?.endsWith('UNI') ? 'universidad' : 
-                           user.matricula?.endsWith('BAC') ? 'bachillerato' : 
-                           user.matricula?.endsWith('CAP') ? 'capacitacion' : '';
+        // Find level id based on carrera_id to pre-fill nivel_estudios
+        let detectLevel = '';
+        if (user.carrera_id && allCareers.length > 0) {
+          const carrera = allCareers.find(c => c.id === user.carrera_id);
+          if (carrera && carrera.niveles?.id) {
+            detectLevel = carrera.niveles.id;
+          }
+        }
         
         form.reset({
           nombre: user.nombre || '',
@@ -440,9 +457,9 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
                     <Select onValueChange={(val) => { field.onChange(val); generateMatricula(val); }} value={field.value}>
                       <FormControl><SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Elegir Nivel" /></SelectTrigger></FormControl>
                       <SelectContent>
-                        <SelectItem value="bachillerato">Bachillerato</SelectItem>
-                        <SelectItem value="universidad">Universidad</SelectItem>
-                        <SelectItem value="capacitacion">Capacitaciones</SelectItem>
+                        {uniqueLevels.map(lvl => (
+                          <SelectItem key={lvl.id} value={lvl.id}>{lvl.nombre}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </FormItem>

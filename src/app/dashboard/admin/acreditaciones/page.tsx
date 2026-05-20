@@ -11,6 +11,7 @@ import { createClient } from '@/lib/supabase/client';
 import { procesarDocumentoOCR } from '@/lib/actions/acreditaciones';
 import { convertirPDFaImagenes } from '@/lib/utils/pdfToImage';
 import { HistoricoTab } from './HistoricoTab';
+import { useInstitucion } from '@/hooks/use-institucion';
 
 // --- Tipos ---
 type ResultadoArchivo = {
@@ -86,6 +87,7 @@ const compressImage = async (file: File): Promise<File> => {
 export default function AcreditacionesPage() {
   const { toast } = useToast();
   const supabase = createClient();
+  const { config: inst } = useInstitucion();
 
   const [mensajeAprobado, setMensajeAprobado] = useState('');
   const [mensajeNoAprobado, setMensajeNoAprobado] = useState('');
@@ -352,7 +354,7 @@ export default function AcreditacionesPage() {
                 Cerrar
               </button>
               <a
-                href="mailto:admin@institutoemilianozapata.edu.mx?subject=Ampliar%20plan%20de%20acreditaciones"
+                href={`mailto:${inst.correo_contacto || 'soporte@tuescuela.edu.mx'}?subject=Ampliar%20plan%20de%20acreditaciones`}
                 className="flex-1 bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700 text-white font-semibold py-2.5 rounded-xl transition-all text-center"
               >
                 Contactar Admin

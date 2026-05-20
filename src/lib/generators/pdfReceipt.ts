@@ -11,6 +11,7 @@ interface ReciboData {
   monto: number;
   folio: string;
   fecha: string; // ISO date YYYY-MM-DD
+  logoUrl?: string; // URL dinámica del logo institucional
 }
 
 const meses = [
@@ -63,10 +64,12 @@ export async function generarReciboPDF(data: ReciboData) {
 
   // Cargar logo
   let imgLogo: HTMLImageElement | null = null;
-  try {
-    imgLogo = await loadImage('/images/logo_zapata.png');
-  } catch (err) {
-    console.warn('No se pudo cargar el logotipo:', err);
+  if (data.logoUrl) {
+    try {
+      imgLogo = await loadImage(data.logoUrl);
+    } catch (err) {
+      console.warn('No se pudo cargar el logotipo:', err);
+    }
   }
 
   // Textos del nivel y carrera

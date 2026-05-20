@@ -16,43 +16,9 @@ import { Variants } from 'framer-motion';
 import { createContactoRecord } from '@/lib/actions/contacto';
 import { useToast } from '@/hooks/use-toast';
 import Image from 'next/image';
+import { useInstitucion } from '@/hooks/use-institucion';
 
-// Temas disponibles (Sin Beige para esta página)
-const themes = [
-  {
-    id: 'azul',
-    primary: '#0A2647',
-    secondary: '#1e3a8a',
-    accent: '#3b82f6',
-    gradient: 'from-blue-600 to-cyan-500',
-    light: 'bg-blue-50',
-    textPrimary: 'text-[#0A2647]',
-    bgSecondary: 'bg-[#0A2647]',
-    borderAccent: 'border-blue-500'
-  },
-  {
-    id: 'verde',
-    primary: '#1A4A3F',
-    secondary: '#064e3b',
-    accent: '#10b981',
-    gradient: 'from-emerald-600 to-teal-400',
-    light: 'bg-emerald-50',
-    textPrimary: 'text-[#1A4A3F]',
-    bgSecondary: 'bg-[#1A4A3F]',
-    borderAccent: 'border-emerald-500'
-  },
-  {
-    id: 'vino',
-    primary: '#8B2332',
-    secondary: '#6B1A27',
-    accent: '#C41E3A',
-    gradient: 'from-[#8B2332] to-[#D42426]',
-    light: 'bg-red-50',
-    textPrimary: 'text-[#8B2332]',
-    bgSecondary: 'bg-[#8B2332]',
-    borderAccent: 'border-red-600'
-  }
-];
+// Eliminamos la lista de themes "hardcodeados" para que respete la tabla configuracion_sistema.
 
 // Custom hook to detect scroll position
 const useScroll = () => {
@@ -81,11 +47,12 @@ const staggerContainer: Variants = {
   }
 };
 
-const LOGO_URL = '/images/logo_zapata.png';
+const LOGO_FALLBACK = '/images/logo_placeholder.svg';
 
 const Navbar = ({ theme }: { theme: any }) => {
   const scrolled = useScroll();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { config: inst } = useInstitucion();
 
   const links = [
     { name: 'Inicio', href: '#inicio' },
@@ -105,7 +72,7 @@ const Navbar = ({ theme }: { theme: any }) => {
         <a href="#inicio" className="flex items-center gap-4 group">
           <div className="relative h-16 w-16 md:h-20 md:w-20 transition-transform duration-300 group-hover:scale-105">
             <img
-              src={LOGO_URL}
+              src={inst.logo_url || LOGO_FALLBACK}
               alt="Logo IEEZ"
               className="w-full h-full object-contain drop-shadow-md"
             />
@@ -113,15 +80,16 @@ const Navbar = ({ theme }: { theme: any }) => {
           <div className="flex flex-col">
             <span className={cn(
               "font-extrabold text-xl md:text-2xl leading-none transition-colors duration-300",
-              scrolled ? theme.textPrimary : "text-white"
-            )}>
-              IEEZ
+              scrolled ? "" : "text-white"
+            )}
+            style={scrolled ? { color: theme.primary } : {}}>
+              {inst.siglas}
             </span>
             <span className={cn(
               "text-[10px] md:text-[11px] uppercase font-bold tracking-[0.1em] transition-colors duration-300",
               scrolled ? "text-gray-600" : "text-gray-200"
             )}>
-              Instituto Educativo<br />Emiliano Zapata
+              {inst.nombre_corto}<br />{inst.siglas !== inst.nombre_corto ? '' : ''}
             </span>
           </div>
         </a>
@@ -247,7 +215,7 @@ const Magnetic = ({ children, intensity = 0.5, className }: { children: React.Re
   return <div ref={ref} className={cn("inline-block transition-transform duration-100", className)}>{children}</div>;
 };
 
-const Hero = ({ theme }: { theme: any }) => {
+export const Hero = ({ theme, config }: { theme: any, config: any }) => {
   return (
     <section id="inicio" className="relative min-h-screen flex items-center pt-20 overflow-hidden" style={{ backgroundColor: theme.primary }}>
       <div className="absolute inset-0 z-0">
@@ -256,8 +224,8 @@ const Hero = ({ theme }: { theme: any }) => {
           style={{ background: `linear-gradient(to right, ${theme.primary}, ${theme.primary}CC, transparent)` }}
         />
         <img
-          src="/images/hero-about.jpeg"
-          alt="Estudiantes"
+          src={config.hero_image || "/images/hero-about.jpeg"}
+          alt="Hero"
           className="w-full h-full object-cover object-center"
         />
       </div>
@@ -270,19 +238,21 @@ const Hero = ({ theme }: { theme: any }) => {
           variants={staggerContainer}
           className="max-w-3xl text-white"
         >
-          <motion.div variants={fadeUp} className="inline-block bg-white/20 backdrop-blur-md border border-white/30 px-6 py-2 rounded-full mb-8">
-            <span className="text-sm font-bold tracking-[0.2em] uppercase">
-              Universidad | Bachillerato | Capacitaciones
-            </span>
-          </motion.div>
+            {config.hero_badges !== null && (
+              <motion.div variants={fadeUp} className="inline-block bg-white/20 backdrop-blur-md border border-white/30 px-6 py-2 rounded-full mb-8">
+                <span className="text-sm font-bold tracking-[0.2em] uppercase">
+                  {config.hero_badges || "Universidad | Bachillerato | Capacitaciones"}
+                </span>
+              </motion.div>
+            )}
 
-          <motion.h1 variants={fadeUp} className="text-5xl md:text-8xl font-black leading-tight mb-8 uppercase drop-shadow-2xl">
-            LA EDUCACIÓN ES EL PRIMER PASO HACIA EL <span className={cn("block mt-4 text-transparent bg-clip-text bg-gradient-to-r inline-block border-b-8", theme.gradient)} style={{ borderBottomColor: theme.accent }}>éxito</span>
-          </motion.h1>
+            <motion.h1 variants={fadeUp} className="text-5xl md:text-8xl font-black leading-tight mb-8 uppercase drop-shadow-2xl">
+              {config.hero_title || "LA EDUCACIÓN ES EL PRIMER PASO HACIA EL"} <span className="block mt-4 inline-block border-b-8" style={{ borderBottomColor: theme.accent, color: theme.accent }}>{config.hero_highlight || "éxito"}</span>
+            </motion.h1>
 
-          <motion.p variants={fadeUp} className="text-xl md:text-2xl text-gray-100 mb-12 max-w-2xl font-medium leading-relaxed">
-            Formación integral para jóvenes y adultos. Concluye tus estudios con validez oficial SEP en un ambiente de excelencia.
-          </motion.p>
+            <motion.p variants={fadeUp} className="text-xl md:text-2xl text-gray-100 mb-12 max-w-2xl font-medium leading-relaxed">
+              {config.hero_subtitle || "Formación integral para jóvenes y adultos. Concluye tus estudios con validez oficial SEP en un ambiente de excelencia."}
+            </motion.p>
 
           <motion.div variants={fadeUp} className="flex flex-col sm:flex-row gap-6 relative z-10">
             <Magnetic intensity={0.4}>
@@ -332,7 +302,7 @@ const Hero = ({ theme }: { theme: any }) => {
   );
 };
 
-const MissionStatement = ({ theme }: { theme: any }) => {
+export const MissionStatement = ({ theme, config }: { theme: any, config: any }) => {
   const containerRef = useRef(null);
   const textRef = useRef(null);
   const descRef = useRef(null);
@@ -400,12 +370,18 @@ const MissionStatement = ({ theme }: { theme: any }) => {
             <div className="w-20 h-1 bg-gradient-to-r rounded-full" style={{ backgroundImage: `linear-gradient(to right, transparent, ${theme.primary}, transparent)` }}></div>
           </div>
 
-          <h2 ref={textRef} className="text-2xl md:text-4xl lg:text-5xl font-black text-gray-900 leading-[1.3] md:leading-tight tracking-tight">
-            Somos una institución <span style={{ color: theme.primary }}>comprometida</span> con brindar educación para estudiantes jóvenes y adultos, ofreciendo la oportunidad de concluir su <span className="underline decoration-4" style={{ textDecorationColor: `${theme.accent}60` }}>Bachillerato General</span>, <span className="underline decoration-4" style={{ textDecorationColor: `${theme.accent}60` }}>Licenciaturas</span>, <span className="underline decoration-4" style={{ textDecorationColor: `${theme.accent}60` }}>Ingenierías</span> y <span className="underline decoration-4" style={{ textDecorationColor: `${theme.accent}60` }}>Capacitaciones</span> avaladas por la <span className="font-black italic">Secretaría de Educación Pública (SEP)</span>.
-          </h2>
+          {config.mission_title ? (
+            <h2 ref={textRef} className="text-2xl md:text-4xl lg:text-5xl font-black text-gray-900 leading-[1.3] md:leading-tight tracking-tight">
+              {config.mission_title}
+            </h2>
+          ) : (
+            <h2 ref={textRef} className="text-2xl md:text-4xl lg:text-5xl font-black text-gray-900 leading-[1.3] md:leading-tight tracking-tight">
+              Somos una institución <span style={{ color: theme.primary }}>comprometida</span> con brindar educación para estudiantes jóvenes y adultos, ofreciendo la oportunidad de concluir su <span className="underline decoration-4" style={{ textDecorationColor: `${theme.accent}60` }}>Bachillerato General</span>, <span className="underline decoration-4" style={{ textDecorationColor: `${theme.accent}60` }}>Licenciaturas</span>, <span className="underline decoration-4" style={{ textDecorationColor: `${theme.accent}60` }}>Ingenierías</span> y <span className="underline decoration-4" style={{ textDecorationColor: `${theme.accent}60` }}>Capacitaciones</span> avaladas por la <span className="font-black italic">Secretaría de Educación Pública (SEP)</span>.
+            </h2>
+          )}
 
           <div ref={descRef} className="mt-12 text-xl md:text-2xl text-gray-600 font-medium max-w-4xl mx-auto leading-relaxed">
-            Nuestro enfoque es proporcionar un ambiente de aprendizaje flexible y accesible para aquellos que desean continuar su Educación Media Superior y Superior.
+            {config.mission_text || "Nuestro enfoque es proporcionar un ambiente de aprendizaje flexible y accesible para aquellos que desean continuar su Educación Media Superior y Superior."}
           </div>
 
           <div className="mt-10 flex justify-center">
@@ -425,7 +401,7 @@ const MissionStatement = ({ theme }: { theme: any }) => {
   );
 };
 
-const About = ({ theme }: { theme: any }) => {
+export const About = ({ theme, config }: { theme: any, config: any }) => {
   return (
     <section id="quienes-somos" className="py-32 bg-gray-50">
       <div className="container mx-auto px-4 lg:px-8">
@@ -439,8 +415,8 @@ const About = ({ theme }: { theme: any }) => {
           >
             <div className="relative rounded-3xl overflow-hidden shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] aspect-square md:aspect-[4/3]">
               <img
-                src="/images/about-team.jpeg"
-                alt="Graduación y directivos"
+                src={config.about_image || "/images/about-team.jpeg"}
+                alt="Nosotros"
                 className="w-full h-full object-cover object-right contrast-110 saturate-105 brightness-105"
               />
               <div className="absolute inset-0 bg-blue-900/10 mix-blend-multiply"></div>
@@ -451,8 +427,8 @@ const About = ({ theme }: { theme: any }) => {
                   <Award size={32} />
                 </div>
                 <div>
-                  <h4 className="font-black text-gray-900 text-lg">Validez Oficial</h4>
-                  <p className="text-sm font-bold text-gray-500 uppercase tracking-tighter">Acuerdo 286 SEP</p>
+                  <h4 className="font-black text-gray-900 text-lg">{config.about_badge_title || "Validez Oficial"}</h4>
+                  <p className="text-sm font-bold text-gray-500 uppercase tracking-tighter">{config.about_badge_subtitle || "Acuerdo 286 SEP"}</p>
                 </div>
               </div>
             </div>
@@ -469,11 +445,11 @@ const About = ({ theme }: { theme: any }) => {
               <Users size={20} /> Quiénes somos
             </motion.div>
             <motion.h2 variants={fadeUp} className="text-5xl md:text-6xl font-black text-gray-900 mb-10 leading-tight">
-              Nuestra Pasión por la <span style={{ color: theme.primary }}>Educación</span> en México
+              {config.about_title || "Nuestra Pasión por la Educación en México"}
             </motion.h2>
             <motion.div variants={fadeUp} className="space-y-8 text-gray-600 text-xl leading-relaxed font-medium">
               <p>
-                En <strong>Instituto Educativo Emiliano Zapata</strong> nos apasiona proporcionar programas de alta calidad. Nuestro compromiso radica en brindar una experiencia educativa excepcional a través de procesos de evaluación seguros y legales ante la <strong>Secretaría de Educación Pública</strong>.
+                {config.about_text || "En Instituto Emiliano Zapata nos apasiona proporcionar programas de alta calidad que se adapten a las necesidades reales de los estudiantes, garantizando que cada egresado tenga las herramientas necesarias para triunfar en el mercado laboral actual."}
               </p>
             </motion.div>
 
@@ -482,18 +458,18 @@ const About = ({ theme }: { theme: any }) => {
                 <div className="w-14 h-14 flex items-center justify-center rounded-xl mb-6 transition-colors" style={{ backgroundColor: `${theme.primary}15`, color: theme.primary }}>
                   <CheckCircle size={28} />
                 </div>
-                <h3 className="font-black text-gray-900 text-2xl mb-3">Acreditaciones</h3>
+                <h3 className="font-black text-gray-900 text-2xl mb-3">{config.about_card1_title || "Acreditaciones"}</h3>
                 <p className="text-gray-500 font-medium">
-                  Respaldo total de la SEP, garantizando la validez oficial de tus estudios.
+                  {config.about_card1_text || "Respaldo total de la SEP, garantizando la validez oficial de tus estudios."}
                 </p>
               </div>
               <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 hover:shadow-xl transition-all group">
                 <div className="w-14 h-14 flex items-center justify-center rounded-xl mb-6 transition-colors" style={{ backgroundColor: `${theme.primary}15`, color: theme.primary }}>
                   <Users size={28} />
                 </div>
-                <h3 className="font-black text-gray-900 text-2xl mb-3">Docentes</h3>
+                <h3 className="font-black text-gray-900 text-2xl mb-3">{config.about_card2_title || "Docentes"}</h3>
                 <p className="text-gray-500 font-medium">
-                  Equipo altamente calificado y comprometido con tu éxito académico.
+                  {config.about_card2_text || "Equipo altamente calificado y comprometido con tu éxito académico."}
                 </p>
               </div>
             </motion.div>
@@ -504,9 +480,10 @@ const About = ({ theme }: { theme: any }) => {
   );
 };
 
-const Programs = ({ theme }: { theme: any }) => {
-  const educationalPrograms = [
+export const Programs = ({ theme, config }: { theme: any, config: any }) => {
+  const defaultPrograms = [
     {
+      id: "prepa-joven",
       title: "PREPA JOVEN",
       subtitle: "",
       duration: "Duración de: 4 MESES",
@@ -514,11 +491,11 @@ const Programs = ({ theme }: { theme: any }) => {
       description: "Para continuar tus estudios e ingresar a cualquier Universidad pública o privada",
       validez: "Con validez oficial SEP",
       image: "/images/universidad.jpeg",
-      icon: <Users size={20} />,
-      crop: "object-top",
-      delay: 0.1
+      iconType: "users",
+      crop: "object-top"
     },
     {
+      id: "prepa-adultos",
       title: "BACHILLERATO ADULTOS",
       subtitle: "",
       duration: "Duración: 2 MESES",
@@ -526,11 +503,11 @@ const Programs = ({ theme }: { theme: any }) => {
       description: "Para trabajar o ingresar a la universidad",
       validez: "Con validez oficial SEP",
       image: "/images/imagen2.jpeg",
-      icon: <Award size={20} />,
-      crop: "object-top",
-      delay: 0.2
+      iconType: "award",
+      crop: "object-top"
     },
     {
+      id: "universidad",
       title: "UNIVERSIDAD",
       subtitle: "",
       duration: "EN 10 MESES",
@@ -538,11 +515,11 @@ const Programs = ({ theme }: { theme: any }) => {
       description: "LICENCIATURAS\nINGENIERÍAS\n\nTITULACIÓN POR EXPERIENCIA PROFESIONAL EN 2 MESES",
       validez: "Titulo y Cédula con validez oficial SEP",
       image: "/images/grad-2.jpeg",
-      icon: <BookOpen size={20} />,
-      crop: "object-center",
-      delay: 0.3
+      iconType: "book",
+      crop: "object-center"
     },
     {
+      id: "capacitaciones",
       title: "CAPACITACIONES LABORALES",
       subtitle: "",
       duration: "Duración: 4 MESES",
@@ -550,17 +527,24 @@ const Programs = ({ theme }: { theme: any }) => {
       description: "Profesionalizate en áreas laborales",
       validez: "Con validez oficial SEP",
       image: "/images/adultos.jpeg",
-      icon: <Briefcase size={20} />,
-      crop: "object-center",
-      delay: 0.4
+      iconType: "briefcase",
+      crop: "object-center"
     }
   ];
 
-  const modalities = [
-    { name: 'Presencial', icon: <Users size={20} /> },
-    { name: 'Virtual', icon: <BookOpen size={20} /> },
-    { name: 'Híbrida', icon: <Clock size={20} /> },
-  ];
+  const educationalPrograms = config.programs?.length > 0 ? config.programs : defaultPrograms;
+
+  const defaultModalities = ['Presencial', 'Virtual', 'Híbrida'];
+  const studyOptions = config.study_options?.length > 0 ? config.study_options : defaultModalities;
+
+  // We can map them dynamically
+  const getIconForModality = (mod: string) => {
+    const l = mod.toLowerCase();
+    if (l.includes('presencial')) return <Users size={24} />;
+    if (l.includes('virtual') || l.includes('linea')) return <BookOpen size={24} />;
+    if (l.includes('híbrida') || l.includes('mixta')) return <Clock size={24} />;
+    return <CheckCircle size={24} />;
+  };
 
   return (
     <section id="oferta-educativa" className="py-32 bg-white relative">
@@ -622,7 +606,11 @@ const Programs = ({ theme }: { theme: any }) => {
                 <div className="absolute inset-x-0 bottom-0 p-8 lg:p-10 z-20">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="p-2 rounded-lg bg-white/20 backdrop-blur-sm text-white">
-                      {program.icon}
+                      {program.iconType === 'graduation' ? <GraduationCap size={20} /> :
+                       program.iconType === 'book' ? <BookOpen size={20} /> :
+                       program.iconType === 'briefcase' ? <Briefcase size={20} /> :
+                       program.iconType === 'award' ? <Award size={20} /> :
+                       <Users size={20} />}
                     </div>
                     <span className="text-white/90 font-black text-xs tracking-widest uppercase">{program.duration}</span>
                   </div>
@@ -664,12 +652,12 @@ const Programs = ({ theme }: { theme: any }) => {
           className="mt-28 md:mt-32 pt-16 border-t border-gray-200/60 text-center"
         >
           <h3 className="text-sm font-black text-gray-400 mb-8 uppercase tracking-[0.3em]">Opciones de Estudio Disponibles</h3>
-          <div className="flex flex-wrap justify-center gap-4 md:gap-6">
-            {modalities.map((modality, idx) => (
+          <div className="flex flex-wrap justify-center gap-4 md:gap-8 mt-12">
+            {studyOptions.map((modality: string, idx: number) => (
               <Magnetic key={idx} intensity={0.2}>
-                <div className="flex items-center gap-3 md:gap-4 px-6 md:px-8 py-4 bg-white text-gray-900 font-black text-sm md:text-base uppercase tracking-wider rounded-full border shadow-sm hover:shadow-md transition-all cursor-default" style={{ borderColor: `${theme.primary}30` }}>
-                  <span style={{ color: theme.primary }}>{modality.icon}</span>
-                  {modality.name}
+                <div className="flex items-center gap-4 md:gap-6 px-8 md:px-12 py-5 md:py-6 bg-white text-gray-900 font-black text-base md:text-xl uppercase tracking-widest rounded-full border shadow-md hover:shadow-lg hover:scale-105 transition-all cursor-default" style={{ borderColor: `${theme.primary}40` }}>
+                  <span style={{ color: theme.primary }}>{getIconForModality(modality)}</span>
+                  {modality}
                 </div>
               </Magnetic>
             ))}
@@ -680,9 +668,9 @@ const Programs = ({ theme }: { theme: any }) => {
   );
 };
 
-const Banner = ({ theme }: { theme: any }) => {
+export const Banner = ({ theme, config }: { theme: any, config: any }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
-  const images = ["/images/grad-1.jpeg", "/images/grad-2.jpeg"];
+  const images = config.banner_images?.length > 0 ? config.banner_images : ["/images/grad-1.jpeg", "/images/grad-2.jpeg"];
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -751,12 +739,14 @@ const Contact = ({ theme }: { theme: any }) => {
   const [loading, setLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [supportPhone, setSupportPhone] = useState("735 2826206");
-  const [supportEmail, setSupportEmail] = useState("instituto.edu.emilianozapata@gmail.com");
+  const [supportEmail, setSupportEmail] = useState("");
+  const [supportAddress, setSupportAddress] = useState("Yautepec Morelos México");
 
   useEffect(() => {
     getDatosContactoFormateados().then(data => {
       setSupportPhone(data.telefono);
       setSupportEmail(data.correo);
+      setSupportAddress(data.direccion);
     });
   }, []);
 
@@ -860,7 +850,7 @@ const Contact = ({ theme }: { theme: any }) => {
                     </div>
                     <div>
                       <p className="text-xs font-black uppercase tracking-[0.2em] mb-2 text-white/60">Ubicación</p>
-                      <p className="text-xl font-bold">Yautepec Morelos México</p>
+                      <p className="text-xl font-bold">{supportAddress}</p>
                     </div>
                   </div>
                 </div>
@@ -952,25 +942,26 @@ const Contact = ({ theme }: { theme: any }) => {
 };
 
 const Footer = ({ theme }: { theme: any }) => {
+  const { config: inst } = useInstitucion();
   return (
-    <footer className="text-white/80 py-20 border-t border-gray-100" style={{ backgroundColor: theme.id === 'azul' ? '#051426' : theme.id === 'verde' ? '#064e3b' : '#4c0519' }}>
+    <footer className="text-white/80 py-20 border-t border-gray-100" style={{ backgroundColor: theme.secondary || theme.primary }}>
       <div className="container mx-auto px-4 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-10">
         <div className="flex items-center gap-6">
           <div className="h-20 w-auto">
             <img
-              src={LOGO_URL}
+              src={inst.logo_url || LOGO_FALLBACK}
               alt="Logo IEEZ"
               className="h-full w-auto object-contain"
             />
           </div>
           <div className="flex flex-col">
-            <h4 className="text-white font-black text-2xl leading-none">IEEZ</h4>
-            <p className="text-[10px] uppercase tracking-[0.2em] font-bold mt-2 text-white/60">Instituto Educativo Emiliano Zapata</p>
+            <h4 className="text-white font-black text-2xl leading-none">{inst.siglas}</h4>
+            <p className="text-[10px] uppercase tracking-[0.2em] font-bold mt-2 text-white/60">{inst.nombre_completo}</p>
           </div>
         </div>
 
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-white/50">
-          © {new Date().getFullYear()} IEEZ. Todos los derechos reservados.
+          © {new Date().getFullYear()} {inst.siglas}. Todos los derechos reservados.
         </p>
 
         <Magnetic intensity={0.5}>
@@ -987,14 +978,7 @@ const Footer = ({ theme }: { theme: any }) => {
   );
 };
 
-const FloatingWhatsApp = () => {
-  const [telefono, setTelefono] = useState("");
-
-  useEffect(() => {
-    // Ya esta importado getDatosContactoFormateados mas arriba en este mismo archivo
-    getDatosContactoFormateados().then(data => setTelefono(data.telefono));
-  }, []);
-
+const FloatingWhatsApp = ({ telefono }: { telefono: string }) => {
   if (!telefono) return null;
 
   const rawNumber = telefono.replace(/\D/g, '');
@@ -1025,31 +1009,62 @@ const FloatingWhatsApp = () => {
 };
 
 export default function AcercaDeNosotrosPage() {
-  const [currentTheme, setCurrentTheme] = useState(themes[0]);
-  const [mounted, setMounted] = useState(false);
+  const { config: inst, loading } = useInstitucion();
+  
+  // Fallback si aún no se ha corrido el script SQL
+  const defaultLandingThemes = [
+    { id: 'azul', primary: '#0A2647', secondary: '#1e3a8a', accent: '#3b82f6' },
+    { id: 'verde', primary: '#1A4A3F', secondary: '#064e3b', accent: '#10b981' },
+    { id: 'vino', primary: '#8B2332', secondary: '#6B1A27', accent: '#C41E3A' }
+  ];
+
+  const landingConfig = inst.landing_config || {
+    themes: defaultLandingThemes,
+    active_theme_id: 'azul',
+    random_theme: false,
+  };
+
+  const [randomTheme, setRandomTheme] = useState<any>(null);
 
   useEffect(() => {
-    // Escoger solo entre Azul, Verde y Vino
-    const randomTheme = themes[Math.floor(Math.random() * themes.length)];
-    setCurrentTheme(randomTheme);
-    setMounted(true);
-  }, []);
+    if (!loading) {
+      if (landingConfig.random_theme && landingConfig.themes?.length > 0) {
+        const randomIndex = Math.floor(Math.random() * landingConfig.themes.length);
+        setRandomTheme(landingConfig.themes[randomIndex]);
+      } else {
+        setRandomTheme(null);
+      }
+    }
+  }, [loading, landingConfig.random_theme, landingConfig.themes]);
 
-  if (!mounted) return null;
+  const activeTheme = randomTheme || landingConfig.themes.find((t: any) => t.id === landingConfig.active_theme_id) || defaultLandingThemes[0];
+
+  const currentTheme = {
+    id: activeTheme.id,
+    primary: activeTheme.primary,
+    secondary: activeTheme.secondary,
+    accent: activeTheme.accent,
+    gradient: `from-[${activeTheme.primary}] to-[${activeTheme.secondary}]`,
+    textPrimary: `text-[${activeTheme.primary}]`,
+  };
+
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-primary" size={32} /></div>;
+
+
 
   return (
     <div className="font-sans text-gray-900 bg-white selection:bg-blue-600 selection:text-white relative">
       <Navbar theme={currentTheme} />
       <main>
-        <Hero theme={currentTheme} />
-        <MissionStatement theme={currentTheme} />
-        <About theme={currentTheme} />
-        <Banner theme={currentTheme} />
-        <Programs theme={currentTheme} />
+        <Hero theme={currentTheme} config={landingConfig} />
+        <MissionStatement theme={currentTheme} config={landingConfig} />
+        <About theme={currentTheme} config={landingConfig} />
+        <Banner theme={currentTheme} config={landingConfig} />
+        <Programs theme={currentTheme} config={landingConfig} />
         <Contact theme={currentTheme} />
       </main>
       <Footer theme={currentTheme} />
-      <FloatingWhatsApp />
+      <FloatingWhatsApp telefono={inst.telefono_contacto} />
     </div>
   );
 }

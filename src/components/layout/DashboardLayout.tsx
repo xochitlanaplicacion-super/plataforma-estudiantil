@@ -38,7 +38,9 @@ import {
   UserPlus,
   CreditCard,
   BookMarked,
-  Mail
+  Mail,
+  Building2,
+  MonitorPlay
 } from 'lucide-react';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -47,6 +49,7 @@ import { UserRole } from '@/lib/types';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import { GlobalChatNotification } from '@/components/shared/GlobalChatNotification';
+import { useInstitucion } from '@/hooks/use-institucion';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -61,6 +64,7 @@ export function DashboardLayout({ children, userRole, userName, userId }: Dashbo
   const supabase = createClient();
   const [theme, setTheme] = useState<string | null>(null);
   const [formattedDate, setFormattedDate] = useState<string>('');
+  const { config: inst } = useInstitucion();
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('ez-theme');
@@ -99,6 +103,10 @@ export function DashboardLayout({ children, userRole, userName, userId }: Dashbo
       { group: "Módulo 10: Reportes", items: [
         { icon: CreditCard, label: 'Control de Pagos', href: '/dashboard/admin/vigencias' },
         { icon: BarChart3, label: 'Reportes y Auditoría', href: '/dashboard/admin/auditoria' },
+      ]},
+      { group: "Configuración del Sistema", items: [
+        { icon: Building2, label: 'Datos de la Institución', href: '/dashboard/admin/institucion' },
+        { icon: MonitorPlay, label: 'Editor Landing Page', href: '/dashboard/admin/landing' },
       ]}
     ],
     admin: [
@@ -138,15 +146,15 @@ export function DashboardLayout({ children, userRole, userName, userId }: Dashbo
   const activeMenus = menuItems[userRole] || [];
 
   return (
-    <SidebarProvider className={cn(theme === 'vino' && 'theme-vino', theme === 'verde' && 'theme-verde', theme === 'beige' && 'theme-beige')}>
+    <SidebarProvider>
       <Sidebar collapsible="icon" className="border-r shadow-lg">
         <SidebarHeader className="p-6 flex flex-col items-center text-center gap-4">
           <div className="h-36 w-36 flex-shrink-0 flex items-center justify-center">
-            <img src="/images/logo_zapata.png" alt="Logo" className="h-full w-full object-contain drop-shadow-md" />
+            <img src={inst.logo_url || '/images/logo_placeholder.svg'} alt="Logo" className="h-full w-full object-contain drop-shadow-md" />
           </div>
           <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-            <span className="font-bold text-lg text-sidebar-foreground">Emiliano Zapata</span>
-            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">Plataforma Académica</span>
+            <span className="font-bold text-lg text-sidebar-foreground">{inst.nombre_corto}</span>
+            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">{inst.slogan}</span>
           </div>
         </SidebarHeader>
         <SidebarContent className="px-2">
@@ -170,7 +178,7 @@ export function DashboardLayout({ children, userRole, userName, userId }: Dashbo
         </SidebarContent>
         <SidebarFooter className="p-4 bg-muted/30">
           <div className="flex justify-center group-data-[collapsible=icon]:hidden">
-             <span className="text-[9px] text-muted-foreground font-bold uppercase opacity-50">EZ Plataforma v1.0</span>
+             <span className="text-[9px] text-muted-foreground font-bold uppercase opacity-50">{inst.siglas} Plataforma v1.0</span>
           </div>
         </SidebarFooter>
       </Sidebar>

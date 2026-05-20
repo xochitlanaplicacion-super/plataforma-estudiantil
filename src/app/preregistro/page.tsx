@@ -15,6 +15,7 @@ import { Loader2, ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { createAspiranteRecord, getPublicCareers } from '@/lib/actions/aspirantes';
 import Link from 'next/link';
+import { useInstitucion } from '@/hooks/use-institucion';
 
 const preregistroSchema = z.object({
   nombre: z.string().min(2, "El nombre es obligatorio"),
@@ -35,6 +36,7 @@ export default function PreregistroPage() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [allCareers, setAllCareers] = useState<any[]>([]);
+  const { config: inst } = useInstitucion();
 
   const form = useForm<PreregistroValues>({
     resolver: zodResolver(preregistroSchema),
@@ -111,7 +113,7 @@ export default function PreregistroPage() {
           <CardHeader className="p-0">
             <CardTitle className="text-2xl font-bold font-headline">¡Solicitud Enviada!</CardTitle>
             <CardDescription className="text-base mt-2">
-              Gracias por tu interés en el Instituto Educativo Emiliano Zapata.
+              Gracias por tu interés en {inst.nombre_completo}.
             </CardDescription>
           </CardHeader>
           <CardContent className="mt-6 p-0 text-muted-foreground text-sm">
@@ -132,8 +134,8 @@ export default function PreregistroPage() {
       <header className="bg-primary text-white p-6 shadow-md">
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <div className="flex items-center gap-6">
-            <img src="/images/logo_zapata.png" alt="Logo" className="h-24 w-auto drop-shadow-lg" />
-            <h1 className="text-2xl font-bold font-headline hidden md:block">Instituto Educativo Emiliano Zapata</h1>
+            <img src={inst.logo_url || '/images/logo_placeholder.svg'} alt="Logo" className="h-24 w-auto drop-shadow-lg" />
+            <h1 className="text-2xl font-bold font-headline hidden md:block">{inst.nombre_completo}</h1>
           </div>
           <Link href="/">
             <Button variant="ghost" className="text-white hover:bg-white/10 gap-2 font-bold">
@@ -337,14 +339,14 @@ export default function PreregistroPage() {
           </CardContent>
           <CardFooter className="justify-center border-t py-8 bg-muted/10 px-8">
             <p className="text-xs text-muted-foreground text-center leading-relaxed">
-              Al enviar este formulario, aceptas que el Instituto Educativo Emiliano Zapata trate tus datos personales para fines de inscripción y comunicación académica.
+              Al enviar este formulario, aceptas que {inst.nombre_completo} trate tus datos personales para fines de inscripción y comunicación académica.
             </p>
           </CardFooter>
         </Card>
       </main>
 
       <footer className="py-8 text-center text-muted-foreground text-sm border-t bg-white">
-        <p>Instituto Educativo Emiliano Zapata &copy; {new Date().getFullYear()}</p>
+        <p>{inst.nombre_completo} &copy; {new Date().getFullYear()}</p>
       </footer>
     </div>
   );

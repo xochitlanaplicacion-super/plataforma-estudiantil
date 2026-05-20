@@ -7,6 +7,7 @@ dns.setDefaultResultOrder('ipv4first');
 import { createClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
 import nodemailer from 'nodemailer';
+import { getInstitucionConfig } from '@/lib/actions/institucion';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || '',
@@ -361,7 +362,6 @@ export async function enviarRecordatorioPago(alumnoId: string) {
   const user = process.env.GMAIL_USER;
   const pass = process.env.GMAIL_APP_PASSWORD;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://institutoeducativoemilianozapata.vercel.app';
-  const logoUrl = `${appUrl}/images/logo_zapata.png`;
 
   if (!user || !pass) {
     return { success: true, warning: 'Notificación creada, pero el correo no está configurado.' };
@@ -373,12 +373,15 @@ export async function enviarRecordatorioPago(alumnoId: string) {
     .map(c => `<li style="margin-bottom:8px;color:#8B2332;font-weight:bold;">• ${c}</li>`)
     .join('');
 
+  const html_inst = await getInstitucionConfig();
+  const logoUrl = html_inst.logo_url || `${appUrl}/images/logo_placeholder.svg`;
+
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
   <body style="margin:0;padding:0;background-color:#f4f4f4;font-family:sans-serif;">
     <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eee;">
       <div style="background:linear-gradient(135deg,#8B2332,#6B1A27);padding:30px;text-align:center;">
         <img src="${logoUrl}" alt="Logo" style="height:100px;width:auto;margin-bottom:10px;">
-        <h1 style="color:#fff;margin:0;font-size:18px;text-transform:uppercase;">Instituto Educativo Emiliano Zapata</h1>
+        <h1 style="color:#fff;margin:0;font-size:18px;text-transform:uppercase;">${html_inst.nombre_completo}</h1>
         <p style="color:#f0d0d5;margin:5px 0 0;font-size:13px;">Control de Pagos</p>
       </div>
       <div style="padding:30px;">
@@ -394,7 +397,7 @@ export async function enviarRecordatorioPago(alumnoId: string) {
         </div>
       </div>
       <div style="background:#f8f9fa;padding:15px;text-align:center;border-top:1px solid #eee;">
-        <p style="color:#333;font-size:12px;margin:0 0 3px;font-weight:bold;">Instituto Educativo Emiliano Zapata</p>
+        <p style="color:#333;font-size:12px;margin:0 0 3px;font-weight:bold;">${html_inst.nombre_completo}</p>
         <p style="margin:0;color:#999;font-size:11px;">Sistema de Gestión Académica © ${new Date().getFullYear()}</p>
       </div>
     </div>
@@ -402,9 +405,9 @@ export async function enviarRecordatorioPago(alumnoId: string) {
 
   try {
     await transporter.sendMail({
-      from: `"Servicios Escolares - IE Emiliano Zapata" <${user}>`,
+      from: `"Servicios Escolares - ${html_inst.siglas}" <${user}>`,
       to: alumno.email,
-      subject: '⚠️ Recordatorio de Pago Pendiente - IE Emiliano Zapata',
+      subject: `⚠️ Recordatorio de Pago Pendiente - ${html_inst.siglas}`,
       html,
     });
     return { success: true };

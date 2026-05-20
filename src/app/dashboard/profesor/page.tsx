@@ -90,8 +90,9 @@ import { polyfill } from "mobile-drag-drop";
 import "mobile-drag-drop/default.css";
 import { ActivityPreview } from '@/components/shared/ActivityPreview';
 import { PanelEntregasProfesor } from '@/components/shared/PanelEntregasProfesor';
+import { useInstitucion } from '@/hooks/use-institucion';
 
-const LOGO_URL = '/images/logo_zapata.png';
+const LOGO_FALLBACK = '/images/logo_placeholder.svg';
 
 
 // --- CONFIGURACIÓN DE PLANTILLAS ---
@@ -562,6 +563,7 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
 export default function ProfesorDashboard() {
   const { toast } = useToast();
   const supabase = createClient();
+  const { config: inst } = useInstitucion();
   const [loading, setLoading] = useState(true);
   const [asignaciones, setAsignaciones] = useState<any[]>([]);
   
@@ -883,8 +885,8 @@ export default function ProfesorDashboard() {
           </div>
           <div className="flex items-center gap-8">
             <div className="flex items-center gap-4">
-              <img src={LOGO_URL} alt="Logo" className="h-20 w-auto object-contain" />
-              <span className="hidden lg:block text-[10px] font-black uppercase tracking-[0.3em] text-white/40">IEEZ Plataforma de Enseñanza</span>
+              <img src={inst.logo_url || LOGO_FALLBACK} alt="Logo" className="h-20 w-auto object-contain" />
+              <span className="hidden lg:block text-[10px] font-black uppercase tracking-[0.3em] text-white/40">{inst.siglas} Plataforma de Enseñanza</span>
             </div>
             <Button variant="outline" className="h-10 px-6 rounded-xl font-black uppercase tracking-widest bg-red-600/20 border-red-600/30 text-red-100 hover:bg-red-600 shadow-lg" onClick={() => setPresentationMode(false)}><X size={18} className="mr-2" /> Salir (Esc)</Button>
           </div>

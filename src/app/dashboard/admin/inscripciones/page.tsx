@@ -47,6 +47,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
+import { useInstitucion } from '@/hooks/use-institucion';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
@@ -61,6 +62,7 @@ export default function InscripcionAlumnos() {
   const [adminName, setAdminName] = useState('');
   const [studentToRemove, setStudentToRemove] = useState<any>(null);
   const supabase = createClient();
+  const { config: inst } = useInstitucion();
   
   // Catalogos
   const [niveles, setNiveles] = useState<any[]>([]);
@@ -236,15 +238,17 @@ export default function InscripcionAlumnos() {
     const worksheet = workbook.addWorksheet('Lista de Asistencia');
 
     try {
-      const response = await fetch('/images/logo_zapata.png');
-      const buffer = await response.arrayBuffer();
-      const logoId = workbook.addImage({ buffer, extension: 'png' });
-      worksheet.addImage(logoId, 'A1:A4');
+      if (inst.logo_url) {
+        const response = await fetch(inst.logo_url);
+        const buffer = await response.arrayBuffer();
+        const logoId = workbook.addImage({ buffer, extension: 'png' });
+        worksheet.addImage(logoId, 'A1:A4');
+      }
     } catch (e) { console.error("Error logo", e); }
 
     worksheet.mergeCells('B1:S1');
     const titleCell = worksheet.getCell('B1');
-    titleCell.value = 'INSTITUTO EDUCATIVO EMILIANO ZAPATA';
+    titleCell.value = inst.nombre_completo.toUpperCase();
     titleCell.font = { name: 'Arial Black', size: 18 };
     titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
 
@@ -256,7 +260,7 @@ export default function InscripcionAlumnos() {
 
     worksheet.addRow([]);
     const infoRows = [
-      ['ADMINISTRADOR:', adminName.toUpperCase(), '', 'NIVEL:', selectedGroupData.carreras?.niveles?.nombre?.toUpperCase()],
+      ['ADMINISTRACIÓN:', inst.nombre_corto.toUpperCase(), '', 'NIVEL:', selectedGroupData.carreras?.niveles?.nombre?.toUpperCase()],
       ['CARRERA:', selectedGroupData.carreras?.nombre?.toUpperCase(), '', 'GRUPO:', `${selectedGroupData.grados?.nombre || 'GRAL.'} - ${selectedGroupData.nombre}`.toUpperCase()],
       ['FECHA:', new Date().toLocaleDateString('es-MX').toUpperCase(), '', 'TURNO:', selectedGroupData.turno?.toUpperCase() || 'N/A']
     ];
@@ -300,18 +304,20 @@ export default function InscripcionAlumnos() {
     const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
 
     try {
-      const response = await fetch('/images/logo_zapata.png');
-      const blob = await response.blob();
-      const base64 = await new Promise<string>(r => {
-        const fr = new FileReader(); fr.onloadend = () => r(fr.result as string); fr.readAsDataURL(blob);
-      });
-      doc.addImage(base64, 'PNG', 15, 10, 30, 30);
+      if (inst.logo_url) {
+        const response = await fetch(inst.logo_url);
+        const blob = await response.blob();
+        const base64 = await new Promise<string>(r => {
+          const fr = new FileReader(); fr.onloadend = () => r(fr.result as string); fr.readAsDataURL(blob);
+        });
+        doc.addImage(base64, 'PNG', 15, 10, 30, 30);
+      }
     } catch (e) { console.error("Logo pdf error", e); }
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(22);
     doc.setTextColor(30, 41, 59);
-    doc.text('INSTITUTO EDUCATIVO EMILIANO ZAPATA', 50, 20);
+    doc.text(inst.nombre_completo.toUpperCase(), 50, 20);
 
     doc.setFontSize(14);
     doc.setFont('helvetica', 'normal');
@@ -320,9 +326,9 @@ export default function InscripcionAlumnos() {
     const infoY = 55;
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
-    doc.text('ADMINISTRADOR:', 15, infoY);
+    doc.text('ADMINISTRACIÓN:', 15, infoY);
     doc.text('CARRERA:', 15, infoY + 7);
-    doc.text(adminName.toUpperCase(), 45, infoY);
+    doc.text(inst.nombre_corto.toUpperCase(), 45, infoY);
     doc.text(selectedGroupData.carreras?.nombre?.toUpperCase() || '', 45, infoY + 7);
 
     doc.text('NIVEL:', 180, infoY);

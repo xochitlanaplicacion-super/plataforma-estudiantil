@@ -167,3 +167,77 @@ export interface MaterialApoyo {
   profiles?: { nombre: string; apellidos: string };
 }
 
+export interface NivelNombre {
+  clave: string;
+  nombre: string;
+}
+
+export interface TemaLogin {
+  id: string;
+  bgImage: string;
+  buttonColor: string;
+  textColor: string;
+  glassStyle: string;
+}
+
+export interface LandingTheme {
+  id: string;
+  primary: string;
+  secondary: string;
+  accent: string;
+}
+
+export interface LandingProgram {
+  id: string;
+  title: string;
+  subtitle: string;
+  duration: string;
+  badge: string;
+  description: string;
+  validez: string;
+  image: string;
+  iconType: string;
+  crop: string;
+}
+
+export interface LandingConfig {
+  themes: LandingTheme[];
+  active_theme_id: string;
+  hero_title: string;
+  hero_highlight: string;
+  hero_subtitle: string;
+  hero_badges: string;
+  hero_image: string;
+  mission_title: string;
+  mission_text: string;
+  about_title: string;
+  about_text: string;
+  about_image: string;
+  banner_images: string[];
+  programs: LandingProgram[];
+}
+
+export interface InstitucionConfig {
+  id: number;
+  nombre_completo: string;
+  nombre_corto: string;
+  siglas: string;
+  slogan: string;
+  direccion?: string;
+  sitio_web?: string;
+  logo_url?: string;
+  logo_dark_url?: string;
+  favicon_url?: string;
+  color_primario: string;
+  color_secundario: string;
+  temas_login: TemaLogin[];
+  modo_tema_login: 'aleatorio' | 'fijo';
+  tema_fijo_index: number;
+  niveles_nombres: NivelNombre[];
+  telefono_contacto: string;
+  correo_contacto: string;
+  horarios_atencion: any[];
+  landing_config?: LandingConfig;
+  codigo_matricula?: string;
+  updated_at?: string;
+}

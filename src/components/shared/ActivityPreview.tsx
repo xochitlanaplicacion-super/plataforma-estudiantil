@@ -1,6 +1,7 @@
 'use client';
 import React, { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { cn } from '@/lib/utils';
+import { useInstitucion } from '@/hooks/use-institucion';
 import confetti from 'canvas-confetti';
 import { 
   ArrowLeft, RotateCcw, X, XCircle, ChevronLeft, ChevronRight,
@@ -248,6 +249,7 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
   entregaExistente?: any;
   isPreview?: boolean;
 }) => {
+  const { config: inst } = useInstitucion();
   const [currentStep, setCurrentStep] = useState(0);
   const [score, setScore] = useState(0);
   const [totalSteps, setTotalSteps] = useState(0);
@@ -1088,7 +1090,7 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
           <div className="p-3 bg-amber-500 text-white rounded-2xl shadow-lg"><Eye size={24} /></div>
           <div>
             <h4 className="font-black text-slate-800 uppercase tracking-tight">Modo Previsualización: Estudiante</h4>
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Plataforma Emiliano Zapata</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Plataforma {inst.nombre_corto}</p>
           </div>
         </div>
         <Button variant="outline" className="rounded-xl border-slate-200 font-black uppercase text-[10px] tracking-widest h-12 px-6" onClick={onClose}>

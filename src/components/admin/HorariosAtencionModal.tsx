@@ -15,7 +15,7 @@ export function HorariosAtencionModal() {
   const [open, setOpen] = useState(false);
   const [bloques, setBloques] = useState<HorarioBloque[]>([]);
   const [telefono, setTelefono] = useState<string>("735 2826206");
-  const [correo, setCorreo] = useState<string>("instituto.edu.emilianozapata@gmail.com");
+  const [correo, setCorreo] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
 

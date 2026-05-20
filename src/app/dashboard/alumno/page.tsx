@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { getAlumnoDashboardData } from '@/lib/actions/alumno';
 import { getMaterialPublicoPorNivel } from '@/lib/actions/material';
 import { getNotificacionesAlumno } from '@/lib/actions/pagos';
+import { getInstitucionConfig } from '@/lib/actions/institucion';
 import {
   BookOpen,
   CalendarDays,
@@ -122,6 +123,8 @@ export default async function AlumnoDashboard() {
   const { data: notifications } = await getNotificacionesAlumno(user.id);
   const latestNotification = notifications && notifications.length > 0 ? notifications[0] : null;
 
+  const inst = await getInstitucionConfig();
+
   return (
     <div className="space-y-12 pb-16 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
@@ -132,7 +135,7 @@ export default async function AlumnoDashboard() {
             ¡Bienvenido(a) a tu espacio!
           </h2>
           <p className="text-muted-foreground mt-1">
-            Plataforma del Instituto Educativo Emiliano Zapata
+            Plataforma del {inst.nombre_completo}
           </p>
         </div>
 
@@ -275,7 +278,7 @@ export default async function AlumnoDashboard() {
                       <Clock4 className="w-3.5 h-3.5 opacity-70" /> Horario Fijo
                     </div>
                     <div className="flex items-center gap-1.5 font-medium">
-                      <MapPin className="w-3.5 h-3.5 opacity-70" /> Campus IEEZ
+                      <MapPin className="w-3.5 h-3.5 opacity-70" /> Campus {inst.siglas}
                     </div>
                   </div>
                 </div>

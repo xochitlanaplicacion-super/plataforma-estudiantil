@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
+import { useInstitucion } from '@/hooks/use-institucion';
 import {
   enviarMensaje, obtenerMensajesUsuario, obtenerConversacion,
   marcarComoLeido, marcarComunicadoVisto, obtenerAdminId,
@@ -18,6 +19,7 @@ import {
 export default function MensajesProfesor() {
   const { toast } = useToast();
   const supabase = createClient();
+  const { config: inst } = useInstitucion();
   const [userId, setUserId] = useState('');
   const [tab, setTab] = useState('avisos');
   const [globales, setGlobales] = useState<any[]>([]);
@@ -135,8 +137,8 @@ export default function MensajesProfesor() {
         <TabsContent value="chat">
           <Card className="rounded-2xl overflow-hidden border">
             <div className="p-3 bg-white border-b flex items-center gap-3">
-              <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white font-black text-sm">EZ</div>
-              <div><p className="font-bold text-sm">{adminNombre}</p><p className="text-[10px] text-muted-foreground">Dirección Instituto Emiliano Zapata</p></div>
+              <div className="w-9 h-9 rounded-full bg-primary flex items-center justify-center text-white font-black text-sm">{inst.siglas.substring(0,2)}</div>
+              <div><p className="font-bold text-sm">Administración {inst.nombre_corto}</p><p className="text-[10px] text-muted-foreground">Soporte y Atención Docente</p></div>
             </div>
             <div className="h-[50vh] overflow-y-auto p-4 space-y-2 bg-[#f0ebe3]">
               {mensajesChat.length === 0 && <div className="text-center text-muted-foreground text-sm py-10"><MessageSquare size={32} className="mx-auto mb-2 opacity-20" /><p>Inicia una conversación con Dirección</p></div>}

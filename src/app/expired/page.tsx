@@ -5,24 +5,26 @@ import { Button } from '@/components/ui/button';
 import { AlertCircle, Clock, Mail, Phone } from 'lucide-react';
 import Link from 'next/link';
 import { getDatosContactoFormateados } from '@/lib/actions/horarios';
+import { getInstitucionConfig } from '@/lib/actions/institucion';
 
 export default async function ExpiredPage() {
   const { telefono: supportPhone, correo: supportEmail } = await getDatosContactoFormateados();
+  const inst = await getInstitucionConfig();
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <Card className="max-w-md w-full text-center p-8 border-destructive/20 shadow-2xl">
         <div className="flex justify-center mb-6">
           <img 
-            src="/images/logo_zapata.png" 
-            alt="Logo Instituto Emiliano Zapata" 
+            src={inst.logo_url || '/images/logo_placeholder.svg'} 
+            alt={`Logo ${inst.nombre_corto}`}
             className="h-32 w-auto drop-shadow-md"
           />
         </div>
         <CardHeader className="p-0 space-y-2">
           <CardTitle className="text-2xl font-bold font-headline">Acceso Expirado</CardTitle>
           <CardDescription className="text-base font-medium text-destructive">
-            Tu periodo de acceso a la plataforma del Instituto Educativo Emiliano Zapata ha terminado.
+            Tu periodo de acceso a la plataforma del {inst.nombre_completo} ha terminado.
           </CardDescription>
         </CardHeader>
         <CardContent className="mt-8 p-0 space-y-6">

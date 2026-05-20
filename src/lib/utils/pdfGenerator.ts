@@ -1,6 +1,6 @@
 import jsPDF from 'jspdf';
 
-export const generarDictamenPDF = async (r: any) => {
+export const generarDictamenPDF = async (r: any, logoUrl?: string) => {
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'letter' });
   const w = doc.internal.pageSize.getWidth();   // ~215.9 mm
   const h = doc.internal.pageSize.getHeight();  // ~279.4 mm
@@ -9,15 +9,17 @@ export const generarDictamenPDF = async (r: any) => {
 
   // ── CARGAR LOGO DESDE /public/images ──────────────────────────────────────
   let logoBase64: string | null = null;
-  try {
-    const resp = await fetch('/images/logo_zapata.png');
-    const blob = await resp.blob();
-    logoBase64 = await new Promise<string>((resolve) => {
-      const reader = new FileReader();
-      reader.onloadend = () => resolve(reader.result as string);
-      reader.readAsDataURL(blob);
-    });
-  } catch { /* si falla la carga, continuar sin logo */ }
+  if (logoUrl) {
+    try {
+      const resp = await fetch(logoUrl);
+      const blob = await resp.blob();
+      logoBase64 = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(blob);
+      });
+    } catch { /* si falla la carga, continuar sin logo */ }
+  }
 
   // ── ENCABEZADO: logos + título ────────────────────────────────────────────
   let y = 14;

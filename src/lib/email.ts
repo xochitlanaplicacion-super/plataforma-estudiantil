@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { getHorariosFormateados } from '@/lib/actions/horarios';
+import { getInstitucionConfig } from '@/lib/actions/institucion';
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -51,7 +52,6 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
     
     // URL base de la aplicación (Quitar diagonal final si existe y asegurar protocolo)
     let appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://institutoeducativoemilianozapata.vercel.app').replace(/\/$/, '');
-    const logoUrl = `${appUrl}/images/logo_zapata.png`;
 
     const isAlumno = data.rol === 'alumno';
     const genero = data.genero || 'Hombre';
@@ -95,20 +95,27 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
         </tr>`;
     }
 
-    // Imagen de cabecera por nivel (Solo para Alumnos)
+    const inst = await getInstitucionConfig();
+    const logoUrl = inst.logo_url || `${appUrl}/images/logo_placeholder.svg`;
     let headerImageUrl = logoUrl;
-    let institutionMention = 'Instituto Educativo Emiliano Zapata';
+    let institutionMention = inst.nombre_completo;
+    
+    // Buscar el nivel en los niveles_nombres de la institución
+    const findNivelNombre = (nivelStr: string) => {
+      const match = inst.niveles_nombres?.find((n: any) => nivelStr.toLowerCase().includes(n.clave));
+      return match ? match.nombre : inst.nombre_completo;
+    };
     
     if (isAlumno && !data.isExpiration && !data.isReactivation) {
       if (nivel.includes('bachillerato') || nivel.includes('prepa')) {
         headerImageUrl = `${appUrl}/images/BIENVENIDA-PREPARATORIA-BACHILLERATO.jpeg`;
-        institutionMention = 'Bachillerato Emiliano Zapata';
+        institutionMention = findNivelNombre(nivel);
       } else if (nivel.includes('universidad') || nivel.includes('superior')) {
         headerImageUrl = `${appUrl}/images/BIENVENIDA-UNIVERSIDAD.jpeg`;
-        institutionMention = 'Universidad Emiliano Zapata';
+        institutionMention = findNivelNombre(nivel);
       } else if (nivel.includes('capacitacion') || nivel.includes('curso')) {
         headerImageUrl = `${appUrl}/images/BIENVENIDA-CAPACITACIONES.jpeg`;
-        institutionMention = 'Capacitaciones Emiliano Zapata';
+        institutionMention = findNivelNombre(nivel);
       }
     }
 
@@ -127,12 +134,12 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
             <!-- HEADER -->
             ${isAlumno && !data.isExpiration && !data.isReactivation ? `
             <tr><td style="text-align:center;background-color:#fff;">
-              <img src="${headerImageUrl}" alt="Bienvenida - Instituto Educativo Emiliano Zapata" width="600" style="width:100%;max-width:600px;height:auto;display:block;border:0;">
+              <img src="${headerImageUrl}" alt="Bienvenida - ${inst.nombre_completo}" width="600" style="width:100%;max-width:600px;height:auto;display:block;border:0;">
             </td></tr>
             ` : `
             <tr><td style="background:linear-gradient(135deg,${colorPrincipal},#000);padding:40px 30px;text-align:center;">
               <img src="${logoUrl}" alt="Logo" width="150" style="height:150px;width:auto;margin-bottom:15px;border:0;">
-              <h1 style="color:#fff;margin:0;font-size:20px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;">Instituto Educativo Emiliano Zapata</h1>
+              <h1 style="color:#fff;margin:0;font-size:20px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;">${inst.nombre_completo}</h1>
               <p style="color:#f0d0d5;margin:5px 0 0;font-size:13px;">Sistema de Gestión Académica</p>
             </td></tr>
             `}
@@ -201,7 +208,7 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
               </table>
             </td></tr>
             <tr><td style="padding:10px 30px 5px;">
-              <p style="color:#555;font-size:13px;text-align:left;line-height:1.6;">Esto significa que, bajo criterios del <strong>Instituto Educativo Emiliano Zapata (${institutionMention})</strong>, sus documentos han sido entregados satisfactoriamente. Sin embargo, es importante mencionarle que, aunque sus documentos están completos según los criterios internos de nuestra institución educativa, aún están sujetos a revisión por parte de la autoridad educativa correspondiente.</p>
+              <p style="color:#555;font-size:13px;text-align:left;line-height:1.6;">Esto significa que, bajo criterios del <strong>${inst.nombre_completo} (${institutionMention})</strong>, sus documentos han sido entregados satisfactoriamente. Sin embargo, es importante mencionarle que, aunque sus documentos están completos según los criterios internos de nuestra institución educativa, aún están sujetos a revisión por parte de la autoridad educativa correspondiente.</p>
               <p style="color:#444;font-size:13px;font-style:italic;font-weight:bold;text-align:left;">Nuevamente, felicitaciones por su inscripción y completar su expediente de documentación. No dude en comunicarse con nosotros si tiene alguna duda o comentario.</p>
               <p style="color:#2b6cb0;font-size:16px;font-weight:bold;text-align:center;margin-top:10px;">¡Mucho éxito en el proceso!</p>
               <p style="font-size:18px;text-align:center;">🎓 📈 🎓</p>
@@ -215,7 +222,7 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
 
             <!-- FOOTER -->
             <tr><td style="background-color:#f8f9fa;padding:15px;text-align:center;border-top:1px solid #eee;">
-              <p style="color:#333;font-size:12px;margin:0 0 3px;font-weight:bold;">Instituto Educativo Emiliano Zapata</p>
+              <p style="color:#333;font-size:12px;margin:0 0 3px;font-weight:bold;">${inst.nombre_completo}</p>
               <p style="margin:0;color:#999;font-size:11px;">Sistema de Gestión Académica © ${new Date().getFullYear()}</p>
             </td></tr>
 
@@ -226,13 +233,13 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
     </html>`;
 
     const info = await transporter.sendMail({
-      from: `"Instituto Educativo Emiliano Zapata" <${user}>`,
+      from: `"${inst.nombre_completo}" <${user}>`,
       to: data.to,
       subject: data.isExpiration 
-        ? '⚠️ Aviso de Acceso - Instituto Emiliano Zapata'
+        ? `⚠️ Aviso de Acceso - ${inst.nombre_corto}`
         : data.isReactivation 
-          ? '🔓 Reactivación de Acceso - Instituto Emiliano Zapata'
-          : '🏫 Tus Credenciales de Acceso - Instituto Emiliano Zapata',
+          ? `🔓 Reactivación de Acceso - ${inst.nombre_corto}`
+          : `🏫 Tus Credenciales de Acceso - ${inst.nombre_corto}`,
       html: htmlContent,
     });
 
@@ -247,8 +254,9 @@ export async function sendDocumentReminderEmail(data: ReminderEmailData) {
   try {
     const user = process.env.GMAIL_USER;
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://institutoeducativoemilianozapata.vercel.app';
-    const logoUrl = `${appUrl}/images/logo_zapata.png`;
     const horarioString = await getHorariosFormateados();
+    const inst = await getInstitucionConfig();
+    const logoUrl = inst.logo_url || `${appUrl}/images/logo_placeholder.svg`;
 
     const listaFaltantes = data.faltantes.map(doc => `<li style="margin-bottom: 8px; color: #8B2332; font-weight: bold;">• ${doc}</li>`).join('');
 
@@ -260,7 +268,7 @@ export async function sendDocumentReminderEmail(data: ReminderEmailData) {
       <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #eee;">
         <div style="background: linear-gradient(135deg, #8B2332, #6B1A27); padding: 30px; text-align: center;">
           <img src="${logoUrl}" alt="Logo" style="height: 120px; width: auto; margin-bottom: 10px;">
-          <h1 style="color: #ffffff; margin: 0; font-size: 18px; text-transform: uppercase;">Instituto Educativo Emiliano Zapata</h1>
+          <h1 style="color: #ffffff; margin: 0; font-size: 18px; text-transform: uppercase;">${inst.nombre_completo}</h1>
         </div>
         <div style="padding: 30px;">
           <h2 style="color: #333;">Recordatorio de Documentación Pendiente</h2>
@@ -279,9 +287,9 @@ export async function sendDocumentReminderEmail(data: ReminderEmailData) {
     </html>`;
 
     await transporter.sendMail({
-      from: `"Servicios Escolares - IE Emiliano Zapata" <${user}>`,
+      from: `"Servicios Escolares - ${inst.siglas}" <${user}>`,
       to: data.to,
-      subject: '⚠️ Aviso: Documentación Pendiente - IE Emiliano Zapata',
+      subject: `⚠️ Aviso: Documentación Pendiente - ${inst.siglas}`,
       html: htmlContent,
     });
 

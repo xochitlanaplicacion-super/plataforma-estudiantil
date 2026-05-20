@@ -8,9 +8,11 @@ import { useToast } from '@/hooks/use-toast';
 import { Loader2, Edit2, Save, X, History, Search, Download } from 'lucide-react';
 import jsPDF from 'jspdf';
 import { getHistoricoAcreditaciones, updateAcreditacion } from '@/lib/actions/acreditaciones';
+import { useInstitucion } from '@/hooks/use-institucion';
 
 export function HistoricoTab() {
   const { toast } = useToast();
+  const { config: inst } = useInstitucion();
   const [registros, setRegistros] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -83,15 +85,17 @@ export function HistoricoTab() {
 
     // ── CARGAR LOGO DESDE /public/images ──────────────────────────────────────
     let logoBase64: string | null = null;
-    try {
-      const resp = await fetch('/images/logo_zapata.png');
-      const blob = await resp.blob();
-      logoBase64 = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.readAsDataURL(blob);
-      });
-    } catch { /* si falla la carga, continuar sin logo */ }
+    if (inst.logo_url) {
+      try {
+        const resp = await fetch(inst.logo_url);
+        const blob = await resp.blob();
+        logoBase64 = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result as string);
+          reader.readAsDataURL(blob);
+        });
+      } catch { /* si falla la carga, continuar sin logo */ }
+    }
 
     // ── ENCABEZADO: logos + título ────────────────────────────────────────────
     let y = 14;

@@ -46,24 +46,25 @@ export async function updateConfiguracion(bloques: HorarioBloque[], telefono: st
 export async function getConfiguracionBruta(): Promise<ConfiguracionGlobal> {
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase.from("configuracion_sistema").select("horarios_atencion, telefono_contacto, correo_contacto").eq("id", 1).single();
-  if (error || !data) return { horarios_atencion: [], telefono_contacto: "735 2826206", correo_contacto: "instituto.edu.emilianozapata@gmail.com" };
+  if (error || !data) return { horarios_atencion: [], telefono_contacto: "", correo_contacto: "" };
   return {
     horarios_atencion: data.horarios_atencion as HorarioBloque[],
     telefono_contacto: data.telefono_contacto,
-    correo_contacto: data.correo_contacto || "instituto.edu.emilianozapata@gmail.com"
+    correo_contacto: data.correo_contacto || ""
   };
 }
 
-export async function getDatosContactoFormateados(): Promise<{telefono: string, correo: string}> {
+export async function getDatosContactoFormateados(): Promise<{telefono: string, correo: string, direccion: string}> {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
   const supabase = createSupabaseClient(supabaseUrl, supabaseKey);
 
-  const { data, error } = await supabase.from("configuracion_sistema").select("telefono_contacto, correo_contacto").eq("id", 1).single();
+  const { data, error } = await supabase.from("configuracion_sistema").select("telefono_contacto, correo_contacto, direccion").eq("id", 1).single();
   
   return {
     telefono: data?.telefono_contacto || "7352826206",
-    correo: data?.correo_contacto || "instituto.edu.emilianozapata@gmail.com"
+    correo: data?.correo_contacto || "",
+    direccion: data?.direccion || "Yautepec Morelos México"
   };
 }
 

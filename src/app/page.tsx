@@ -10,6 +10,7 @@ import { Loader2, Eye, EyeOff, ClipboardEdit, Info } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
+import { useInstitucion } from '@/hooks/use-institucion';
 
 type Theme = {
   id: string;
@@ -19,7 +20,7 @@ type Theme = {
   glassStyle: string;
 };
 
-const themes: Theme[] = [
+const DEFAULT_THEMES: Theme[] = [
   {
     id: 'vino',
     bgImage: '/images/FONDO_ROJO.png',
@@ -43,7 +44,7 @@ const themes: Theme[] = [
   }
 ];
 
-const LOGO_URL = '/images/logo_zapata.png';
+const LOGO_FALLBACK = '/images/logo_placeholder.svg';
 
 const LocalAlert = ({ children, variant = "default" }: { children: React.ReactNode, variant?: "default" | "destructive" }) => (
   <div className={`p-4 rounded-lg border flex gap-3 ${variant === "destructive" ? "bg-destructive/10 border-destructive/20 text-destructive" : "bg-muted border-border text-foreground"}`}>
@@ -55,6 +56,8 @@ export default function LoginPage() {
   const { toast } = useToast();
   const router = useRouter();
   const supabase = createClient();
+  const { config: inst } = useInstitucion();
+  const logoUrl = inst.logo_url || LOGO_FALLBACK;
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -62,22 +65,32 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
-  const [currentTheme, setCurrentTheme] = useState<Theme>(themes[0]);
+  const [currentTheme, setCurrentTheme] = useState<Theme>(DEFAULT_THEMES[0]);
   const [bgLoaded, setBgLoaded] = useState(false);
   const [logoLoaded, setLogoLoaded] = useState(false);
 
   useEffect(() => {
     setMounted(true);
-    // Cada vez que se carga la página de login, se elige un tema al azar
-    const randomIndex = Math.floor(Math.random() * themes.length);
-    const selectedTheme = themes[randomIndex];
     
-    // Guardamos la selección para que la plataforma interna la reconozca
+    // Select themes source
+    const availableThemes = inst.temas_login && inst.temas_login.length > 0 ? inst.temas_login : DEFAULT_THEMES;
+    let selectedTheme = availableThemes[0];
+
+    if (inst.modo_tema_login === 'fijo') {
+      const index = inst.tema_fijo_index || 0;
+      selectedTheme = availableThemes[index] || availableThemes[0];
+    } else {
+      // Aleatorio
+      const randomIndex = Math.floor(Math.random() * availableThemes.length);
+      selectedTheme = availableThemes[randomIndex];
+    }
+    
+    // Guardamos la selección (opcional para fallback, aunque ya no lo necesita el layout)
     localStorage.setItem('ez-theme', selectedTheme.id);
     
     setCurrentTheme(selectedTheme);
     setBgLoaded(false);
-  }, []);
+  }, [inst.temas_login, inst.modo_tema_login, inst.tema_fijo_index]);
 
   const redirectByRole = (rol: string) => {
     let destination = '/dashboard/alumno';
@@ -173,8 +186,8 @@ export default function LoginPage() {
           <div className="relative z-10 w-full h-full flex items-center justify-center p-12">
             <div className="relative w-[85%] lg:w-[85%] aspect-square flex items-center justify-center">
               <img 
-                src={LOGO_URL}
-                alt="Logo Emiliano Zapata"
+                src={logoUrl}
+                alt="Logo Institucional"
                 className={`
                   w-full h-full object-contain drop-shadow-2xl
                   transition-all duration-700
@@ -207,7 +220,7 @@ export default function LoginPage() {
 
         <div className="p-8 md:p-14 lg:p-24 flex flex-col justify-center bg-white relative">
           <div className="md:hidden flex justify-center mb-8">
-            <img src={LOGO_URL} alt="Logo" className="w-24 h-24 object-contain" />
+            <img src={logoUrl} alt="Logo" className="w-24 h-24 object-contain" />
           </div>
 
           <div className="max-w-md w-full mx-auto space-y-10">

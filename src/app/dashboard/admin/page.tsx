@@ -16,12 +16,13 @@ import { sendDocReminderAction } from '@/lib/actions/users';
 import { useToast } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
-import { HorariosAtencionModal } from '@/components/admin/HorariosAtencionModal';
+import { useInstitucion } from '@/hooks/use-institucion';
 
 export default function AdminDashboard() {
   const { toast } = useToast();
   const router = useRouter();
   const supabase = createClient();
+  const { config: inst } = useInstitucion();
   const [loading, setLoading] = useState(true);
   const [isUserDialogOpen, setIsUserDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
@@ -157,10 +158,9 @@ export default function AdminDashboard() {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-3xl font-bold font-headline tracking-tight text-primary">Panel Administrativo</h2>
-          <p className="text-muted-foreground">Control global de la plataforma Emiliano Zapata.</p>
+          <p className="text-muted-foreground">Control global de la plataforma {inst.nombre_corto}.</p>
         </div>
         <div className="flex gap-4 items-center">
-          <HorariosAtencionModal />
           {stats.nuevosMensajes > 0 && (
             <Badge className="bg-amber-100 text-amber-800 border-amber-200 animate-pulse px-4 py-1.5 rounded-full">
               {stats.nuevosMensajes} MENSAJES PENDIENTES

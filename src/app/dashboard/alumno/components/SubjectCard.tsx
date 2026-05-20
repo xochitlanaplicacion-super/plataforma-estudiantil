@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import { cn, parseFechaLocal } from '@/lib/utils';
+import { useInstitucion } from '@/hooks/use-institucion';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -47,7 +48,7 @@ import {
 } from "@/components/ui/accordion";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
-const LOGO_URL = '/images/logo_zapata.png';
+const LOGO_FALLBACK = '/images/logo_placeholder.svg';
 
 const getSubjectIcon = (nombre: string) => {
   const norm = nombre.toLowerCase();
@@ -186,6 +187,8 @@ interface SubjectCardProps {
 
 export function SubjectCard({ materia, exercises, unidades = [], promedio, progreso, proximaEvaluacion }: SubjectCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const { config: inst } = useInstitucion();
   const [currentPage, setCurrentPage] = useState(1);
   const [presentationMode, setPresentationMode] = useState(false);
   const [activeSlides, setActiveSlides] = useState<Slide[]>([]);
@@ -735,8 +738,8 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
           </div>
           <div className="flex items-center gap-8">
             <div className="flex items-center gap-4">
-              <img src={LOGO_URL} alt="Logo" className="h-14 w-auto object-contain" />
-              <span className="hidden lg:block text-[10px] font-black uppercase tracking-[0.3em] text-white/40">IEEZ Instituto Educativo Emiliano Zapata</span>
+              <img src={inst.logo_url || LOGO_FALLBACK} alt="Logo" className="h-14 w-auto object-contain" />
+              <span className="hidden lg:block text-[10px] font-black uppercase tracking-[0.3em] text-white/40">{inst.siglas} {inst.nombre_completo}</span>
             </div>
             <Button 
               variant="outline" 
@@ -761,8 +764,8 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
                 <div className="flex flex-col min-w-0">
                   <DialogTitle className="text-sm sm:text-base font-black uppercase tracking-tight text-slate-800 truncate">{activeVideo?.titulo || 'Reproduciendo Video'}</DialogTitle>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <img src={LOGO_URL} alt="Logo IEEZ" className="h-4 sm:h-5 w-auto object-contain shrink-0" />
-                    <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] truncate">Instituto Educativo Emiliano Zapata</p>
+                    <img src={inst.logo_url || LOGO_FALLBACK} alt={`Logo ${inst.siglas}`} className="h-4 sm:h-5 w-auto object-contain shrink-0" />
+                    <p className="text-[9px] sm:text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] truncate">{inst.nombre_completo}</p>
                   </div>
                 </div>
               </div>

@@ -2,11 +2,22 @@ import type {Metadata} from 'next';
 import './globals.css';
 import { FirebaseClientProvider } from '@/firebase';
 import { Toaster } from '@/components/ui/toaster';
+import { ThemeProvider } from '@/components/shared/ThemeProvider';
 
-export const metadata: Metadata = {
-  title: 'Plataforma Emiliano Zapata | Sistema Educativo',
-  description: 'Gestión académica integral para el Instituto Educativo Emiliano Zapata.',
-};
+import { getInstitucionConfig } from '@/lib/actions/institucion';
+
+export async function generateMetadata(): Promise<Metadata> {
+  const config = await getInstitucionConfig();
+  
+  return {
+    title: `${config.nombre_corto || 'Plataforma'} | Sistema Académico`,
+    description: `Plataforma educativa de ${config.nombre_completo || 'la institución'}.`,
+    icons: {
+      icon: config.favicon_url || '/icon.png',
+      apple: config.favicon_url || '/icon.png',
+    }
+  };
+}
 
 export default function RootLayout({
   children,
@@ -22,8 +33,10 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         <FirebaseClientProvider>
-          {children}
-          <Toaster />
+          <ThemeProvider>
+            {children}
+            <Toaster />
+          </ThemeProvider>
         </FirebaseClientProvider>
       </body>
     </html>
