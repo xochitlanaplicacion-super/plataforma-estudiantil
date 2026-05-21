@@ -72,6 +72,8 @@ export default function InstitucionPage() {
   const [correo, setCorreo] = useState('');
   const [bloques, setBloques] = useState<HorarioBloque[]>([]);
   const [dbNiveles, setDbNiveles] = useState<any[]>([]);
+  const [nivelImgErrors, setNivelImgErrors] = useState<Record<string, boolean>>({});
+  const [nivelImgLoading, setNivelImgLoading] = useState<Record<string, boolean>>({});
 
   // ─── SMTP State ────────────────────────────────────────────────────────
   const [smtp_host, setSmtpHost] = useState('');
@@ -96,7 +98,14 @@ export default function InstitucionPage() {
   // ─── Cargar datos iniciales ──────────────────────────────────────────────
   useEffect(() => {
     getNiveles().then(res => {
-      if (res.data) setDbNiveles(res.data);
+      if (res.data) {
+        console.log('📷 Niveles cargados:', res.data.map(n => ({
+          nombre: n.nombre,
+          imagen_bienvenida_url: n.imagen_bienvenida_url || '(vacío)'
+        })));
+        setDbNiveles(res.data);
+      }
+      if (res.error) console.error('❌ Error cargando niveles:', res.error);
     });
   }, []);
 
@@ -395,30 +404,81 @@ export default function InstitucionPage() {
           {dbNiveles.length === 0 ? (
             <p className="text-sm text-muted-foreground">No hay niveles configurados. Créalos primero en Estructura Académica.</p>
           ) : (
-            dbNiveles.map((n, i) => (
+            dbNiveles.map((n, i) => {
+              const imgKey = n.id || `nivel_${i}`;
+              const hasError = nivelImgErrors[imgKey];
+              const isLoading = nivelImgLoading[imgKey];
+              // Cache-bust para forzar recarga en Vercel
+              const imgSrc = n.imagen_bienvenida_url
+                ? `${n.imagen_bienvenida_url}${n.imagen_bienvenida_url.includes('?') ? '&' : '?'}t=${Date.now()}`
+                : null;
+
+              return (
               <div key={n.id} className="flex flex-col md:flex-row md:items-center gap-4 p-4 border rounded-xl bg-card shadow-sm justify-between">
                 <div className="space-y-2">
                   <Label className="text-sm font-bold uppercase text-primary">{n.nombre}</Label>
                   <p className="text-[10px] text-muted-foreground">Esta imagen se incluirá en el correo de bienvenida de los alumnos.</p>
                   <Button variant="outline" size="sm" className="mt-2 text-xs" onClick={() => triggerUpload(`nivel_${i}`)} disabled={!!uploading}>
                     {uploading === `nivel_${i}` ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
-                    Subir Imagen
+                    {n.imagen_bienvenida_url ? 'Cambiar Imagen' : 'Subir Imagen'}
                   </Button>
                 </div>
                 {n.imagen_bienvenida_url && (
                   <div className="flex items-center gap-4">
                     <div className="w-48 h-24 rounded-lg overflow-hidden border shrink-0 bg-muted flex items-center justify-center relative group">
-                      <img src={n.imagen_bienvenida_url} alt="Preview" className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                      {/* Loading skeleton */}
+                      {isLoading && !hasError && (
+                        <div className="absolute inset-0 flex items-center justify-center bg-muted z-10">
+                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                        </div>
+                      )}
+                      {/* Error state - imagen rota */}
+                      {hasError && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center bg-red-50 dark:bg-red-950/20 z-10 p-1">
+                          <ImageIcon className="h-5 w-5 text-red-400 mb-1" />
+                          <span className="text-[8px] text-red-500 text-center leading-tight">Imagen no encontrada</span>
+                          <span className="text-[7px] text-red-300 truncate max-w-full px-1">{n.imagen_bienvenida_url.split('/').pop()?.substring(0, 30)}</span>
+                        </div>
+                      )}
+                      {/* Imagen real */}
+                      <img
+                        src={imgSrc || ''}
+                        alt="Preview"
+                        className={`w-full h-full object-cover transition-opacity ${hasError ? 'opacity-0 absolute' : 'opacity-100'}`}
+                        onLoad={() => {
+                          console.log(`✅ Nivel ${n.nombre}: imagen cargada OK`, n.imagen_bienvenida_url);
+                          setNivelImgLoading(prev => ({ ...prev, [imgKey]: false }));
+                          setNivelImgErrors(prev => ({ ...prev, [imgKey]: false }));
+                        }}
+                        onError={() => {
+                          console.error(`❌ Nivel ${n.nombre}: imagen NO cargó`, n.imagen_bienvenida_url);
+                          setNivelImgLoading(prev => ({ ...prev, [imgKey]: false }));
+                          setNivelImgErrors(prev => ({ ...prev, [imgKey]: true }));
+                        }}
+                        onLoadStart={() => {
+                          setNivelImgLoading(prev => ({ ...prev, [imgKey]: true }));
+                        }}
+                      />
+                      {/* Overlay con botón borrar */}
+                      {!hasError && (
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                         <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => setDeleteTarget(`nivel_${i}`)}>
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
+                      )}
                     </div>
+                    {/* Botón borrar siempre visible si hay error */}
+                    {hasError && (
+                      <Button variant="outline" size="sm" className="text-xs text-red-500 border-red-200" onClick={() => setDeleteTarget(`nivel_${i}`)}>
+                        <Trash2 className="h-3 w-3 mr-1" /> Borrar URL rota
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
-            ))
+              );
+            })
           )}
         </CardContent>
       </Card>
