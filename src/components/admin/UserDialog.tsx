@@ -277,7 +277,16 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
       }
 
       if (result.success) {
-        toast({ title: user ? "Actualizado" : "Inscrito", description: "Operación exitosa." });
+        if (result.warning) {
+          toast({ 
+            title: user ? "Perfil Actualizado" : "Alumno Inscrito", 
+            description: result.warning,
+            variant: "destructive",
+            duration: 8000
+          });
+        } else {
+          toast({ title: user ? "Actualizado" : "Inscrito", description: "Operación exitosa." });
+        }
         onSuccess();
         onOpenChange(false);
       } else {

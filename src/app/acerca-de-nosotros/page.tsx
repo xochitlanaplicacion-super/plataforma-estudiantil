@@ -449,7 +449,7 @@ export const About = ({ theme, config }: { theme: any, config: any }) => {
             </motion.h2>
             <motion.div variants={fadeUp} className="space-y-8 text-gray-600 text-xl leading-relaxed font-medium">
               <p>
-                {config.about_text || "En Instituto Emiliano Zapata nos apasiona proporcionar programas de alta calidad que se adapten a las necesidades reales de los estudiantes, garantizando que cada egresado tenga las herramientas necesarias para triunfar en el mercado laboral actual."}
+                {config.about_text || "En nuestra institución educativa nos apasiona proporcionar programas de alta calidad que se adapten a las necesidades reales de los estudiantes, garantizando que cada egresado tenga las herramientas necesarias para triunfar en el mercado laboral actual."}
               </p>
             </motion.div>
 

@@ -359,30 +359,38 @@ export async function enviarRecordatorioPago(alumnoId: string) {
   });
 
   // Enviar email
-  const user = process.env.GMAIL_USER;
-  const pass = process.env.GMAIL_APP_PASSWORD;
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://institutoeducativoemilianozapata.vercel.app';
+  const html_inst = await getInstitucionConfig();
 
-  if (!user || !pass) {
-    return { success: true, warning: 'Notificación creada, pero el correo no está configurado.' };
+  if (!html_inst.smtp_user || !html_inst.smtp_password) {
+    return { success: true, warning: 'Notificación creada en la plataforma, pero no se pudo enviar el correo porque el servidor de correo electrónico no está configurado. Ve a Configuración → Correo Saliente para activarlo.' };
   }
 
-  const transporter = nodemailer.createTransport({ service: 'gmail', auth: { user, pass } });
+  const smtpHost = html_inst.smtp_host || 'smtp.gmail.com';
+  const smtpPort = html_inst.smtp_port || 465;
+  const transporter = nodemailer.createTransport({
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpPort === 465,
+    auth: { user: html_inst.smtp_user, pass: html_inst.smtp_password },
+  });
+
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://plataforma.ejemplo.edu';
+  const logoUrl = html_inst.logo_url || `${appUrl}/images/logo_placeholder.svg`;
+  const colorPrincipal = html_inst.color_primario || '#333333';
+  const colorSecundario = html_inst.color_secundario || '#1A4A3F';
+  const fromName = html_inst.smtp_from_name || `Servicios Escolares - ${html_inst.siglas}`;
 
   const listaHtml = conceptosPendientes
-    .map(c => `<li style="margin-bottom:8px;color:#8B2332;font-weight:bold;">• ${c}</li>`)
+    .map(c => `<li style="margin-bottom:8px;color:${colorPrincipal};font-weight:bold;">• ${c}</li>`)
     .join('');
-
-  const html_inst = await getInstitucionConfig();
-  const logoUrl = html_inst.logo_url || `${appUrl}/images/logo_placeholder.svg`;
 
   const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
   <body style="margin:0;padding:0;background-color:#f4f4f4;font-family:sans-serif;">
     <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #eee;">
-      <div style="background:linear-gradient(135deg,#8B2332,#6B1A27);padding:30px;text-align:center;">
+      <div style="background:linear-gradient(135deg,${colorPrincipal},${colorSecundario});padding:30px;text-align:center;">
         <img src="${logoUrl}" alt="Logo" style="height:100px;width:auto;margin-bottom:10px;">
         <h1 style="color:#fff;margin:0;font-size:18px;text-transform:uppercase;">${html_inst.nombre_completo}</h1>
-        <p style="color:#f0d0d5;margin:5px 0 0;font-size:13px;">Control de Pagos</p>
+        <p style="color:rgba(255,255,255,0.7);margin:5px 0 0;font-size:13px;">Control de Pagos</p>
       </div>
       <div style="padding:30px;">
         <h2 style="color:#333;">⚠️ Recordatorio de Pago Pendiente</h2>
@@ -393,7 +401,7 @@ export async function enviarRecordatorioPago(alumnoId: string) {
           <p style="margin:0;color:#856404;font-size:13px;">Por favor, regulariza tu situación lo antes posible acudiendo a ventanilla o realizando tu transferencia. Ante cualquier duda, comunícate con Servicios Escolares.</p>
         </div>
         <div style="text-align:center;margin-top:20px;">
-          <a href="${appUrl}/dashboard/alumno/pagos" style="display:inline-block;background:#8B2332;color:#fff;padding:14px 40px;border-radius:6px;text-decoration:none;font-weight:bold;">Ver Mis Pagos →</a>
+          <a href="${appUrl}/dashboard/alumno/pagos" style="display:inline-block;background:${colorPrincipal};color:#fff;padding:14px 40px;border-radius:6px;text-decoration:none;font-weight:bold;">Ver Mis Pagos →</a>
         </div>
       </div>
       <div style="background:#f8f9fa;padding:15px;text-align:center;border-top:1px solid #eee;">
@@ -405,7 +413,7 @@ export async function enviarRecordatorioPago(alumnoId: string) {
 
   try {
     await transporter.sendMail({
-      from: `"Servicios Escolares - ${html_inst.siglas}" <${user}>`,
+      from: `"${fromName}" <${html_inst.smtp_user}>`,
       to: alumno.email,
       subject: `⚠️ Recordatorio de Pago Pendiente - ${html_inst.siglas}`,
       html,
@@ -415,6 +423,8 @@ export async function enviarRecordatorioPago(alumnoId: string) {
     return { success: true, warning: `Notificación creada, pero el correo falló: ${e.message}` };
   }
 }
+
+// (No extra utilities needed)
 
 // ─── NOTIFICACIONES DEL ALUMNO ───────────────────────────────────────────────
 

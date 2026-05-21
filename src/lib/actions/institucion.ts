@@ -2,7 +2,7 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, unstable_noStore as noStore } from "next/cache";
 import { InstitucionConfig } from "@/lib/types";
 
 // ─── DEFAULTS (fallback si no hay datos en DB) ────────────────────────────────
@@ -39,6 +39,7 @@ const DEFAULTS: InstitucionConfig = {
 // ─── GET: Lectura server-side sin cookies (para emails, PDFs, background jobs) ─
 
 export async function getInstitucionConfig(): Promise<InstitucionConfig> {
+  noStore();
   try {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -61,6 +62,7 @@ export async function getInstitucionConfig(): Promise<InstitucionConfig> {
       slogan: data.slogan || DEFAULTS.slogan,
       direccion: data.direccion || undefined,
       sitio_web: data.sitio_web || undefined,
+      url_plataforma: data.url_plataforma || undefined,
       logo_url: data.logo_url || DEFAULTS.logo_url,
       logo_dark_url: data.logo_dark_url || DEFAULTS.logo_dark_url,
       favicon_url: data.favicon_url || DEFAULTS.favicon_url,
@@ -75,6 +77,12 @@ export async function getInstitucionConfig(): Promise<InstitucionConfig> {
       horarios_atencion: (data.horarios_atencion as any[]) || [],
       landing_config: data.landing_config || undefined,
       updated_at: data.updated_at,
+      // SMTP: SIN fallback - si no están configurados, el correo no se envía
+      smtp_host: data.smtp_host || undefined,
+      smtp_port: data.smtp_port || undefined,
+      smtp_user: data.smtp_user || undefined,
+      smtp_password: data.smtp_password || undefined,
+      smtp_from_name: data.smtp_from_name || undefined,
     };
   } catch {
     return DEFAULTS;
@@ -84,6 +92,7 @@ export async function getInstitucionConfig(): Promise<InstitucionConfig> {
 // ─── GET: Lectura con autenticación (para la página de configuración) ────────
 
 export async function getInstitucionConfigAuth(): Promise<InstitucionConfig> {
+  noStore();
   const supabase = await createServerSupabaseClient();
   const { data, error } = await supabase
     .from("configuracion_sistema")
@@ -102,6 +111,7 @@ export async function getInstitucionConfigAuth(): Promise<InstitucionConfig> {
     slogan: data.slogan || DEFAULTS.slogan,
     direccion: data.direccion || undefined,
     sitio_web: data.sitio_web || undefined,
+    url_plataforma: data.url_plataforma || undefined,
     logo_url: data.logo_url || DEFAULTS.logo_url,
     logo_dark_url: data.logo_dark_url || DEFAULTS.logo_dark_url,
     favicon_url: data.favicon_url || DEFAULTS.favicon_url,
@@ -116,6 +126,11 @@ export async function getInstitucionConfigAuth(): Promise<InstitucionConfig> {
     horarios_atencion: (data.horarios_atencion as any[]) || [],
     landing_config: data.landing_config || undefined,
     updated_at: data.updated_at,
+    smtp_host: data.smtp_host || undefined,
+    smtp_port: data.smtp_port || undefined,
+    smtp_user: data.smtp_user || undefined,
+    smtp_password: data.smtp_password || undefined,
+    smtp_from_name: data.smtp_from_name || undefined,
   };
 }
 
@@ -136,10 +151,14 @@ export async function updateInstitucionConfig(config: Partial<InstitucionConfig>
 
   const textFields = [
     'nombre_completo', 'nombre_corto', 'siglas', 'slogan', 'direccion',
-    'sitio_web', 'logo_url', 'logo_dark_url', 'favicon_url',
+    'sitio_web', 'url_plataforma', 'logo_url', 'logo_dark_url', 'favicon_url',
     'color_primario', 'color_secundario', 'modo_tema_login',
-    'telefono_contacto', 'correo_contacto', 'codigo_matricula'
+    'telefono_contacto', 'correo_contacto', 'codigo_matricula',
+    'smtp_host', 'smtp_user', 'smtp_password', 'smtp_from_name'
   ] as const;
+
+  // Campo numérico SMTP
+  if (config.smtp_port !== undefined) updateData.smtp_port = config.smtp_port;
 
   for (const field of textFields) {
     if (config[field] !== undefined) {

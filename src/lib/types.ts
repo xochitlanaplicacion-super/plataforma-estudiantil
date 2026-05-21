@@ -225,6 +225,7 @@ export interface InstitucionConfig {
   slogan: string;
   direccion?: string;
   sitio_web?: string;
+  url_plataforma?: string;
   logo_url?: string;
   logo_dark_url?: string;
   favicon_url?: string;
@@ -240,4 +241,10 @@ export interface InstitucionConfig {
   landing_config?: LandingConfig;
   codigo_matricula?: string;
   updated_at?: string;
+  // ─── Configuración SMTP para correo saliente ───────────────
+  smtp_host?: string;
+  smtp_port?: number;
+  smtp_user?: string;
+  smtp_password?: string;
+  smtp_from_name?: string;
 }

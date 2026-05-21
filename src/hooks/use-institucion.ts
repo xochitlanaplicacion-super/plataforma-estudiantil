@@ -9,11 +9,12 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
 
 const DEFAULTS: InstitucionConfig = {
   id: 1,
-  nombre_completo: 'Instituto Educativo Emiliano Zapata',
-  nombre_corto: 'Emiliano Zapata',
-  siglas: 'IEEZ',
+  nombre_completo: 'Instituto Educativo de Ejemplo',
+  nombre_corto: 'Mi Institución',
+  siglas: 'IE',
   codigo_matricula: '',
   slogan: 'Plataforma Académica',
+  url_plataforma: 'https://plataforma.ejemplo.edu/',
   color_primario: '#8B2332',
   color_secundario: '#1A4A3F',
   temas_login: [
@@ -24,12 +25,12 @@ const DEFAULTS: InstitucionConfig = {
   modo_tema_login: 'aleatorio',
   tema_fijo_index: 0,
   niveles_nombres: [
-    { clave: "bachillerato", nombre: "Bachillerato Emiliano Zapata" },
-    { clave: "universidad", nombre: "Universidad Emiliano Zapata" },
-    { clave: "capacitaciones", nombre: "Capacitaciones Emiliano Zapata" },
+    { clave: "bachillerato", nombre: "Bachillerato" },
+    { clave: "universidad", nombre: "Universidad" },
+    { clave: "capacitaciones", nombre: "Capacitaciones" },
   ],
-  telefono_contacto: '735 2826206',
-  correo_contacto: 'instituto.edu.emilianozapata@gmail.com',
+  telefono_contacto: '123 456 7890',
+  correo_contacto: 'contacto@miinstitucion.edu',
   horarios_atencion: [],
 };
 
@@ -62,17 +63,19 @@ function setCache(data: InstitucionConfig) {
   }
 }
 
-export function useInstitucion() {
+export function useInstitucion(options?: { bypassCache?: boolean }) {
   const [config, setConfig] = useState<InstitucionConfig>(DEFAULTS);
   const [loading, setLoading] = useState(true);
 
   const fetchConfig = useCallback(async () => {
-    // 1. Intentar cache primero
-    const cached = getCached();
-    if (cached) {
-      setConfig(cached);
-      setLoading(false);
-      return;
+    // 1. Intentar cache primero (si no está desactivado)
+    if (!options?.bypassCache) {
+      const cached = getCached();
+      if (cached) {
+        setConfig(cached);
+        setLoading(false);
+        return;
+      }
     }
 
     // 2. Fetch desde Supabase
@@ -99,6 +102,7 @@ export function useInstitucion() {
         slogan: data.slogan || DEFAULTS.slogan,
         direccion: data.direccion || undefined,
         sitio_web: data.sitio_web || undefined,
+        url_plataforma: data.url_plataforma || undefined,
         logo_url: data.logo_url || undefined,
         logo_dark_url: data.logo_dark_url || undefined,
         favicon_url: data.favicon_url || undefined,
@@ -113,6 +117,11 @@ export function useInstitucion() {
         horarios_atencion: (data.horarios_atencion as any[]) || [],
         landing_config: data.landing_config || undefined,
         updated_at: data.updated_at,
+        smtp_host: data.smtp_host || undefined,
+        smtp_port: data.smtp_port || undefined,
+        smtp_user: data.smtp_user || undefined,
+        smtp_password: data.smtp_password || undefined,
+        smtp_from_name: data.smtp_from_name || undefined,
       };
 
       setConfig(parsed);

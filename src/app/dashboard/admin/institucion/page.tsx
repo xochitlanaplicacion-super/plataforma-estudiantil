@@ -14,15 +14,19 @@ import {
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle
 } from '@/components/ui/alert-dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { useInstitucion } from '@/hooks/use-institucion';
 import { updateInstitucionConfig, uploadLogo } from '@/lib/actions/institucion';
+import { getNiveles, upsertNivel } from '@/lib/actions/academic';
 import { HexColorPicker } from 'react-colorful';
 import { InstitucionConfig, NivelNombre, TemaLogin } from '@/lib/types';
 import { HorarioBloque } from '@/lib/actions/horarios';
 import {
   Building2, Save, Loader2, Upload, Trash2, Plus, Palette, Image as ImageIcon,
-  Phone, Mail, Clock, CalendarDays, Globe, MapPin, GraduationCap, Paintbrush
+  Phone, Mail, Clock, CalendarDays, Globe, MapPin, GraduationCap, Paintbrush,
+  Eye, EyeOff, Info
 } from 'lucide-react';
 
 const DAYS_ORDER = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
@@ -35,7 +39,7 @@ const PRESET_COLORS = [
 
 export default function InstitucionPage() {
   const { toast } = useToast();
-  const { config: initialConfig, loading: hookLoading, refresh } = useInstitucion();
+  const { config: initialConfig, loading: hookLoading, refresh } = useInstitucion({ bypassCache: true });
   const [saving, setSaving] = useState(false);
   const [cleaning, setCleaning] = useState(false);
   const [showCleanupDialog, setShowCleanupDialog] = useState(false);
@@ -45,7 +49,7 @@ export default function InstitucionPage() {
   const [colorModalTarget, setColorModalTarget] = useState<string | null>(null);
   const [tempColor, setTempColor] = useState('#000000');
   const [tempOnChange, setTempOnChange] = useState<((c: string) => void) | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<'logo' | 'favicon' | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   // ─── Form State ──────────────────────────────────────────────────────────
   const [nombre_completo, setNombreCompleto] = useState('');
@@ -55,6 +59,7 @@ export default function InstitucionPage() {
   const [slogan, setSlogan] = useState('');
   const [direccion, setDireccion] = useState('');
   const [sitio_web, setSitioWeb] = useState('');
+  const [url_plataforma, setUrlPlataforma] = useState('');
   const [logo_url, setLogoUrl] = useState('');
   const [favicon_url, setFaviconUrl] = useState('');
   const [color_primario, setColorPrimario] = useState('#8B2332');
@@ -66,8 +71,35 @@ export default function InstitucionPage() {
   const [telefono, setTelefono] = useState('');
   const [correo, setCorreo] = useState('');
   const [bloques, setBloques] = useState<HorarioBloque[]>([]);
+  const [dbNiveles, setDbNiveles] = useState<any[]>([]);
+
+  // ─── SMTP State ────────────────────────────────────────────────────────
+  const [smtp_host, setSmtpHost] = useState('');
+  const [smtp_port, setSmtpPort] = useState<number | ''>(465);
+  const [smtp_user, setSmtpUser] = useState('');
+  const [smtp_password, setSmtpPassword] = useState('');
+  const [smtp_from_name, setSmtpFromName] = useState('');
+  const [showSmtpPassword, setShowSmtpPassword] = useState(false);
+  const [proveedorSmtp, setProveedorSmtp] = useState('custom');
+
+  const handleProveedorChange = (val: string) => {
+    setProveedorSmtp(val);
+    if (val === 'gmail') {
+      setSmtpHost('smtp.gmail.com');
+      setSmtpPort(465);
+    } else if (val === 'outlook') {
+      setSmtpHost('smtp.office365.com');
+      setSmtpPort(587);
+    }
+  };
 
   // ─── Cargar datos iniciales ──────────────────────────────────────────────
+  useEffect(() => {
+    getNiveles().then(res => {
+      if (res.data) setDbNiveles(res.data);
+    });
+  }, []);
+
   useEffect(() => {
     if (!hookLoading && initialConfig) {
       setNombreCompleto(initialConfig.nombre_completo);
@@ -77,6 +109,7 @@ export default function InstitucionPage() {
       setSlogan(initialConfig.slogan);
       setDireccion(initialConfig.direccion || '');
       setSitioWeb(initialConfig.sitio_web || '');
+      setUrlPlataforma(initialConfig.url_plataforma || '');
       setLogoUrl(initialConfig.logo_url || '');
       setFaviconUrl(initialConfig.favicon_url || '');
       setColorPrimario(initialConfig.color_primario);
@@ -91,6 +124,11 @@ export default function InstitucionPage() {
         ? initialConfig.horarios_atencion
         : [{ dias: ["Lunes","Martes","Miércoles","Jueves","Viernes"], hora_inicio: "09:00", hora_fin: "18:00" }]
       );
+      setSmtpHost(initialConfig.smtp_host || '');
+      setSmtpPort(initialConfig.smtp_port || 465);
+      setSmtpUser(initialConfig.smtp_user || '');
+      setSmtpPassword(initialConfig.smtp_password || '');
+      setSmtpFromName(initialConfig.smtp_from_name || '');
     }
   }, [hookLoading, initialConfig]);
 
@@ -157,6 +195,10 @@ export default function InstitucionPage() {
       const currentBg = temas_login[index]?.bgImage;
       // Solo borrar si el fondo es una URL de Supabase (no imagen local del proyecto)
       if (currentBg && currentBg.includes('supabase')) fd.append('old_url', currentBg);
+    } else if (uploadTarget.startsWith('nivel_')) {
+      const index = parseInt(uploadTarget.split('_')[1], 10);
+      const currentUrl = dbNiveles[index]?.imagen_bienvenida_url;
+      if (currentUrl && currentUrl.includes('supabase')) fd.append('old_url', currentUrl);
     }
 
     const result = await uploadLogo(fd);
@@ -166,8 +208,13 @@ export default function InstitucionPage() {
       else if (uploadTarget.startsWith('tema_')) {
         const index = parseInt(uploadTarget.split('_')[1], 10);
         updateTema(index, 'bgImage', result.url);
+      } else if (uploadTarget.startsWith('nivel_')) {
+        const index = parseInt(uploadTarget.split('_')[1], 10);
+        const newNiveles = [...dbNiveles];
+        newNiveles[index] = { ...newNiveles[index], imagen_bienvenida_url: result.url };
+        setDbNiveles(newNiveles);
       }
-      toast({ title: "Logo subido", description: "La imagen se cargó correctamente." });
+      toast({ title: "Imagen subida", description: "La imagen se cargó correctamente." });
     } else {
       toast({ variant: "destructive", title: "Error", description: result.error || "No se pudo subir." });
     }
@@ -202,10 +249,7 @@ export default function InstitucionPage() {
 
   // ─── Guardar Todo ────────────────────────────────────────────────────────
   const handleSave = async () => {
-    if (!nombre_completo.trim() || !nombre_corto.trim()) {
-      toast({ variant: "destructive", title: "Error", description: "El nombre completo y corto son obligatorios." });
-      return;
-    }
+    // Validación removida para permitir guardar en blanco y probar los fallbacks genéricos
     for (const b of bloques) {
       if (b.dias.length === 0) {
         toast({ variant: "destructive", title: "Error", description: "Todos los bloques de horario deben tener al menos un día." });
@@ -214,17 +258,29 @@ export default function InstitucionPage() {
     }
     setSaving(true);
     const result = await updateInstitucionConfig({
-      nombre_completo, nombre_corto, siglas, codigo_matricula: codigo_matricula.toUpperCase(), slogan, direccion: direccion || undefined,
-      sitio_web: sitio_web || undefined, logo_url: logo_url, favicon_url: favicon_url,
+      nombre_completo, nombre_corto, siglas, codigo_matricula: codigo_matricula.toUpperCase(), slogan, direccion: direccion || null,
+      sitio_web: sitio_web || null, url_plataforma: url_plataforma || null, logo_url: logo_url, favicon_url: favicon_url,
       color_primario, color_secundario, temas_login, modo_tema_login, tema_fijo_index,
       niveles_nombres, telefono_contacto: telefono, correo_contacto: correo,
       horarios_atencion: bloques,
+      smtp_host: smtp_host || null,
+      smtp_port: typeof smtp_port === 'number' ? smtp_port : null,
+      smtp_user: smtp_user || null,
+      smtp_password: smtp_password || null,
+      smtp_from_name: smtp_from_name || null,
     });
-    if (result.success) {
+
+    let errorNiveles = false;
+    for (const n of dbNiveles) {
+      const res = await upsertNivel(n);
+      if (res.error) errorNiveles = true;
+    }
+
+    if (result.success && !errorNiveles) {
       toast({ title: "✅ Configuración Guardada", description: "Los cambios se reflejarán en toda la plataforma." });
       refresh();
     } else {
-      toast({ variant: "destructive", title: "Error", description: result.error });
+      toast({ variant: "destructive", title: "Error", description: result.error || "Error al guardar configuración de niveles." });
     }
     setSaving(false);
   };
@@ -291,11 +347,14 @@ export default function InstitucionPage() {
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2"><Building2 size={18} /> Identidad de la Institución</CardTitle><CardDescription>Nombre, siglas y slogan que aparecerán en toda la plataforma.</CardDescription></CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2"><Label className="font-bold">Nombre Completo *</Label><Input value={nombre_completo} onChange={e => setNombreCompleto(e.target.value)} placeholder="Instituto Educativo..." /></div>
-          <div className="space-y-2"><Label className="font-bold">Nombre Corto *</Label><Input value={nombre_corto} onChange={e => setNombreCorto(e.target.value)} placeholder="Emiliano Zapata" /></div>
-          <div className="space-y-2"><Label className="font-bold">Siglas</Label><Input value={siglas} onChange={e => setSiglas(e.target.value)} placeholder="IEEZ" /></div>
+          <div className="space-y-2"><Label className="font-bold">Nombre Completo</Label><Input value={nombre_completo} onChange={e => setNombreCompleto(e.target.value)} placeholder="Ej. Instituto Educativo de Excelencia" /></div>
+          <div className="space-y-2"><Label className="font-bold">Nombre Corto</Label><Input value={nombre_corto} onChange={e => setNombreCorto(e.target.value)} placeholder="Ej. Mi Institución" /></div>
+          <div className="space-y-2"><Label className="font-bold">Siglas</Label><Input value={siglas} onChange={e => setSiglas(e.target.value)} placeholder="Ej. IE" /></div>
           <div className="space-y-2"><Label className="font-bold">Prefijo de Matrícula (Código)</Label><Input value={codigo_matricula} onChange={e => setCodigoMatricula(e.target.value.toUpperCase())} placeholder="XXXXXX" className="uppercase" /></div>
-          <div className="space-y-2"><Label className="font-bold">Slogan / Subtítulo</Label><Input value={slogan} onChange={e => setSlogan(e.target.value)} placeholder="Plataforma Académica" /></div>
+          <div className="space-y-2"><Label className="font-bold">Slogan / Subtítulo</Label><Input value={slogan} onChange={e => setSlogan(e.target.value)} placeholder="Ej. Plataforma Académica" /></div>
+          <div className="space-y-2"><Label className="font-bold">URL de la Plataforma (Botones Correo)</Label><Input value={url_plataforma} onChange={e => setUrlPlataforma(e.target.value)} placeholder="Ej. https://plataforma.ejemplo.edu/" /></div>
+          <div className="space-y-2"><Label className="font-bold">Sitio Web Oficial</Label><Input value={sitio_web} onChange={e => setSitioWeb(e.target.value)} placeholder="Ej. https://mi-escuela.com" /></div>
+          <div className="space-y-2 md:col-span-2"><Label className="font-bold">Dirección Física</Label><Input value={direccion} onChange={e => setDireccion(e.target.value)} placeholder="Av. Principal #123..." /></div>
         </CardContent>
       </Card>
 
@@ -329,18 +388,38 @@ export default function InstitucionPage() {
         </CardContent>
       </Card>
 
-      {/* ─── SECCIÓN 3: NIVELES EDUCATIVOS ─────────────────────────────────── */}
+      {/* ─── SECCIÓN 3: IMÁGENES POR NIVEL EDUCATIVO ─────────────────────── */}
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><GraduationCap size={18} /> Niveles Educativos</CardTitle><CardDescription>Nombres personalizados por nivel. Usados en correos de bienvenida y documentos oficiales.</CardDescription></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><ImageIcon size={18} /> Imágenes por Nivel Educativo</CardTitle><CardDescription>Sube el banner de bienvenida que se enviará a los alumnos de cada nivel por correo.</CardDescription></CardHeader>
         <CardContent className="space-y-4">
-          {niveles_nombres.map((n, i) => (
-            <div key={i} className="flex items-end gap-3 p-3 border rounded-xl bg-card shadow-sm">
-              <div className="flex-1 space-y-1"><Label className="text-xs font-bold uppercase text-muted-foreground">Clave</Label><Input value={n.clave} onChange={e => updateNivel(i, 'clave', e.target.value)} placeholder="bachillerato" /></div>
-              <div className="flex-[2] space-y-1"><Label className="text-xs font-bold uppercase text-muted-foreground">Nombre a mostrar</Label><Input value={n.nombre} onChange={e => updateNivel(i, 'nombre', e.target.value)} placeholder="Bachillerato Mi Escuela" /></div>
-              <Button variant="ghost" size="icon" className="text-red-500 hover:bg-red-50 shrink-0" onClick={() => removeNivel(i)}><Trash2 size={16} /></Button>
-            </div>
-          ))}
-          <Button variant="outline" className="w-full border-dashed border-2 gap-2" onClick={addNivel}><Plus size={16} /> Agregar nivel</Button>
+          {dbNiveles.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No hay niveles configurados. Créalos primero en Estructura Académica.</p>
+          ) : (
+            dbNiveles.map((n, i) => (
+              <div key={n.id} className="flex flex-col md:flex-row md:items-center gap-4 p-4 border rounded-xl bg-card shadow-sm justify-between">
+                <div className="space-y-2">
+                  <Label className="text-sm font-bold uppercase text-primary">{n.nombre}</Label>
+                  <p className="text-[10px] text-muted-foreground">Esta imagen se incluirá en el correo de bienvenida de los alumnos.</p>
+                  <Button variant="outline" size="sm" className="mt-2 text-xs" onClick={() => triggerUpload(`nivel_${i}`)} disabled={!!uploading}>
+                    {uploading === `nivel_${i}` ? <Loader2 className="animate-spin h-4 w-4 mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                    Subir Imagen
+                  </Button>
+                </div>
+                {n.imagen_bienvenida_url && (
+                  <div className="flex items-center gap-4">
+                    <div className="w-48 h-24 rounded-lg overflow-hidden border shrink-0 bg-muted flex items-center justify-center relative group">
+                      <img src={n.imagen_bienvenida_url} alt="Preview" className="w-full h-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
+                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                        <Button variant="destructive" size="icon" className="h-8 w-8" onClick={() => setDeleteTarget(`nivel_${i}`)}>
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
         </CardContent>
       </Card>
 
@@ -458,6 +537,64 @@ export default function InstitucionPage() {
         </CardContent>
       </Card>
 
+      {/* ─── SECCIÓN 8: SERVIDOR DE CORREO (SMTP) ─── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><Mail size={18} /> Servidor de Correo Saliente (SMTP)</CardTitle>
+          <CardDescription>
+            Configura las credenciales para que la plataforma pueda enviar correos (bienvenida, recordatorios, etc.). 
+            Si dejas esto en blanco, los correos no se enviarán.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-muted/50 p-4 rounded-xl border border-border/50">
+            <div>
+              <Label className="font-bold flex items-center gap-2">Proveedor <Popover><PopoverTrigger asChild><Info className="h-4 w-4 text-primary cursor-pointer hover:opacity-80" /></PopoverTrigger><PopoverContent className="w-80 text-sm p-4"><p className="mb-2"><strong>¿Qué es SMTP?</strong> Es el servidor que enviará los correos.</p><p className="mb-2"><strong>Gmail / Outlook:</strong> Requieren una <em>"Contraseña de Aplicación"</em> (App Password), NO tu contraseña normal.</p><p className="text-muted-foreground text-xs">Para obtenerla en Gmail: Gestionar tu cuenta &gt; Seguridad &gt; Verificación en 2 pasos &gt; Contraseñas de aplicaciones.</p></PopoverContent></Popover></Label>
+              <p className="text-xs text-muted-foreground mt-1">Selecciona un proveedor para autocompletar el Host y el Puerto.</p>
+            </div>
+            <Select value={proveedorSmtp} onValueChange={handleProveedorChange}>
+              <SelectTrigger className="w-full md:w-[200px] bg-background">
+                <SelectValue placeholder="Selecciona proveedor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="gmail">Gmail</SelectItem>
+                <SelectItem value="outlook">Outlook / Hotmail</SelectItem>
+                <SelectItem value="custom">Otro / Personalizado</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="space-y-2">
+              <Label className="font-bold">Servidor SMTP (Host)</Label>
+              <Input value={smtp_host} onChange={e => setSmtpHost(e.target.value)} placeholder="Ej: smtp.gmail.com" />
+            </div>
+            <div className="space-y-2">
+              <Label className="font-bold">Puerto</Label>
+              <Input type="number" value={smtp_port === '' ? '' : smtp_port} onChange={e => setSmtpPort(e.target.value ? parseInt(e.target.value) : '')} placeholder="Ej: 465" />
+            </div>
+            <div className="space-y-2">
+              <Label className="font-bold">Usuario (Correo Electrónico)</Label>
+              <Input type="email" value={smtp_user} onChange={e => setSmtpUser(e.target.value)} placeholder="contacto@miescuela.edu.mx" />
+            </div>
+            <div className="space-y-2">
+              <Label className="font-bold">Contraseña (App Password)</Label>
+              <div className="relative">
+                <Input type={showSmtpPassword ? "text" : "password"} value={smtp_password} onChange={e => setSmtpPassword(e.target.value)} placeholder="Contraseña de aplicación" className="pr-10" />
+                <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-10 w-10 text-muted-foreground hover:text-foreground" onClick={() => setShowSmtpPassword(!showSmtpPassword)}>
+                  {showSmtpPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Es altamente recomendado usar una Contraseña de Aplicación.</p>
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label className="font-bold">Nombre del Remitente</Label>
+              <Input value={smtp_from_name} onChange={e => setSmtpFromName(e.target.value)} placeholder="Ej: Servicios Escolares" />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
         </div>{/* end scrollable panel */}
       </div>{/* end flex-col full-height */}
 
@@ -549,7 +686,13 @@ export default function InstitucionPage() {
             className="bg-red-600 hover:bg-red-700 text-white" 
             onClick={() => {
               if (deleteTarget === 'logo') setLogoUrl('');
-              if (deleteTarget === 'favicon') setFaviconUrl('');
+              else if (deleteTarget === 'favicon') setFaviconUrl('');
+              else if (deleteTarget?.startsWith('nivel_')) {
+                const index = parseInt(deleteTarget.split('_')[1], 10);
+                const newNiveles = [...dbNiveles];
+                newNiveles[index] = { ...newNiveles[index], imagen_bienvenida_url: null };
+                setDbNiveles(newNiveles);
+              }
               setDeleteTarget(null);
               toast({ title: "Imagen removida", description: "Da clic en Guardar Cambios para persistir el cambio." });
             }}

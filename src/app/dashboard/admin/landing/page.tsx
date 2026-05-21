@@ -44,7 +44,7 @@ export default function EditorLandingPage() {
         mission_title: "",
         mission_text: "",
         about_title: "Nuestra Pasión por la Educación en México",
-        about_text: "En Instituto Emiliano Zapata nos apasiona proporcionar programas de alta calidad que se adapten a las necesidades reales de los estudiantes, garantizando que cada egresado tenga las herramientas necesarias para triunfar en el mercado laboral actual.",
+        about_text: "En nuestra institución educativa nos apasiona proporcionar programas de alta calidad que se adapten a las necesidades reales de los estudiantes, garantizando que cada egresado tenga las herramientas necesarias para triunfar en el mercado laboral actual.",
         about_image: "/images/about-team.jpeg",
         about_badge_title: "Validez Oficial",
         about_badge_subtitle: "Acuerdo 286 SEP",
@@ -589,7 +589,7 @@ export default function EditorLandingPage() {
               </div>
               <div className="space-y-2">
                 <Label>Texto descriptivo</Label>
-                <Textarea value={landingConfig.about_text} placeholder="En Instituto Emiliano Zapata nos apasiona proporcionar programas de alta calidad que se adapten a las necesidades reales de los estudiantes, garantizando que cada egresado tenga las herramientas necesarias para triunfar en el mercado laboral actual." onChange={(e) => handleChange('about_text', e.target.value)} className="h-40" />
+                <Textarea value={landingConfig.about_text} placeholder="En nuestra institución educativa nos apasiona proporcionar programas de alta calidad que se adapten a las necesidades reales de los estudiantes, garantizando que cada egresado tenga las herramientas necesarias para triunfar en el mercado laboral actual." onChange={(e) => handleChange('about_text', e.target.value)} className="h-40" />
               </div>
             </div>
 

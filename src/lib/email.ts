@@ -1,14 +1,30 @@
 import nodemailer from 'nodemailer';
 import { getHorariosFormateados } from '@/lib/actions/horarios';
 import { getInstitucionConfig } from '@/lib/actions/institucion';
+import { InstitucionConfig } from '@/lib/types';
 
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_APP_PASSWORD,
-  },
-});
+// ─── Factory: Crear transporter dinámico desde la BD ──────────────────────────
+// NO hay transporter global. Se crea por cada envío usando los datos SMTP
+// de la tabla configuracion_sistema. Si no hay datos, retorna null.
+
+function createSmtpTransporter(inst: InstitucionConfig) {
+  if (!inst.smtp_user || !inst.smtp_password) return null;
+
+  const host = inst.smtp_host || 'smtp.gmail.com';
+  const port = inst.smtp_port || 465;
+
+  return nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: {
+      user: inst.smtp_user,
+      pass: inst.smtp_password,
+    },
+  });
+}
+
+const SMTP_NOT_CONFIGURED_ERROR = 'El correo no pudo enviarse porque no se ha configurado el servidor de correo electrónico. Para activarlo, ve a Configuración → Correo Saliente y completa los datos de tu servidor SMTP (correo, contraseña y servidor).';
 
 interface WelcomeEmailData {
   to: string;
@@ -33,13 +49,15 @@ interface ReminderEmailData {
 
 export async function sendWelcomeEmail(data: WelcomeEmailData) {
   try {
-    const user = process.env.GMAIL_USER;
-    const pass = process.env.GMAIL_APP_PASSWORD;
+    const inst = await getInstitucionConfig();
+    const transporter = createSmtpTransporter(inst);
 
-    if (!user || !pass) {
-      console.warn('⚠️ Credenciales de Gmail no configuradas.');
-      return { success: false, error: 'Credenciales de correo no configuradas' };
+    if (!transporter) {
+      console.warn('⚠️ SMTP no configurado en la BD.');
+      return { success: false, error: SMTP_NOT_CONFIGURED_ERROR };
     }
+
+    const fromName = inst.smtp_from_name || inst.nombre_completo;
 
     const rolTexto: Record<string, string> = {
       alumno: '🎓 Alumno',
@@ -50,13 +68,12 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
 
     const rolLabel = rolTexto[data.rol] || data.rol;
     
-    // URL base de la aplicación (Quitar diagonal final si existe y asegurar protocolo)
-    let appUrl = (process.env.NEXT_PUBLIC_APP_URL || 'https://institutoeducativoemilianozapata.vercel.app').replace(/\/$/, '');
+    // URL base de la aplicación
+    let appUrl = (inst.url_plataforma || 'https://plataforma.ejemplo.edu/').replace(/\/$/, '');
 
     const isAlumno = data.rol === 'alumno';
     const genero = data.genero || 'Hombre';
-    const nivel = data.nivel?.toLowerCase() || '';
-    const carrera = data.carreraNombre || 'Programa General';
+    const carrera = data.carreraNombre || '';
     
     // Sufijo de género
     const esMujer = genero === 'Mujer';
@@ -67,15 +84,16 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
     const colorBordeEstado = esMujer ? '#F8BBD0' : '#BBDEFB';
     const colorTextoEstado = esMujer ? '#C2185B' : '#1976D2';
     
-    // VARIABLES PARA FORMATO GENÉRICO (ADMIN/PROFE/REACTIVACIÓN)
-    let colorPrincipal = '#8B2332'; // Guinda por defecto
+    // COLORES DINÁMICOS desde la BD
+    const colorPrincipal = inst.color_primario || '#333333';
+    const colorSecundario = inst.color_secundario || '#1A4A3F';
+
     let tituloPrincipal = data.isReactivation ? '¡Acceso Reactivado!' : `¡Bienvenido(a), ${data.nombre}!`;
     let subTexto = data.isReactivation 
       ? 'Tu periodo de acceso ha sido extendido exitosamente. Puedes volver a ingresar al sistema con los siguientes datos:'
       : `Tu cuenta ha sido creada exitosamente como <strong>${rolLabel}</strong>.`;
 
     if (data.isExpiration) {
-      colorPrincipal = '#cc6600'; // Ámbar para expiración
       tituloPrincipal = '⚠️ Acceso Finalizado';
       subTexto = `Estimado(a) <strong>${data.nombre}</strong>, te informamos que tu periodo de acceso a la plataforma ha terminado el día de hoy.`;
     }
@@ -95,28 +113,40 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
         </tr>`;
     }
 
-    const inst = await getInstitucionConfig();
     const logoUrl = inst.logo_url || `${appUrl}/images/logo_placeholder.svg`;
     let headerImageUrl = logoUrl;
-    let institutionMention = inst.nombre_completo;
     
-    // Buscar el nivel en los niveles_nombres de la institución
-    const findNivelNombre = (nivelStr: string) => {
-      const match = inst.niveles_nombres?.find((n: any) => nivelStr.toLowerCase().includes(n.clave));
-      return match ? match.nombre : inst.nombre_completo;
-    };
+    // ─── Consulta dinámica del nivel desde la BD ───────────────────────────
+    // El parámetro 'nivel' ya viene como nombre legible (ej: "UNIVERSIDAD")
+    // Buscamos en la tabla 'niveles' para obtener su imagen de bienvenida
+    const nivelNombre = data.nivel || '';
+    let imagenBienvenida: string | null = null;
     
-    if (isAlumno && !data.isExpiration && !data.isReactivation) {
-      if (nivel.includes('bachillerato') || nivel.includes('prepa')) {
-        headerImageUrl = `${appUrl}/images/BIENVENIDA-PREPARATORIA-BACHILLERATO.jpeg`;
-        institutionMention = findNivelNombre(nivel);
-      } else if (nivel.includes('universidad') || nivel.includes('superior')) {
-        headerImageUrl = `${appUrl}/images/BIENVENIDA-UNIVERSIDAD.jpeg`;
-        institutionMention = findNivelNombre(nivel);
-      } else if (nivel.includes('capacitacion') || nivel.includes('curso')) {
-        headerImageUrl = `${appUrl}/images/BIENVENIDA-CAPACITACIONES.jpeg`;
-        institutionMention = findNivelNombre(nivel);
+    if (nivelNombre) {
+      try {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
+        if (supabaseUrl && supabaseKey) {
+          const { createClient } = await import('@supabase/supabase-js');
+          const supaAdmin = createClient(supabaseUrl, supabaseKey, {
+            auth: { autoRefreshToken: false, persistSession: false }
+          });
+          const { data: nivelRow } = await supaAdmin
+            .from('niveles')
+            .select('imagen_bienvenida_url')
+            .ilike('nombre', nivelNombre)
+            .maybeSingle();
+          if (nivelRow?.imagen_bienvenida_url) {
+            imagenBienvenida = nivelRow.imagen_bienvenida_url;
+          }
+        }
+      } catch (e) {
+        console.warn('No se pudo consultar imagen de nivel:', e);
       }
+    }
+    
+    if (isAlumno && !data.isExpiration && !data.isReactivation && imagenBienvenida) {
+      headerImageUrl = imagenBienvenida;
     }
 
     const htmlContent = `
@@ -137,10 +167,10 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
               <img src="${headerImageUrl}" alt="Bienvenida - ${inst.nombre_completo}" width="600" style="width:100%;max-width:600px;height:auto;display:block;border:0;">
             </td></tr>
             ` : `
-            <tr><td style="background:linear-gradient(135deg,${colorPrincipal},#000);padding:40px 30px;text-align:center;">
+            <tr><td style="background:linear-gradient(135deg,${colorPrincipal},${colorSecundario});padding:40px 30px;text-align:center;">
               <img src="${logoUrl}" alt="Logo" width="150" style="height:150px;width:auto;margin-bottom:15px;border:0;">
               <h1 style="color:#fff;margin:0;font-size:20px;font-weight:bold;text-transform:uppercase;letter-spacing:1px;">${inst.nombre_completo}</h1>
-              <p style="color:#f0d0d5;margin:5px 0 0;font-size:13px;">Sistema de Gestión Académica</p>
+              <p style="color:rgba(255,255,255,0.7);margin:5px 0 0;font-size:13px;">Sistema de Gestión Académica</p>
             </td></tr>
             `}
 
@@ -197,7 +227,7 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
             <tr><td style="padding:10px 30px;text-align:center;">
               <h2 style="color:#333;margin:0;font-size:22px;text-transform:uppercase;">¡FELICIDADES, ${data.nombre} ${data.apellidos}!</h2>
               <h3 style="color:#2c7a7b;margin:12px 0;font-size:16px;font-weight:bold;">¡HAS COMPLETADO TU INSCRIPCIÓN!</h3>
-              <p style="font-size:16px;color:#8B2332;font-weight:bold;text-transform:uppercase;margin:8px 0 15px;">${nivel} - ${carrera}</p>
+              <p style="font-size:16px;color:${colorPrincipal};font-weight:bold;text-transform:uppercase;margin:8px 0 15px;">${nivelNombre}${carrera ? ` - ${carrera}` : ''}</p>
               <p style="color:#444;font-size:14px;text-align:left;line-height:1.6;margin-bottom:15px;">${estimadoText} <strong>${data.nombre} ${data.apellidos}</strong>, se le informa que el área de Control Escolar ha validado su documentación para su correcta inscripción y su estatus actual es:</p>
             </td></tr>
             <tr><td style="text-align:center;padding:0 30px 15px;">
@@ -208,7 +238,7 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
               </table>
             </td></tr>
             <tr><td style="padding:10px 30px 5px;">
-              <p style="color:#555;font-size:13px;text-align:left;line-height:1.6;">Esto significa que, bajo criterios del <strong>${inst.nombre_completo} (${institutionMention})</strong>, sus documentos han sido entregados satisfactoriamente. Sin embargo, es importante mencionarle que, aunque sus documentos están completos según los criterios internos de nuestra institución educativa, aún están sujetos a revisión por parte de la autoridad educativa correspondiente.</p>
+              <p style="color:#555;font-size:13px;text-align:left;line-height:1.6;">Esto significa que, bajo criterios del <strong>${inst.nombre_completo}</strong>, sus documentos han sido entregados satisfactoriamente. Sin embargo, es importante mencionarle que, aunque sus documentos están completos según los criterios internos de nuestra institución educativa, aún están sujetos a revisión por parte de la autoridad educativa correspondiente.</p>
               <p style="color:#444;font-size:13px;font-style:italic;font-weight:bold;text-align:left;">Nuevamente, felicitaciones por su inscripción y completar su expediente de documentación. No dude en comunicarse con nosotros si tiene alguna duda o comentario.</p>
               <p style="color:#2b6cb0;font-size:16px;font-weight:bold;text-align:center;margin-top:10px;">¡Mucho éxito en el proceso!</p>
               <p style="font-size:18px;text-align:center;">🎓 📈 🎓</p>
@@ -233,7 +263,7 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
     </html>`;
 
     const info = await transporter.sendMail({
-      from: `"${inst.nombre_completo}" <${user}>`,
+      from: `"${fromName}" <${inst.smtp_user}>`,
       to: data.to,
       subject: data.isExpiration 
         ? `⚠️ Aviso de Acceso - ${inst.nombre_corto}`
@@ -252,13 +282,21 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
 
 export async function sendDocumentReminderEmail(data: ReminderEmailData) {
   try {
-    const user = process.env.GMAIL_USER;
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://institutoeducativoemilianozapata.vercel.app';
-    const horarioString = await getHorariosFormateados();
     const inst = await getInstitucionConfig();
-    const logoUrl = inst.logo_url || `${appUrl}/images/logo_placeholder.svg`;
+    const transporter = createSmtpTransporter(inst);
 
-    const listaFaltantes = data.faltantes.map(doc => `<li style="margin-bottom: 8px; color: #8B2332; font-weight: bold;">• ${doc}</li>`).join('');
+    if (!transporter) {
+      return { success: false, error: SMTP_NOT_CONFIGURED_ERROR };
+    }
+
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://plataforma.ejemplo.edu';
+    const horarioString = await getHorariosFormateados();
+    const logoUrl = inst.logo_url || `${appUrl}/images/logo_placeholder.svg`;
+    const colorPrincipal = inst.color_primario || '#333333';
+    const colorSecundario = inst.color_secundario || '#1A4A3F';
+    const fromName = inst.smtp_from_name || `Servicios Escolares - ${inst.siglas}`;
+
+    const listaFaltantes = data.faltantes.map(doc => `<li style="margin-bottom: 8px; color: ${colorPrincipal}; font-weight: bold;">• ${doc}</li>`).join('');
 
     const htmlContent = `
     <!DOCTYPE html>
@@ -266,7 +304,7 @@ export async function sendDocumentReminderEmail(data: ReminderEmailData) {
     <head><meta charset="utf-8"></head>
     <body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: sans-serif;">
       <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #eee;">
-        <div style="background: linear-gradient(135deg, #8B2332, #6B1A27); padding: 30px; text-align: center;">
+        <div style="background: linear-gradient(135deg, ${colorPrincipal}, ${colorSecundario}); padding: 30px; text-align: center;">
           <img src="${logoUrl}" alt="Logo" style="height: 120px; width: auto; margin-bottom: 10px;">
           <h1 style="color: #ffffff; margin: 0; font-size: 18px; text-transform: uppercase;">${inst.nombre_completo}</h1>
         </div>
@@ -287,7 +325,7 @@ export async function sendDocumentReminderEmail(data: ReminderEmailData) {
     </html>`;
 
     await transporter.sendMail({
-      from: `"Servicios Escolares - ${inst.siglas}" <${user}>`,
+      from: `"${fromName}" <${inst.smtp_user}>`,
       to: data.to,
       subject: `⚠️ Aviso: Documentación Pendiente - ${inst.siglas}`,
       html: htmlContent,
@@ -299,3 +337,4 @@ export async function sendDocumentReminderEmail(data: ReminderEmailData) {
     return { success: false, error: error.message };
   }
 }
+// (No extra utilities needed)
