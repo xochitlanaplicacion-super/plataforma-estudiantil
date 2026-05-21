@@ -74,6 +74,7 @@ export default function InstitucionPage() {
   const [dbNiveles, setDbNiveles] = useState<any[]>([]);
   const [nivelImgErrors, setNivelImgErrors] = useState<Record<string, boolean>>({});
   const [nivelImgLoading, setNivelImgLoading] = useState<Record<string, boolean>>({});
+  const [orphanCount, setOrphanCount] = useState<number | null>(null);
 
   // ─── SMTP State ────────────────────────────────────────────────────────
   const [smtp_host, setSmtpHost] = useState('');
@@ -107,7 +108,21 @@ export default function InstitucionPage() {
       }
       if (res.error) console.error('❌ Error cargando niveles:', res.error);
     });
+
+    fetchOrphanCount();
   }, []);
+
+  const fetchOrphanCount = async () => {
+    try {
+      const res = await fetch('/api/admin/cleanup-storage');
+      if (res.ok) {
+        const data = await res.json();
+        setOrphanCount(data.count);
+      }
+    } catch (e) {
+      console.warn('No se pudo obtener conteo de huérfanos', e);
+    }
+  };
 
   useEffect(() => {
     if (!hookLoading && initialConfig) {
@@ -247,6 +262,7 @@ export default function InstitucionPage() {
       const data = await res.json();
       if (data.success) {
         toast({ title: '🗑️ Limpieza completa', description: data.message });
+        fetchOrphanCount(); // Refrescar el contador
       } else {
         toast({ variant: 'destructive', title: 'Error', description: data.error || 'No se pudo limpiar el bucket.' });
       }
@@ -337,9 +353,14 @@ export default function InstitucionPage() {
             <p className="text-sm text-muted-foreground mt-0.5">Personaliza la identidad. Los cambios se reflejan en toda la plataforma.</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={handleCleanupStorage} disabled={cleaning} size="sm" className="gap-2 border-red-200 text-red-600 hover:bg-red-50">
+            <Button variant="outline" onClick={handleCleanupStorage} disabled={cleaning || orphanCount === 0} size="sm" className="gap-2 border-red-200 text-red-600 hover:bg-red-50 relative">
               {cleaning ? <Loader2 className="animate-spin" size={14} /> : <Trash2 size={14} />}
               {cleaning ? 'Limpiando...' : 'Limpiar bucket'}
+              {orphanCount !== null && orphanCount > 0 && (
+                <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full border border-white">
+                  {orphanCount}
+                </span>
+              )}
             </Button>
             <Button onClick={handleSave} disabled={saving} className="gap-2 font-bold" size="default">
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}

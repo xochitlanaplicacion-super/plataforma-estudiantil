@@ -541,8 +541,17 @@ export default function EditorLandingPage() {
               {landingConfig.hero_image ? (
                 <>
                   <Image src={landingConfig.hero_image} alt="Hero" fill className="object-cover group-hover:opacity-50 transition-opacity" />
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span className="bg-black/70 text-white px-4 py-2 rounded-full font-bold flex items-center gap-2"><ImagePlus size={18}/> Cambiar Imagen</span>
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity gap-3">
+                    <span className="bg-black/80 text-white px-4 py-2 rounded-full font-bold flex items-center gap-2 hover:bg-black transition-colors"><ImagePlus size={18}/> Cambiar</span>
+                    <Button size="icon" variant="destructive" className="h-10 w-10 rounded-full shadow-lg" onClick={async (e) => {
+                      e.stopPropagation();
+                      if (confirm("¿Estás seguro de que quieres eliminar esta imagen? La sección se mostrará con el color sólido del tema.")) {
+                        if (landingConfig.hero_image.includes('supabase')) await deleteStorageFile(landingConfig.hero_image);
+                        handleChange('hero_image', null);
+                      }
+                    }}>
+                      <Trash2 size={18} />
+                    </Button>
                   </div>
                 </>
               ) : (
@@ -637,8 +646,17 @@ export default function EditorLandingPage() {
               {landingConfig.about_image ? (
                 <>
                   <Image src={landingConfig.about_image} alt="About" fill className="object-cover group-hover:opacity-50 transition-opacity" />
-                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span className="bg-black/70 text-white px-4 py-2 rounded-full font-bold flex items-center gap-2"><ImagePlus size={18}/> Cambiar Imagen</span>
+                  <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity gap-3">
+                    <span className="bg-black/80 text-white px-4 py-2 rounded-full font-bold flex items-center gap-2 hover:bg-black transition-colors"><ImagePlus size={18}/> Cambiar</span>
+                    <Button size="icon" variant="destructive" className="h-10 w-10 rounded-full shadow-lg" onClick={async (e) => {
+                      e.stopPropagation();
+                      if (confirm("¿Estás seguro de que quieres eliminar esta imagen? La sección se mostrará vacía.")) {
+                        if (landingConfig.about_image.includes('supabase')) await deleteStorageFile(landingConfig.about_image);
+                        handleChange('about_image', null);
+                      }
+                    }}>
+                      <Trash2 size={18} />
+                    </Button>
                   </div>
                 </>
               ) : (

@@ -223,11 +223,13 @@ export const Hero = ({ theme, config }: { theme: any, config: any }) => {
           className="absolute inset-0 z-10 opacity-80"
           style={{ background: `linear-gradient(to right, ${theme.primary}, ${theme.primary}CC, transparent)` }}
         />
-        <img
-          src={config.hero_image || "/images/hero-about.jpeg"}
-          alt="Hero"
-          className="w-full h-full object-cover object-center"
-        />
+        {config.hero_image && (
+          <img
+            src={config.hero_image}
+            alt="Hero"
+            className="w-full h-full object-cover object-center"
+          />
+        )}
       </div>
 
       <div className="container mx-auto px-4 lg:px-8 relative z-20">
@@ -413,13 +415,21 @@ export const About = ({ theme, config }: { theme: any, config: any }) => {
             transition={{ duration: 0.8 }}
             className="lg:w-[55%] relative"
           >
-            <div className="relative rounded-3xl overflow-hidden shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] aspect-square md:aspect-[4/3]">
-              <img
-                src={config.about_image || "/images/about-team.jpeg"}
-                alt="Nosotros"
-                className="w-full h-full object-cover object-right contrast-110 saturate-105 brightness-105"
-              />
-              <div className="absolute inset-0 bg-blue-900/10 mix-blend-multiply"></div>
+            <div className="relative rounded-3xl overflow-hidden shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] aspect-square md:aspect-[4/3]" style={!config.about_image ? { backgroundColor: theme.primary } : {}}>
+              {config.about_image ? (
+                <>
+                  <img
+                    src={config.about_image}
+                    alt="Nosotros"
+                    className="w-full h-full object-cover object-right contrast-110 saturate-105 brightness-105"
+                  />
+                  <div className="absolute inset-0 bg-blue-900/10 mix-blend-multiply"></div>
+                </>
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center opacity-10">
+                  <BookOpen size={100} className="text-white" />
+                </div>
+              )}
             </div>
             <div className="absolute -bottom-10 -right-10 bg-white p-8 rounded-2xl shadow-2xl max-w-xs hidden md:block border border-gray-100">
               <div className="flex items-center gap-5">
@@ -579,14 +589,24 @@ export const Programs = ({ theme, config }: { theme: any, config: any }) => {
             >
               <div className="relative min-h-[320px] lg:min-h-[380px] overflow-hidden group">
                 {/* Image Background con Nanobanana style cropping */}
-                <img
-                  src={program.image}
-                  alt={program.title}
-                  className={cn(
-                    "absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110",
-                    program.crop
-                  )}
-                />
+                {program.image ? (
+                  <img
+                    src={program.image}
+                    alt={program.title}
+                    className={cn(
+                      "absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110",
+                      program.crop
+                    )}
+                  />
+                ) : (
+                  <div className="absolute inset-0 w-full h-full flex items-center justify-center opacity-10" style={{ backgroundColor: theme.primary }}>
+                    {program.iconType === 'graduation' ? <GraduationCap size={100} className="text-white" /> :
+                     program.iconType === 'book' ? <BookOpen size={100} className="text-white" /> :
+                     program.iconType === 'briefcase' ? <Briefcase size={100} className="text-white" /> :
+                     program.iconType === 'award' ? <Award size={100} className="text-white" /> :
+                     <Users size={100} className="text-white" />}
+                  </div>
+                )}
 
                 {/* Overlays */}
                 <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/90 via-black/40 to-transparent z-10"></div>
@@ -670,14 +690,37 @@ export const Programs = ({ theme, config }: { theme: any, config: any }) => {
 
 export const Banner = ({ theme, config }: { theme: any, config: any }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
-  const images = config.banner_images?.length > 0 ? config.banner_images : ["/images/grad-1.jpeg", "/images/grad-2.jpeg"];
+  const images = config.banner_images || [];
 
   useEffect(() => {
+    if (images.length === 0) return;
     const timer = setInterval(() => {
       setCurrentIdx((prev) => (prev + 1) % images.length);
     }, 4000);
     return () => clearInterval(timer);
-  }, []);
+  }, [images.length]);
+
+  if (images.length === 0) {
+    return (
+      <div className="relative h-[50vh] min-h-[500px] flex items-center justify-center overflow-hidden" style={{ backgroundColor: theme.primary }}>
+        <div className="relative z-20 text-center px-6 w-full max-w-5xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6 }}
+          >
+            <h2 className="text-5xl md:text-7xl font-black text-white mb-10 uppercase tracking-tighter drop-shadow-lg">Estudiantes que trascienden</h2>
+            <Magnetic intensity={0.4}>
+              <a href="/preregistro" className="inline-block bg-white text-gray-900 px-12 py-5 rounded-2xl font-black uppercase tracking-widest hover:scale-105 transition-all shadow-2xl">
+                Únete a nuestra comunidad
+              </a>
+            </Magnetic>
+          </motion.div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="relative h-[50vh] min-h-[500px] flex items-center justify-center overflow-hidden">

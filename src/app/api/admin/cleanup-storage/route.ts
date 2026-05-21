@@ -4,70 +4,68 @@ import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 const BUCKET = "logos-institucion";
 
+// Helper centralizado para escanear y calcular los huérfanos globalmente
+async function getOrphans() {
+  const supabaseAuth = await createServerSupabaseClient();
+  const { data: { user } } = await supabaseAuth.auth.getUser();
+  if (!user) throw new Error("No autenticado");
+
+  const { data: profile } = await supabaseAuth.from("profiles").select("rol").eq("id", user.id).single();
+  if (!profile || !["admin", "superuser"].includes(profile.rol)) {
+    throw new Error("No autorizado");
+  }
+
+  // Usar service role para invocar el RPC y borrar archivos
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
+
+  // ── 1. Ejecutar RPC Global Scanner ──────────────────────────────────────
+  const { data: rpcData, error: rpcError } = await supabase.rpc('get_active_storage_urls', { bucket_name: BUCKET });
+  if (rpcError) throw new Error(`Error en escáner global: ${rpcError.message}`);
+
+  const activeUrls = new Set<string>();
+
+  // Regex para extraer el nombre del archivo justo después de /logos-institucion/
+  const regex = new RegExp(`/${BUCKET}/([^"\\s?\\#]+)`, 'g');
+
+  (rpcData || []).forEach((row: any) => {
+    const content = row.matched_content || '';
+    let match;
+    // Buscar todas las ocurrencias de URLs en el texto/JSON devuelto
+    while ((match = regex.exec(content)) !== null) {
+      if (match[1]) activeUrls.add(match[1]);
+    }
+  });
+
+  // ── 2. Listar todos los archivos en el bucket ──────────────────────────
+  const { data: files, error: listError } = await supabase.storage.from(BUCKET).list("", { limit: 1000 });
+  if (listError) throw new Error(`Error al listar archivos: ${listError.message}`);
+
+  // ── 3. Identificar huérfanos ───────────────────────────────────────────
+  // Filtramos .emptyFolderPlaceholder por precaución de Supabase
+  const orphans = (files || [])
+    .filter(f => f.name && !activeUrls.has(f.name) && f.name !== '.emptyFolderPlaceholder')
+    .map(f => f.name);
+
+  return { supabase, orphans };
+}
+
+// GET: Solo cuenta los huérfanos para mostrar en la UI
+export async function GET() {
+  try {
+    const { orphans } = await getOrphans();
+    return NextResponse.json({ count: orphans.length });
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message }, { status: err.message === "No autenticado" ? 401 : 500 });
+  }
+}
+
+// POST: Realiza la eliminación real
 export async function POST() {
   try {
-    // ── Verificar que el usuario sea admin o superuser ─────────────────────
-    const supabaseAuth = await createServerSupabaseClient();
-    const { data: { user } } = await supabaseAuth.auth.getUser();
-    if (!user) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
-
-    const { data: profile } = await supabaseAuth.from("profiles").select("rol").eq("id", user.id).single();
-    if (!profile || !["admin", "superuser"].includes(profile.rol)) {
-      return NextResponse.json({ error: "No autorizado" }, { status: 403 });
-    }
-
-    // ── Usar service role para operaciones de storage ──────────────────────
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
-
-    // ── 1. Obtener URLs activas de la base de datos ────────────────────────
-    const { data: config } = await supabase
-      .from("configuracion_sistema")
-      .select("logo_url, logo_dark_url, favicon_url, landing_config, temas_login")
-      .eq("id", 1)
-      .single();
-
-    const activeUrls = new Set<string>();
-
-    const addIfSupabase = (url: string | null | undefined) => {
-      if (url && url.includes(BUCKET)) {
-        // Extraer solo el nombre del archivo
-        const parts = url.split(`/${BUCKET}/`);
-        if (parts[1]) activeUrls.add(parts[1].split("?")[0]);
-      }
-    };
-
-    addIfSupabase(config?.logo_url);
-    addIfSupabase(config?.logo_dark_url);
-    addIfSupabase(config?.favicon_url);
-
-    // Landing config
-    const lc = config?.landing_config;
-    if (lc) {
-      addIfSupabase(lc.hero_image);
-      addIfSupabase(lc.about_image);
-      (lc.banner_images || []).forEach((url: string) => addIfSupabase(url));
-      (lc.programs || []).forEach((p: any) => addIfSupabase(p?.image));
-    }
-
-    // Fondos de temas de login
-    (config?.temas_login || []).forEach((t: any) => addIfSupabase(t?.bgImage));
-
-    // ── 2. Listar todos los archivos en el bucket ──────────────────────────
-    const { data: files, error: listError } = await supabase.storage
-      .from(BUCKET)
-      .list("", { limit: 1000 });
-
-    if (listError) {
-      return NextResponse.json({ error: `Error al listar archivos: ${listError.message}` }, { status: 500 });
-    }
-
-    // ── 3. Identificar huérfanos ───────────────────────────────────────────
-    const orphans = (files || [])
-      .filter(f => f.name && !activeUrls.has(f.name))
-      .map(f => f.name);
+    const { supabase, orphans } = await getOrphans();
 
     if (orphans.length === 0) {
       return NextResponse.json({ success: true, deleted: 0, message: "✅ No hay archivos huérfanos. El bucket está limpio." });
@@ -77,17 +75,17 @@ export async function POST() {
     const { error: deleteError } = await supabase.storage.from(BUCKET).remove(orphans);
 
     if (deleteError) {
-      return NextResponse.json({ error: `Error al borrar: ${deleteError.message}` }, { status: 500 });
+      throw new Error(`Error al borrar: ${deleteError.message}`);
     }
 
     return NextResponse.json({
       success: true,
       deleted: orphans.length,
       files: orphans,
-      message: `🗑️ Se borraron ${orphans.length} archivos huérfanos del bucket.`
+      message: `🗑️ Se borraron ${orphans.length} archivos huérfanos globalmente.`
     });
 
   } catch (err: any) {
-    return NextResponse.json({ error: err.message || "Error inesperado" }, { status: 500 });
+    return NextResponse.json({ error: err.message || "Error inesperado" }, { status: err.message === "No autenticado" ? 401 : 500 });
   }
 }
