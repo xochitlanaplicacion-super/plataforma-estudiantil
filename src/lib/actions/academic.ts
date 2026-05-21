@@ -2,7 +2,7 @@
 'use server';
 
 import { createClient } from '@supabase/supabase-js';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, unstable_noStore as noStore } from 'next/cache';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cuuohbztrxxneozagecr.supabase.co',
@@ -60,6 +60,7 @@ const prepareForUpsert = (data: any) => {
 
 // --- NIVELES ---
 export async function getNiveles() {
+  noStore();
   const { data, error } = await supabaseAdmin.from('niveles').select('*').order('nombre');
   return { data, error };
 }
