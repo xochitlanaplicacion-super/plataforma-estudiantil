@@ -47,22 +47,27 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  webpack: (config, { isServer }) => {
+  webpack: (config, { isServer, webpack }) => {
     if (!isServer) {
       config.resolve.fallback = {
         ...config.resolve.fallback,
         fs: false,
         net: false,
         tls: false,
+        crypto: false,
+        https: false,
+        http: false,
+        path: false,
+        stream: false,
+        os: false,
+        zlib: false,
       };
-      config.resolve.alias = {
-        ...config.resolve.alias,
-        'node:fs': false,
-        'node:https': false,
-        'node:http': false,
-        'node:path': false,
-        'node:os': false,
-      };
+      
+      config.plugins.push(
+        new webpack.NormalModuleReplacementPlugin(/^node:/, (resource: any) => {
+          resource.request = resource.request.replace(/^node:/, '');
+        })
+      );
     }
     return config;
   },
