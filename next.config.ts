@@ -47,6 +47,25 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        ...config.resolve.fallback,
+        fs: false,
+        net: false,
+        tls: false,
+      };
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        'node:fs': false,
+        'node:https': false,
+        'node:http': false,
+        'node:path': false,
+        'node:os': false,
+      };
+    }
+    return config;
+  },
 };
 
 export default nextConfig;
