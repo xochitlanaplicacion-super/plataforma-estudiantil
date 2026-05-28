@@ -21,23 +21,21 @@ async function getOrphans() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // ── 1. Ejecutar RPC Global Scanner ──────────────────────────────────────
-  const { data: rpcData, error: rpcError } = await supabase.rpc('get_active_storage_urls', { bucket_name: BUCKET });
-  if (rpcError) throw new Error(`Error en escáner global: ${rpcError.message}`);
+  // ── 1. Obtener todas las URLs activas desde las tablas correspondientes ──
+  // Ya no usamos el RPC porque fallaba al detectar URLs dentro de JSONs o tablas nuevas.
+  // En su lugar, obtenemos los datos directamente y los parseamos con la misma expresión regular.
+  const { data: config } = await supabase.from("configuracion_sistema").select("*");
+  const { data: niveles } = await supabase.from("niveles").select("*");
+
+  const allContent = JSON.stringify({ config, niveles });
 
   const activeUrls = new Set<string>();
-
-  // Regex para extraer el nombre del archivo justo después de /logos-institucion/
   const regex = new RegExp(`/${BUCKET}/([^"\\s?\\#]+)`, 'g');
 
-  (rpcData || []).forEach((row: any) => {
-    const content = row.matched_content || '';
-    let match;
-    // Buscar todas las ocurrencias de URLs en el texto/JSON devuelto
-    while ((match = regex.exec(content)) !== null) {
-      if (match[1]) activeUrls.add(match[1]);
-    }
-  });
+  let match;
+  while ((match = regex.exec(allContent)) !== null) {
+    if (match[1]) activeUrls.add(match[1]);
+  }
 
   // ── 2. Listar todos los archivos en el bucket ──────────────────────────
   const { data: files, error: listError } = await supabase.storage.from(BUCKET).list("", { limit: 1000 });

@@ -3,7 +3,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, UserPlus, Search, Filter, Loader2, Edit, Trash2, Key, ChevronDown, AlertTriangle } from 'lucide-react';
+import { Users, UserPlus, Search, Filter, Loader2, Edit, Trash2, Key, AlertTriangle, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -32,6 +32,15 @@ export default function UsuariosManagement() {
   
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<User | null>(null);
+
+  const PROFESSOR_LIMIT = 15;
+
+  // Total de profesores registrados (activos e inactivos)
+  const totalProfesores = useMemo(() => {
+    return users.filter(u => u.rol === 'profesor').length;
+  }, [users]);
+
+  const isAtProfessorLimit = totalProfesores >= PROFESSOR_LIMIT;
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -141,9 +150,23 @@ export default function UsuariosManagement() {
           <h2 className="text-3xl font-bold tracking-tight text-primary font-headline">Gestión de Usuarios</h2>
           <p className="text-muted-foreground">Administra alumnos, profesores y personal administrativo.</p>
         </div>
-        <Button className="bg-primary gap-2 shadow-md" onClick={handleCreate}>
-          <UserPlus size={18} /> Nuevo Usuario
-        </Button>
+        <div className="flex flex-col items-end gap-2">
+          {/* Contador de cuota de profesores */}
+          <div className={`flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full border ${
+            isAtProfessorLimit
+              ? 'bg-destructive/10 border-destructive/30 text-destructive'
+              : totalProfesores >= PROFESSOR_LIMIT - 3
+                ? 'bg-amber-500/10 border-amber-500/30 text-amber-700'
+                : 'bg-primary/10 border-primary/20 text-primary'
+          }`}>
+            <Users size={13} />
+            <span>Profesores registrados: <strong>{totalProfesores}</strong> / {PROFESSOR_LIMIT}</span>
+            {isAtProfessorLimit && <ShieldAlert size={13} />}
+          </div>
+          <Button className="bg-primary gap-2 shadow-md" onClick={handleCreate}>
+            <UserPlus size={18} /> Nuevo Usuario
+          </Button>
+        </div>
       </div>
 
       <Card className="border-muted/60 shadow-sm">
@@ -318,7 +341,9 @@ export default function UsuariosManagement() {
         user={selectedUser} 
         open={isDialogOpen} 
         onOpenChange={setIsDialogOpen} 
-        onSuccess={fetchUsers} 
+        onSuccess={fetchUsers}
+        totalProfesores={totalProfesores}
+        profesorLimit={PROFESSOR_LIMIT}
       />
     </div>
   );

@@ -252,6 +252,30 @@ export async function upsertSlide(slide: any) {
   }
 }
 
+export async function updateSlidesOrder(updates: { id: string, orden: number }[]) {
+  try {
+    // Supabase permite upsert por lotes si mandamos un array.
+    // Como solo queremos actualizar el 'orden', necesitamos proveer también el ID.
+    // Es posible que upsert sobreescriba campos no especificados si la base de datos lo requiere,
+    // pero con supabase-js `.upsert(array)` solo hace merge de las columnas enviadas si configuramos onConflict bien.
+    // Otra opción segura es hacer un update iterando sobre cada uno o usar Promise.all. 
+    // Usaremos Promise.all para estar 100% seguros de no sobreescribir otros datos accidentalmente.
+    const promises = updates.map(update => 
+      supabaseAdmin.from('slides')
+        .update({ orden: update.orden })
+        .eq('id', update.id)
+    );
+    
+    await Promise.all(promises);
+    
+    revalidatePath('/dashboard/profesor');
+    return { success: true };
+  } catch (err: any) {
+    console.error("Error al reordenar diapositivas:", err);
+    return { success: false, error: err };
+  }
+}
+
 export async function deleteSlide(id: string) {
   const { error } = await supabaseAdmin.from('slides').delete().eq('id', id);
   revalidatePath('/dashboard/profesor');

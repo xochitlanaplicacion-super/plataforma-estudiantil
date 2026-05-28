@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { User, Aspirante } from '@/lib/types';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, AlertCircle, RefreshCw, Eye, EyeOff, Sparkles, Mail } from 'lucide-react';
+import { Loader2, AlertCircle, RefreshCw, Eye, EyeOff, Sparkles, Mail, ShieldAlert } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { createUserWithProfile, updateUserProfile, resendWelcomeEmailAction } from '@/lib/actions/users';
 import { getPublicCareers, getPublicLevels } from '@/lib/actions/aspirantes';
@@ -62,16 +62,18 @@ interface UserDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSuccess: () => void;
+  totalProfesores?: number;
+  profesorLimit?: number;
 }
 
-export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSuccess }: UserDialogProps) {
+export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSuccess, totalProfesores = 0, profesorLimit = 15 }: UserDialogProps) {
   const { toast } = useToast();
   const supabase = createClient();
   const [loading, setLoading] = useState(false);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [dbError, setDbError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
-  const [showPassword, setShowPassword] = useState(true); // Siempre visible en edición por defecto
+  const [showPassword, setShowPassword] = useState(true);
   const [allCareers, setAllCareers] = useState<any[]>([]);
   const [allLevels, setAllLevels] = useState<any[]>([]);
   const { config: inst } = useInstitucion();
@@ -102,6 +104,13 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
   });
 
   const nivelEstudios = form.watch('nivel_estudios');
+  const watchedRol = form.watch('rol');
+
+  // Bloquear registro si es profesor nuevo y se alcanzó el límite
+  const isProfesorLimitReached = !user && watchedRol === 'profesor' && totalProfesores >= profesorLimit;
+
+  // Color primario de la institucion para el banner de error
+  const primaryColor = inst?.color_primario || '#7f1d1d';
 
 
 
@@ -335,6 +344,33 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
           </Alert>
         )}
 
+        {/* Banner de límite de profesores */}
+        {isProfesorLimitReached && (
+          <div
+            className="flex items-start gap-3 rounded-xl border-2 p-4 mb-4"
+            style={{
+              borderColor: primaryColor,
+              backgroundColor: `${primaryColor}18`,
+              color: primaryColor,
+            }}
+          >
+            <ShieldAlert size={22} className="mt-0.5 flex-shrink-0" style={{ color: primaryColor }} />
+            <div className="flex flex-col gap-1">
+              <p className="font-bold text-sm" style={{ color: primaryColor }}>
+                ⛔ Límite de la Plataforma Alcanzado
+              </p>
+              <p className="text-xs leading-relaxed" style={{ color: primaryColor }}>
+                Ya tienes <strong>{totalProfesores}</strong> profesores registrados en el sistema ({profesorLimit}/{profesorLimit} del plan actual).
+                Para registrar al profesor número <strong>{profesorLimit + 1}</strong>, debes:
+              </p>
+              <ul className="text-xs mt-1 space-y-1 list-disc list-inside" style={{ color: primaryColor }}>
+                <li>Eliminar o desactivar a los profesores inactivos que ya no utilicen la plataforma.</li>
+                <li>Solicitar un incremento de cuota en tu plan de plantilla institucional.</li>
+              </ul>
+            </div>
+          </div>
+        )}
+
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6 pt-2">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
@@ -504,7 +540,12 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
 
             <DialogFooter className="gap-2 pt-4 border-t">
               <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
-              <Button type="submit" disabled={loading} className="bg-primary px-8">
+              <Button 
+                type="submit" 
+                disabled={loading || isProfesorLimitReached} 
+                className="bg-primary px-8"
+                title={isProfesorLimitReached ? `Límite de ${profesorLimit} profesores alcanzado` : undefined}
+              >
                 {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : user ? 'Guardar Cambios' : 'Confirmar Inscripción'}
               </Button>
             </DialogFooter>

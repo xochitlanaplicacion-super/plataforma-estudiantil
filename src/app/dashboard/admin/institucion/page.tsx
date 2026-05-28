@@ -283,16 +283,16 @@ export default function InstitucionPage() {
     }
     setSaving(true);
     const result = await updateInstitucionConfig({
-      nombre_completo, nombre_corto, siglas, codigo_matricula: codigo_matricula.toUpperCase(), slogan, direccion: direccion || null,
-      sitio_web: sitio_web || null, url_plataforma: url_plataforma || null, logo_url: logo_url, favicon_url: favicon_url,
+      nombre_completo, nombre_corto, siglas, codigo_matricula: codigo_matricula.toUpperCase(), slogan, direccion: direccion || undefined,
+      sitio_web: sitio_web || undefined, url_plataforma: url_plataforma || undefined, logo_url: logo_url, favicon_url: favicon_url,
       color_primario, color_secundario, temas_login, modo_tema_login, tema_fijo_index,
       niveles_nombres, telefono_contacto: telefono, correo_contacto: correo,
       horarios_atencion: bloques,
-      smtp_host: smtp_host || null,
-      smtp_port: typeof smtp_port === 'number' ? smtp_port : null,
-      smtp_user: smtp_user || null,
-      smtp_password: smtp_password || null,
-      smtp_from_name: smtp_from_name || null,
+      smtp_host: smtp_host || undefined,
+      smtp_port: typeof smtp_port === 'number' ? smtp_port : undefined,
+      smtp_user: smtp_user || undefined,
+      smtp_password: smtp_password || undefined,
+      smtp_from_name: smtp_from_name || undefined,
     });
 
     let errorNiveles = false;

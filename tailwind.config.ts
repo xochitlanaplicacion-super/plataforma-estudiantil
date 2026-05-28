@@ -64,6 +64,26 @@ export default {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
+      keyframes: {
+        'bot-hover': {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-15px)' },
+        },
+        'pulse-slow': {
+          '0%, 100%': { transform: 'scale(1)', opacity: '0.6' },
+          '50%': { transform: 'scale(1.2)', opacity: '0.3' },
+        },
+        'pulse-fast': {
+          '0%, 100%': { transform: 'scale(1)', opacity: '0.3' },
+          '50%': { transform: 'scale(1.1)', opacity: '0.1' },
+        }
+      },
+      animation: {
+        'bot-hover': 'bot-hover 3s ease-in-out infinite',
+        'bot-thinking': 'bot-hover 1.5s ease-in-out infinite',
+        'pulse-slow': 'pulse-slow 4s ease-in-out infinite',
+        'pulse-fast': 'pulse-fast 2s ease-in-out infinite',
+      }
     },
   },
   plugins: [require('tailwindcss-animate')],

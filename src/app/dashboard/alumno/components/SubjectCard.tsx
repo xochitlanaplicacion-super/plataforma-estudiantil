@@ -38,6 +38,8 @@ import {
 import Link from 'next/link';
 import { cn, parseFechaLocal } from '@/lib/utils';
 import { useInstitucion } from '@/hooks/use-institucion';
+import SlideViewer from '@/components/shared/slide-viewer';
+import { exportSlidesToPptx } from '@/lib/export-pptx';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -526,9 +528,21 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
                                             <span className="text-[10px] font-black uppercase tracking-wider text-blue-100">{tema.slides.length} láminas</span>
                                           </div>
                                         </div>
-                                        <div className="flex items-center gap-2 pr-2 text-blue-50">
-                                          <span className="text-xs font-black uppercase tracking-widest hidden sm:block">Presentar</span>
-                                          <Play className="w-4 h-4 fill-current" />
+                                        <div className="flex items-center gap-4 pr-2">
+                                          <div 
+                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tighter bg-white/10 text-white hover:bg-white/20 transition-all border border-white/20"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              exportSlidesToPptx(tema.slides || [], tema.titulo, inst?.logo_url);
+                                            }}
+                                          >
+                                            <Download size={12} strokeWidth={3} />
+                                            <span className="hidden sm:inline">PPTX</span>
+                                          </div>
+                                          <div className="flex items-center gap-2 text-blue-50">
+                                            <span className="text-xs font-black uppercase tracking-widest hidden sm:block">Presentar</span>
+                                            <Play className="w-4 h-4 fill-current" />
+                                          </div>
                                         </div>
                                       </button>
                                     )}
@@ -661,59 +675,20 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
     </div>
     
     {presentationMode && activeSlides.length > 0 && (
-      <div 
-        className={cn(
-          "fixed inset-0 z-[100] grid grid-rows-[1fr_auto] overflow-hidden bg-gradient-to-br", 
-          {
-            'bg-slate-900 from-slate-900 to-blue-900 text-white': !activeSlides[activeSlideIndex]?.estilo || activeSlides[activeSlideIndex]?.estilo === 'azul',
-            'bg-[#4c0519] from-[#4c0519] to-[#8B2332] text-white': activeSlides[activeSlideIndex]?.estilo === 'vino',
-            'bg-[#064e3b] from-[#064e3b] to-[#1A4A3F] text-white': activeSlides[activeSlideIndex]?.estilo === 'verde',
-            'bg-black from-black to-slate-900 text-white': activeSlides[activeSlideIndex]?.estilo === 'oscuro'
-          }
-        )}
-      >
+      <div className="fixed inset-0 z-[100] grid grid-rows-[1fr_auto] overflow-hidden bg-black">
         <div className="absolute top-0 left-0 h-1.5 bg-blue-400/50 w-full z-50">
           <div 
             className="h-full bg-blue-400 transition-all duration-500 shadow-[0_0_15px_rgba(96,165,250,0.8)]" 
             style={{ width: `${((activeSlideIndex + 1) / activeSlides.length) * 100}%` }} 
           />
         </div>
-        <div className="relative flex flex-col md:flex-row items-center justify-center gap-8 p-10 md:p-20 overflow-hidden">
-          <div className="flex-1 flex flex-col justify-center max-w-full overflow-hidden">
-            <h1 
-              className="font-black uppercase tracking-tight mb-6 leading-tight" 
-              style={{ fontSize: 'clamp(2rem, 8vw, 5rem)' }}
-            >
-              {activeSlides[activeSlideIndex]?.titulo}
-            </h1>
-            <div className="overflow-y-auto max-h-[50vh] pr-4 custom-scrollbar">
-              <p 
-                className="font-medium leading-relaxed opacity-90 whitespace-pre-wrap" 
-                style={{ fontSize: 'clamp(1rem, 2.5vw, 2.2rem)' }}
-              >
-                {activeSlides[activeSlideIndex]?.contenido}
-              </p>
-            </div>
-          </div>
-          <div className="flex-1 w-full h-full max-h-[60vh] md:max-h-full flex items-center justify-center">
-            {activeSlides[activeSlideIndex]?.imagen_url ? (
-              <div className={cn(
-                "grid gap-4 w-full h-full p-4", 
-                splitImageUrls(activeSlides[activeSlideIndex]?.imagen_url || '').length === 1 ? "grid-cols-1" : "grid-cols-2"
-              )}>
-                {splitImageUrls(activeSlides[activeSlideIndex]?.imagen_url || '').map((url, i) => (
-                  <div key={i} className="relative w-full h-full overflow-hidden rounded-2xl shadow-2xl border border-white/10">
-                    <img src={url} alt="Slide" className="w-full h-full object-cover" />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="w-full aspect-video flex flex-col items-center justify-center bg-white/5 rounded-3xl border-2 border-dashed border-white/10 opacity-30">
-                <ImageIcon size={100} />
-              </div>
-            )}
+        
+        <div className="relative w-full h-full flex items-center justify-center p-4">
+          <div className="w-full max-w-[1600px] mx-auto">
+            <SlideViewer slide={activeSlides[activeSlideIndex]} />
           </div>
         </div>
+
         <div className="py-3 px-10 flex items-center justify-between bg-black/30 backdrop-blur-2xl border-t border-white/5 z-[110]">
           <div className="flex gap-4">
             <Button 

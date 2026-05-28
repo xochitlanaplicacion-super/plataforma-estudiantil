@@ -51,6 +51,28 @@ export async function createUserWithProfile(userData: any, aspiranteId?: string)
       return { success: false, error: `La CURP ${curp} ya está asignada a otro usuario.` };
     }
 
+    // ─── VALIDACIÓN DE CUOTA DE PROFESORES (LÍMITE: 15) ─────────────────────
+    // Esta validación ocurre en el servidor para que no pueda saltarse por Postman u otras herramientas.
+    if (userData.rol === 'profesor') {
+      const PROFESSOR_LIMIT = 15;
+      const { count, error: countError } = await supabaseAdmin
+        .from('profiles')
+        .select('*', { count: 'exact', head: true })
+        .eq('rol', 'profesor');
+
+      if (countError) {
+        return { success: false, error: 'No se pudo verificar la cuota de profesores. Intenta de nuevo.' };
+      }
+
+      if ((count ?? 0) >= PROFESSOR_LIMIT) {
+        return {
+          success: false,
+          error: `⛔ Límite de plantilla alcanzado: Ya tienes ${count} profesores registrados (máximo ${PROFESSOR_LIMIT} del plan actual). Elimina o desactiva profesores inactivos, o solicita un incremento de cuota.`
+        };
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
       email: email,
       password: userData.password,

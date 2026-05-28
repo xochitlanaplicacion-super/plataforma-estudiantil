@@ -51,7 +51,9 @@ import {
   Youtube,
   Video,
   PlusCircle,
-  ExternalLink
+  ExternalLink,
+  Wand2,
+  BrainCircuit
 } from 'lucide-react';
 
 import { 
@@ -68,6 +70,7 @@ import {
   getSlides,
   upsertSlide,
   deleteSlide,
+  updateSlidesOrder,
   getResources,
   upsertResource,
   deleteResourceRecord
@@ -91,6 +94,13 @@ import "mobile-drag-drop/default.css";
 import { ActivityPreview } from '@/components/shared/ActivityPreview';
 import { PanelEntregasProfesor } from '@/components/shared/PanelEntregasProfesor';
 import { useInstitucion } from '@/hooks/use-institucion';
+import SlideCanvasEditor, { parseSlideContent, serializeSlideContent } from '@/components/shared/slide-canvas-editor';
+import SlideViewer from '@/components/shared/slide-viewer';
+import { SLIDE_TEMPLATES } from '@/components/shared/slide-templates';
+import { exportSlidesToPptx } from '@/lib/export-pptx';
+import { ProfesorAIAssistant } from '@/components/shared/ProfesorAIAssistant';
+import { getEstadoPagoIA } from '@/lib/actions/pagos';
+import Image from "next/image";
 
 const LOGO_FALLBACK = '/images/logo_placeholder.svg';
 
@@ -130,20 +140,91 @@ interface Token {
 }
 
 function CompletarEspaciosEditor({ content, updateContent }: { content: any, updateContent: (newContent: any) => void }) {
-  const [appState, setAppState] = useState<'INPUT' | 'SELECT'>('INPUT');
+  const [appState, setAppState] = useState<'INPUT' | 'SELECT'>(content.aiSuggestedWords?.length > 0 ? 'SELECT' : 'INPUT');
   const [text, setText] = useState(content.text || '');
   const [tokens, setTokens] = useState<Token[]>(content.tokens || []);
 
+  useEffect(() => {
+    if (content.text && content.text !== text) {
+      setText(content.text);
+      
+      // Si la IA generó el texto, auto-procesar a tokens y seleccionar sugerencias
+      if (content.aiSuggestedWords && content.aiSuggestedWords.length > 0) {
+        const words = content.text.split(/(\s+)/).filter((w: string) => w.length > 0);
+        
+        const newTokens = words.map((word: string, i: number) => ({ 
+          id: `token-${Date.now()}-${i}`, 
+          text: word, 
+          isMissing: false,
+          isAiSuggested: false
+        }));
+
+        // Buscar secuencias exactas para frases de múltiples palabras
+        content.aiSuggestedWords.forEach((sw: string) => {
+          const swWords = sw.split(/\s+/).map(w => w.replace(/[.,;!?()]/g, '').trim().toLowerCase()).filter(w => w);
+          if (swWords.length === 0) return;
+
+          for (let i = 0; i <= newTokens.length - swWords.length; i++) {
+            let match = true;
+            let tokenIndex = i;
+            let swIndex = 0;
+
+            while (swIndex < swWords.length && tokenIndex < newTokens.length) {
+              const currentTokenText = newTokens[tokenIndex].text;
+              if (currentTokenText.trim() === '') {
+                tokenIndex++;
+                continue;
+              }
+              const cleanToken = currentTokenText.replace(/[.,;!?()]/g, '').trim().toLowerCase();
+              if (cleanToken !== swWords[swIndex]) {
+                match = false;
+                break;
+              }
+              swIndex++;
+              tokenIndex++;
+            }
+
+            if (swIndex < swWords.length) match = false;
+
+            if (match) {
+              // Encontramos la secuencia exacta, marcar esos tokens
+              let markIndex = i;
+              let markedCount = 0;
+              while (markedCount < swWords.length && markIndex < newTokens.length) {
+                if (newTokens[markIndex].text.trim() !== '') {
+                  newTokens[markIndex].isMissing = true;
+                  newTokens[markIndex].isAiSuggested = true;
+                  markedCount++;
+                }
+                markIndex++;
+              }
+              break; // Solo marcamos la primera aparición de la frase sugerida
+            }
+          }
+        });
+
+        setTokens(newTokens);
+        setAppState("SELECT");
+        updateContent({ ...content, text: content.text, tokens: newTokens });
+      }
+    }
+  }, [content.text, content.aiSuggestedWords]);
+
   const handleInputNext = () => {
     const words = text.split(/(\s+)/).filter((w: string) => w.length > 0);
+    let newTokens = tokens;
     if (words.join("") !== tokens.map(t => t.text).join("")) {
-      setTokens(words.map((word: string, i: number) => ({ id: `token-${Date.now()}-${i}`, text: word, isMissing: false })));
+      newTokens = words.map((word: string, i: number) => ({ id: `token-${Date.now()}-${i}`, text: word, isMissing: false }));
+      setTokens(newTokens);
     }
     setAppState("SELECT");
+    updateContent({ ...content, text, tokens: newTokens });
   };
 
   const handleToggleToken = (id: string) => {
-    setTokens(prev => prev.map(t => t.id === id ? { ...t, isMissing: !t.isMissing } : t));
+    const newTokens = tokens.map(t => t.id === id ? { ...t, isMissing: !t.isMissing } : t);
+    setTokens(newTokens);
+    updateContent({ ...content, text, tokens: newTokens });
   };
 
   if (appState === 'INPUT') {
@@ -173,13 +254,17 @@ function CompletarEspaciosEditor({ content, updateContent }: { content: any, upd
         <p className="text-xs text-slate-500 font-bold uppercase">Haz clic en las palabras que el alumno deberá arrastrar y soltar.</p>
       </div>
       <div className="bg-white p-8 rounded-3xl shadow-lg border-2 border-slate-100 flex flex-wrap gap-x-1 gap-y-3 leading-loose">
-        {tokens.map((token) => {
+        {tokens.map((token: any) => {
           if (!token.text.trim()) return <span key={token.id} className="w-2">{token.text}</span>;
+          
           return (
             <button
               key={token.id}
               onClick={() => handleToggleToken(token.id)}
-              className={cn("px-2 py-1 rounded-lg transition-all font-black text-lg border-b-4", token.isMissing ? "bg-indigo-600 border-indigo-800 text-white shadow-xl transform scale-110 -translate-y-1 mx-1 z-10" : "bg-slate-50 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 text-slate-700")}
+              className={cn("px-2 py-1 rounded-lg transition-all font-black text-lg border-b-4", 
+                token.isMissing 
+                  ? (token.isAiSuggested ? "bg-amber-400 border-amber-600 text-amber-900 shadow-xl transform scale-110 -translate-y-1 mx-1 z-10" : "bg-indigo-600 border-indigo-800 text-white shadow-xl transform scale-110 -translate-y-1 mx-1 z-10")
+                  : "bg-slate-50 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 text-slate-700")}
             >
               {token.text}
             </button>
@@ -190,7 +275,7 @@ function CompletarEspaciosEditor({ content, updateContent }: { content: any, upd
         <Button variant="ghost" onClick={() => setAppState('INPUT')} className="text-slate-600 font-black text-xs uppercase hover:bg-slate-100"><ArrowLeft className="mr-2 w-4 h-4" /> Volver a Editar Texto</Button>
         <div className="text-xs font-black uppercase text-slate-400">Ocultas seleccionadas: <span className="text-indigo-600 text-base">{missingCount}</span></div>
       </div>
-      <Button onClick={() => updateContent({ ...content, text, tokens })} className="w-full h-16 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase tracking-widest shadow-xl transition-all text-sm">
+      <Button onClick={() => updateContent({ ...content, text, tokens, aiSuggestedWords: [] })} className="w-full h-16 rounded-2xl bg-emerald-500 hover:bg-emerald-600 text-white font-black uppercase tracking-widest shadow-xl transition-all text-sm">
         <CheckCircle2 className="w-5 h-5 mr-2" /> Guardar Configuración
       </Button>
     </div>
@@ -198,10 +283,200 @@ function CompletarEspaciosEditor({ content, updateContent }: { content: any, upd
 }
 
 
-const TemplateEditor = ({ type, content, updateContent }: { type: string, content: any, updateContent: (newContent: any) => void }) => {
+const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string, content: any, updateContent: (newContent: any) => void, pagoIA?: boolean }) => {
   const supabase = createClient();
   const { toast } = useToast();
   const [uploading, setUploading] = useState(false);
+  
+  // Estados para Generador IA Crucigrama
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [aiNumWords, setAiNumWords] = useState(5);
+  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiGenerating, setAiGenerating] = useState(false);
+  const [fillBlankRetryPrompt, setFillBlankRetryPrompt] = useState('');
+
+  const generateAI = async (promptOverride?: string | React.MouseEvent) => {
+    const isStringOverride = typeof promptOverride === 'string';
+    let effectivePrompt = (isStringOverride ? promptOverride : aiPrompt).trim();
+    if (!effectivePrompt && type === 'completar_espacios') {
+      effectivePrompt = content?.text || '';
+    }
+    
+    if (!effectivePrompt) {
+      toast({ variant: "destructive", title: "Error", description: "El prompt no puede estar vacío." });
+      return;
+    }
+    setAiGenerating(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      let endpoint = '';
+      let payload: any = { prompt: effectivePrompt, userId: user?.id };
+      
+      if (type === 'crucigrama') {
+        endpoint = '/api/exercises/generate-crossword';
+        payload.numPalabras = aiNumWords;
+      } else if (type === 'opcion_multiple') {
+        endpoint = '/api/exercises/generate-quiz';
+        payload.numPreguntas = aiNumWords;
+      } else if (type === 'verdadero_falso') {
+        endpoint = '/api/exercises/generate-true-false';
+        payload.numPreguntas = aiNumWords;
+      } else if (type === 'emparejamiento') {
+        endpoint = '/api/exercises/generate-matching';
+        payload.numPares = aiNumWords;
+      } else if (type === 'ordenar_secuencia') {
+        endpoint = '/api/exercises/generate-sequence';
+        payload.numPasos = aiNumWords;
+      } else if (type === 'completar_espacios') {
+        endpoint = '/api/exercises/generate-fill-blank';
+        payload.numPalabras = aiNumWords;
+      } else if (type === 'sopa_letras') {
+        endpoint = '/api/exercises/generate-word-search';
+        payload.numPalabras = aiNumWords;
+      } else if (type === 'flashcards') {
+        endpoint = '/api/exercises/generate-flashcards';
+        payload.numTarjetas = aiNumWords;
+      }
+      
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error("Error en la IA");
+      const data = await res.json();
+      
+      if (type === 'crucigrama') {
+        updateContent({ ...content, words: data.words || [], clues: data.clues || [] });
+      } else if (type === 'sopa_letras') {
+        updateContent({ ...content, words: data.words || [], clues: data.clues || [], sopaFeedback: data.feedback || '' });
+      } else if (type === 'opcion_multiple' || type === 'verdadero_falso' || type === 'emparejamiento' || type === 'flashcards') {
+        updateContent({ ...content, items: data.items || [] });
+      } else if (type === 'ordenar_secuencia') {
+        updateContent({ ...content, items: data.items || [], feedback: data.feedback || '' });
+      } else if (type === 'completar_espacios') {
+        // Inyectar el texto en el editor — el profesor selecciona las palabras ocultas manualmente
+        updateContent({ ...content, text: data.text || '', aiSuggestedWords: data.suggestedWords || [], feedback: data.feedback || '' });
+        setFillBlankRetryPrompt(effectivePrompt);
+      }
+      
+      setAiModalOpen(false);
+      setAiPrompt("");
+      toast({ title: "¡Generación exitosa!", description: "La información se ha inyectado en el formulario." });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Error", description: e.message || "No se pudo generar la actividad." });
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
+  const renderAiButton = () => {
+    if (!pagoIA) return null;
+    return (
+      <Button 
+        className="w-full bg-[#110B29] hover:bg-[#1a0f3d] text-[#A855F7] border border-[#A855F7]/30 shadow-[0_0_15px_rgba(168,85,247,0.3)] hover:shadow-[0_0_25px_rgba(168,85,247,0.5)] rounded-2xl h-14 font-black uppercase tracking-widest transition-all mb-6"
+        onClick={() => setAiModalOpen(true)}
+      >
+        <BrainCircuit size={18} className="mr-3" /> Generar con IA
+      </Button>
+    );
+  };
+
+  const renderAiModal = () => (
+    <Dialog open={aiModalOpen} onOpenChange={setAiModalOpen}>
+      <DialogContent className="sm:max-w-[950px] p-0 border-[#3b0764] bg-[#0f041a] text-slate-200 overflow-hidden rounded-[32px]">
+        <div className="flex flex-col md:flex-row">
+          <div className="flex-1 p-8 space-y-6">
+          <div className="flex items-center gap-4 border-b border-[#3b0764] pb-6">
+            <div className="p-3 bg-[#A855F7]/20 rounded-2xl text-[#A855F7]">
+              <BrainCircuit size={28} />
+            </div>
+            <div>
+              <DialogTitle className="text-xl font-black text-white uppercase tracking-wider">
+                {type === 'crucigrama' ? 'Crucigrama IA'
+                  : type === 'opcion_multiple' ? 'Opción Múltiple IA'
+                  : type === 'verdadero_falso' ? 'Verdadero/Falso IA'
+                  : type === 'emparejamiento' ? 'Emparejamiento IA'
+                  : type === 'completar_espacios' ? 'Completar Espacios IA'
+                  : type === 'sopa_letras' ? 'Sopa de Letras IA'
+                  : type === 'flashcards' ? 'Flashcards IA'
+                  : 'Ordenar Secuencia IA'}
+              </DialogTitle>
+              <DialogDescription className="text-xs text-[#A855F7] uppercase font-bold tracking-widest mt-1">Generación asistida</DialogDescription>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-[#A855F7]">
+                {type === 'crucigrama' ? 'N° de Palabras'
+                  : type === 'opcion_multiple' ? 'N° de Preguntas'
+                  : type === 'verdadero_falso' ? 'N° de Enunciados'
+                  : type === 'emparejamiento' ? 'N° de Pares'
+                  : type === 'completar_espacios' ? 'N° de Palabras Clave'
+                  : type === 'sopa_letras' ? 'N° de Palabras'
+                  : type === 'flashcards' ? 'N° de Tarjetas'
+                  : 'N° de Pasos'}
+              </label>
+              <Input 
+                type="number" 
+                min={2} 
+                max={20}
+                value={aiNumWords}
+                onChange={(e) => setAiNumWords(parseInt(e.target.value) || 5)}
+                className="h-12 bg-black/40 border-[#3b0764] focus-visible:ring-[#A855F7] text-white rounded-xl"
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <label className="text-[10px] font-black uppercase tracking-widest text-[#A855F7]">Instrucciones / Texto Base</label>
+              <textarea 
+                rows={6}
+                value={aiPrompt}
+                onChange={(e) => setAiPrompt(e.target.value)}
+                placeholder="Pega aquí un texto sobre el tema o escribe las instrucciones específicas para la IA..."
+                className="w-full p-4 bg-black/40 border-2 border-[#3b0764] rounded-2xl text-sm outline-none focus:border-[#A855F7] focus:ring-4 focus:ring-[#A855F7]/20 transition-all text-white placeholder-slate-600 resize-none"
+              />
+            </div>
+          </div>
+
+          <div className="flex gap-4 pt-4">
+            <Button 
+              variant="outline" 
+              className="flex-1 rounded-2xl h-12 bg-transparent border-[#3b0764] text-slate-300 hover:bg-[#3b0764]/30 hover:text-white"
+              onClick={() => setAiModalOpen(false)}
+            >
+              CANCELAR
+            </Button>
+            <Button 
+              className="flex-1 rounded-2xl h-12 bg-gradient-to-r from-[#7e22ce] to-[#9333ea] hover:from-[#6b21a8] hover:to-[#7e22ce] text-white font-black uppercase tracking-widest border border-[#c084fc]/50 shadow-[0_0_20px_rgba(168,85,247,0.4)]"
+              onClick={generateAI}
+              disabled={aiGenerating}
+            >
+              {aiGenerating ? <Loader2 className="animate-spin" size={18} /> : "GENERAR"}
+            </Button>
+          </div>
+        </div>
+        
+        {/* RIGHT PANEL: AI BOT */}
+        <div className="hidden md:flex flex-col items-center justify-center w-80 bg-[#1a0b2e]/50 border-l border-[#3b0764] p-8 relative">
+          <div className={`relative w-full aspect-square ${aiGenerating ? 'animate-bot-thinking' : 'animate-bot-hover'}`}>
+            <Image 
+              src={aiGenerating ? "/images/THINKINGBOT.png" : "/images/NORMALBOT.png"} 
+              alt="AI Bot" 
+              fill
+              className="object-contain drop-shadow-[0_0_30px_rgba(168,85,247,0.4)]"
+            />
+          </div>
+          
+          {/* ONDAS NEON AZULES (GRAVITACIONALES) */}
+          <div className={`absolute bottom-12 w-48 h-8 rounded-[100%] bg-blue-500/40 blur-[20px] shadow-[0_0_50px_20px_rgba(59,130,246,0.6)] ${aiGenerating ? 'animate-pulse-fast' : 'animate-pulse-slow'}`} />
+          <div className={`absolute bottom-12 w-24 h-4 rounded-[100%] bg-cyan-400/70 blur-[10px] shadow-[0_0_30px_10px_rgba(34,211,238,0.8)] ${aiGenerating ? 'animate-pulse-fast' : 'animate-pulse-slow'}`} />
+        </div>
+      </div>
+      </DialogContent>
+    </Dialog>
+  );
 
   if (!type) return <div className="p-8 text-center opacity-30 italic">Selecciona una plantilla para comenzar.</div>;
 
@@ -259,6 +534,8 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
   if (type === 'opcion_multiple') {
     return (
       <div className="space-y-6">
+        {renderAiButton()}
+        {renderAiModal()}
         {content.items?.map((item: any, qIdx: number) => (
           <div key={qIdx} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-4">
             <div className="flex justify-between items-center">
@@ -281,6 +558,11 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
                 updateContent({ ...content, items: newItems });
               }} 
             />
+            {item.feedback && (
+              <div className="text-[10px] bg-[#A855F7]/10 text-[#A855F7] p-3 rounded-xl border border-[#A855F7]/30 font-bold">
+                💡 EXPLICACIÓN IA: {item.feedback}
+              </div>
+            )}
             <div className="space-y-2">
               {item.options?.map((opt: any, oIdx: number) => (
                 <div key={oIdx} className="flex gap-2 items-center">
@@ -325,31 +607,40 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
   if (type === 'verdadero_falso') {
     return (
       <div className="space-y-4">
+        {renderAiButton()}
+        {renderAiModal()}
         {content.items?.map((item: any, idx: number) => (
-          <div key={idx} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex items-center gap-4">
-            <Input 
-              placeholder="Afirmación..." 
-              value={item.statement} 
-              className="flex-1 uppercase font-bold text-xs" 
-              onChange={(e) => {
+          <div key={idx} className="p-4 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col gap-4">
+            <div className="flex items-center gap-4">
+              <Input 
+                placeholder="Afirmación..." 
+                value={item.statement} 
+                className="flex-1 uppercase font-bold text-xs" 
+                onChange={(e) => {
+                  const newItems = [...content.items];
+                  newItems[idx].statement = e.target.value.toUpperCase();
+                  updateContent({ ...content, items: newItems });
+                }} 
+              />
+              <div className="flex flex-col items-center gap-1">
+                <span className="text-[10px] font-black uppercase">{item.correct ? 'Verdadero' : 'Falso'}</span>
+                <Switch checked={item.correct} onCheckedChange={(val) => {
+                  const newItems = [...content.items];
+                  newItems[idx].correct = val;
+                  updateContent({ ...content, items: newItems });
+                }} />
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => {
                 const newItems = [...content.items];
-                newItems[idx].statement = e.target.value.toUpperCase();
+                newItems.splice(idx, 1);
                 updateContent({ ...content, items: newItems });
-              }} 
-            />
-            <div className="flex flex-col items-center gap-1">
-              <span className="text-[10px] font-black uppercase">{item.correct ? 'Verdadero' : 'Falso'}</span>
-              <Switch checked={item.correct} onCheckedChange={(val) => {
-                const newItems = [...content.items];
-                newItems[idx].correct = val;
-                updateContent({ ...content, items: newItems });
-              }} />
+              }}><X size={14} /></Button>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => {
-              const newItems = [...content.items];
-              newItems.splice(idx, 1);
-              updateContent({ ...content, items: newItems });
-            }}><X size={14} /></Button>
+            {item.feedback && (
+              <div className="text-[10px] bg-[#A855F7]/10 text-[#A855F7] p-3 rounded-xl border border-[#A855F7]/30 font-bold">
+                💡 EXPLICACIÓN IA: {item.feedback}
+              </div>
+            )}
           </div>
         ))}
         <Button variant="outline" className="w-full text-xs font-black uppercase" onClick={() => {
@@ -363,35 +654,44 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
   if (type === 'emparejamiento') {
     return (
       <div className="space-y-6">
+        {renderAiButton()}
+        {renderAiModal()}
         <div className="text-center space-y-2 mb-6">
           <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Pares de Emparejamiento</h3>
           <p className="text-xs text-slate-500 font-bold uppercase">Agrega los conceptos y sus definiciones. El alumno deberá unirlos correctamente.</p>
         </div>
         <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
           {content.items?.map((item: any, idx: number) => (
-            <div key={idx} className="flex gap-4 items-center bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 relative group transition-all hover:border-purple-200 hover:shadow-md">
-              <span className="absolute -left-3 -top-3 w-8 h-8 bg-purple-100 text-purple-700 font-black rounded-full flex items-center justify-center border-4 border-white shadow-sm">{idx + 1}</span>
-              <div className="flex-1 space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-400">Concepto</label>
-                <Input placeholder="Ej. Mitocondria" value={item.left} className="font-bold border-slate-200 bg-white" onChange={(e) => {
+            <div key={idx} className="flex flex-col gap-3 bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 relative group transition-all hover:border-purple-200 hover:shadow-md">
+              <div className="flex gap-4 items-center">
+                <span className="absolute -left-3 -top-3 w-8 h-8 bg-purple-100 text-purple-700 font-black rounded-full flex items-center justify-center border-4 border-white shadow-sm">{idx + 1}</span>
+                <div className="flex-1 space-y-2">
+                  <label className="text-[10px] font-black uppercase text-slate-400">Concepto</label>
+                  <Input placeholder="Ej. Mitocondria" value={item.left} className="font-bold border-slate-200 bg-white" onChange={(e) => {
+                    const newItems = [...content.items];
+                    newItems[idx].left = e.target.value;
+                    updateContent({ ...content, items: newItems });
+                  }} />
+                </div>
+                <div className="flex-1 space-y-2">
+                  <label className="text-[10px] font-black uppercase text-slate-400">Definición</label>
+                  <Input placeholder="Ej. Organelo generador de energía" value={item.right} className="font-bold border-slate-200 bg-white" onChange={(e) => {
+                    const newItems = [...content.items];
+                    newItems[idx].right = e.target.value;
+                    updateContent({ ...content, items: newItems });
+                  }} />
+                </div>
+                <Button variant="ghost" size="icon" className="text-red-400 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 hover:text-red-600 self-end mb-1" onClick={() => {
                   const newItems = [...content.items];
-                  newItems[idx].left = e.target.value;
+                  newItems.splice(idx, 1);
                   updateContent({ ...content, items: newItems });
-                }} />
+                }}><Trash2 size={18} /></Button>
               </div>
-              <div className="flex-1 space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-400">Definición</label>
-                <Input placeholder="Ej. Organelo generador de energía" value={item.right} className="font-bold border-slate-200 bg-white" onChange={(e) => {
-                  const newItems = [...content.items];
-                  newItems[idx].right = e.target.value;
-                  updateContent({ ...content, items: newItems });
-                }} />
-              </div>
-              <Button variant="ghost" size="icon" className="text-red-400 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 hover:text-red-600 self-end mb-1" onClick={() => {
-                const newItems = [...content.items];
-                newItems.splice(idx, 1);
-                updateContent({ ...content, items: newItems });
-              }}><Trash2 size={18} /></Button>
+              {item.feedback && (
+                <div className="text-[10px] bg-[#A855F7]/10 text-[#A855F7] p-3 rounded-xl border border-[#A855F7]/30 font-bold">
+                  💡 EXPLICACIÓN IA: {item.feedback}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -414,6 +714,13 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
 
     return (
       <div className="space-y-6">
+        {renderAiButton()}
+        {renderAiModal()}
+        {content.feedback && (
+          <div className="text-[10px] bg-[#A855F7]/10 text-[#A855F7] p-3 rounded-xl border border-[#A855F7]/30 font-bold">
+            💡 EXPLICACIÓN IA (orden): {content.feedback}
+          </div>
+        )}
         <div className="text-center space-y-2 mb-6">
           <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Secuencia Correcta</h3>
           <p className="text-xs text-slate-500 font-bold uppercase">Ingresa los pasos en el orden correcto. En el ejercicio aparecerán desordenados.</p>
@@ -448,12 +755,53 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
   }
 
   if (type === 'completar_espacios') {
-    return <CompletarEspaciosEditor content={content} updateContent={updateContent} />;
+    return (
+      <div className="space-y-4">
+        {renderAiButton()}
+        {renderAiModal()}
+        {content.feedback && (
+          <div className="text-[10px] bg-[#A855F7]/10 text-[#A855F7] p-3 rounded-xl border border-[#A855F7]/30 font-bold">
+            💡 NOTA IA: {content.feedback}
+          </div>
+        )}
+        {content.aiSuggestedWords?.length > 0 && (
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-3">
+            <p className="text-[10px] font-black uppercase text-amber-700 mb-2">📌 Palabras sugeridas por la IA para ocultar:</p>
+            <div className="flex flex-wrap gap-2">
+              {content.aiSuggestedWords.map((w: string, i: number) => (
+                <span key={i} className="px-2 py-1 bg-amber-200 text-amber-900 rounded-lg text-xs font-bold">{w}</span>
+              ))}
+            </div>
+            <div className="border-t border-amber-200 pt-3 space-y-2">
+              <label className="text-[10px] font-black uppercase text-amber-600">🔄 Instrucciones para regenerar:</label>
+              <textarea
+                rows={3}
+                value={fillBlankRetryPrompt}
+                onChange={(e) => setFillBlankRetryPrompt(e.target.value)}
+                placeholder="Escribe o modifica las instrucciones para que la IA regenere el ejercicio..."
+                className="w-full p-3 bg-white border-2 border-amber-200 rounded-xl text-sm outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-200 transition-all resize-none text-slate-700"
+              />
+              <button
+                onClick={() => generateAI(fillBlankRetryPrompt)}
+                disabled={aiGenerating || !fillBlankRetryPrompt.trim()}
+                className="flex items-center gap-2 text-[11px] font-black uppercase text-white bg-amber-500 hover:bg-amber-600 px-4 py-2 rounded-xl transition-all disabled:opacity-50 shadow-md"
+              >
+                <RotateCcw size={14} className={aiGenerating ? 'animate-spin' : ''} />
+                {aiGenerating ? 'Regenerando...' : 'No me convence — Rehacer con IA'}
+              </button>
+            </div>
+          </div>
+        )}
+        <CompletarEspaciosEditor content={content} updateContent={updateContent} />
+      </div>
+    );
   }
 
   if (type === 'flashcards') {
     return (
       <div className="space-y-8">
+        {renderAiButton()}
+        {renderAiModal()}
         <div className="text-center space-y-2 mb-6">
           <h3 className="text-xl font-black text-slate-800 uppercase tracking-widest">Tarjetas de Repaso (Flashcards)</h3>
           <p className="text-xs text-slate-500 font-bold uppercase">Agrega un término en el frente y su definición en el reverso.</p>
@@ -500,6 +848,15 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
   if (type === 'sopa_letras' || type === 'crucigrama') {
     return (
       <div className="space-y-6">
+        {renderAiButton()}
+        {renderAiModal()}
+
+        {type === 'sopa_letras' && content.sopaFeedback && (
+          <div className="text-[10px] bg-[#A855F7]/10 text-[#A855F7] p-3 rounded-xl border border-[#A855F7]/30 font-bold">
+            💡 EXPLICACIÓN IA: {content.sopaFeedback}
+          </div>
+        )}
+
         <div className="flex items-center justify-between p-4 bg-indigo-50/50 rounded-2xl border border-indigo-100">
           <div className="space-y-1">
             <p className="text-xs font-black text-indigo-900 uppercase">Lista de Apoyo visible</p>
@@ -563,8 +920,11 @@ const TemplateEditor = ({ type, content, updateContent }: { type: string, conten
 export default function ProfesorDashboard() {
   const { toast } = useToast();
   const supabase = createClient();
+
   const { config: inst } = useInstitucion();
   const [loading, setLoading] = useState(true);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserName, setCurrentUserName] = useState<string | null>(null);
   const [asignaciones, setAsignaciones] = useState<any[]>([]);
   
   const [selectedMateria, setSelectedMateria] = useState<any>(null);
@@ -577,7 +937,7 @@ export default function ProfesorDashboard() {
   const [slides, setSlides] = useState<any[]>([]);
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const [presentationMode, setPresentationMode] = useState(false);
-  const [slideDialogOpen, setSlideDialogOpne] = useState(false);
+  const [slideDialogOpen, setSlideDialogOpen] = useState(false);
 
   const [resources, setResources] = useState<any[]>([]);
   const [isResourceDialogOpen, setIsResourceDialogOpen] = useState(false);
@@ -592,10 +952,136 @@ export default function ProfesorDashboard() {
   
   const [previewActivity, setPreviewActivity] = useState<any | null>(null);
 
+  // Estados para Generador de IA
+  const [aiDialogOpen, setAiDialogOpen] = useState(false);
+  const [aiTema, setAiTema] = useState('');
+  const [aiNumSlides, setAiNumSlides] = useState(5);
+  const [aiInstrucciones, setAiInstrucciones] = useState('');
+  const [aiEstilo, setAiEstilo] = useState('canva_estrellas_1');
+  const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [pagoIA, setPagoIA] = useState(false);
+
+  useEffect(() => {
+    getEstadoPagoIA().then(setPagoIA);
+  }, []);
+
+  const pendingUpserts = useRef<{ [slideId: string]: NodeJS.Timeout }>({});
+  const prevActiveSlideIdRef = useRef<string | null>(null);
+
+  // Flush pending upserts on dialog close
+  useEffect(() => {
+    if (!slideDialogOpen) {
+      Object.keys(pendingUpserts.current).forEach(async (id) => {
+        const timeout = pendingUpserts.current[id];
+        if (timeout) {
+          clearTimeout(timeout);
+          delete pendingUpserts.current[id];
+          const slideToUpdate = slides.find(s => s.id === id);
+          if (slideToUpdate) {
+            try {
+              await upsertSlide(slideToUpdate);
+            } catch (err) {
+              console.error("Error flushing on close:", err);
+            }
+          }
+        }
+      });
+    }
+  }, [slideDialogOpen, slides]);
+
+  // Flush pending upserts on slide change
+  useEffect(() => {
+    const currentSlide = slides[activeSlideIndex];
+    const prevSlideId = prevActiveSlideIdRef.current;
+    
+    if (prevSlideId && currentSlide && prevSlideId !== currentSlide.id) {
+      const timeout = pendingUpserts.current[prevSlideId];
+      if (timeout) {
+        clearTimeout(timeout);
+        delete pendingUpserts.current[prevSlideId];
+        const slideToUpdate = slides.find(s => s.id === prevSlideId);
+        if (slideToUpdate) {
+          upsertSlide(slideToUpdate).catch(err => {
+            console.error("Error flushing on slide change:", err);
+          });
+        }
+      }
+    }
+    
+    if (currentSlide) {
+      prevActiveSlideIdRef.current = currentSlide.id;
+    } else {
+      prevActiveSlideIdRef.current = null;
+    }
+  }, [activeSlideIndex, slides]);
+
+  // Clear timeouts on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(pendingUpserts.current).forEach(clearTimeout);
+    };
+  }, []);
+
+  const handleGenerateAI = async () => {
+    if (!aiTema) {
+      toast({ title: 'Atención', description: 'Debes ingresar un tema.', variant: 'destructive' });
+      return;
+    }
+    
+    setIsGeneratingAI(true);
+    try {
+      const res = await fetch('/api/slides/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tema: aiTema,
+          numSlides: aiNumSlides,
+          instrucciones: aiInstrucciones,
+          estilo: aiEstilo,
+          userId: (await supabase.auth.getUser()).data.user?.id || null
+        })
+      });
+
+      if (!res.ok) throw new Error('Error al generar las diapositivas');
+      
+      const { slides: generatedSlides } = await res.json();
+      
+      // Save all generated slides to DB
+      if (generatedSlides && generatedSlides.length > 0) {
+        for (const slide of generatedSlides) {
+          const newSlideData = {
+            tema_id: selectedTema.id,
+            titulo: slide.titulo,
+            contenido: slide.contenido,
+            estilo: slide.estilo,
+            orden: slide.orden + slides.length
+          };
+          await upsertSlide(newSlideData);
+        }
+        
+        await fetchSlides(selectedTema.id);
+        toast({ title: '¡Éxito!', description: 'Diapositivas generadas con IA.' });
+        setAiDialogOpen(false);
+        setAiTema('');
+        setAiInstrucciones('');
+      }
+    } catch (error) {
+      toast({ title: 'Error', description: 'Hubo un problema comunicándose con la IA.', variant: 'destructive' });
+      console.error(error);
+    } finally {
+      setIsGeneratingAI(false);
+    }
+  };
+
   const fetchInitialData = async () => {
     setLoading(true);
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
+      setCurrentUserId(user.id);
+      const { data: profileData } = await supabase.from('profiles').select('nombre, apellidos').eq('id', user.id).single();
+      if (profileData) {
+        setCurrentUserName(`${profileData.nombre} ${profileData.apellidos}`.trim());
+      }
       const { data } = await getMyAsignaciones(user.id);
       if (data) setAsignaciones(data);
     }
@@ -683,19 +1169,11 @@ export default function ProfesorDashboard() {
   };
 
   const handleDelete = async (type: string, id: string, title?: string) => {
-    if (type === 'unidad' || type === 'tema') {
+    if (type === 'unidad' || type === 'tema' || type === 'ejercicio') {
       setDeleteConfirmTarget({ type, id, title });
       setDeleteConfirmInput("");
       setDeleteConfirmOpen(true);
       return;
-    }
-    
-    let error;
-    if (type === 'ejercicio') ({ error } = await deleteEjercicio(id));
-
-    if (!error) {
-      toast({ title: "Eliminado correctamente" });
-      if (type === 'ejercicio') fetchEjercicios(selectedTema.id);
     }
   };
 
@@ -708,13 +1186,15 @@ export default function ProfesorDashboard() {
 
     if (type === 'unidad') ({ error } = await deleteUnidad(id));
     if (type === 'tema') ({ error } = await deleteTema(id));
+    if (type === 'ejercicio') ({ error } = await deleteEjercicio(id));
 
     if (!error) {
-      toast({ title: "Eliminado con éxito", description: `Se ha borrado el/la ${type} y todo su contenido.` });
+      toast({ title: "Eliminado con éxito", description: `Se ha borrado el/la ${type === 'ejercicio' ? 'actividad' : type} y todo su contenido.` });
       setDeleteConfirmOpen(false);
       setDeleteConfirmTarget(null);
       if (type === 'unidad') { fetchUnidades(selectedMateria.id); setSelectedUnidad(null); }
       if (type === 'tema') { fetchTemas(selectedUnidad.id); setSelectedTema(null); }
+      if (type === 'ejercicio') fetchEjercicios(selectedTema.id);
     } else {
       toast({ variant: "destructive", title: "Error al eliminar", description: "No se pudo realizar la operación." });
     }
@@ -723,18 +1203,36 @@ export default function ProfesorDashboard() {
   const handleOpenSlideEditor = (tema: any) => {
     setSelectedTema(tema);
     fetchSlides(tema.id);
-    setSlideDialogOpne(true);
+    setSlideDialogOpen(true);
   };
 
   const handleAddSlide = async () => {
     const { data: { user } } = await supabase.auth.getUser();
+    const defaultCanvasContent = serializeSlideContent({
+      elements: [
+        {
+          id: `title-${Date.now()}`,
+          type: 'text',
+          content: 'TÍTULO AQUÍ',
+          x: 10, y: 10, width: 80, height: 15,
+          style: { fontSize: '48px', fontWeight: 'bold', color: '#ffffff', textAlign: 'center' }
+        },
+        {
+          id: `body-${Date.now() + 1}`,
+          type: 'text',
+          content: 'Escribe el contenido de tu diapositiva...',
+          x: 10, y: 35, width: 80, height: 50,
+          style: { fontSize: '24px', fontWeight: 'normal', color: '#ffffffcc', textAlign: 'left' }
+        }
+      ]
+    });
     const newSlide = {
       tema_id: selectedTema.id,
       titulo: 'Nueva Diapositiva',
-      contenido: 'Contenido de la diapositiva...',
+      contenido: defaultCanvasContent,
       orden: slides.length + 1,
       created_by: user?.id,
-      estilo: 'azul'
+      estilo: 'canva_estrellas_1'
     };
     const { data, error } = await upsertSlide(newSlide);
     if (error) { toast({ variant: "destructive", title: "Error", description: "Problema al crear diapositiva." }); return; }
@@ -744,12 +1242,106 @@ export default function ProfesorDashboard() {
     }
   };
 
-  const handleUpdateSlide = async (id: string, updates: any) => {
-    const slideToUpdate = slides.find(s => s.id === id);
-    if (!slideToUpdate) return;
-    const updated = { ...slideToUpdate, ...updates };
-    setSlides(slides.map(s => s.id === id ? updated : s));
-    await upsertSlide(updated);
+  const handleUpdateSlide = useCallback((id: string, updates: any) => {
+    setSlides(prevSlides => {
+      const slideToUpdate = prevSlides.find(s => s.id === id);
+      if (!slideToUpdate) return prevSlides;
+      const updated = { ...slideToUpdate, ...updates };
+
+      // Cancelar cualquier upsert pendiente para esta diapositiva
+      if (pendingUpserts.current[id]) {
+        clearTimeout(pendingUpserts.current[id]);
+      }
+
+      // Programar el upsert en la base de datos después de 1 segundo de inactividad
+      pendingUpserts.current[id] = setTimeout(async () => {
+        try {
+          await upsertSlide(updated);
+          delete pendingUpserts.current[id];
+        } catch (err) {
+          console.error("Error doing autosave:", err);
+        }
+      }, 1000);
+
+      return prevSlides.map(s => s.id === id ? updated : s);
+    });
+  }, []);
+
+  const handleApplyGlobalStyles = async (style: any) => {
+    if (!style || !slides || slides.length === 0) return;
+    
+    toast({ title: 'Aplicando estilos...', description: 'Actualizando todas las diapositivas.' });
+    const newSlides = [...slides];
+    
+    for (let i = 0; i < newSlides.length; i++) {
+      const slide = newSlides[i];
+      try {
+        const data = parseSlideContent(slide.contenido);
+        if (data && data.elements) {
+          let hasChanges = false;
+          data.elements.forEach((el: any) => {
+            if (el.type === 'text') {
+              el.style = {
+                ...el.style,
+                color: style.color || el.style?.color,
+                fontFamily: style.fontFamily || el.style?.fontFamily
+              };
+              hasChanges = true;
+            }
+          });
+          
+          if (hasChanges) {
+            const updatedSlide = { ...slide, contenido: serializeSlideContent(data) };
+            newSlides[i] = updatedSlide;
+            await upsertSlide(updatedSlide);
+          }
+        }
+      } catch (e) {
+        console.error("Error applying global styles to slide", slide.id);
+      }
+    }
+    
+    setSlides(newSlides);
+    toast({ title: '¡Éxito!', description: 'Color y fuente aplicados a todas las diapositivas.' });
+  };
+
+  const handleMoveSlide = async (index: number, direction: 'up' | 'down') => {
+    if (direction === 'up' && index === 0) return;
+    if (direction === 'down' && index === slides.length - 1) return;
+
+    const newSlides = [...slides];
+    const swapIndex = direction === 'up' ? index - 1 : index + 1;
+
+    // Intercambiar `orden`
+    const currentOrden = newSlides[index].orden ?? index;
+    const swapOrden = newSlides[swapIndex].orden ?? swapIndex;
+    
+    newSlides[index] = { ...newSlides[index], orden: swapOrden };
+    newSlides[swapIndex] = { ...newSlides[swapIndex], orden: currentOrden };
+
+    // Intercambiar posiciones en el array para re-renderizado inmediato
+    const temp = newSlides[index];
+    newSlides[index] = newSlides[swapIndex];
+    newSlides[swapIndex] = temp;
+
+    setSlides(newSlides);
+    
+    if (activeSlideIndex === index) {
+      setActiveSlideIndex(swapIndex);
+    } else if (activeSlideIndex === swapIndex) {
+      setActiveSlideIndex(index);
+    }
+
+    // Actualizar en BD
+    try {
+      await updateSlidesOrder([
+        { id: newSlides[index].id, orden: newSlides[index].orden },
+        { id: newSlides[swapIndex].id, orden: newSlides[swapIndex].orden }
+      ]);
+    } catch (e) {
+      console.error("Error updating slide order", e);
+      toast({ variant: "destructive", title: "Error", description: "No se pudo actualizar el orden en el servidor." });
+    }
   };
 
   const handleDeleteSlide = (id: string) => {
@@ -758,6 +1350,26 @@ export default function ProfesorDashboard() {
 
   const confirmDeleteSlide = async () => {
     if (!slideToDelete) return;
+
+    // Antes de borrar el registro, limpiar las imágenes del bucket
+    const slide = slides.find(s => s.id === slideToDelete);
+    if (slide?.contenido) {
+      try {
+        const canvasData = JSON.parse(slide.contenido);
+        if (canvasData?.elements && Array.isArray(canvasData.elements)) {
+          const imageElements = canvasData.elements.filter(
+            (el: any) => el.type === 'image' && el.content
+          );
+          // Borrar cada imagen del bucket en paralelo
+          await Promise.all(
+            imageElements.map((el: any) => handleSlideImageDelete(el.content))
+          );
+        }
+      } catch {
+        // Si el contenido no es JSON válido (formato legado), no hay nada que limpiar
+      }
+    }
+
     const { error } = await deleteSlide(slideToDelete);
     if (!error) {
       const newSlides = slides.filter(s => s.id !== slideToDelete);
@@ -767,6 +1379,7 @@ export default function ProfesorDashboard() {
     }
     setSlideToDelete(null);
   };
+
 
   const handleOpenResourceDialog = (tema: any) => {
     setSelectedTema(tema);
@@ -843,38 +1456,70 @@ export default function ProfesorDashboard() {
     return urls.split(/,(?=http|data:)/).map(u => u.trim()).filter(Boolean);
   };
 
+  // Función para subir imágenes de diapositivas al bucket
+  const handleSlideImageUpload = async (file: File): Promise<string | null> => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return null;
+      if (file.size > 5 * 1024 * 1024) {
+        toast({ variant: 'destructive', title: 'Archivo demasiado grande', description: 'Máximo 5MB por imagen.' });
+        return null;
+      }
+      const ext = file.name.split('.').pop();
+      const path = `slides/${selectedTema?.id || 'general'}/${Date.now()}.${ext}`;
+      const { error: uploadErr } = await supabase.storage.from('diapositivas-assets').upload(path, file);
+      if (uploadErr) {
+        // Si el bucket no existe, intentar con recursos-educativos
+        const { error: fallbackErr } = await supabase.storage.from('recursos-educativos').upload(`slides/${path}`, file);
+        if (fallbackErr) { toast({ variant: 'destructive', title: 'Error al subir imagen', description: fallbackErr.message }); return null; }
+        const { data: { publicUrl } } = supabase.storage.from('recursos-educativos').getPublicUrl(`slides/${path}`);
+        return publicUrl;
+      }
+      const { data: { publicUrl } } = supabase.storage.from('diapositivas-assets').getPublicUrl(path);
+      return publicUrl;
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Error', description: err.message });
+      return null;
+    }
+  };
+
+  // Borra la imagen física del bucket de Supabase cuando se elimina del editor
+  const handleSlideImageDelete = async (url: string): Promise<void> => {
+    try {
+      // Extraer el path relativo desde la URL pública de Supabase
+      // La URL tiene la forma: .../storage/v1/object/public/BUCKET/path/to/file.ext
+      const BUCKETS = ['diapositivas-assets', 'recursos-educativos'];
+      for (const bucket of BUCKETS) {
+        const marker = `/object/public/${bucket}/`;
+        if (url.includes(marker)) {
+          const filePath = url.split(marker)[1];
+          // Decodificar caracteres especiales en el path
+          const decodedPath = decodeURIComponent(filePath);
+          const { error } = await supabase.storage.from(bucket).remove([decodedPath]);
+          if (error) {
+            console.error(`Error al borrar imagen del bucket '${bucket}':`, error.message);
+          }
+          return;
+        }
+      }
+      console.warn('No se pudo determinar el bucket para borrar:', url);
+    } catch (err: any) {
+      console.error('Error inesperado al borrar imagen:', err.message);
+    }
+  };
+
   if (presentationMode && slides.length > 0) {
     const slide = slides[activeSlideIndex];
     if (!slide) { setPresentationMode(false); return null; }
-    const styleMap: any = {
-      'azul': 'bg-slate-900 from-slate-900 to-blue-900 text-white',
-      'vino': 'bg-[#4c0519] from-[#4c0519] to-[#8B2332] text-white',
-      'verde': 'bg-[#064e3b] from-[#064e3b] to-[#1A4A3F] text-white',
-      'oscuro': 'bg-black from-black to-slate-900 text-white'
-    };
 
     return (
-      <div className={cn("fixed inset-0 z-[100] grid grid-rows-[1fr_auto] overflow-hidden bg-gradient-to-br", styleMap[slide.estilo || 'azul'])}>
+      <div className="fixed inset-0 z-[100] grid grid-rows-[1fr_auto] overflow-hidden bg-black">
         <div className="absolute top-0 left-0 h-1.5 bg-blue-400/50 w-full z-50">
           <div className="h-full bg-blue-400 transition-all duration-500 shadow-[0_0_15px_rgba(96,165,250,0.8)]" style={{ width: `${((activeSlideIndex + 1) / slides.length) * 100}%` }} />
         </div>
-        <div className="relative flex flex-col md:flex-row items-center justify-center gap-8 p-10 md:p-20 overflow-hidden">
-          <div className="flex-1 flex flex-col justify-center max-w-full overflow-hidden">
-            <h1 className="font-black uppercase tracking-tight mb-6 leading-tight" style={{ fontSize: 'clamp(2rem, 8vw, 5rem)' }}>{slide.titulo}</h1>
-            <div className="overflow-y-auto max-h-[50vh] pr-4 custom-scrollbar">
-              <p className="font-medium leading-relaxed opacity-90" style={{ fontSize: 'clamp(1rem, 2.5vw, 2.2rem)' }}>{slide.contenido}</p>
-            </div>
-          </div>
-          <div className="flex-1 w-full h-full max-h-[60vh] md:max-h-full flex items-center justify-center">
-            {slide.imagen_url ? (
-              <div className={cn("grid gap-4 w-full h-full p-4", splitImageUrls(slide.imagen_url).length === 1 ? "grid-cols-1" : "grid-cols-2")}>
-                {splitImageUrls(slide.imagen_url).map((url, i) => (
-                  <div key={i} className="relative w-full h-full overflow-hidden rounded-2xl shadow-2xl border border-white/10">
-                    <img src={url} alt="Slide" className="w-full h-full object-cover" />
-                  </div>
-                ))}
-              </div>
-            ) : <div className="w-full aspect-video flex flex-col items-center justify-center bg-white/5 rounded-3xl border-2 border-dashed border-white/10 opacity-30"><ImageIcon size={100} /></div>}
+        <div className="relative w-full h-full flex items-center justify-center p-4">
+          <div className="w-full max-w-[1600px] mx-auto">
+            <SlideViewer slide={slide} />
           </div>
         </div>
         <div className="py-3 px-10 flex items-center justify-between bg-black/30 backdrop-blur-2xl border-t border-white/5 z-[110]">
@@ -1035,7 +1680,7 @@ export default function ProfesorDashboard() {
                             <div className="flex justify-end gap-2">
                               <Button variant="ghost" size="icon" className="text-amber-600 hover:bg-amber-50" onClick={() => setPreviewActivity(e)}><Eye size={16}/></Button>
                               <Button variant="ghost" size="icon" className="text-blue-600 hover:bg-blue-50" onClick={() => setDialog({ open: true, type: 'ejercicio', data: {...e, contenido: typeof e.contenido === 'string' ? JSON.parse(e.contenido || '{}') : e.contenido} })}><Edit size={16}/></Button>
-                              <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete('ejercicio', e.id)}><Trash2 size={16}/></Button>
+                              <Button variant="ghost" size="icon" className="text-destructive" onClick={() => handleDelete('ejercicio', e.id, e.titulo)}><Trash2 size={16}/></Button>
                             </div>
                           </TableCell>
                         </TableRow>
@@ -1225,7 +1870,7 @@ export default function ProfesorDashboard() {
                   </div>
                 </div>
                 <Separator />
-                <TemplateEditor type={dialog.data.tipo} content={dialog.data.contenido || {}} updateContent={(newContent) => setDialog({ ...dialog, data: { ...dialog.data, contenido: newContent } })} />
+                <TemplateEditor type={dialog.data.tipo} content={dialog.data.contenido || {}} updateContent={(newContent) => setDialog({ ...dialog, data: { ...dialog.data, contenido: newContent } })} pagoIA={pagoIA} />
               </div>
             )}
           </div>
@@ -1240,81 +1885,370 @@ export default function ProfesorDashboard() {
       {/* PREVISUALIZACIÓN DE ACTIVIDAD */}
       {previewActivity && <ActivityPreview exercise={previewActivity} onClose={() => setPreviewActivity(null)} isPreview={true} />}
 
-      {/* DIALOGO DE DIAPOSITIVAS */}
-      <Dialog open={slideDialogOpen} onOpenChange={setSlideDialogOpne}>
-        <DialogContent className="max-w-[95vw] w-[1300px] h-[90vh] flex flex-col p-0 rounded-3xl overflow-hidden shadow-2xl border-none">
-          <DialogHeader className="p-6 bg-slate-900 border-b border-white/5 flex flex-row justify-between items-center space-y-0 shrink-0">
+      {/* DIALOGO DE DIAPOSITIVAS - EDITOR CANVAS */}
+      <Dialog open={slideDialogOpen} onOpenChange={setSlideDialogOpen}>
+        <DialogContent className="max-w-[95vw] w-[1400px] h-[92vh] flex flex-col p-0 rounded-3xl overflow-hidden shadow-2xl border-none">
+          <DialogHeader className="p-5 bg-slate-900 border-b border-white/5 flex flex-row justify-between items-center space-y-0 shrink-0">
             <div>
-              <DialogTitle className="text-2xl font-black uppercase tracking-tight text-white flex items-center gap-3">
+              <DialogTitle className="text-xl font-black uppercase tracking-tight text-white flex items-center gap-3">
                 <Presentation className="text-blue-400" /> Diseño de Clase: {selectedTema?.titulo}
               </DialogTitle>
             </div>
             <div className="flex gap-3">
-              <Button variant="default" className="bg-blue-600 hover:bg-blue-700 rounded-xl font-black uppercase tracking-widest gap-2 shadow-lg h-12 px-6" onClick={() => setPresentationMode(true)} disabled={slides.length === 0}>
+              <Button variant="outline" className="rounded-xl font-bold bg-white/5 border-white/10 hover:bg-white/10 hover:text-white text-white shadow-sm h-11 px-4 gap-2" onClick={() => exportSlidesToPptx(slides, selectedTema?.titulo || 'Clase', inst?.logo_url)} disabled={slides.length === 0}>
+                <Download size={18} /> PPTX
+              </Button>
+              <Button variant="default" className="bg-blue-600 hover:bg-blue-700 rounded-xl font-black uppercase tracking-widest gap-2 shadow-lg h-11 px-6" onClick={() => setPresentationMode(true)} disabled={slides.length === 0}>
                 <Play size={18} fill="currentColor" /> Presentar
               </Button>
-              <Button variant="ghost" className="rounded-xl font-bold text-white hover:bg-white/5 h-12 px-6 border border-white/10" onClick={() => setSlideDialogOpne(false)}>Cerrar</Button>
+              <Button variant="ghost" className="rounded-xl font-bold text-white hover:bg-white/5 h-11 px-6 border border-white/10" onClick={() => setSlideDialogOpen(false)}>Cerrar</Button>
             </div>
           </DialogHeader>
           <div className="flex-1 flex overflow-hidden bg-slate-950">
-            <aside className="w-72 bg-slate-900 border-r border-white/5 flex flex-col shrink-0">
-              <div className="p-4 border-b border-white/5">
-                <Button className="w-full gap-2 rounded-xl bg-blue-600 font-black uppercase text-[10px] tracking-widest h-12" onClick={handleAddSlide}>+ Nueva Diapositiva</Button>
+            {/* Sidebar de miniaturas */}
+            <aside className="w-64 bg-slate-900 border-r border-white/5 flex flex-col shrink-0">
+              <div className="p-3 border-b border-white/5 space-y-2">
+                <Button className="w-full gap-2 rounded-xl bg-blue-600 font-black uppercase text-[10px] tracking-widest h-11" onClick={handleAddSlide}><Plus size={16} /> Nueva Diapositiva</Button>
+                {pagoIA && (
+                  <Button variant="outline" className="w-full gap-2 rounded-xl bg-purple-900/20 border-purple-500/30 text-purple-300 font-black uppercase text-[10px] tracking-widest h-11 hover:bg-purple-900/40" onClick={() => setAiDialogOpen(true)}>
+                    <BrainCircuit size={16} /> Generar Diapositivas (IA)
+                  </Button>
+                )}
               </div>
-              <div className="flex-1 overflow-y-auto p-3 space-y-2 custom-scrollbar">
+              <div className="flex-1 overflow-y-auto p-2 space-y-1.5 custom-scrollbar">
                 {slides.map((s, idx) => (
-                  <div key={s.id} onClick={() => setActiveSlideIndex(idx)} className={cn("p-4 rounded-2xl border-2 cursor-pointer transition-all flex items-center gap-3 relative group", activeSlideIndex === idx ? "bg-blue-600/10 border-blue-600" : "border-transparent hover:bg-white/5")}>
-                    <span className="text-xs font-black text-slate-500">{idx + 1}</span>
-                    <p className={cn("text-[11px] font-bold uppercase truncate", activeSlideIndex === idx ? "text-blue-400" : "text-slate-300")}>{s.titulo || 'Sin Título'}</p>
-                    <button className="opacity-0 group-hover:opacity-100 h-7 w-7 rounded-lg bg-red-500/10 text-red-500 flex items-center justify-center transition-all shrink-0" onClick={(e) => { e.stopPropagation(); handleDeleteSlide(s.id); }}><Trash2 size={14} /></button>
+                  <div
+                    key={s.id}
+                    onClick={() => setActiveSlideIndex(idx)}
+                    className={cn(
+                      "p-3 rounded-xl border-2 cursor-pointer transition-all flex items-center gap-2 relative group",
+                      activeSlideIndex === idx ? "bg-blue-600/10 border-blue-500" : "border-transparent hover:bg-white/5"
+                    )}
+                  >
+                    <span className="text-[10px] font-black text-slate-500 w-5 text-center shrink-0">{idx + 1}</span>
+                    <p className={cn("text-[10px] font-bold uppercase truncate flex-1", activeSlideIndex === idx ? "text-blue-400" : "text-slate-400")}>
+                      {s.titulo || 'Sin Título'}
+                    </p>
+                    <div className="flex items-center opacity-0 group-hover:opacity-100 transition-all shrink-0">
+                      <button
+                        disabled={idx === 0}
+                        className="h-6 w-6 rounded-md hover:bg-white/10 text-slate-300 disabled:opacity-30 disabled:hover:bg-transparent flex items-center justify-center transition-all"
+                        onClick={(e) => { e.stopPropagation(); handleMoveSlide(idx, 'up'); }}
+                        title="Mover arriba"
+                      >
+                        <ArrowUp size={12} />
+                      </button>
+                      <button
+                        disabled={idx === slides.length - 1}
+                        className="h-6 w-6 rounded-md hover:bg-white/10 text-slate-300 disabled:opacity-30 disabled:hover:bg-transparent flex items-center justify-center transition-all"
+                        onClick={(e) => { e.stopPropagation(); handleMoveSlide(idx, 'down'); }}
+                        title="Mover abajo"
+                      >
+                        <ArrowDown size={12} />
+                      </button>
+                      <button
+                        className="h-6 w-6 rounded-md hover:bg-red-500/20 text-red-400 flex items-center justify-center transition-all ml-1"
+                        onClick={(e) => { e.stopPropagation(); handleDeleteSlide(s.id); }}
+                        title="Eliminar diapositiva"
+                      >
+                        <Trash2 size={12} />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
             </aside>
-            <main className="flex-1 bg-slate-950 p-10 overflow-y-auto custom-scrollbar">
+
+            {/* Panel Principal - Editor Canvas */}
+            <main className="flex-1 bg-slate-950 overflow-y-auto custom-scrollbar">
               {slides.length > 0 && slides[activeSlideIndex] ? (
-                <div className="max-w-4xl mx-auto space-y-10">
-                  <div className="space-y-4">
-                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] flex items-center gap-2"><Palette size={14} /> Estilo Visual</label>
-                    <div className="grid grid-cols-4 gap-4">
-                      {['azul', 'vino', 'verde', 'oscuro'].map((est) => (
-                        <button 
-                          key={est} 
-                          onClick={() => handleUpdateSlide(slides[activeSlideIndex].id, { estilo: est })} 
+                <div className="p-6 space-y-6">
+                  {/* Selector de Plantillas */}
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-[0.2em] flex items-center gap-2">
+                      <Palette size={14} /> Plantilla Visual
+                    </label>
+                    <div className="flex gap-3 overflow-x-auto pb-2 custom-scrollbar">
+                      {Object.values(SLIDE_TEMPLATES).map((tmpl) => (
+                        <button
+                          key={tmpl.id}
+                          onClick={() => handleUpdateSlide(slides[activeSlideIndex].id, { estilo: tmpl.id })}
                           className={cn(
-                            "h-12 rounded-xl font-black text-[10px] uppercase border-2 transition-all", 
-                            slides[activeSlideIndex].estilo === est ? "border-blue-500 scale-105 shadow-lg" : "border-white/5 opacity-50 hover:opacity-100",
-                            est === 'azul' ? "bg-blue-900 text-white" : est === 'vino' ? "bg-rose-900 text-white" : est === 'verde' ? "bg-emerald-900 text-white" : "bg-slate-800 text-white"
+                            "flex-shrink-0 w-40 rounded-xl border-2 overflow-hidden transition-all",
+                            slides[activeSlideIndex].estilo === tmpl.id
+                              ? "border-blue-500 scale-105 shadow-lg shadow-blue-500/20"
+                              : "border-white/10 opacity-60 hover:opacity-100"
                           )}
                         >
-                          {est}
+                          <div className="aspect-video relative">
+                            <tmpl.component className="">
+                              <div className="w-full h-full" />
+                            </tmpl.component>
+                          </div>
+                          <div className="p-2 bg-slate-900 text-center">
+                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-wider">{tmpl.name}</span>
+                          </div>
                         </button>
                       ))}
                     </div>
                   </div>
-                  <Input className="text-2xl h-16 font-black uppercase border-none bg-white/5 text-white focus:bg-white/10 rounded-2xl px-6" value={slides[activeSlideIndex]?.titulo || ''} onChange={(e) => handleUpdateSlide(slides[activeSlideIndex].id, { titulo: e.target.value.toUpperCase() })} />
-                  <textarea className="w-full p-6 text-lg min-h-[200px] font-medium bg-white/5 border-none text-slate-200 focus:bg-white/10 rounded-3xl outline-none resize-none" value={slides[activeSlideIndex]?.contenido || ''} onChange={(e) => handleUpdateSlide(slides[activeSlideIndex].id, { contenido: e.target.value })} />
-                  <div className="bg-blue-600/5 p-8 rounded-3xl border border-white/5 space-y-4">
-                    <label className="text-[10px] font-black uppercase text-blue-400 tracking-[0.2em] flex items-center gap-2"><ImageIcon size={14} /> Imágenes</label>
-                    {slides[activeSlideIndex]?.imagen_url && (
-                      <div className="grid grid-cols-2 gap-4 mb-4">
-                        {splitImageUrls(slides[activeSlideIndex].imagen_url).map((url, i) => (
-                          <div key={i} className="relative aspect-video rounded-xl overflow-hidden border border-white/10">
-                            <img src={url} alt="Preview" className="w-full h-full object-cover" />
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    <textarea className="w-full p-4 bg-slate-900 border-white/10 rounded-2xl text-white text-sm outline-none min-h-[80px]" value={slides[activeSlideIndex]?.imagen_url || ''} onChange={(e) => handleUpdateSlide(slides[activeSlideIndex].id, { imagen_url: e.target.value })} />
-                  </div>
+
+                  {/* Editor Canvas Drag & Drop */}
+                  <SlideCanvasEditor
+                    templateId={slides[activeSlideIndex]?.estilo || 'azul'}
+                    canvasData={parseSlideContent(slides[activeSlideIndex]?.contenido)}
+                    titulo={slides[activeSlideIndex]?.titulo || ''}
+                    onTituloChange={(titulo) => handleUpdateSlide(slides[activeSlideIndex].id, { titulo })}
+                    onChange={(data) => handleUpdateSlide(slides[activeSlideIndex].id, { contenido: serializeSlideContent(data) })}
+                    onImageUpload={handleSlideImageUpload}
+                    onImageDelete={handleSlideImageDelete}
+                    onApplyGlobalStyles={handleApplyGlobalStyles}
+                  />
                 </div>
-              ) : <div className="h-full flex flex-col items-center justify-center opacity-20"><Presentation size={100} className="mb-6 text-white" /></div>}
+              ) : (
+                <div className="h-full flex flex-col items-center justify-center opacity-20">
+                  <Presentation size={80} className="mb-4 text-white" />
+                  <p className="text-white/40 text-sm font-bold uppercase tracking-widest">Crea tu primera diapositiva</p>
+                </div>
+              )}
             </main>
           </div>
         </DialogContent>
       </Dialog>
 
+      {/* DIALOG DE GENERADOR IA - Nueva UI con Preview en vivo */}
+      <Dialog open={aiDialogOpen} onOpenChange={setAiDialogOpen}>
+        <DialogContent className="max-w-[92vw] w-[1100px] max-h-[92vh] rounded-[28px] p-0 border-none shadow-2xl overflow-hidden bg-slate-950 flex flex-col">
+          {/* Header */}
+          <DialogHeader className="p-5 bg-purple-950/60 border-b border-purple-500/20 shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-purple-600/30 text-purple-300 rounded-xl">
+                <Wand2 size={22} />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-black uppercase tracking-tight text-white">Generador IA de Diapositivas</DialogTitle>
+                <DialogDescription className="text-purple-300 text-[10px] font-bold tracking-widest uppercase">
+                  Elige plantilla y configura · la IA ajusta el texto automáticamente
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          {/* Body — dos columnas */}
+          <div className="flex flex-1 overflow-hidden min-h-0">
+
+            {/* ── Columna izquierda: Formulario ── */}
+            <div className="w-[420px] shrink-0 flex flex-col overflow-y-auto custom-scrollbar bg-slate-900 border-r border-white/5">
+              <div className="p-5 space-y-5">
+
+                {/* Tema */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Tema Principal *</label>
+                  <Input
+                    value={aiTema}
+                    onChange={(e) => setAiTema(e.target.value)}
+                    placeholder="Ej. La Revolución Mexicana..."
+                    className="bg-slate-800 border-slate-700 text-white font-bold h-11"
+                    disabled={isGeneratingAI}
+                  />
+                </div>
+
+                {/* Nº Diapositivas */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    Nº Diapositivas
+                    <span className="ml-2 text-purple-400 normal-case font-semibold">
+                      (la IA limita el texto según este número)
+                    </span>
+                  </label>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range" min={3} max={20}
+                      value={aiNumSlides}
+                      onChange={(e) => setAiNumSlides(parseInt(e.target.value))}
+                      disabled={isGeneratingAI}
+                      className="flex-1 accent-purple-500"
+                    />
+                    <span className="w-10 text-center font-black text-white text-xl bg-slate-800 rounded-xl py-1">{aiNumSlides}</span>
+                  </div>
+                  <p className="text-[10px] text-slate-500 font-medium">
+                    {aiNumSlides <= 4 ? '📝 Pocas diapositivas → más texto por slide' : aiNumSlides <= 8 ? '⚖️ Balance ideal de texto y slides' : '✂️ Muchas diapositivas → texto conciso por slide'}
+                  </p>
+                </div>
+
+                {/* Selector de Plantilla con Cards */}
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Plantilla Visual</label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {Object.values(SLIDE_TEMPLATES).map((tmpl) => (
+                      <button
+                        key={tmpl.id}
+                        type="button"
+                        disabled={isGeneratingAI}
+                        onClick={() => setAiEstilo(tmpl.id)}
+                        className={cn(
+                          "relative rounded-xl overflow-hidden border-2 transition-all text-left",
+                          aiEstilo === tmpl.id
+                            ? "border-purple-500 shadow-lg shadow-purple-500/30 scale-[1.02]"
+                            : "border-white/10 opacity-70 hover:opacity-100 hover:border-white/30"
+                        )}
+                      >
+                        {/* Thumbnail */}
+                        <div className="aspect-video w-full overflow-hidden bg-slate-800">
+                          {tmpl.previewSrc ? (
+                            <img
+                              src={tmpl.previewSrc}
+                              alt={tmpl.name}
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <tmpl.component>
+                              <div className="w-full h-full" />
+                            </tmpl.component>
+                          )}
+                        </div>
+                        {/* Nombre */}
+                        <div className={cn("px-2 py-1.5 text-center", aiEstilo === tmpl.id ? "bg-purple-700" : "bg-slate-800")}>
+                          <span className="text-[9px] font-black uppercase tracking-wider text-white">{tmpl.name}</span>
+                        </div>
+                        {/* Checkmark */}
+                        {aiEstilo === tmpl.id && (
+                          <div className="absolute top-1.5 right-1.5 bg-purple-500 rounded-full w-5 h-5 flex items-center justify-center">
+                            <svg viewBox="0 0 12 12" className="w-3 h-3 text-white fill-current"><path d="M10 3L5 8.5 2 5.5" stroke="white" strokeWidth="2" fill="none" strokeLinecap="round"/></svg>
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Instrucciones extra */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-black uppercase tracking-widest text-slate-400">Instrucciones Extra (Opcional)</label>
+                  <textarea
+                    rows={3}
+                    value={aiInstrucciones}
+                    onChange={(e) => setAiInstrucciones(e.target.value)}
+                    placeholder="Ej. Usa lenguaje para secundaria, enfócate en las causas..."
+                    className="w-full bg-slate-800 border border-slate-700 rounded-xl p-3 text-white text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 resize-none custom-scrollbar"
+                    disabled={isGeneratingAI}
+                  />
+                </div>
+              </div>
+
+              {/* Footer del formulario */}
+              <div className="mt-auto p-5 border-t border-white/5 flex gap-3">
+                <Button
+                  variant="ghost"
+                  className="text-slate-400 hover:text-white uppercase font-bold text-[10px] flex-1"
+                  onClick={() => setAiDialogOpen(false)}
+                  disabled={isGeneratingAI}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  className="flex-[2] bg-purple-600 hover:bg-purple-700 text-white font-black uppercase tracking-widest rounded-xl shadow-[0_0_20px_rgba(168,85,247,0.5)] gap-2"
+                  onClick={handleGenerateAI}
+                  disabled={isGeneratingAI}
+                >
+                  {isGeneratingAI ? <Loader2 className="animate-spin" size={18} /> : <BrainCircuit size={18} />}
+                  {isGeneratingAI ? 'Generando...' : 'Generar Presentación'}
+                </Button>
+              </div>
+            </div>
+
+            {/* ── Columna derecha: Preview en vivo ── */}
+            <div className="flex-1 flex flex-col bg-slate-950 overflow-hidden">
+              {/* Título del panel */}
+              <div className="px-6 py-4 border-b border-white/5 flex items-center justify-between shrink-0">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Vista Previa de Plantilla</span>
+                <span className="text-[10px] font-bold text-purple-400 bg-purple-500/10 px-3 py-1 rounded-full">
+                  {SLIDE_TEMPLATES[aiEstilo]?.name || '—'}
+                </span>
+              </div>
+
+              {/* Área de preview */}
+              <div className="flex-1 flex items-center justify-center p-8 overflow-hidden">
+                <div className="w-full max-w-[640px]">
+                  {/* Pantalla de slide con aspect-ratio 16:9 */}
+                  <div
+                    className="relative w-full rounded-2xl overflow-hidden shadow-[0_0_60px_rgba(168,85,247,0.2)] border border-white/10"
+                    style={{ paddingTop: '56.25%' }}
+                  >
+                    <div className="absolute inset-0">
+                      {(() => {
+                        const tmpl = SLIDE_TEMPLATES[aiEstilo];
+                        if (!tmpl) return null;
+                        const TemplateComp = tmpl.component;
+                        return (
+                          <TemplateComp>
+                            {/* Simulación de contenido de diapositiva */}
+                            <div
+                              className="absolute"
+                              style={{ left: '5%', top: '8%', width: '90%', height: '15%', display: 'flex', alignItems: 'center' }}
+                            >
+                              <span
+                                className="font-black text-[1.8vw] leading-tight truncate"
+                                style={{ color: tmpl.titleColor, fontFamily: tmpl.fontFamily }}
+                              >
+                                {aiTema || 'Título de la Presentación'}
+                              </span>
+                            </div>
+                            <div
+                              className="absolute"
+                              style={{ left: '5%', top: '28%', width: '90%', height: '62%', display: 'flex', flexDirection: 'column', justifyContent: 'flex-start', gap: '4%' }}
+                            >
+                              {['• Punto principal del tema', '• Información relevante', '• Conclusión o dato clave'].slice(0, Math.min(3, Math.ceil(aiNumSlides / 2))).map((pt, i) => (
+                                <span
+                                  key={i}
+                                  className="text-[1.2vw] font-semibold leading-snug"
+                                  style={{ color: tmpl.contentColor, fontFamily: tmpl.fontFamily, opacity: 1 - i * 0.15 }}
+                                >
+                                  {pt}
+                                </span>
+                              ))}
+                            </div>
+                          </TemplateComp>
+                        );
+                      })()}
+                    </div>
+                  </div>
+
+                  {/* Info de la plantilla */}
+                  <div className="mt-4 grid grid-cols-3 gap-3">
+                    <div className="bg-slate-900 rounded-xl p-3 border border-white/5 text-center">
+                      <p className="text-[9px] font-black uppercase text-slate-500 tracking-wider mb-1">Fuente IA</p>
+                      <p className="text-xs font-bold text-white">{SLIDE_TEMPLATES[aiEstilo]?.fontFamily || '—'}</p>
+                    </div>
+                    <div className="bg-slate-900 rounded-xl p-3 border border-white/5 text-center">
+                      <p className="text-[9px] font-black uppercase text-slate-500 tracking-wider mb-1">Color Título</p>
+                      <div className="flex items-center justify-center gap-1.5">
+                        <div className="w-4 h-4 rounded-full border border-white/20" style={{ background: SLIDE_TEMPLATES[aiEstilo]?.titleColor }} />
+                        <span className="text-[10px] font-mono text-white">{SLIDE_TEMPLATES[aiEstilo]?.titleColor}</span>
+                      </div>
+                    </div>
+                    <div className="bg-slate-900 rounded-xl p-3 border border-white/5 text-center">
+                      <p className="text-[9px] font-black uppercase text-slate-500 tracking-wider mb-1">Color Texto</p>
+                      <div className="flex items-center justify-center gap-1.5">
+                        <div className="w-4 h-4 rounded-full border border-white/20" style={{ background: SLIDE_TEMPLATES[aiEstilo]?.contentColor }} />
+                        <span className="text-[10px] font-mono text-white">{SLIDE_TEMPLATES[aiEstilo]?.contentColor}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <p className="text-center text-[10px] text-slate-600 mt-3 font-medium">
+                    La IA usará estos colores y fuentes automáticamente en todas las diapositivas.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={isResourceDialogOpen} onOpenChange={setIsResourceDialogOpen}>
+
         <DialogContent className="max-w-2xl w-[95vw] max-h-[90vh] flex flex-col p-0 rounded-[32px] overflow-hidden shadow-2xl">
           <DialogHeader className="p-8 bg-slate-50 border-b shrink-0 flex items-center gap-4 space-y-0">
             <div className="p-3 bg-emerald-100 text-emerald-600 rounded-2xl"><Paperclip size={24} /></div>
@@ -1362,9 +2296,9 @@ export default function ProfesorDashboard() {
             </div>
             <DialogTitle className="text-3xl font-black uppercase tracking-tight text-slate-800">¿Estás seguro?</DialogTitle>
             <DialogDescription className="text-slate-500 text-lg leading-relaxed pt-4">
-              Estás a punto de borrar el/la {deleteConfirmTarget?.type === 'unidad' ? 'unidad' : 'tema'}: 
+              Estás a punto de borrar el/la {deleteConfirmTarget?.type === 'unidad' ? 'unidad' : (deleteConfirmTarget?.type === 'tema' ? 'tema' : 'actividad')}: 
               <span className="font-black text-slate-900 block my-3 text-xl italic underline decoration-destructive/30">"{deleteConfirmTarget?.title}"</span>
-              Esta acción eliminará <span className="text-destructive font-black underline">TODO</span> el contenido relacionado (temas, ejercicios, presentaciones y recursos) y <span className="font-black text-slate-900">no se puede deshacer.</span>
+              Esta acción eliminará <span className="text-destructive font-black underline">TODO</span> {deleteConfirmTarget?.type === 'ejercicio' ? 'el contenido de esta actividad' : 'el contenido relacionado (temas, ejercicios, presentaciones y recursos)'} y <span className="font-black text-slate-900">no se puede deshacer.</span>
             </DialogDescription>
           </DialogHeader>
 
@@ -1414,6 +2348,9 @@ export default function ProfesorDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ONBOARDING / COPILOTO IA PARA PROFESORES */}
+      {pagoIA && <ProfesorAIAssistant userId={currentUserId || undefined} userName={currentUserName || undefined} />}
     </div>
   );
 }

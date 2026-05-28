@@ -315,3 +315,52 @@ export async function saveExerciseResult(
 
   return { success: true, data };
 }
+
+export async function getMateriasYTemasParaAlumno(userId: string) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!supabaseUrl || !supabaseKey) return [];
+  
+  const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+  
+  const { data: profile } = await supabaseAdmin.from("profiles").select("grupo_id").eq("id", userId).single();
+  if (!profile?.grupo_id) return [];
+
+  const { data: asig } = await supabaseAdmin
+    .from("asignaciones_profesor")
+    .select(`
+      materia_id,
+      materias (
+        id, nombre,
+        unidades (
+          id, titulo,
+          orden,
+          temas (
+            id, titulo,
+            orden
+          )
+        )
+      )
+    `)
+    .eq("grupo_id", profile.grupo_id)
+    .eq("activo", true);
+    
+  if (!asig) return [];
+  
+  // Limpiar duplicados de materia (si los hay)
+  const materias = Array.from(new Map(asig.filter((a: any) => a.materias).map((a: any) => [a.materias.id, a.materias])).values()) as any[];
+  
+  // Ordenar unidades y temas
+  materias.forEach(m => {
+    if (m.unidades) {
+      m.unidades.sort((a: any, b: any) => (a.orden || 0) - (b.orden || 0));
+      m.unidades.forEach((u: any) => {
+        if (u.temas) {
+          u.temas.sort((a: any, b: any) => (a.orden || 0) - (b.orden || 0));
+        }
+      });
+    }
+  });
+  
+  return materias;
+}

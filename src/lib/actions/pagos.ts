@@ -661,3 +661,25 @@ export async function updateNombrePrograma(nombreAnterior: string, nombreNuevo: 
   revalidatePath('/dashboard/alumno/pagos');
   return { success: true };
 }
+
+// ─── ESTADO PAGO SERVICIOS IA ───────────────────────────────────────────────
+
+export async function getEstadoPagoIA(): Promise<boolean> {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('pago_de_servicios')
+      .select('estado')
+      .limit(1)
+      .single();
+
+    if (error) {
+      console.error('Error obteniendo estado de pago IA:', error);
+      return false;
+    }
+
+    return data?.estado === 'SI';
+  } catch (err) {
+    console.error('Excepción en getEstadoPagoIA:', err);
+    return false;
+  }
+}
