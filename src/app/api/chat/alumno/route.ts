@@ -350,16 +350,16 @@ Ejemplo de cómo debe empezar tu respuesta:
               (promptTokens / 1_000_000) * usedModel.costInput +
               (completionTokens / 1_000_000) * usedModel.costOutput;
 
-            supabaseAdmin.from("ai_usage_log").insert({
+            const usageLogPromise = supabaseAdmin.from("ai_usage_log").insert({
               profesor_id: userId, // Reusamos la columna para alumno_id temporalmente
               chat_session_id: sessionId || null,
               modelo_usado: usedModel.id,
               tokens_entrada: promptTokens,
               tokens_salida: completionTokens,
               costo_usd: totalCost,
-            }).then(({ error }) => { if (error) console.error("[Alumno API] ai_usage_log:", error); });
+            });
 
-            supabaseAdmin.from("ai_token_usage").insert({
+            const tokenUsagePromise = supabaseAdmin.from("ai_token_usage").insert({
               user_id: userId,
               tipo_peticion: "chat_alumno",
               clase_tema: "CHAT_ALUMNO",
@@ -368,7 +368,9 @@ Ejemplo de cómo debe empezar tu respuesta:
               total_tokens: promptTokens + completionTokens,
               model_used: usedModel.id,
               estimated_cost_usd: totalCost,
-            }).then(({ error }) => { if (error) console.error("[Alumno API] ai_token_usage:", error); });
+            });
+
+            let historyPromise = Promise.resolve();
 
             // NUEVO: Guardar mensajes en supabase desde el servidor para saltar RLS del cliente
             if (sessionId) {
@@ -411,10 +413,11 @@ Ejemplo de cómo debe empezar tu respuesta:
                 updatePayload.session_name = titleMatch[1].trim();
               }
 
-
-              supabaseAdmin.from("alumno_chat_history").update(updatePayload).eq("id", sessionId)
-                .then(({ error }) => { if (error) console.error("[Alumno API] Error guardando historial:", error); });
+              historyPromise = supabaseAdmin.from("alumno_chat_history").update(updatePayload).eq("id", sessionId).then();
             }
+
+            // Esperar a que las promesas de guardado terminen para que Vercel no las cancele
+            await Promise.allSettled([usageLogPromise, tokenUsagePromise, historyPromise]);
           }
 
           controller.enqueue(

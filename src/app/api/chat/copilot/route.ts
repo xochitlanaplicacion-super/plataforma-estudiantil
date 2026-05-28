@@ -393,49 +393,39 @@ Ejemplo de cómo debe empezar tu respuesta:
                     // Como OpenRouter ejecuta la busqueda internamente y no siempre envía tool_calls al cliente,
                     // determinamos que usó el internet SÓLO si incluyó enlaces web reales en su respuesta.
                     const hasLink = /(https?:\/\/|www\.|[a-zA-Z0-9-]+\.(com|es|mx|net|org|edu|gob)\b)/i.test(fullText);
-                    
-                    if (canUseWebSearch && hasLink) {
-                      didWebSearch = true;
-                    }
+                    if (canUseWebSearch && hasLink) didWebSearch = true;
 
-                    // Registrar conteo de búsqueda si se utilizó
                     if (didWebSearch) {
                       const today = new Date().toISOString().split('T')[0];
                       supabaseAdmin.from("ai_daily_web_searches").upsert(
                         { profesor_id: userId, fecha: today, search_count: todaySearchCount + 1 },
                         { onConflict: 'profesor_id, fecha' }
-                      ).then(({ error }) => { if (error) console.error("[Copilot] Error upsert web search:", error); });
+                      ).catch(e => console.error("[Copilot] Error upsert web search:", e));
                     }
 
-                    supabaseAdmin.from("ai_usage_log").insert({
+                    const usageLogPromise = supabaseAdmin.from("ai_usage_log").insert({
                       profesor_id: userId, chat_session_id: sessionId || null,
                       modelo_usado: model.id, tokens_entrada: promptTokens,
                       tokens_salida: completionTokens, costo_usd: totalCost,
-                    }).then(({ error }) => { if (error) console.error("[Copilot] ai_usage_log:", error); });
+                    });
 
-                    supabaseAdmin.from("ai_token_usage").insert({
-                      user_id: userId,
-                      tipo_peticion: "chat_profesor",
-                      clase_tema: "CHAT_PROFESOR",
-                      prompt_tokens: promptTokens,
-                      completion_tokens: completionTokens,
-                      total_tokens: promptTokens + completionTokens,
-                      model_used: model.id,
-                      estimated_cost_usd: totalCost,
-                    }).then(({ error }) => { if (error) console.error("[Copilot API] ai_token_usage:", error); });
+                    const tokenUsagePromise = supabaseAdmin.from("ai_token_usage").insert({
+                      user_id: userId, tipo_peticion: "chat_profesor",
+                      clase_tema: "CHAT_PROFESOR", prompt_tokens: promptTokens,
+                      completion_tokens: completionTokens, total_tokens: promptTokens + completionTokens,
+                      model_used: model.id, estimated_cost_usd: totalCost,
+                    });
 
-                    // NUEVO: Guardar mensajes en supabase desde el servidor para saltar RLS del cliente
+                    let historyPromise = Promise.resolve();
+
                     if (sessionId) {
                       const cleanContent = fullText.replace(/<titulo>[\s\S]*?<\/titulo>\n*/g, "");
                       const assistantMessage = {
-                        role: "assistant",
-                        content: cleanContent,
-                        tokens_in: promptTokens,
-                        tokens_out: completionTokens,
+                        role: "assistant", content: cleanContent,
+                        tokens_in: promptTokens, tokens_out: completionTokens,
                         timestamp: new Date().toISOString(),
                       };
                       
-                      // 1. Obtener historial actual de la BD
                       const { data: currentSession } = await supabaseAdmin
                         .from("profesor_chat_history")
                         .select("messages")
@@ -443,31 +433,23 @@ Ejemplo de cómo debe empezar tu respuesta:
                         .single();
                         
                       let finalMessages = currentSession?.messages || [];
-                      
-                      // 2. Si hay un mensaje de usuario en apiMessages, agregarlo (solo el último si es nuevo)
                       if (messages.length > 0) {
                          const lastMsg = messages[messages.length - 1];
                          if (lastMsg.role === "user") {
-                           finalMessages.push({
-                             role: "user",
-                             content: lastMsg.content,
-                             timestamp: new Date().toISOString()
-                           });
+                           finalMessages.push({ role: "user", content: lastMsg.content, timestamp: new Date().toISOString() });
                          }
                       }
                       
-                      // 3. Agregar respuesta del asistente
                       finalMessages.push(assistantMessage);
                       
                       let updatePayload: any = { messages: finalMessages, updated_at: new Date().toISOString() };
                       const titleMatch = fullText.match(/<titulo>([\s\S]*?)<\/titulo>/);
-                      if (titleMatch && titleMatch[1]) {
-                        updatePayload.session_name = titleMatch[1].trim();
-                      }
+                      if (titleMatch && titleMatch[1]) updatePayload.session_name = titleMatch[1].trim();
 
-                      supabaseAdmin.from("profesor_chat_history").update(updatePayload).eq("id", sessionId)
-                        .then(({ error }) => { if (error) console.error("[Copilot API] Error guardando historial:", error); });
+                      historyPromise = supabaseAdmin.from("profesor_chat_history").update(updatePayload).eq("id", sessionId).then();
                     }
+
+                    await Promise.allSettled([usageLogPromise, tokenUsagePromise, historyPromise]);
                   }
 
                   controller.enqueue(encoder.encode(
