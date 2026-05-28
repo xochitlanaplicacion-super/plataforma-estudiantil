@@ -254,7 +254,7 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: "Cuerpo de la solicitud invalido." }), { status: 400 });
   }
 
-  const { messages, fullMessages, userId, sessionId, institucionNombre, userName } = body;
+  const { messages, userId, sessionId, institucionNombre, userName } = body;
 
   if (!messages || !Array.isArray(messages)) {
     return new Response(JSON.stringify({ error: "Se requiere el campo 'messages'." }), { status: 400 });
@@ -434,7 +434,30 @@ Ejemplo de cómo debe empezar tu respuesta:
                         tokens_out: completionTokens,
                         timestamp: new Date().toISOString(),
                       };
-                      const finalMessages = [...(fullMessages || []), assistantMessage];
+                      
+                      // 1. Obtener historial actual de la BD
+                      const { data: currentSession } = await supabaseAdmin
+                        .from("profesor_chat_history")
+                        .select("messages")
+                        .eq("id", sessionId)
+                        .single();
+                        
+                      let finalMessages = currentSession?.messages || [];
+                      
+                      // 2. Si hay un mensaje de usuario en apiMessages, agregarlo (solo el último si es nuevo)
+                      if (messages.length > 0) {
+                         const lastMsg = messages[messages.length - 1];
+                         if (lastMsg.role === "user") {
+                           finalMessages.push({
+                             role: "user",
+                             content: lastMsg.content,
+                             timestamp: new Date().toISOString()
+                           });
+                         }
+                      }
+                      
+                      // 3. Agregar respuesta del asistente
+                      finalMessages.push(assistantMessage);
                       
                       let updatePayload: any = { messages: finalMessages, updated_at: new Date().toISOString() };
                       const titleMatch = fullText.match(/<titulo>([\s\S]*?)<\/titulo>/);

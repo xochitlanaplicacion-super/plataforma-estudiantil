@@ -195,7 +195,7 @@ export async function POST(req: NextRequest) {
   const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
 
   try {
-    const { messages, fullMessages, userId, sessionId, institucionNombre, userName } = await req.json();
+    const { messages, userId, sessionId, institucionNombre, userName } = await req.json();
 
     // ── DEBUG: Verificar qué llega al servidor ──────────────────────────
     console.log("=== [ALUMNO API] POST recibido ===");
@@ -304,6 +304,7 @@ Ejemplo de cómo debe empezar tu respuesta:
 
         const decoder = new TextDecoder();
         let buffer = "";
+        let fullText = "";
         let promptTokens = 0;
         let completionTokens = 0;
 
@@ -331,6 +332,7 @@ Ejemplo de cómo debe empezar tu respuesta:
                   }
 
                   if (chunk) {
+                    fullText += chunk;
                     controller.enqueue(
                       new TextEncoder().encode(`data: ${JSON.stringify({ delta: chunk })}\n\n`)
                     );
@@ -370,7 +372,7 @@ Ejemplo de cómo debe empezar tu respuesta:
 
             // NUEVO: Guardar mensajes en supabase desde el servidor para saltar RLS del cliente
             if (sessionId) {
-              const cleanContent = buffer.replace(/<titulo>[\s\S]*?<\/titulo>\n*/g, "");
+              const cleanContent = fullText.replace(/<titulo>[\s\S]*?<\/titulo>\n*/g, "");
               const assistantMessage = {
                 role: "assistant",
                 content: cleanContent,
@@ -378,13 +380,37 @@ Ejemplo de cómo debe empezar tu respuesta:
                 tokens_out: completionTokens,
                 timestamp: new Date().toISOString(),
               };
-              const finalMessages = [...(fullMessages || []), assistantMessage];
+              
+              // 1. Obtener historial actual de la BD
+              const { data: currentSession } = await supabaseAdmin
+                .from("alumno_chat_history")
+                .select("messages")
+                .eq("id", sessionId)
+                .single();
+                
+              let finalMessages = currentSession?.messages || [];
+              
+              // 2. Si hay un mensaje de usuario en apiMessages, agregarlo (solo el último si es nuevo)
+              if (messages.length > 0) {
+                 const lastMsg = messages[messages.length - 1];
+                 if (lastMsg.role === "user") {
+                   finalMessages.push({
+                     role: "user",
+                     content: lastMsg.content,
+                     timestamp: new Date().toISOString()
+                   });
+                 }
+              }
+              
+              // 3. Agregar respuesta del asistente
+              finalMessages.push(assistantMessage);
               
               let updatePayload: any = { messages: finalMessages, updated_at: new Date().toISOString() };
-              const titleMatch = buffer.match(/<titulo>([\s\S]*?)<\/titulo>/);
+              const titleMatch = fullText.match(/<titulo>([\s\S]*?)<\/titulo>/);
               if (titleMatch && titleMatch[1]) {
                 updatePayload.session_name = titleMatch[1].trim();
               }
+
 
               supabaseAdmin.from("alumno_chat_history").update(updatePayload).eq("id", sessionId)
                 .then(({ error }) => { if (error) console.error("[Alumno API] Error guardando historial:", error); });
