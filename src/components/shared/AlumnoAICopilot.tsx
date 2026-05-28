@@ -190,6 +190,7 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           messages: apiMessages,
+          fullMessages: updatedMessages,
           userId,
           sessionId: session.id,
           institucionNombre: config?.nombre_corto || config?.nombre,

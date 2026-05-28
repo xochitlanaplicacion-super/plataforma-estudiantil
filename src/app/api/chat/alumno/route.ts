@@ -195,7 +195,7 @@ export async function POST(req: NextRequest) {
   const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
 
   try {
-    const { messages, userId, sessionId, institucionNombre, userName } = await req.json();
+    const { messages, fullMessages, userId, sessionId, institucionNombre, userName } = await req.json();
 
     // ── DEBUG: Verificar qué llega al servidor ──────────────────────────
     console.log("=== [ALUMNO API] POST recibido ===");
@@ -367,6 +367,28 @@ Ejemplo de cómo debe empezar tu respuesta:
               model_used: usedModel.id,
               estimated_cost_usd: totalCost,
             }).then(({ error }) => { if (error) console.error("[Alumno API] ai_token_usage:", error); });
+
+            // NUEVO: Guardar mensajes en supabase desde el servidor para saltar RLS del cliente
+            if (sessionId) {
+              const cleanContent = buffer.replace(/<titulo>[\s\S]*?<\/titulo>\n*/g, "");
+              const assistantMessage = {
+                role: "assistant",
+                content: cleanContent,
+                tokens_in: promptTokens,
+                tokens_out: completionTokens,
+                timestamp: new Date().toISOString(),
+              };
+              const finalMessages = [...(fullMessages || []), assistantMessage];
+              
+              let updatePayload: any = { messages: finalMessages, updated_at: new Date().toISOString() };
+              const titleMatch = buffer.match(/<titulo>([\s\S]*?)<\/titulo>/);
+              if (titleMatch && titleMatch[1]) {
+                updatePayload.session_name = titleMatch[1].trim();
+              }
+
+              supabaseAdmin.from("alumno_chat_history").update(updatePayload).eq("id", sessionId)
+                .then(({ error }) => { if (error) console.error("[Alumno API] Error guardando historial:", error); });
+            }
           }
 
           controller.enqueue(

@@ -254,7 +254,7 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: "Cuerpo de la solicitud invalido." }), { status: 400 });
   }
 
-  const { messages, userId, sessionId, institucionNombre, userName } = body;
+  const { messages, fullMessages, userId, sessionId, institucionNombre, userName } = body;
 
   if (!messages || !Array.isArray(messages)) {
     return new Response(JSON.stringify({ error: "Se requiere el campo 'messages'." }), { status: 400 });
@@ -322,7 +322,7 @@ Ejemplo de cómo debe empezar tu respuesta:
   // Limitar historial a los últimos 6 mensajes (3 del usuario y 3 del asistente)
   const recentMessages = messages.slice(-6);
 
-  const fullMessages = [
+  const fullMessagesPayload = [
     { role: "system", content: systemPrompt },
     ...recentMessages,
   ];
@@ -348,7 +348,7 @@ Ejemplo de cómo debe empezar tu respuesta:
         },
         body: JSON.stringify({
           model: model.id,
-          messages: fullMessages,
+          messages: fullMessagesPayload,
           stream: true,
           provider: { data_collection: "deny" },
           ...(canUseWebSearch ? { tools: [{ type: "openrouter:web_search" }] } : {})
@@ -414,12 +414,37 @@ Ejemplo de cómo debe empezar tu respuesta:
                     }).then(({ error }) => { if (error) console.error("[Copilot] ai_usage_log:", error); });
 
                     supabaseAdmin.from("ai_token_usage").insert({
-                      user_id: userId, tipo_peticion: "chat_copiloto_profesor",
-                      clase_tema: "CHAT_COPILOTO", prompt_tokens: promptTokens,
+                      user_id: userId,
+                      tipo_peticion: "chat_profesor",
+                      clase_tema: "CHAT_PROFESOR",
+                      prompt_tokens: promptTokens,
                       completion_tokens: completionTokens,
                       total_tokens: promptTokens + completionTokens,
-                      model_used: model.id, estimated_cost_usd: totalCost,
-                    }).then(({ error }) => { if (error) console.error("[Copilot] ai_token_usage:", error); });
+                      model_used: model.id,
+                      estimated_cost_usd: totalCost,
+                    }).then(({ error }) => { if (error) console.error("[Copilot API] ai_token_usage:", error); });
+
+                    // NUEVO: Guardar mensajes en supabase desde el servidor para saltar RLS del cliente
+                    if (sessionId) {
+                      const cleanContent = fullText.replace(/<titulo>[\s\S]*?<\/titulo>\n*/g, "");
+                      const assistantMessage = {
+                        role: "assistant",
+                        content: cleanContent,
+                        tokens_in: promptTokens,
+                        tokens_out: completionTokens,
+                        timestamp: new Date().toISOString(),
+                      };
+                      const finalMessages = [...(fullMessages || []), assistantMessage];
+                      
+                      let updatePayload: any = { messages: finalMessages, updated_at: new Date().toISOString() };
+                      const titleMatch = fullText.match(/<titulo>([\s\S]*?)<\/titulo>/);
+                      if (titleMatch && titleMatch[1]) {
+                        updatePayload.session_name = titleMatch[1].trim();
+                      }
+
+                      supabaseAdmin.from("profesor_chat_history").update(updatePayload).eq("id", sessionId)
+                        .then(({ error }) => { if (error) console.error("[Copilot API] Error guardando historial:", error); });
+                    }
                   }
 
                   controller.enqueue(encoder.encode(
