@@ -374,6 +374,7 @@ Ejemplo de cómo debe empezar tu respuesta:
           const decoder = new TextDecoder();
 
           let buffer = "";
+          let lastFinishReason = "";
 
           try {
             // ── Phase 1: Read the stream from OpenRouter ──
@@ -394,6 +395,10 @@ Ejemplo de cómo debe empezar tu respuesta:
                     const data = JSON.parse(dataStr);
                     const chunk = data.choices?.[0]?.delta?.content || "";
                     
+                    if (data.choices?.[0]?.finish_reason) {
+                      lastFinishReason = data.choices[0].finish_reason;
+                    }
+
                     if (data.usage) {
                       promptTokens = data.usage.prompt_tokens || promptTokens;
                       completionTokens = data.usage.completion_tokens || completionTokens;
@@ -409,6 +414,84 @@ Ejemplo de cómo debe empezar tu respuesta:
                     // ignorar lineas parse error
                   }
                 }
+              }
+            }
+
+            // ── Phase 2: Auto-resume if the response was cut off ──
+            let resumesDone = 0;
+            const MAX_RESUMES = 2; // Prevent infinite loops and massive token burn
+
+            while ((lastFinishReason === "length" || lastFinishReason === "max_tokens") && resumesDone < MAX_RESUMES) {
+              resumesDone++;
+              lastFinishReason = ""; // Reset for the next stream
+              
+              const followUpMessages = [
+                ...fullMessagesPayload,
+                { role: "assistant", content: fullText },
+                { role: "user", content: "Continúa generando tu respuesta exactamente desde donde te quedaste. No repitas nada de lo que ya dijiste, simplemente continúa el texto de forma fluida y natural." }
+              ];
+
+              const followUpResponse = await fetch(OPENROUTER_URL, {
+                method: "POST",
+                headers: {
+                  Authorization: `Bearer ${apiKey}`,
+                  "Content-Type": "application/json",
+                  "HTTP-Referer": "https://iez.edu.mx",
+                  "X-Title": "IEZ Platform - Copiloto Profesor Auto-Resume",
+                },
+                body: JSON.stringify({
+                  model: model.id,
+                  messages: followUpMessages,
+                  stream: true,
+                  provider: { data_collection: "deny" }
+                  // Intentionally NOT including plugins here to save time and just continue text
+                }),
+              });
+
+              if (followUpResponse.ok && followUpResponse.body) {
+                const followUpReader = followUpResponse.body.getReader();
+                let followUpBuffer = "";
+
+                while (true) {
+                  const { done: done2, value: value2 } = await followUpReader.read();
+                  if (done2) break;
+
+                  followUpBuffer += decoder.decode(value2, { stream: true });
+                  const followUpLines = followUpBuffer.split("\n");
+                  followUpBuffer = followUpLines.pop() || "";
+
+                  for (const line of followUpLines) {
+                    if (line.startsWith("data: ")) {
+                      const dataStr = line.replace("data: ", "").trim();
+                      if (dataStr === "[DONE]") continue;
+
+                      try {
+                        const data = JSON.parse(dataStr);
+                        const chunk = data.choices?.[0]?.delta?.content || "";
+                        
+                        if (data.choices?.[0]?.finish_reason) {
+                          lastFinishReason = data.choices[0].finish_reason;
+                        }
+
+                        if (data.usage) {
+                          promptTokens += data.usage.prompt_tokens || 0;
+                          completionTokens += data.usage.completion_tokens || 0;
+                        }
+
+                        if (chunk) {
+                          fullText += chunk;
+                          controller.enqueue(
+                            encoder.encode(`data: ${JSON.stringify({ delta: chunk })}\n\n`)
+                          );
+                        }
+                      } catch (e) {
+                        // ignorar
+                      }
+                    }
+                  }
+                }
+              } else {
+                break; // If fetch fails, break out of resume loop
               }
             }
 
