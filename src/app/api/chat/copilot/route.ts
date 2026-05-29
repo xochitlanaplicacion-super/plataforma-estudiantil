@@ -373,6 +373,7 @@ Ejemplo de cómo debe empezar tu respuesta:
           const reader = response.body!.getReader();
           const decoder = new TextDecoder();
 
+          let buffer = "";
           try {
             while (true) {
               const { done, value } = await reader.read();
