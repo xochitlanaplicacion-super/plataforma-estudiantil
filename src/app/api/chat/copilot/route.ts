@@ -378,102 +378,105 @@ Ejemplo de cómo debe empezar tu respuesta:
               const { done, value } = await reader.read();
               if (done) break;
 
-              const chunk = decoder.decode(value, { stream: true });
-              const lines = chunk.split("\n").filter((l) => l.startsWith("data: "));
+              buffer += decoder.decode(value, { stream: true });
+              const lines = buffer.split("\n");
+              buffer = lines.pop() || "";
 
               for (const line of lines) {
-                const payload = line.replace("data: ", "").trim();
+                if (line.startsWith("data: ")) {
+                  const dataStr = line.replace("data: ", "").trim();
+                  if (dataStr === "[DONE]") continue;
 
-                if (payload === "[DONE]") {
-                  if (userId && supabaseUrl && supabaseKey) {
-                    const totalCost =
-                      (promptTokens / 1_000_000) * model.costInput +
-                      (completionTokens / 1_000_000) * model.costOutput;
-
-                    // Como OpenRouter ejecuta la busqueda internamente y no siempre envía tool_calls al cliente,
-                    // determinamos que usó el internet SÓLO si incluyó enlaces web reales en su respuesta.
-                    const hasLink = /(https?:\/\/|www\.|[a-zA-Z0-9-]+\.(com|es|mx|net|org|edu|gob)\b)/i.test(fullText);
-                    if (canUseWebSearch && hasLink) didWebSearch = true;
-
-                    if (didWebSearch) {
-                      const today = new Date().toISOString().split('T')[0];
-                      supabaseAdmin.from("ai_daily_web_searches").upsert(
-                        { profesor_id: userId, fecha: today, search_count: todaySearchCount + 1 },
-                        { onConflict: 'profesor_id, fecha' }
-                      ).catch(e => console.error("[Copilot] Error upsert web search:", e));
+                  try {
+                    const data = JSON.parse(dataStr);
+                    const chunk = data.choices?.[0]?.delta?.content || "";
+                    
+                    if (data.usage) {
+                      promptTokens = data.usage.prompt_tokens || promptTokens;
+                      completionTokens = data.usage.completion_tokens || completionTokens;
                     }
 
-                    const usageLogPromise = supabaseAdmin.from("ai_usage_log").insert({
-                      profesor_id: userId, chat_session_id: sessionId || null,
-                      modelo_usado: model.id, tokens_entrada: promptTokens,
-                      tokens_salida: completionTokens, costo_usd: totalCost,
-                    });
-
-                    const tokenUsagePromise = supabaseAdmin.from("ai_token_usage").insert({
-                      user_id: userId, tipo_peticion: "chat_profesor",
-                      clase_tema: "CHAT_PROFESOR", prompt_tokens: promptTokens,
-                      completion_tokens: completionTokens, total_tokens: promptTokens + completionTokens,
-                      model_used: model.id, estimated_cost_usd: totalCost,
-                    });
-
-                    let historyPromise = Promise.resolve();
-
-                    if (sessionId) {
-                      const cleanContent = fullText.replace(/<titulo>[\s\S]*?<\/titulo>\n*/g, "");
-                      const assistantMessage = {
-                        role: "assistant", content: cleanContent,
-                        tokens_in: promptTokens, tokens_out: completionTokens,
-                        timestamp: new Date().toISOString(),
-                      };
-                      
-                      const { data: currentSession } = await supabaseAdmin
-                        .from("profesor_chat_history")
-                        .select("messages")
-                        .eq("id", sessionId)
-                        .single();
-                        
-                      let finalMessages = currentSession?.messages || [];
-                      if (messages.length > 0) {
-                         const lastMsg = messages[messages.length - 1];
-                         if (lastMsg.role === "user") {
-                           finalMessages.push({ role: "user", content: lastMsg.content, timestamp: new Date().toISOString() });
-                         }
-                      }
-                      
-                      finalMessages.push(assistantMessage);
-                      
-                      let updatePayload: any = { messages: finalMessages, updated_at: new Date().toISOString() };
-                      const titleMatch = fullText.match(/<titulo>([\s\S]*?)<\/titulo>/);
-                      if (titleMatch && titleMatch[1]) updatePayload.session_name = titleMatch[1].trim();
-
-                      historyPromise = supabaseAdmin.from("profesor_chat_history").update(updatePayload).eq("id", sessionId).then();
+                    if (chunk) {
+                      fullText += chunk;
+                      controller.enqueue(
+                        encoder.encode(`data: ${JSON.stringify({ delta: chunk })}\n\n`)
+                      );
                     }
-
-                    await Promise.allSettled([usageLogPromise, tokenUsagePromise, historyPromise]);
+                  } catch (e) {
+                    // ignorar lineas parse error
                   }
-
-                  controller.enqueue(encoder.encode(
-                    `data: ${JSON.stringify({ done: true, fullText, modelUsed: model.id, tokens: { prompt: promptTokens, completion: completionTokens } })}\n\n`
-                  ));
-                  controller.close();
-                  return;
                 }
-
-                try {
-                  const parsed = JSON.parse(payload);
-                  
-                  const delta = parsed.choices?.[0]?.delta?.content || "";
-                  if (delta) {
-                    fullText += delta;
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ delta })}\n\n`));
-                  }
-                  if (parsed.usage) {
-                    promptTokens = parsed.usage.prompt_tokens || promptTokens;
-                    completionTokens = parsed.usage.completion_tokens || completionTokens;
-                  }
-                } catch { /* chunk malformado */ }
               }
             }
+
+            if (userId && supabaseUrl && supabaseKey) {
+              const totalCost =
+                (promptTokens / 1_000_000) * model.costInput +
+                (completionTokens / 1_000_000) * model.costOutput;
+
+              const hasLink = /(https?:\/\/|www\.|[a-zA-Z0-9-]+\.(com|es|mx|net|org|edu|gob)\b)/i.test(fullText);
+              if (canUseWebSearch && hasLink) didWebSearch = true;
+
+              if (didWebSearch) {
+                const today = new Date().toISOString().split('T')[0];
+                supabaseAdmin.from("ai_daily_web_searches").upsert(
+                  { profesor_id: userId, fecha: today, search_count: todaySearchCount + 1 },
+                  { onConflict: 'profesor_id, fecha' }
+                ).catch(e => console.error("[Copilot] Error upsert web search:", e));
+              }
+
+              const usageLogPromise = supabaseAdmin.from("ai_usage_log").insert({
+                profesor_id: userId, chat_session_id: sessionId || null,
+                modelo_usado: model.id, tokens_entrada: promptTokens,
+                tokens_salida: completionTokens, costo_usd: totalCost,
+              });
+
+              const tokenUsagePromise = supabaseAdmin.from("ai_token_usage").insert({
+                user_id: userId, tipo_peticion: "chat_profesor",
+                clase_tema: "CHAT_PROFESOR", prompt_tokens: promptTokens,
+                completion_tokens: completionTokens, total_tokens: promptTokens + completionTokens,
+                model_used: model.id, estimated_cost_usd: totalCost,
+              });
+
+              let historyPromise = Promise.resolve();
+
+              if (sessionId) {
+                const cleanContent = fullText.replace(/<titulo>[\s\S]*?<\/titulo>\n*/g, "");
+                const assistantMessage = {
+                  role: "assistant", content: cleanContent,
+                  tokens_in: promptTokens, tokens_out: completionTokens,
+                  timestamp: new Date().toISOString(),
+                };
+                
+                const { data: currentSession } = await supabaseAdmin
+                  .from("profesor_chat_history")
+                  .select("messages")
+                  .eq("id", sessionId)
+                  .single();
+                  
+                let finalMessages = currentSession?.messages || [];
+                if (messages.length > 0) {
+                   const lastMsg = messages[messages.length - 1];
+                   if (lastMsg.role === "user") {
+                     finalMessages.push({ role: "user", content: lastMsg.content, timestamp: new Date().toISOString() });
+                   }
+                }
+                
+                finalMessages.push(assistantMessage);
+                
+                let updatePayload: any = { messages: finalMessages, updated_at: new Date().toISOString() };
+                const titleMatch = fullText.match(/<titulo>([\s\S]*?)<\/titulo>/);
+                if (titleMatch && titleMatch[1]) updatePayload.session_name = titleMatch[1].trim();
+
+                historyPromise = supabaseAdmin.from("profesor_chat_history").update(updatePayload).eq("id", sessionId).then();
+              }
+
+              await Promise.allSettled([usageLogPromise, tokenUsagePromise, historyPromise]);
+            }
+
+            controller.enqueue(encoder.encode(
+              `data: ${JSON.stringify({ done: true, fullText, modelUsed: model.id, tokens: { prompt: promptTokens, completion: completionTokens } })}\n\n`
+            ));
           } catch (streamError) {
             console.error("[Copilot] Error en stream:", streamError);
             controller.error(streamError);
