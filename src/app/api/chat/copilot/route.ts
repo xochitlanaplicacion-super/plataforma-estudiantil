@@ -422,7 +422,9 @@ Ejemplo de cómo debe empezar tu respuesta:
                 supabaseAdmin.from("ai_daily_web_searches").upsert(
                   { profesor_id: userId, fecha: today, search_count: todaySearchCount + 1 },
                   { onConflict: 'profesor_id, fecha' }
-                ).catch(e => console.error("[Copilot] Error upsert web search:", e));
+                ).then(({ error }: any) => {
+                  if (error) console.error("[Copilot] Error upsert web search:", error);
+                });
               }
 
               const usageLogPromise = supabaseAdmin.from("ai_usage_log").insert({
@@ -468,7 +470,7 @@ Ejemplo de cómo debe empezar tu respuesta:
                 const titleMatch = fullText.match(/<titulo>([\s\S]*?)<\/titulo>/);
                 if (titleMatch && titleMatch[1]) updatePayload.session_name = titleMatch[1].trim();
 
-                historyPromise = supabaseAdmin.from("profesor_chat_history").update(updatePayload).eq("id", sessionId).then();
+                historyPromise = supabaseAdmin.from("profesor_chat_history").update(updatePayload).eq("id", sessionId).then(() => {}) as any;
               }
 
               await Promise.allSettled([usageLogPromise, tokenUsagePromise, historyPromise]);
@@ -480,6 +482,8 @@ Ejemplo de cómo debe empezar tu respuesta:
           } catch (streamError) {
             console.error("[Copilot] Error en stream:", streamError);
             controller.error(streamError);
+          } finally {
+            controller.close();
           }
         },
       });

@@ -413,7 +413,7 @@ Ejemplo de cómo debe empezar tu respuesta:
                 updatePayload.session_name = titleMatch[1].trim();
               }
 
-              historyPromise = supabaseAdmin.from("alumno_chat_history").update(updatePayload).eq("id", sessionId).then();
+              historyPromise = supabaseAdmin.from("alumno_chat_history").update(updatePayload).eq("id", sessionId).then(() => {}) as any;
             }
 
             // Esperar a que las promesas de guardado terminen para que Vercel no las cancele
