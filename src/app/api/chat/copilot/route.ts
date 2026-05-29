@@ -351,7 +351,7 @@ Ejemplo de cómo debe empezar tu respuesta:
           messages: fullMessagesPayload,
           stream: true,
           provider: { data_collection: "deny" },
-          ...(canUseWebSearch ? { tools: [{ type: "openrouter:web_search" }] } : {})
+          ...(canUseWebSearch ? { plugins: [{ id: "web", max_results: 5 }] } : {})
         }),
       });
 
@@ -374,11 +374,9 @@ Ejemplo de cómo debe empezar tu respuesta:
           const decoder = new TextDecoder();
 
           let buffer = "";
-          let lastFinishReason = "";
-          let toolCallsDetected = false;
 
           try {
-            // ── Phase 1: Read the initial stream from OpenRouter ──
+            // ── Phase 1: Read the stream from OpenRouter ──
             while (true) {
               const { done, value } = await reader.read();
               if (done) break;
@@ -396,16 +394,6 @@ Ejemplo de cómo debe empezar tu respuesta:
                     const data = JSON.parse(dataStr);
                     const chunk = data.choices?.[0]?.delta?.content || "";
                     
-                    // Track finish_reason to detect tool_calls
-                    if (data.choices?.[0]?.finish_reason) {
-                      lastFinishReason = data.choices[0].finish_reason;
-                    }
-
-                    // Detect tool_calls in delta (web search)
-                    if (data.choices?.[0]?.delta?.tool_calls) {
-                      toolCallsDetected = true;
-                    }
-
                     if (data.usage) {
                       promptTokens = data.usage.prompt_tokens || promptTokens;
                       completionTokens = data.usage.completion_tokens || completionTokens;
@@ -421,84 +409,6 @@ Ejemplo de cómo debe empezar tu respuesta:
                     // ignorar lineas parse error
                   }
                 }
-              }
-            }
-
-            // ── Phase 2: If the model tried to use web search (tool_calls), ──
-            // ── OpenRouter closes the stream prematurely. Make a follow-up  ──
-            // ── request WITHOUT tools so the model answers directly.         ──
-            if (lastFinishReason === "tool_calls" || toolCallsDetected) {
-              console.log("[Copilot] Detected tool_calls - making follow-up request without tools");
-              didWebSearch = true;
-
-              // Build follow-up messages: keep system prompt + user message,
-              // include partial text as context so the model continues naturally
-              const followUpSystemAddendum = fullText.trim()
-                ? `\n\n[CONTINUACIÓN OBLIGATORIA]\nYa comenzaste a responder lo siguiente:\n"${fullText.trim()}"\n\nAhora CONTINÚA directamente desde donde te quedaste. NO repitas lo que ya dijiste. Completa la respuesta de forma natural y completa.`
-                : "";
-
-              const followUpMessages = [
-                { role: "system", content: fullMessagesPayload[0].content + followUpSystemAddendum },
-                ...fullMessagesPayload.slice(1),
-              ];
-
-              const followUpResponse = await fetch(OPENROUTER_URL, {
-                method: "POST",
-                headers: {
-                  Authorization: `Bearer ${apiKey}`,
-                  "Content-Type": "application/json",
-                  "HTTP-Referer": "https://iez.edu.mx",
-                  "X-Title": "IEZ Platform - Copiloto Profesor",
-                },
-                body: JSON.stringify({
-                  model: model.id,
-                  messages: followUpMessages,
-                  stream: true,
-                  provider: { data_collection: "deny" },
-                  // NO tools - the model must answer directly
-                }),
-              });
-
-              if (followUpResponse.ok && followUpResponse.body) {
-                const followUpReader = followUpResponse.body.getReader();
-                let followUpBuffer = "";
-
-                while (true) {
-                  const { done: done2, value: value2 } = await followUpReader.read();
-                  if (done2) break;
-
-                  followUpBuffer += decoder.decode(value2, { stream: true });
-                  const followUpLines = followUpBuffer.split("\n");
-                  followUpBuffer = followUpLines.pop() || "";
-
-                  for (const line of followUpLines) {
-                    if (line.startsWith("data: ")) {
-                      const dataStr = line.replace("data: ", "").trim();
-                      if (dataStr === "[DONE]") continue;
-
-                      try {
-                        const data = JSON.parse(dataStr);
-                        const chunk = data.choices?.[0]?.delta?.content || "";
-
-                        if (data.usage) {
-                          promptTokens += data.usage.prompt_tokens || 0;
-                          completionTokens += data.usage.completion_tokens || 0;
-                        }
-
-                        if (chunk) {
-                          fullText += chunk;
-                          controller.enqueue(
-                            encoder.encode(`data: ${JSON.stringify({ delta: chunk })}\n\n`)
-                          );
-                        }
-                      } catch (e) {
-                        // ignorar
-                      }
-                    }
-                  }
-                }
-              } else {
-                console.error("[Copilot] Follow-up request failed:", followUpResponse.status);
               }
             }
 
