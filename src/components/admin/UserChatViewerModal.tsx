@@ -10,6 +10,15 @@ import {
 import { Loader2, MessageSquare, AlertTriangle, User, Bot, Calendar, Info } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkMath from "remark-math";
+import rehypeKatex from "rehype-katex";
+import "katex/dist/katex.min.css"; // Ensure Katex styles are loaded
+
+const preprocessLatex = (text: string) => {
+  let result = text.replace(/\\\[([\s\S]*?)\\\]/g, (_, content) => `$$${content}$$`);
+  result = result.replace(/\\\(([\s\S]*?)\\\)/g, (_, content) => `$${content}$`);
+  return result;
+};
 
 interface ChatMessage {
   role: "user" | "assistant" | "system";
@@ -89,7 +98,7 @@ export function UserChatViewerModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-6xl h-[85vh] p-0 flex flex-col overflow-hidden bg-gray-50 border-0 rounded-2xl shadow-2xl">
+      <DialogContent className="max-w-[95vw] h-[95vh] p-0 flex flex-col overflow-hidden bg-gray-50 border-0 rounded-2xl shadow-2xl">
         {/* Header */}
         <div 
           className="flex items-center justify-between px-6 py-4 border-b border-gray-200"
@@ -193,15 +202,22 @@ export function UserChatViewerModal({
                         {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
                       </div>
                       
-                      <div className={`max-w-[80%] rounded-2xl p-4 shadow-sm ${
+                      <div className={`w-full overflow-hidden rounded-2xl p-4 shadow-sm ${
                         msg.role === 'user' 
                           ? 'bg-white border border-gray-200 text-gray-800' 
                           : 'text-white'
                       }`}
                       style={{ backgroundColor: msg.role === 'assistant' ? primaryColor : undefined }}>
-                        <div className={`prose prose-sm max-w-none ${msg.role === 'assistant' ? 'prose-invert' : ''}`}>
-                          <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                            {msg.content}
+                        <div className={`prose prose-sm max-w-none break-words ${msg.role === 'assistant' ? 'prose-invert' : ''}`}>
+                          <ReactMarkdown 
+                            remarkPlugins={[remarkMath, remarkGfm]}
+                            rehypePlugins={[rehypeKatex]}
+                            components={{
+                              p: ({ node, ...props }) => <p {...props} className="mb-2 whitespace-pre-wrap break-words" />,
+                              a: ({ node, ...props }) => <a {...props} className="underline break-all" target="_blank" rel="noopener noreferrer" />
+                            }}
+                          >
+                            {preprocessLatex(msg.content)}
                           </ReactMarkdown>
                         </div>
                       </div>
