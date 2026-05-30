@@ -330,11 +330,17 @@ Ejemplo de cómo debe empezar tu respuesta:
   let lastError = "Error desconocido";
 
   // ORQUESTACIÓN MULTI-MODELO:
-  // Si tiene oportunidad de búsqueda, usamos DeepSeek V4 Flash (mejor razonamiento para búsquedas)
-  // Si ya agotó sus búsquedas, ahorramos usando Qwen 3.5 Flash (excelente redacción interna)
+  // Si tiene oportunidad de búsqueda, usamos DeepSeek V4 Flash (mejor razonamiento para búsquedas). Si falla, Qwen.
+  // Si ya agotó sus búsquedas, ahorramos usando Qwen 3.5 Flash (excelente redacción interna). Si falla, DeepSeek.
   const activeModels = canUseWebSearch
-    ? [{ id: "deepseek/deepseek-v4-flash", costInput: 0.14, costOutput: 0.28 }]
-    : [{ id: "qwen/qwen3.5-flash-02-23", costInput: 0.065, costOutput: 0.26 }];
+    ? [
+        { id: "deepseek/deepseek-v4-flash", costInput: 0.14, costOutput: 0.28 },
+        { id: "qwen/qwen3.5-flash-02-23", costInput: 0.065, costOutput: 0.26 }
+      ]
+    : [
+        { id: "qwen/qwen3.5-flash-02-23", costInput: 0.065, costOutput: 0.26 },
+        { id: "deepseek/deepseek-v4-flash", costInput: 0.14, costOutput: 0.28 }
+      ];
 
   for (const model of activeModels) {
     try {
