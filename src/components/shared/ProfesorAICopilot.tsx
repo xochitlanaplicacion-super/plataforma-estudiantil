@@ -36,6 +36,32 @@ interface ProfesorAICopilotProps {
   userName?: string;
   onClose: () => void;
 }
+// ── Preprocessor LaTeX: convertir \( \) → $ $ y \[ \] → $$ $$
+const preprocessLatex = (text: string) => {
+  let result = text.replace(/\\\[([\s\S]*?)\\\]/g, (_, content) => `$$${content}$$`);
+  result = result.replace(/\\\(([\s\S]*?)\\\)/g, (_, content) => `$${content}$`);
+  return result;
+};
+
+const MemoizedMarkdown = React.memo(({ content, isDark }: { content: string; isDark: boolean }) => (
+  <ReactMarkdown
+    className="prose-sm max-w-none dark:prose-invert"
+    remarkPlugins={[remarkMath, remarkGfm]}
+    rehypePlugins={[rehypeKatex]}
+    components={{
+      a: ({ node, ...props }) => (
+        <a {...props} target="_blank" rel="noopener noreferrer" className={isDark ? 'text-cyan-300 underline hover:text-cyan-100 break-all font-medium' : 'text-indigo-600 underline hover:text-indigo-800 break-all font-medium'} />
+      ),
+      p: ({ node, ...props }) => <p {...props} className={isDark ? 'text-slate-300 mb-2 whitespace-pre-wrap' : 'text-gray-700 mb-2 whitespace-pre-wrap'} />,
+      li: ({ node, ...props }) => <li {...props} className={isDark ? 'text-slate-300' : 'text-gray-600'} />,
+      h1: ({ node, ...props }) => <h1 {...props} className={isDark ? 'text-white text-xl font-black mt-4 mb-2' : 'text-gray-900 text-xl font-black mt-4 mb-2'} />,
+      h2: ({ node, ...props }) => <h2 {...props} className={isDark ? 'text-indigo-100 text-lg font-black mt-4 mb-2' : 'text-indigo-800 text-lg font-black mt-4 mb-2'} />,
+      h3: ({ node, ...props }) => <h3 {...props} className={isDark ? 'text-indigo-200 text-base font-black mt-3 mb-1' : 'text-indigo-700 text-base font-black mt-3 mb-1'} />
+    }}
+  >
+    {preprocessLatex(content)}
+  </ReactMarkdown>
+));
 
 // ── Componente Principal ───────────────────────────────────────────────
 export function ProfesorAICopilot({ userId, userName, onClose }: ProfesorAICopilotProps) {
