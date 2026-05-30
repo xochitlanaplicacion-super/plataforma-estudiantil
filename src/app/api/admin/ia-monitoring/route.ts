@@ -169,7 +169,7 @@ ${JSON.stringify(condensed)}`;
         "X-Title": "Monitoreo IA"
       },
       body: JSON.stringify({
-        model: "deepseek/deepseek-chat", // OpenRouter model syntax
+        model: "deepseek/deepseek-v4-flash", // OpenRouter model syntax
         messages: [{ role: "user", content: prompt }],
         temperature: 0.1,
         response_format: { type: "json_object" },
