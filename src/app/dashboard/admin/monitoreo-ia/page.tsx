@@ -159,7 +159,7 @@ export default function MonitoreoIAPage() {
             Analizando con IA
           </h2>
           <p className="text-blue-200 font-medium text-sm">
-            DeepSeek V4 Flash está clasificando los nuevos mensajes...
+            El motor de IA está clasificando los nuevos mensajes...
           </p>
           <div className="flex items-center gap-2 mt-6 bg-white/10 px-5 py-2.5 rounded-full">
             <Loader2 size={14} className="animate-spin text-blue-300" />
@@ -289,7 +289,7 @@ export default function MonitoreoIAPage() {
               <div className="h-72 flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-xl bg-gray-50/50">
                 <RefreshCw className="text-gray-300 mb-3" size={32} />
                 <p className="text-sm text-gray-500 font-medium text-center px-6">
-                  No hay categorías aún. Presiona "Sincronizar Análisis" para que DeepSeek clasifique los chats.
+                  No hay categorías aún. Presiona "Sincronizar Análisis" para que el sistema clasifique los chats.
                 </p>
               </div>
             ) : (

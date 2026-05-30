@@ -167,8 +167,8 @@ ${JSON.stringify(condensed)}`;
 
     if (!aiResponse.ok) {
       const errText = await aiResponse.text();
-      console.error("DeepSeek Error:", errText);
-      throw new Error(`Error en API DeepSeek: ${aiResponse.status}`);
+      console.error("AI API Error:", errText);
+      throw new Error(`Error en el servicio de análisis: ${aiResponse.status}`);
     }
 
     const aiData = await aiResponse.json();
