@@ -9,11 +9,12 @@ import {
 } from "lucide-react";
 import Image from "next/image";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip,
-  ResponsiveContainer, Cell
+  PieChart, Pie, Tooltip as RechartsTooltip,
+  ResponsiveContainer, Cell, Legend
 } from "recharts";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { UserChatViewerModal } from "@/components/admin/UserChatViewerModal";
 
 // ── Tipos ──────────────────────────────────────────────────────────────
 interface RedListAlert {
@@ -55,6 +56,12 @@ export default function MonitoreoIAPage() {
   const [days, setDays] = useState(7);
   const [activeTab, setActiveTab] = useState<"alumnos" | "profesores">("alumnos");
 
+  // State para el directorio de usuarios
+  const [activeDirectoryTab, setActiveDirectoryTab] = useState<"alumnos" | "profesores">("alumnos");
+  const [directoryUsers, setDirectoryUsers] = useState<any[]>([]);
+  const [isLoadingDirectory, setIsLoadingDirectory] = useState(false);
+  const [selectedUserForChat, setSelectedUserForChat] = useState<{ id: string, name: string, type: "alumno"|"profesor" } | null>(null);
+
   const primaryColor = config?.color_primario || "#4f46e5";
 
   // ── Carga de datos desde BD local (instántaneo) ────────────────────
@@ -95,9 +102,30 @@ export default function MonitoreoIAPage() {
     }
   }, [supabase]);
 
+  const loadDirectory = useCallback(async (type: "alumnos" | "profesores") => {
+    setIsLoadingDirectory(true);
+    try {
+      // type="alumnos" -> API expects "alumno"
+      const apiType = type === "alumnos" ? "alumno" : "profesor";
+      const res = await fetch(`/api/admin/ia-monitoring/users?type=${apiType}`);
+      const data = await res.json();
+      if (data.success) {
+        setDirectoryUsers(data.users || []);
+      }
+    } catch (e) {
+      console.error("Error loading directory:", e);
+    } finally {
+      setIsLoadingDirectory(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadDashboardData();
   }, [loadDashboardData]);
+
+  useEffect(() => {
+    loadDirectory(activeDirectoryTab);
+  }, [activeDirectoryTab, loadDirectory]);
 
   // ── Disparar análisis Delta ────────────────────────────────────────
   const handleRunAnalysis = async () => {
@@ -275,61 +303,78 @@ export default function MonitoreoIAPage() {
 
           <div className="p-6">
             <div className="flex items-center gap-2 mb-6">
-              <Layers size={15} className="text-gray-400" />
-              <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">
-                Categorización de Temas (acumulado permanente)
+              <Layers size={18} style={{ color: primaryColor }} />
+              <h3 className="text-sm font-black text-gray-700 uppercase tracking-widest">
+                Categorización de Temas
               </h3>
             </div>
 
             {isLoadingData ? (
-              <div className="h-72 flex items-center justify-center">
-                <Loader2 className="animate-spin text-gray-300" size={32} />
+              <div className="h-80 flex items-center justify-center">
+                <Loader2 className="animate-spin text-gray-300" size={40} />
               </div>
             ) : currentStats.length === 0 ? (
-              <div className="h-72 flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-xl bg-gray-50/50">
+              <div className="h-80 flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-3xl bg-gray-50/50">
                 <RefreshCw className="text-gray-300 mb-3" size={32} />
                 <p className="text-sm text-gray-500 font-medium text-center px-6">
                   No hay categorías aún. Presiona "Sincronizar Análisis" para que el sistema clasifique los chats.
                 </p>
               </div>
             ) : (
-              <div className="h-72 w-full">
+              <div className="h-80 w-full relative">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart
-                    data={currentStats}
-                    layout="vertical"
-                    margin={{ top: 5, right: 40, left: 10, bottom: 5 }}
-                  >
-                    <XAxis type="number" hide />
-                    <YAxis
-                      dataKey="categoria"
-                      type="category"
-                      width={160}
-                      tick={{ fontSize: 12, fontWeight: 600, fill: "#64748b" }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
+                  <PieChart>
+                    <Pie
+                      data={currentStats}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={85}
+                      outerRadius={120}
+                      paddingAngle={4}
+                      dataKey="conteo"
+                      nameKey="categoria"
+                      stroke="none"
+                      cornerRadius={8}
+                    >
+                      {currentStats.map((entry, index) => {
+                        // Generar variaciones del color primario
+                        const opacity = Math.max(0.3, 1 - (index * 0.15));
+                        return (
+                          <Cell 
+                            key={`cell-${index}`} 
+                            fill={primaryColor} 
+                            opacity={opacity}
+                            style={{ filter: "drop-shadow(0px 4px 6px rgba(0,0,0,0.1))" }}
+                          />
+                        );
+                      })}
+                    </Pie>
                     <RechartsTooltip
-                      cursor={{ fill: "#f8fafc" }}
+                      cursor={{ fill: "transparent" }}
                       contentStyle={{
-                        borderRadius: "12px",
+                        borderRadius: "16px",
                         border: "none",
-                        boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)",
-                        fontSize: "12px",
+                        boxShadow: "0 10px 25px -5px rgba(0,0,0,0.1)",
+                        fontSize: "13px",
+                        fontWeight: "bold"
                       }}
                       formatter={(value: any) => [`${value} sesiones`, "Total"]}
                     />
-                    <Bar dataKey="conteo" radius={[0, 6, 6, 0]} barSize={26}>
-                      {currentStats.map((_, index) => (
-                        <Cell
-                          key={`cell-${index}`}
-                          fill={primaryColor}
-                          opacity={Math.max(0.4, 1 - index * 0.12)}
-                        />
-                      ))}
-                    </Bar>
-                  </BarChart>
+                    <Legend 
+                      verticalAlign="bottom" 
+                      height={36} 
+                      iconType="circle"
+                      formatter={(value) => <span className="text-gray-600 font-medium text-xs ml-1">{value}</span>}
+                    />
+                  </PieChart>
                 </ResponsiveContainer>
+                {/* Etiqueta central */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-8">
+                  <span className="text-3xl font-black text-gray-900">
+                    {currentStats.reduce((sum, item) => sum + item.conteo, 0)}
+                  </span>
+                  <span className="text-[10px] uppercase font-bold text-gray-400 tracking-widest">Sesiones</span>
+                </div>
               </div>
             )}
           </div>
@@ -409,6 +454,98 @@ export default function MonitoreoIAPage() {
         </div>
 
       </div>
+
+      {/* ── Directorio de Usuarios de IA (NUEVO) ───────────────────────── */}
+      <div className="bg-white rounded-[32px] border border-gray-100 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden mt-10">
+        <div className="p-8 pb-4">
+          <h2 className="text-xl font-black text-gray-900 flex items-center gap-2 mb-2">
+            <MessageSquare size={24} style={{ color: primaryColor }} />
+            Directorio de Historias IA
+          </h2>
+          <p className="text-sm text-gray-500">
+            Explora las conversaciones individuales de cada usuario con la inteligencia artificial.
+          </p>
+        </div>
+
+        {/* Pestañas de Directorio */}
+        <div className="px-8 border-b border-gray-100 flex items-center gap-6">
+          {(["alumnos", "profesores"] as const).map((tab) => (
+            <button
+              key={`dir-${tab}`}
+              onClick={() => setActiveDirectoryTab(tab)}
+              className={cn(
+                "py-4 font-black text-sm transition-all capitalize border-b-2",
+                activeDirectoryTab === tab
+                  ? "text-gray-900"
+                  : "text-gray-400 border-transparent hover:text-gray-600"
+              )}
+              style={activeDirectoryTab === tab ? { borderColor: primaryColor } : {}}
+            >
+              {tab} con IA
+            </button>
+          ))}
+        </div>
+
+        <div className="p-8 bg-slate-50/50">
+          {isLoadingDirectory ? (
+            <div className="flex justify-center py-20"><Loader2 className="animate-spin text-gray-300" size={32} /></div>
+          ) : directoryUsers.length === 0 ? (
+            <div className="text-center py-16 text-gray-400 font-medium bg-white rounded-2xl border border-dashed border-gray-200">
+              Ningún {activeDirectoryTab.slice(0, -1)} ha utilizado la IA aún.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {directoryUsers.map((user) => (
+                <div 
+                  key={user.id} 
+                  className="bg-white rounded-2xl p-5 border border-gray-100 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col justify-between"
+                >
+                  <div className="mb-4">
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="w-10 h-10 rounded-full flex items-center justify-center font-black text-white text-lg"
+                           style={{ backgroundColor: primaryColor }}>
+                        {user.nombre.charAt(0)}
+                      </div>
+                      <span className="bg-gray-100 text-gray-600 font-bold text-xs px-2.5 py-1 rounded-full">
+                        {user.total_sesiones} chats
+                      </span>
+                    </div>
+                    <h4 className="font-bold text-gray-900">{user.nombre} {user.apellidos}</h4>
+                    {user.matricula && (
+                      <p className="text-xs text-gray-500 font-medium">Matrícula: {user.matricula}</p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => setSelectedUserForChat({ 
+                      id: user.id, 
+                      name: `${user.nombre} ${user.apellidos}`, 
+                      type: user.user_type 
+                    })}
+                    className="w-full text-sm font-bold py-2.5 rounded-xl transition-all"
+                    style={{ backgroundColor: `${primaryColor}15`, color: primaryColor }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = `${primaryColor}25`}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = `${primaryColor}15`}
+                  >
+                    Ver Conversaciones
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Modal Visor de Chats */}
+      {selectedUserForChat && (
+        <UserChatViewerModal
+          isOpen={!!selectedUserForChat}
+          onClose={() => setSelectedUserForChat(null)}
+          userId={selectedUserForChat.id}
+          userName={selectedUserForChat.name}
+          userType={selectedUserForChat.type}
+          primaryColor={primaryColor}
+        />
+      )}
     </div>
   );
 }
