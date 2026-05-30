@@ -2,14 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-
-// ── MODELOS PARA ALUMNOS ──
-// Principal: gpt-oss-120b (gratuito, alta calidad)
-// Fallback:  qwen/qwen3.5-flash-02-23 (gratuito, respaldo de emergencia)
-const ALUMNO_MODELS = [
-  { id: "openai/gpt-oss-120b",        label: "GPT-oss 120B",   costInput: 0.039, costOutput: 0.18 },
-  { id: "qwen/qwen3.5-flash-02-23",   label: "Qwen 3.5 Flash", costInput: 0.065, costOutput: 0.26 },
-];
+export const maxDuration = 60;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSULTA SEGURA: Solo los datos del alumno autenticado (READ-ONLY)
@@ -211,6 +204,24 @@ export async function POST(req: NextRequest) {
       return new Response(JSON.stringify({ error: "Faltan parámetros o el formato de mensajes es incorrecto." }), { status: 400 });
     }
 
+    // Consultar el contador diario de mensajes
+    let todayMessageCount = 0;
+    const today = new Date().toISOString().split('T')[0];
+    try {
+      const { data: usageData } = await supabaseAdmin
+        .from("ai_alumno_daily_messages")
+        .select("message_count")
+        .eq("alumno_id", userId)
+        .eq("fecha", today)
+        .maybeSingle();
+      
+      if (usageData) {
+        todayMessageCount = usageData.message_count;
+      }
+    } catch (err) {
+      console.error("[ALUMNO API] Error al obtener contador diario:", err);
+    }
+
     // Construir el RAG context
     const bdContext = await buildAlumnoContext(userId, supabaseAdmin);
     
@@ -259,11 +270,25 @@ Ejemplo de cómo debe empezar tu respuesta:
 
     // ── LLAMADA CON FALLBACK AUTOMÁTICO ─────────────────────────────────
     let response: globalThis.Response | null = null;
-    let usedModel = ALUMNO_MODELS[0];
+    
+    const activeModels = todayMessageCount < 5
+      ? [
+          { id: "openai/gpt-oss-120b", label: "GPT-oss 120B", providerConfig: { order: ["Novita"], quantizations: ["fp4"] } },
+          { id: "google/gemma-3-27b-it", label: "Gemma 3 27B", providerConfig: { order: ["DeepInfra"], quantizations: ["fp8"] } }
+        ]
+      : [
+          { id: "google/gemma-3-27b-it", label: "Gemma 3 27B", providerConfig: { order: ["DeepInfra"], quantizations: ["fp8"] } }
+        ];
 
-    for (const model of ALUMNO_MODELS) {
+    let usedModel = activeModels[0];
+
+    for (const model of activeModels) {
       try {
         console.log(`[ALUMNO API] Intentando modelo: ${model.label} (${model.id})`);
+        
+        const fetchController = new AbortController();
+        const timeoutId = setTimeout(() => fetchController.abort(), 8000);
+
         const attempt = await fetch(OPENROUTER_URL, {
           method: "POST",
           headers: {
@@ -272,13 +297,43 @@ Ejemplo de cómo debe empezar tu respuesta:
             "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "https://institutoemilianozapata.edu.mx",
             "X-Title": "IEZ Platform - Copiloto Alumno",
           },
-          body: JSON.stringify({ model: model.id, messages: apiMessages, stream: true }),
+          body: JSON.stringify({ 
+            model: model.id, 
+            messages: apiMessages, 
+            stream: true,
+            provider: {
+              data_collection: "deny",
+              ...(model.providerConfig || {})
+            }
+          }),
+          signal: fetchController.signal
         });
+        
+        clearTimeout(timeoutId);
 
         if (attempt.ok && attempt.body) {
           response = attempt;
           usedModel = model;
           console.log(`[ALUMNO API] ✅ Modelo aceptado: ${model.label}`);
+          
+          // Incrementar contador diario de mensajes
+          try {
+            const { data } = await supabaseAdmin
+              .from("ai_alumno_daily_messages")
+              .select("id, message_count")
+              .eq("alumno_id", userId)
+              .eq("fecha", today)
+              .maybeSingle();
+              
+            if (data) {
+              await supabaseAdmin.from("ai_alumno_daily_messages").update({ message_count: data.message_count + 1 }).eq("id", data.id);
+            } else {
+              await supabaseAdmin.from("ai_alumno_daily_messages").insert({ alumno_id: userId, fecha: today, message_count: 1 });
+            }
+          } catch (err) {
+            console.error("[ALUMNO API] Error incrementando uso diario:", err);
+          }
+
           break;
         } else {
           const errText = await attempt.text();
