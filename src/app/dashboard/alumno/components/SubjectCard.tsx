@@ -517,20 +517,20 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
                                           setActiveSlideIndex(0);
                                           setPresentationMode(true);
                                         }}
-                                        className="col-span-full mb-2 flex items-center justify-between p-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl shadow-md transition-all group active:scale-[0.98]"
+                                        className="col-span-full mb-2 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-0 p-3 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-xl shadow-md transition-all group active:scale-[0.98]"
                                       >
-                                        <div className="flex items-center gap-3">
-                                          <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                                        <div className="flex items-center gap-3 w-full sm:w-auto">
+                                          <div className="p-2 bg-white/20 rounded-lg backdrop-blur-sm shrink-0">
                                             <MonitorPlay className="w-5 h-5" />
                                           </div>
-                                          <div className="flex flex-col text-left">
+                                          <div className="flex flex-col text-left min-w-0">
                                             <span className="text-sm font-bold truncate max-w-[200px] md:max-w-[400px]">Diapositivas de la Clase</span>
                                             <span className="text-[10px] font-black uppercase tracking-wider text-blue-100">{tema.slides.length} láminas</span>
                                           </div>
                                         </div>
-                                        <div className="flex items-center gap-4 pr-2">
+                                        <div className="flex items-center justify-between sm:justify-end w-full sm:w-auto gap-4 pr-0 sm:pr-2 pt-2 sm:pt-0 border-t border-white/10 sm:border-t-0 mt-1 sm:mt-0">
                                           <div 
-                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tighter bg-white/10 text-white hover:bg-white/20 transition-all border border-white/20"
+                                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-tighter bg-white/10 text-white hover:bg-white/20 transition-all border border-white/20 shadow-sm"
                                             onClick={(e) => {
                                               e.stopPropagation();
                                               exportSlidesToPptx(tema.slides || [], tema.titulo, inst?.logo_url);
@@ -539,9 +539,9 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
                                             <Download size={12} strokeWidth={3} />
                                             <span className="hidden sm:inline">PPTX</span>
                                           </div>
-                                          <div className="flex items-center gap-2 text-blue-50">
-                                            <span className="text-xs font-black uppercase tracking-widest hidden sm:block">Presentar</span>
-                                            <Play className="w-4 h-4 fill-current" />
+                                          <div className="flex items-center gap-2 text-blue-50 bg-white/10 sm:bg-transparent px-3 py-1.5 sm:px-0 sm:py-0 rounded-lg sm:rounded-none">
+                                            <span className="text-[10px] sm:text-xs font-black uppercase tracking-widest">Presentar</span>
+                                            <Play className="w-3.5 h-3.5 sm:w-4 sm:h-4 fill-current" />
                                           </div>
                                         </div>
                                       </button>
