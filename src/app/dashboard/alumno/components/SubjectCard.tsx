@@ -683,9 +683,9 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
           />
         </div>
         
-        <div className="relative w-full h-full flex items-center justify-center p-4">
-          <div className="w-full max-w-[1600px] mx-auto">
-            <SlideViewer slide={activeSlides[activeSlideIndex]} />
+        <div className="relative w-full h-full flex items-center justify-center p-2 sm:p-4 min-h-0">
+          <div className="w-full h-full max-w-[1600px] mx-auto flex items-center justify-center">
+            <SlideViewer slide={activeSlides[activeSlideIndex]} className="max-h-full max-w-full object-contain" />
           </div>
         </div>
 

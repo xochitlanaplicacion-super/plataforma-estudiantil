@@ -76,7 +76,11 @@ export default function SlideViewer({ slide, className = '' }: SlideViewerProps)
     const updateScale = () => {
       if (containerRef.current) {
         const rect = containerRef.current.getBoundingClientRect();
-        setScale(rect.width / 960);
+        // Calc scales based on the available container dimensions
+        const scaleX = rect.width / 960;
+        const scaleY = rect.height / 540;
+        // Use the smaller scale so it always fits without overflowing
+        setScale(Math.min(scaleX, scaleY) || 1);
       }
     };
     updateScale();
@@ -91,11 +95,10 @@ export default function SlideViewer({ slide, className = '' }: SlideViewerProps)
     return (
       <div 
         ref={containerRef}
-        className={cn("w-full relative overflow-hidden", className)} 
-        style={{ paddingBottom: '56.25%' /* 16:9 */ }}
+        className={cn("w-full relative overflow-hidden aspect-video flex items-center justify-center", className)} 
       >
         <div 
-          className="absolute top-0 left-0 origin-top-left"
+          className="absolute origin-center"
           style={{
             width: '960px',
             height: '540px',
@@ -155,11 +158,10 @@ export default function SlideViewer({ slide, className = '' }: SlideViewerProps)
 
   return (
     <div className={cn(
-      "w-full relative bg-gradient-to-br overflow-hidden",
+      "w-full relative bg-gradient-to-br overflow-hidden aspect-video",
       LEGACY_STYLE_MAP[templateId] || LEGACY_STYLE_MAP['azul'],
       className
     )}
-    style={{ paddingBottom: '56.25%' /* 16:9 */ }}
     >
       <div className="absolute inset-0 flex flex-col md:flex-row items-center justify-center gap-8 p-10 md:p-16">
         <div className="flex-1 flex flex-col justify-center max-w-full overflow-hidden">

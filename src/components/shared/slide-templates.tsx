@@ -26,7 +26,7 @@ const ClassicAzul: React.FC<{ children?: React.ReactNode; className?: string }> 
 // ─── Plantilla 2: Canva Estrellas Burbujas ────────────────────────────────────
 const CanvaEstrellas: React.FC<{ children?: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
   <div className={`w-full h-full bg-[#bad1e2] relative overflow-hidden ${className}`}>
-    <div className="hidden md:block">
+    <div className="hidden lg:block">
       <CanvaEstrellasBackground />
     </div>
     <div className="absolute inset-0 z-10 text-[#1e293b]">
@@ -38,11 +38,11 @@ const CanvaEstrellas: React.FC<{ children?: React.ReactNode; className?: string 
 
 // ─── Plantilla 3: Blue Modern Abstract ────────────────────────────────────────
 const BlueModern: React.FC<{ children?: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
-  <div className={`w-full h-full bg-[#f4f7fc] md:bg-white relative overflow-hidden ${className}`}>
+  <div className={`w-full h-full bg-[#f4f7fc] lg:bg-white relative overflow-hidden ${className}`}>
     <img
       src="/slide-templates/blue-modern.svg"
       alt=""
-      className="hidden md:block absolute inset-0 w-full h-full object-cover"
+      className="hidden lg:block absolute inset-0 w-full h-full object-cover"
       aria-hidden="true"
     />
     <div className="absolute inset-0 z-10 text-[#1e3a5f]">
@@ -53,11 +53,11 @@ const BlueModern: React.FC<{ children?: React.ReactNode; className?: string }> =
 
 // ─── Plantilla 4: Acuarela Multicolor ─────────────────────────────────────────
 const AcuarelaMulticolor: React.FC<{ children?: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
-  <div className={`w-full h-full bg-[#fdfbf7] md:bg-white relative overflow-hidden ${className}`}>
+  <div className={`w-full h-full bg-[#fdfbf7] lg:bg-white relative overflow-hidden ${className}`}>
     <img
       src="/slide-templates/acuarela-multicolor.svg"
       alt=""
-      className="hidden md:block absolute inset-0 w-full h-full object-cover"
+      className="hidden lg:block absolute inset-0 w-full h-full object-cover"
       loading="lazy"
       aria-hidden="true"
     />
@@ -73,7 +73,7 @@ const LluviaIdeas: React.FC<{ children?: React.ReactNode; className?: string }> 
     <img
       src="/slide-templates/lluvia-ideas.svg"
       alt=""
-      className="hidden md:block absolute inset-0 w-full h-full object-cover"
+      className="hidden lg:block absolute inset-0 w-full h-full object-cover"
       loading="lazy"
       aria-hidden="true"
     />
@@ -85,11 +85,11 @@ const LluviaIdeas: React.FC<{ children?: React.ReactNode; className?: string }> 
 
 // ─── Plantilla 6: Purple Watercolor ───────────────────────────────────────────
 const PurpleWatercolor: React.FC<{ children?: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
-  <div className={`w-full h-full bg-[#f5f3fa] md:bg-white relative overflow-hidden ${className}`}>
+  <div className={`w-full h-full bg-[#f5f3fa] lg:bg-white relative overflow-hidden ${className}`}>
     <img
       src="/slide-templates/purple-watercolor.svg"
       alt=""
-      className="hidden md:block absolute inset-0 w-full h-full object-cover"
+      className="hidden lg:block absolute inset-0 w-full h-full object-cover"
       loading="lazy"
       aria-hidden="true"
     />
@@ -101,11 +101,11 @@ const PurpleWatercolor: React.FC<{ children?: React.ReactNode; className?: strin
 
 // ─── Plantilla 7: Purple Business ─────────────────────────────────────────────
 const PurpleBusiness: React.FC<{ children?: React.ReactNode; className?: string }> = ({ children, className = '' }) => (
-  <div className={`w-full h-full bg-[#f8f5fc] md:bg-white relative overflow-hidden ${className}`}>
+  <div className={`w-full h-full bg-[#f8f5fc] lg:bg-white relative overflow-hidden ${className}`}>
     <img
       src="/slide-templates/purple-business.svg"
       alt=""
-      className="hidden md:block absolute inset-0 w-full h-full object-cover"
+      className="hidden lg:block absolute inset-0 w-full h-full object-cover"
       loading="lazy"
       aria-hidden="true"
     />
