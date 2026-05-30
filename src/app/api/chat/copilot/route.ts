@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+export const maxDuration = 60;
 
 // Los modelos se definen dinámicamente dentro de la función POST según la cuota de búsqueda.
 
@@ -335,15 +336,20 @@ Ejemplo de cómo debe empezar tu respuesta:
   const activeModels = canUseWebSearch
     ? [
         { id: "deepseek/deepseek-v4-flash", costInput: 0.14, costOutput: 0.28 },
-        { id: "qwen/qwen-2.5-72b-instruct", costInput: 0.0, costOutput: 0.0 }
+        { id: "qwen/qwen3.5-flash-02-23", costInput: 0.065, costOutput: 0.26 },
+        { id: "openai/gpt-oss-120b", costInput: 0.0, costOutput: 0.0 }
       ]
     : [
-        { id: "qwen/qwen-2.5-72b-instruct", costInput: 0.0, costOutput: 0.0 },
-        { id: "deepseek/deepseek-v4-flash", costInput: 0.14, costOutput: 0.28 }
+        { id: "qwen/qwen3.5-flash-02-23", costInput: 0.065, costOutput: 0.26 },
+        { id: "deepseek/deepseek-v4-flash", costInput: 0.14, costOutput: 0.28 },
+        { id: "openai/gpt-oss-120b", costInput: 0.0, costOutput: 0.0 }
       ];
 
   for (const model of activeModels) {
     try {
+      const fetchController = new AbortController();
+      const timeoutId = setTimeout(() => fetchController.abort(), 8000);
+
       const response = await fetch(OPENROUTER_URL, {
         method: "POST",
         headers: {
@@ -359,7 +365,10 @@ Ejemplo de cómo debe empezar tu respuesta:
           provider: { data_collection: "deny" },
           ...(canUseWebSearch ? { plugins: [{ id: "web", max_results: 5 }] } : {})
         }),
+        signal: fetchController.signal
       });
+
+      clearTimeout(timeoutId);
 
       if (!response.ok || !response.body) {
         const errText = await response.text();
