@@ -24,7 +24,9 @@ export async function POST(req: Request) {
     let contextText = "";
 
     // 1. Recolectar contexto según el Origen
-    if (source === "chat") {
+    if (source === "texto") {
+      contextText = body.textoLibre?.trim() || "Genera preguntas de cultura general nivel preparatoria.";
+    } else if (source === "chat") {
       // Tomamos los últimos 10 mensajes del chat
       if (chatMessages && Array.isArray(chatMessages)) {
         const last10 = chatMessages.slice(-10);
@@ -64,7 +66,8 @@ export async function POST(req: Request) {
         if (tema) {
           const materiaNombre = (tema.unidades as any)?.materias?.nombre || "";
           const unidadNombre = (tema.unidades as any)?.titulo || "";
-          contextText = `Genera un ejercicio sobre el tema "${tema.titulo}" de la unidad "${unidadNombre}" de la materia "${materiaNombre}".\nESTRICTAMENTE basate en los conceptos tradicionales o académicos de esta materia.`;
+          contextText = `Genera un ejercicio sobre el tema "${tema.titulo}" de la unidad "${unidadNombre}" de la materia "${materiaNombre}".
+ESTRICTAMENTE BASATE EN LA MATERIA: "${materiaNombre}". NUNCA generes preguntas de una materia diferente. Si la materia es de Humanidades (ej. Filosofía), NO preguntes de Ciencias Exactas (ej. Física o Matemáticas), y viceversa. Si no hay contexto en diapositivas, UTILIZA TU CONOCIMIENTO INTERNO EXPERTO SOBRE ESTE TEMA ESPECÍFICO.`;
         } else {
           contextText = "Genera preguntas educativas nivel preparatoria.";
         }
@@ -76,7 +79,10 @@ export async function POST(req: Request) {
     console.log(`[Contexto Textual a enviar]:\n${contextText}\n==============================================\n`);
 
     // 2. Construir Prompt según tipo
-    let systemPrompt = `Eres un experto creador de ejercicios interactivos educativos. Basándote ESTRICTAMENTE en el siguiente contexto y en la materia indicada, genera exactamente ${count} reactivos académicos. NO inventes asociaciones modernas (como redes sociales, influencers o tecnología) a menos que el contexto lo mencione explícitamente. Mantén un tono académico apropiado para la materia.`;
+    let systemPrompt = `Eres un experto creador de ejercicios interactivos educativos. 
+MISION PRINCIPAL: Basándote en el contexto y en la materia indicada, genera EXACTAMENTE ${count} reactivos académicos.
+REGLA DE ORO: SI EL CONTEXTO INDICA UNA MATERIA ESPECÍFICA (EJ. FILOSOFÍA, HISTORIA), DEBES GENERAR PREGUNTAS ÚNICA Y EXCLUSIVAMENTE SOBRE ESA MATERIA. PROHIBIDO GENERAR PREGUNTAS DE OTRAS DISCIPLINAS (COMO FÍSICA O MATEMÁTICAS) SI NO CORRESPONDEN A LA MATERIA SOLICITADA. SI NO HAY CONTEXTO TEXTUAL, UTILIZA TU CONOCIMIENTO INTERNO SOBRE EL TEMA SOLICITADO.
+NO inventes asociaciones modernas (como redes sociales, influencers o tecnología) a menos que el contexto lo mencione explícitamente. Mantén un tono académico apropiado para la materia.`;
     
     if (type === "multiple") {
       systemPrompt += `

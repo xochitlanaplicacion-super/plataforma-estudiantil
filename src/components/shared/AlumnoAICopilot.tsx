@@ -755,7 +755,8 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
               body: JSON.stringify({
                 ...config,
                 userId,
-                chatMessages: config.source === "chat" ? activeSession?.messages : undefined
+                chatMessages: config.source === "chat" ? activeSession?.messages : undefined,
+                textoLibre: config.source === "texto" ? config.textoLibre : undefined
               })
             });
 
@@ -782,9 +783,11 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
             }
 
             if (session) {
-              let content = "Aquí tienes el ejercicio generado basado en tus materiales.";
+              let content = "Aquí tienes el ejercicio generado.";
               if (config.source === "materia" && config.materiaNombre) {
                 content = `**Ejercicio de ${config.materiaNombre}**\nUnidad: ${config.unidadNombre || "N/A"}\nTema: ${config.temaNombre || "N/A"}\n\nAquí tienes el ejercicio generado basado en tus materiales.`;
+              } else if (config.source === "texto") {
+                content = `**Ejercicio generado a partir del texto ingresado.**\n\nAquí tienes las preguntas solicitadas.`;
               }
 
               const exerciseMsg: ChatMessage = {

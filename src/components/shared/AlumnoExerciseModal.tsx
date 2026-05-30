@@ -1,14 +1,15 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { X, BookOpen, MessageSquare, Loader2 } from "lucide-react";
+import { X, BookOpen, MessageSquare, Loader2, FileText } from "lucide-react";
 import { getMateriasYTemasParaAlumno } from "@/lib/actions/alumno";
 
 interface AlumnoExerciseModalProps {
   isOpen: boolean;
   onClose: () => void;
   onGenerate: (config: {
-    source: "chat" | "materia";
+    source: "texto" | "materia";
+    textoLibre?: string;
     materiaId?: string;
     unidadId?: string;
     temaId?: string;
@@ -22,7 +23,8 @@ interface AlumnoExerciseModalProps {
 }
 
 export function AlumnoExerciseModal({ isOpen, onClose, onGenerate, userId }: AlumnoExerciseModalProps) {
-  const [source, setSource] = useState<"chat" | "materia">("chat");
+  const [source, setSource] = useState<"texto" | "materia">("texto");
+  const [textoLibre, setTextoLibre] = useState<string>("");
   const [type, setType] = useState<"multiple" | "boolean">("multiple");
   const [count, setCount] = useState<number>(5);
   
@@ -84,6 +86,7 @@ export function AlumnoExerciseModal({ isOpen, onClose, onGenerate, userId }: Alu
 
     onGenerate({
       source,
+      textoLibre: source === "texto" ? textoLibre : undefined,
       materiaId: selectedMateria || undefined,
       unidadId: selectedUnidad || undefined,
       temaId: selectedTema || undefined,
@@ -98,7 +101,7 @@ export function AlumnoExerciseModal({ isOpen, onClose, onGenerate, userId }: Alu
 
   if (!isOpen) return null;
 
-  const isFormValid = source === "chat" || (source === "materia" && selectedTema);
+  const isFormValid = (source === "texto" && textoLibre.trim().length > 0) || (source === "materia" && selectedTema);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
@@ -118,13 +121,13 @@ export function AlumnoExerciseModal({ isOpen, onClose, onGenerate, userId }: Alu
             <label className="text-sm font-semibold text-indigo-300">Origen de la información</label>
             <div className="grid grid-cols-2 gap-3">
               <button
-                onClick={() => setSource("chat")}
+                onClick={() => setSource("texto")}
                 className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border transition ${
-                  source === "chat" ? "bg-indigo-600/20 border-indigo-500 text-indigo-200" : "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10"
+                  source === "texto" ? "bg-indigo-600/20 border-indigo-500 text-indigo-200" : "bg-white/5 border-white/10 text-slate-400 hover:bg-white/10"
                 }`}
               >
-                <MessageSquare size={24} />
-                <span className="text-xs font-medium text-center">Sobre este chat<br/><span className="text-[10px] opacity-70">(últimos 10 msgs)</span></span>
+                <FileText size={24} />
+                <span className="text-xs font-medium text-center">Sobre este texto / tema<br/><span className="text-[10px] opacity-70">(Pega información)</span></span>
               </button>
               <button
                 onClick={() => setSource("materia")}
@@ -137,6 +140,18 @@ export function AlumnoExerciseModal({ isOpen, onClose, onGenerate, userId }: Alu
               </button>
             </div>
           </div>
+
+          {source === "texto" && (
+            <div className="space-y-3 p-4 rounded-xl bg-black/20 border border-indigo-900/50">
+              <label className="text-xs text-slate-400">Texto libre o instrucciones</label>
+              <textarea 
+                className="w-full h-32 bg-[#130f2a] border border-indigo-800/50 rounded-xl p-3 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-indigo-500/70 resize-none"
+                placeholder="Pega aquí el texto, apuntes o indicaciones para crear el ejercicio..."
+                value={textoLibre}
+                onChange={e => setTextoLibre(e.target.value)}
+              />
+            </div>
+          )}
 
           {/* Selectores si es Materia */}
           {source === "materia" && (
