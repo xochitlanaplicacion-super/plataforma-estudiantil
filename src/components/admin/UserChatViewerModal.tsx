@@ -202,18 +202,18 @@ export function UserChatViewerModal({
                         {msg.role === 'user' ? <User size={16} /> : <Bot size={16} />}
                       </div>
                       
-                      <div className={`w-full overflow-hidden rounded-2xl p-4 shadow-sm ${
+                      <div className={`max-w-[90%] overflow-x-auto rounded-2xl p-4 shadow-sm ${
                         msg.role === 'user' 
                           ? 'bg-white border border-gray-200 text-gray-800' 
                           : 'text-white'
                       }`}
                       style={{ backgroundColor: msg.role === 'assistant' ? primaryColor : undefined }}>
-                        <div className={`prose prose-sm max-w-none break-words ${msg.role === 'assistant' ? 'prose-invert' : ''}`}>
+                        <div className={`prose prose-sm max-w-none break-words overflow-x-auto custom-scrollbar ${msg.role === 'assistant' ? 'prose-invert' : ''}`}>
                           <ReactMarkdown 
                             remarkPlugins={[remarkMath, remarkGfm]}
                             rehypePlugins={[rehypeKatex]}
                             components={{
-                              p: ({ node, ...props }) => <p {...props} className="mb-2 whitespace-pre-wrap break-words" />,
+                              p: ({ node, ...props }) => <p {...props} className="mb-2 whitespace-pre-wrap" />,
                               a: ({ node, ...props }) => <a {...props} className="underline break-all" target="_blank" rel="noopener noreferrer" />
                             }}
                           >
