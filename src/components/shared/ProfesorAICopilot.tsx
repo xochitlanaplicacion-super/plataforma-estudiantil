@@ -3,6 +3,12 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
+
+import ReactMarkdown from 'react-markdown';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import remarkGfm from 'remark-gfm';
+import 'katex/dist/katex.min.css';
 import { createClient } from "@/lib/supabase/client";
 import { useInstitucion } from "@/hooks/use-institucion";
 import Image from "next/image";
@@ -321,46 +327,6 @@ export function ProfesorAICopilot({ userId, userName, onClose }: ProfesorAICopil
     }
   };
 
-  // ── Render Markdown simple (negritas, listas, enlaces) ─────────────
-  const renderMarkdown = (text: string) => {
-    const LINK_PLACEHOLDER = "\x00LINK\x00";
-    const links: string[] = [];
-
-    // 1. Markdown links [texto](url)
-    let result = text.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (_, label, url) => {
-      links.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-cyan-300 underline hover:text-cyan-100 break-all font-medium">${label}</a>`);
-      return LINK_PLACEHOLDER + (links.length - 1) + LINK_PLACEHOLDER;
-    });
-
-    // 2. Markdown links [Enlace](url) — el patrón exacto que usa OpenRouter
-    result = result.replace(/\[Enlace\]\((https?:\/\/[^)\s]+)\)/g, (_, url) => {
-      links.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-cyan-300 underline hover:text-cyan-100 break-all font-medium">🔗 ${url}</a>`);
-      return LINK_PLACEHOLDER + (links.length - 1) + LINK_PLACEHOLDER;
-    });
-
-    // 3. URLs desnudas que quedaron sin envolver
-    result = result.replace(/(https?:\/\/[^\s<"\]]+)/g, (url) => {
-      links.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-cyan-300 underline hover:text-cyan-100 break-all font-medium">${url}</a>`);
-      return LINK_PLACEHOLDER + (links.length - 1) + LINK_PLACEHOLDER;
-    });
-
-    // 4. Resto del markdown
-    result = result
-      .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
-      .replace(/\*(.+?)\*/g, "<em>$1</em>")
-      .replace(/^### (.+)$/gm, `<h3 class="text-base font-black mt-3 mb-1 ${isDark ? 'text-indigo-200' : 'text-indigo-700'}">$1</h3>`)
-      .replace(/^## (.+)$/gm, `<h2 class="text-lg font-black mt-4 mb-2 ${isDark ? 'text-indigo-100' : 'text-indigo-800'}">$1</h2>`)
-      .replace(/^# (.+)$/gm, `<h1 class="text-xl font-black mt-4 mb-2 ${isDark ? 'text-white' : 'text-gray-900'}">$1</h1>`)
-      .replace(/^- (.+)$/gm, `<li class="ml-4 list-disc ${isDark ? 'text-slate-300' : 'text-gray-600'}">$1</li>`)
-      .replace(/^(\d+)\. (.+)$/gm, `<li class="ml-4 list-decimal ${isDark ? 'text-slate-300' : 'text-gray-600'}"><span class="font-bold ${isDark ? 'text-indigo-300' : 'text-indigo-600'}">$1.</span> $2</li>`)
-      .replace(/\n\n/g, '<br/><br/>')
-      .replace(/\n/g, "<br/>");
-
-    // 5. Restaurar enlaces
-    result = result.replace(new RegExp(`\x00LINK\x00(\\d+)\x00LINK\x00`, 'g'), (_, i) => links[parseInt(i)]);
-
-    return result;
-  };
 
   // ── Scroll al inicio / fin del último mensaje ─────────────────────
   const scrollToLastMsgTop = () => {
@@ -672,10 +638,23 @@ export function ProfesorAICopilot({ userId, userName, onClose }: ProfesorAICopil
                     : (isDark ? 'bg-[#1a1035] text-slate-200 border border-indigo-900/50 rounded-tl-sm' : 'bg-[#f7f7f8] text-gray-800 border border-gray-200 rounded-tl-sm')
                 )}>
                   {msg.role === "assistant" ? (
-                    <div
-                      className="prose-sm"
-                      dangerouslySetInnerHTML={{ __html: renderMarkdown(msg.content) }}
-                    />
+                    <ReactMarkdown
+                      className="prose-sm max-w-none dark:prose-invert"
+                      remarkPlugins={[remarkMath, remarkGfm]}
+                      rehypePlugins={[rehypeKatex]}
+                      components={{
+                        a: ({ node, ...props }) => (
+                          <a {...props} target="_blank" rel="noopener noreferrer" className={isDark ? 'text-cyan-300 underline hover:text-cyan-100 break-all font-medium' : 'text-indigo-600 underline hover:text-indigo-800 break-all font-medium'} />
+                        ),
+                        p: ({ node, ...props }) => <p {...props} className={isDark ? 'text-slate-300 mb-2 whitespace-pre-wrap' : 'text-gray-700 mb-2 whitespace-pre-wrap'} />,
+                        li: ({ node, ...props }) => <li {...props} className={isDark ? 'text-slate-300' : 'text-gray-600'} />,
+                        h1: ({ node, ...props }) => <h1 {...props} className={isDark ? 'text-white text-xl font-black mt-4 mb-2' : 'text-gray-900 text-xl font-black mt-4 mb-2'} />,
+                        h2: ({ node, ...props }) => <h2 {...props} className={isDark ? 'text-indigo-100 text-lg font-black mt-4 mb-2' : 'text-indigo-800 text-lg font-black mt-4 mb-2'} />,
+                        h3: ({ node, ...props }) => <h3 {...props} className={isDark ? 'text-indigo-200 text-base font-black mt-3 mb-1' : 'text-indigo-700 text-base font-black mt-3 mb-1'} />
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
                   ) : (
                     <p className="whitespace-pre-wrap">{msg.content}</p>
                   )}
