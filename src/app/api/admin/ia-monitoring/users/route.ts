@@ -80,15 +80,16 @@ export async function GET(req: Request) {
     }
 
     // 2. Obtener perfiles
-    let profilesSelect = "id, nombre, apellidos";
+    let profilesSelect = "id, nombre, apellidos, estatus";
     if (type === "alumno") {
-      profilesSelect += ", matricula, estatus";
+      profilesSelect += ", matricula";
     }
 
     const { data: profiles, error: profError } = await supabaseAdmin
       .from(profileTable)
       .select(profilesSelect)
-      .in("id", activeUserIds);
+      .in("id", activeUserIds)
+      .ilike("estatus", "activo");
 
     if (profError) throw profError;
 
