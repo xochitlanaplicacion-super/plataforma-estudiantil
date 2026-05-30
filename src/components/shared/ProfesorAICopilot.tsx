@@ -324,6 +324,8 @@ export function ProfesorAICopilot({ userId, userName, onClose }: ProfesorAICopil
       const remaining = sessions.filter((s) => s.id !== sessionId);
       setActiveSession(remaining[0] || null);
     }
+  };
+
   // ── Scroll al inicio / fin del último mensaje ─────────────────────
   const scrollToLastMsgTop = () => {
     if (lastAssistantRef.current) {
