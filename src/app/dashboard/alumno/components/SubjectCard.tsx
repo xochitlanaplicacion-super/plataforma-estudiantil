@@ -689,39 +689,39 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
           </div>
         </div>
 
-        <div className="py-3 px-10 flex items-center justify-between bg-black/30 backdrop-blur-2xl border-t border-white/5 z-[110]">
-          <div className="flex gap-4">
+        <div className="py-2 sm:py-3 px-2 sm:px-10 flex items-center justify-between bg-black/30 backdrop-blur-2xl border-t border-white/5 z-[110]">
+          <div className="flex gap-2 sm:gap-4">
             <Button 
               variant="ghost" 
-              className="h-12 w-12 rounded-full text-white hover:bg-white/10" 
+              className="h-10 w-10 sm:h-12 sm:w-12 rounded-full text-white hover:bg-white/10 shrink-0" 
               onClick={() => setActiveSlideIndex(Math.max(0, activeSlideIndex - 1))} 
               disabled={activeSlideIndex === 0}
             >
-              <ChevronLeft size={32} />
+              <ChevronLeft size={24} className="sm:w-8 sm:h-8" />
             </Button>
-            <div className="flex items-center px-4 text-xl font-black tabular-nums tracking-widest text-white/40">
-              <span className="text-white">{activeSlideIndex + 1}</span> / {activeSlides.length}
+            <div className="flex items-center px-1 sm:px-4 text-base sm:text-xl font-black tabular-nums tracking-widest text-white/40 shrink-0">
+              <span className="text-white">{activeSlideIndex + 1}</span><span className="mx-1">/</span>{activeSlides.length}
             </div>
             <Button 
               variant="ghost" 
-              className="h-12 w-12 rounded-full text-white hover:bg-white/10" 
+              className="h-10 w-10 sm:h-12 sm:w-12 rounded-full text-white hover:bg-white/10 shrink-0" 
               onClick={() => setActiveSlideIndex(Math.min(activeSlideIndex + 1, activeSlides.length - 1))} 
-              disabled={activeSlideIndex === activeSlides.length - 1}
+              disabled={activeSlideIndex === activeSlideIndex.length - 1}
             >
-              <ChevronRight size={32} />
+              <ChevronRight size={24} className="sm:w-8 sm:h-8" />
             </Button>
           </div>
-          <div className="flex items-center gap-8">
-            <div className="flex items-center gap-4">
-              <img src={inst.logo_url || LOGO_FALLBACK} alt="Logo" className="h-14 w-auto object-contain" />
+          <div className="flex items-center gap-2 sm:gap-8">
+            <div className="hidden sm:flex items-center gap-4">
+              <img src={inst.logo_url || LOGO_FALLBACK} alt="Logo" className="h-10 sm:h-14 w-auto object-contain" />
               <span className="hidden lg:block text-[10px] font-black uppercase tracking-[0.3em] text-white/40">{inst.siglas} {inst.nombre_completo}</span>
             </div>
             <Button 
               variant="outline" 
-              className="h-10 px-6 rounded-xl font-black uppercase tracking-widest bg-red-600/20 border-red-600/30 text-red-100 hover:bg-red-600 shadow-lg" 
+              className="h-8 sm:h-10 px-3 sm:px-6 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-widest bg-red-600/20 border-red-600/30 text-red-100 hover:bg-red-600 shadow-lg shrink-0" 
               onClick={() => setPresentationMode(false)}
             >
-              <X size={18} className="mr-2" /> Salir (Esc)
+              <X size={14} className="mr-1 sm:mr-2 sm:w-[18px] sm:h-[18px]" /> <span className="hidden sm:inline">Salir (Esc)</span><span className="sm:hidden">Salir</span>
             </Button>
           </div>
         </div>
