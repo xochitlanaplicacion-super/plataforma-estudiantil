@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useInstitucion } from "@/hooks/use-institucion";
 import Image from "next/image";
 import {
-  X, Send, Copy, Check, Plus, MessageSquare, Loader2, Edit2, ChevronUp, ChevronDown, BookOpen
+  X, Send, Copy, Check, Plus, MessageSquare, Loader2, Edit2, ChevronUp, ChevronDown, BookOpen, Sun, Moon
 } from "lucide-react";
 import { AlumnoExerciseModal } from "./AlumnoExerciseModal";
 import { InlineExercise, type ExerciseState } from "./InlineExercise";
@@ -60,6 +60,9 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
   const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [isExerciseModalOpen, setIsExerciseModalOpen] = useState(false);
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+
+  const isDark = theme === 'dark';
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -299,20 +302,22 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
     const links: string[] = [];
 
     // 1. Markdown links [texto](url)
+    const linkClass = isDark ? 'text-cyan-300 underline hover:text-cyan-100 break-all font-medium' : 'text-indigo-600 underline hover:text-indigo-800 break-all font-medium';
+
     let result = text.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, (_, label, url) => {
-      links.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-cyan-300 underline hover:text-cyan-100 break-all font-medium">${label}</a>`);
+      links.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="${linkClass}">${label}</a>`);
       return LINK_PLACEHOLDER + (links.length - 1) + LINK_PLACEHOLDER;
     });
 
     // 2. Markdown links [Enlace](url)
     result = result.replace(/\[Enlace\]\((https?:\/\/[^)\s]+)\)/g, (_, url) => {
-      links.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-cyan-300 underline hover:text-cyan-100 break-all font-medium">🔗 ${url}</a>`);
+      links.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="${linkClass}">🔗 ${url}</a>`);
       return LINK_PLACEHOLDER + (links.length - 1) + LINK_PLACEHOLDER;
     });
 
     // 3. URLs desnudas
     result = result.replace(/(https?:\/\/[^\s<"\]]+)/g, (url) => {
-      links.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-cyan-300 underline hover:text-cyan-100 break-all font-medium">${url}</a>`);
+      links.push(`<a href="${url}" target="_blank" rel="noopener noreferrer" class="${linkClass}">${url}</a>`);
       return LINK_PLACEHOLDER + (links.length - 1) + LINK_PLACEHOLDER;
     });
 
@@ -320,11 +325,11 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
     result = result
       .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
       .replace(/\*(.+?)\*/g, "<em>$1</em>")
-      .replace(/^### (.+)$/gm, '<h3 class="text-base font-black mt-3 mb-1 text-indigo-200">$1</h3>')
-      .replace(/^## (.+)$/gm, '<h2 class="text-lg font-black mt-4 mb-2 text-indigo-100">$1</h2>')
-      .replace(/^# (.+)$/gm, '<h1 class="text-xl font-black mt-4 mb-2 text-white">$1</h1>')
-      .replace(/^- (.+)$/gm, '<li class="ml-4 list-disc text-slate-300">$1</li>')
-      .replace(/^(\d+)\. (.+)$/gm, '<li class="ml-4 list-decimal text-slate-300"><span class="font-bold text-indigo-300">$1.</span> $2</li>')
+      .replace(/^### (.+)$/gm, `<h3 class="text-base font-black mt-3 mb-1 ${isDark ? 'text-indigo-200' : 'text-indigo-700'}">$1</h3>`)
+      .replace(/^## (.+)$/gm, `<h2 class="text-lg font-black mt-4 mb-2 ${isDark ? 'text-indigo-100' : 'text-indigo-800'}">$1</h2>`)
+      .replace(/^# (.+)$/gm, `<h1 class="text-xl font-black mt-4 mb-2 ${isDark ? 'text-white' : 'text-gray-900'}">$1</h1>`)
+      .replace(/^- (.+)$/gm, `<li class="ml-4 list-disc ${isDark ? 'text-slate-300' : 'text-gray-600'}">$1</li>`)
+      .replace(/^(\d+)\. (.+)$/gm, `<li class="ml-4 list-decimal ${isDark ? 'text-slate-300' : 'text-gray-600'}"><span class="font-bold ${isDark ? 'text-indigo-300' : 'text-indigo-600'}">$1.</span> $2</li>`)
       .replace(/\n\n/g, '<br/><br/>')
       .replace(/\n/g, "<br/>");
 
@@ -356,25 +361,29 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
   return createPortal(
     <div className="fixed inset-0 z-[99999] flex items-stretch">
       {/* ── FONDO BLUR ── */}
-      <div className="absolute inset-0 backdrop-blur-md bg-slate-950/70" onClick={onClose} />
+      <div className={cn("absolute inset-0 backdrop-blur-md", isDark ? 'bg-slate-950/70' : 'bg-black/30')} onClick={onClose} />
 
       {/* ── CONTENEDOR PRINCIPAL ── */}
-      <div className="relative m-4 md:m-8 flex-1 flex rounded-[28px] overflow-hidden shadow-[0_0_80px_rgba(99,102,241,0.3)] border border-indigo-900/50 bg-[#080514]">
+      <div className={cn("relative m-4 md:m-8 flex-1 flex rounded-[28px] overflow-hidden border", isDark ? 'shadow-[0_0_80px_rgba(99,102,241,0.3)] border-indigo-900/50 bg-[#080514]' : 'shadow-xl border-gray-200 bg-white')}>
 
         {/* ── SIDEBAR: HISTORIAL DE SESIONES ── */}
         <div className={cn(
-          "flex flex-col bg-[#0d0a1e] border-r border-indigo-900/40 transition-all duration-300 absolute md:relative z-20 h-full",
+          "flex flex-col border-r transition-all duration-300 absolute md:relative z-20 h-full",
+          isDark ? 'bg-[#0d0a1e] border-indigo-900/40' : 'bg-[#f9f9f9] border-gray-200',
           sidebarOpen ? "w-64 translate-x-0" : "w-64 -translate-x-full md:w-0 md:translate-x-0 overflow-hidden"
         )}>
-          <div className="p-4 border-b border-indigo-900/40 flex items-center justify-between">
-            <span className="text-xs font-black uppercase tracking-widest text-indigo-400">Conversaciones</span>
-            <button className="md:hidden text-indigo-400 p-1" onClick={() => setSidebarOpen(false)}>
+          <div className={cn("p-4 border-b flex items-center justify-between", isDark ? 'border-indigo-900/40' : 'border-gray-200')}>
+            <span className={cn("text-xs font-black uppercase tracking-widest", isDark ? 'text-indigo-400' : 'text-indigo-500')}>Conversaciones</span>
+            <button className={cn("md:hidden p-1", isDark ? 'text-indigo-400' : 'text-indigo-500')} onClick={() => setSidebarOpen(false)}>
               <X size={16} />
             </button>
           </div>
           <button
             onClick={createNewSession}
-            className="mx-3 mt-3 flex items-center gap-2 p-3 rounded-xl bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 text-xs font-black uppercase tracking-wider transition-all border border-indigo-500/30 hover:border-indigo-400/50"
+            className={cn(
+              "mx-3 mt-3 flex items-center gap-2 p-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all border hover:border-indigo-400/50",
+              isDark ? 'bg-indigo-600/20 hover:bg-indigo-600/40 text-indigo-300 border-indigo-500/30' : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border-gray-200'
+            )}
           >
             <Plus size={14} /> Nueva Conversación
           </button>
@@ -388,8 +397,8 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
                 className={cn(
                   "w-full text-left p-3 rounded-xl text-xs transition-all group flex items-start gap-2 cursor-pointer",
                   activeSession?.id === s.id
-                    ? "bg-indigo-600/30 text-indigo-200 border border-indigo-500/50"
-                    : "text-slate-400 hover:bg-white/5 hover:text-slate-300"
+                    ? cn(isDark ? 'bg-indigo-600/30 text-indigo-200 border border-indigo-500/50' : 'bg-indigo-100 text-indigo-700 border border-indigo-300')
+                    : cn(isDark ? 'text-slate-400 hover:bg-white/5 hover:text-slate-300' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-600')
                 )}
               >
                 <MessageSquare size={12} className="mt-0.5 shrink-0 opacity-60" />
@@ -408,7 +417,7 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
                     }}
                     onBlur={() => saveTitle(s.id, editingTitle)}
                     autoFocus
-                    className="flex-1 bg-white/10 text-white rounded px-1.5 py-0.5 text-xs outline-none focus:ring-1 focus:ring-indigo-400 w-full min-w-0"
+                    className={cn("flex-1 rounded px-1.5 py-0.5 text-xs outline-none focus:ring-1 focus:ring-indigo-400 w-full min-w-0", isDark ? 'bg-white/10 text-white' : 'bg-gray-100 text-gray-900')}
                     onClick={(e) => e.stopPropagation()}
                   />
                 ) : (
@@ -422,7 +431,7 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
                       setEditingSessionId(s.id);
                       setEditingTitle(s.session_name);
                     }}
-                    className="opacity-0 group-hover:opacity-100 text-indigo-400 hover:text-indigo-300 transition-all mr-1 shrink-0"
+                    className={cn("opacity-0 group-hover:opacity-100 transition-all mr-1 shrink-0", isDark ? 'text-indigo-400 hover:text-indigo-300' : 'text-indigo-500 hover:text-indigo-600')}
                   >
                     <Edit2 size={11} />
                   </button>
@@ -430,13 +439,13 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
               </div>
             ))}
             {sessions.length === 0 && (
-              <p className="text-center text-xs text-slate-600 py-8">No hay conversaciones aún</p>
+              <p className={cn("text-center text-xs py-8", isDark ? 'text-slate-600' : 'text-gray-400')}>No hay conversaciones aún</p>
             )}
           </div>
         </div>
 
         {/* ── BOT CENTRAL ── */}
-        <div className="hidden lg:flex flex-col items-center justify-center w-56 bg-[#08051a] border-r border-indigo-900/40 relative shrink-0">
+        <div className={cn("hidden lg:flex flex-col items-center justify-center w-56 border-r relative shrink-0", isDark ? 'bg-[#08051a] border-indigo-900/40' : 'bg-[#f5f5f5] border-gray-200')}>
           {config.logo_url && !logoError && (
             <div className="absolute top-4 flex items-center justify-center w-48 h-24">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -457,26 +466,30 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
               src={isThinking ? "/images/THINKINGBOT.png" : "/images/NORMALBOT.png"}
               alt="Copiloto IA"
               fill
-              className="object-contain drop-shadow-[0_0_30px_rgba(99,102,241,0.5)]"
+              className={cn("object-contain", isDark ? 'drop-shadow-[0_0_30px_rgba(99,102,241,0.5)]' : 'drop-shadow-md')}
               priority
             />
           </div>
-          <div className={cn(
-            "absolute bottom-16 w-36 h-7 rounded-[100%] bg-blue-500/40 blur-[18px]",
-            "shadow-[0_0_50px_20px_rgba(59,130,246,0.5)]",
-            isThinking ? "animate-pulse-fast" : "animate-pulse-slow"
-          )} />
-          <div className={cn(
-            "absolute bottom-16 w-20 h-4 rounded-[100%] bg-cyan-400/60 blur-[10px]",
-            "shadow-[0_0_30px_10px_rgba(34,211,238,0.7)]",
-            isThinking ? "animate-pulse-fast" : "animate-pulse-slow"
-          )} />
+          {isDark && (
+            <>
+              <div className={cn(
+                "absolute bottom-16 w-36 h-7 rounded-[100%] bg-blue-500/40 blur-[18px]",
+                "shadow-[0_0_50px_20px_rgba(59,130,246,0.5)]",
+                isThinking ? "animate-pulse-fast" : "animate-pulse-slow"
+              )} />
+              <div className={cn(
+                "absolute bottom-16 w-20 h-4 rounded-[100%] bg-cyan-400/60 blur-[10px]",
+                "shadow-[0_0_30px_10px_rgba(34,211,238,0.7)]",
+                isThinking ? "animate-pulse-fast" : "animate-pulse-slow"
+              )} />
+            </>
+          )}
           <div className="absolute bottom-8 text-center">
             <span className={cn(
               "text-[10px] font-black uppercase tracking-widest px-3 py-1 rounded-full",
               isThinking
-                ? "text-cyan-300 bg-cyan-950/60 border border-cyan-500/40 animate-pulse"
-                : "text-indigo-400 bg-indigo-950/40 border border-indigo-500/30"
+                ? cn(isDark ? "text-cyan-300 bg-cyan-950/60 border border-cyan-500/40" : "text-cyan-600 bg-cyan-50 border border-cyan-300", "animate-pulse")
+                : cn(isDark ? "text-indigo-400 bg-indigo-950/40 border border-indigo-500/30" : "text-indigo-500 bg-gray-50 border border-gray-200")
             )}>
               {isThinking ? "⚡ Pensando..." : "✨ Listo"}
             </span>
@@ -487,18 +500,18 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
         <div className="flex-1 flex flex-col min-w-0">
 
           {/* Header del chat */}
-          <div className="flex items-center gap-3 px-4 md:px-6 py-4 border-b border-indigo-900/40 bg-[#0d0a1e]/50">
+          <div className={cn("flex items-center gap-3 px-4 md:px-6 py-4 border-b", isDark ? 'border-indigo-900/40 bg-[#0d0a1e]/50' : 'border-gray-200 bg-[#f9f9f9]')}>
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 rounded-lg text-indigo-400 hover:bg-indigo-900/30 transition-all"
+              className={cn("p-2 rounded-lg transition-all", isDark ? 'text-indigo-400 hover:bg-indigo-900/30' : 'text-indigo-500 hover:bg-gray-100')}
             >
               <MessageSquare size={16} />
             </button>
             <div className="flex-1 min-w-0">
-              <h2 className="text-sm font-black text-white uppercase tracking-wider truncate">
+              <h2 className={cn("text-sm font-black uppercase tracking-wider truncate", isDark ? 'text-white' : 'text-gray-900')}>
                 {activeSession?.session_name || "Copiloto IA · Tu Asistente"}
               </h2>
-              <p className="text-[10px] text-indigo-400 font-medium uppercase tracking-widest truncate">
+              <p className={cn("text-[10px] font-medium uppercase tracking-widest truncate", isDark ? 'text-indigo-400' : 'text-indigo-500')}>
                 Ayuda para tus clases en {config.nombre_corto || "tu institución"}
               </p>
             </div>
@@ -511,33 +524,45 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
                       src={isThinking ? "/images/THINKINGBOT.png" : "/images/NORMALBOT.png"}
                       alt="Copiloto IA"
                       fill
-                      className="object-contain drop-shadow-[0_0_15px_rgba(99,102,241,0.5)]"
+                      className={cn("object-contain", isDark ? 'drop-shadow-[0_0_15px_rgba(99,102,241,0.5)]' : 'drop-shadow-sm')}
                     />
                   </div>
-                  <div className={cn(
-                    "absolute -bottom-1 w-6 h-1.5 rounded-[100%] bg-blue-500/40 blur-[4px]",
-                    isThinking ? "animate-pulse-fast" : "animate-pulse-slow"
-                  )} />
+                  {isDark && (
+                    <div className={cn(
+                      "absolute -bottom-1 w-6 h-1.5 rounded-[100%] bg-blue-500/40 blur-[4px]",
+                      isThinking ? "animate-pulse-fast" : "animate-pulse-slow"
+                    )} />
+                  )}
                 </div>
               )}
 
               <button
                 onClick={scrollToLastMsgTop}
                 title="Ir al inicio del último mensaje"
-                className="p-2 rounded-xl text-indigo-400 hover:bg-indigo-900/30 hover:text-indigo-200 transition-all hidden sm:block"
+                className={cn("p-2 rounded-xl transition-all hidden sm:block", isDark ? 'text-indigo-400 hover:bg-indigo-900/30 hover:text-indigo-200' : 'text-indigo-500 hover:bg-gray-100 hover:text-indigo-700')}
               >
                 <ChevronUp size={16} />
               </button>
               <button
                 onClick={scrollToLastMsgBottom}
                 title="Ir al final del último mensaje"
-                className="p-2 rounded-xl text-indigo-400 hover:bg-indigo-900/30 hover:text-indigo-200 transition-all hidden sm:block"
+                className={cn("p-2 rounded-xl transition-all hidden sm:block", isDark ? 'text-indigo-400 hover:bg-indigo-900/30 hover:text-indigo-200' : 'text-indigo-500 hover:bg-gray-100 hover:text-indigo-700')}
               >
                 <ChevronDown size={16} />
               </button>
               <button
+                onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+                className={cn(
+                  'p-2 rounded-xl transition-all',
+                  isDark ? 'text-yellow-400 hover:bg-indigo-900/30' : 'text-gray-500 hover:bg-gray-100'
+                )}
+                title={isDark ? 'Modo claro' : 'Modo oscuro'}
+              >
+                {isDark ? <Sun size={18} /> : <Moon size={18} />}
+              </button>
+              <button
                 onClick={onClose}
-                className="p-2 rounded-xl text-slate-400 hover:bg-white/10 hover:text-white transition-all ml-1"
+                className={cn("p-2 rounded-xl transition-all ml-1", isDark ? 'text-slate-400 hover:bg-white/10 hover:text-white' : 'text-gray-500 hover:bg-gray-100 hover:text-gray-900')}
               >
                 <X size={18} />
               </button>
@@ -549,8 +574,8 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
             {displayMessages.length === 0 && !isThinking && (
               <div className="h-full flex flex-col items-center justify-center text-center space-y-4 py-10 md:py-20">
                 <div className="text-5xl">🤖</div>
-                <h3 className="text-lg font-black text-white px-4">¿En qué te puedo ayudar hoy?</h3>
-                <p className="text-sm text-slate-400 max-w-xs leading-relaxed px-4">
+                <h3 className={cn("text-lg font-black px-4", isDark ? 'text-white' : 'text-gray-900')}>¿En qué te puedo ayudar hoy?</h3>
+                <p className={cn("text-sm max-w-xs leading-relaxed px-4", isDark ? 'text-slate-400' : 'text-gray-500')}>
                   Soy tu Asistente IA 24/7. Pregúntame sobre los temas de clase y te ayudaré a entenderlos mejor.
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4 w-full max-w-lg px-4">
@@ -563,7 +588,10 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
                     <button
                       key={sug}
                       onClick={() => setInputText(sug.replace(/^[^\s]+\s/, ""))}
-                      className="text-left p-3 rounded-2xl bg-indigo-950/40 hover:bg-indigo-900/40 border border-indigo-800/40 hover:border-indigo-600/50 text-xs text-slate-300 transition-all hover:text-white"
+                      className={cn(
+                        "text-left p-3 rounded-2xl border text-xs transition-all",
+                        isDark ? 'bg-indigo-950/40 hover:bg-indigo-900/40 border-indigo-800/40 hover:border-indigo-600/50 text-slate-300 hover:text-white' : 'bg-gray-50 hover:bg-gray-100 border-gray-200 hover:border-indigo-300 text-gray-600 hover:text-gray-900'
+                      )}
                     >
                       {sug}
                     </button>
@@ -581,7 +609,7 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
                 className={cn("flex gap-3 group", msg.role === "user" ? "justify-end" : "justify-start")}
               >
                 {msg.role === "assistant" && (
-                  <div className="w-8 h-8 rounded-full bg-indigo-900/60 border border-indigo-500/40 flex items-center justify-center shrink-0 mt-1">
+                  <div className={cn("w-8 h-8 rounded-full border flex items-center justify-center shrink-0 mt-1", isDark ? 'bg-indigo-900/60 border-indigo-500/40' : 'bg-indigo-50 border-indigo-200')}>
                     <span className="text-sm">🤖</span>
                   </div>
                 )}
@@ -590,7 +618,7 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
                   "max-w-[85%] md:max-w-[75%] rounded-2xl px-4 md:px-5 py-3 md:py-4 text-sm leading-relaxed relative",
                   msg.role === "user"
                     ? "bg-indigo-600 text-white rounded-tr-sm"
-                    : "bg-[#1a1035] text-slate-200 border border-indigo-900/50 rounded-tl-sm"
+                    : cn("rounded-tl-sm border", isDark ? 'bg-[#1a1035] text-slate-200 border-indigo-900/50' : 'bg-[#f7f7f8] text-gray-800 border-gray-200')
                 )}>
                   {msg.isExercise && msg.exerciseData ? (
                     <InlineExercise
@@ -633,7 +661,7 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
                   {msg.role === "assistant" && !msg.isExercise && (
                     <button
                       onClick={() => copyMessage(msg.content, idx)}
-                      className="absolute top-2 right-2 md:top-3 md:right-3 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all bg-indigo-900/50 hover:bg-indigo-700/60 text-indigo-300 hover:text-white"
+                      className={cn("absolute top-2 right-2 md:top-3 md:right-3 p-1.5 rounded-lg opacity-0 group-hover:opacity-100 transition-all", isDark ? 'bg-indigo-900/50 hover:bg-indigo-700/60 text-indigo-300 hover:text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-gray-700')}
                       title="Copiar respuesta"
                     >
                       {copiedId === idx ? <Check size={13} className="text-green-400" /> : <Copy size={13} />}
@@ -663,8 +691,8 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
           </div>
 
           {/* Input de mensaje */}
-          <div className="px-4 md:px-6 pb-4 md:pb-6 pt-2 bg-[#080514]">
-            <div className="flex items-end gap-2 md:gap-3 bg-[#130f2a] border border-indigo-800/50 rounded-2xl p-2 md:p-3 focus-within:border-indigo-500/70 transition-all shadow-inner">
+          <div className={cn("px-4 md:px-6 pb-4 md:pb-6 pt-2", isDark ? 'bg-[#080514]' : 'bg-white')}>
+            <div className={cn("flex items-end gap-2 md:gap-3 border rounded-2xl p-2 md:p-3 focus-within:border-indigo-500/70 transition-all shadow-inner", isDark ? 'bg-[#130f2a] border-indigo-800/50' : 'bg-white border-gray-300')}>
               <textarea
                 ref={textareaRef}
                 value={inputText}
@@ -680,7 +708,7 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
                   }
                 }}
                 placeholder="Escribe tu pregunta... (Shift+Enter para salto de línea)"
-                className="flex-1 bg-transparent text-sm text-white placeholder-slate-600 resize-none outline-none min-h-[40px] max-h-[140px] py-2 md:py-2.5 px-2 leading-relaxed"
+                className={cn("flex-1 bg-transparent text-sm resize-none outline-none min-h-[40px] max-h-[140px] py-2 md:py-2.5 px-2 leading-relaxed", isDark ? 'text-white placeholder-slate-600' : 'text-gray-900 placeholder-gray-400')}
                 rows={1}
               />
 
@@ -690,20 +718,20 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
                 className={cn(
                   "p-2.5 md:p-3 rounded-xl transition-all shrink-0 mb-0.5",
                   inputText.trim() && !isThinking
-                    ? "bg-indigo-600 hover:bg-indigo-500 text-white shadow-[0_0_20px_rgba(99,102,241,0.4)] hover:shadow-[0_0_30px_rgba(99,102,241,0.6)] active:scale-95 md:hover:scale-110"
-                    : "bg-indigo-900/20 text-slate-600 cursor-not-allowed"
+                    ? cn("bg-indigo-600 hover:bg-indigo-500 text-white active:scale-95 md:hover:scale-110", isDark ? 'shadow-[0_0_20px_rgba(99,102,241,0.4)] hover:shadow-[0_0_30px_rgba(99,102,241,0.6)]' : 'shadow-md hover:shadow-lg')
+                    : cn("cursor-not-allowed", isDark ? 'bg-indigo-900/20 text-slate-600' : 'bg-gray-100 text-gray-400')
                 )}
               >
                 {isThinking ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
               </button>
             </div>
             <div className="flex flex-col sm:flex-row items-center justify-between mt-2 md:mt-3 gap-2">
-              <p className="text-[10px] text-slate-700 font-medium">
+              <p className={cn("text-[10px] font-medium", isDark ? 'text-slate-700' : 'text-gray-400')}>
                 Asistente IA de {config.nombre_corto} · Las respuestas pueden variar
               </p>
               <button 
                 onClick={() => setIsExerciseModalOpen(true)}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-900/30 border border-indigo-500/20 hover:bg-indigo-600/30 text-indigo-300 hover:text-white transition-all text-[11px] font-semibold"
+                className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all text-[11px] font-semibold", isDark ? 'bg-indigo-900/30 border-indigo-500/20 hover:bg-indigo-600/30 text-indigo-300 hover:text-white' : 'bg-indigo-50 border-gray-200 hover:bg-indigo-100 text-indigo-600 hover:text-indigo-700')}
               >
                 <BookOpen size={12} />
                 Crear Ejercicio IA
