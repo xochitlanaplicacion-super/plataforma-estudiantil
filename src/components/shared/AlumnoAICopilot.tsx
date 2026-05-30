@@ -307,6 +307,15 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
     setTimeout(() => setCopiedId(null), 2000);
   };
 
+  // ── Preprocessor LaTeX: convertir \( \) → $ $ y \[ \] → $$ $$ ────
+  const preprocessLatex = (text: string) => {
+    // 1. Display math: \[ ... \] → $$ ... $$
+    let result = text.replace(/\\\[([\s\S]*?)\\\]/g, (_, content) => `$$${content}$$`);
+    // 2. Inline math: \( ... \) → $ ... $
+    result = result.replace(/\\\(([\s\S]*?)\\\)/g, (_, content) => `$${content}$`);
+    return result;
+  };
+
   // ── Scroll al inicio / fin del último mensaje ─────────────────────
   const scrollToLastMsgTop = () => {
     if (lastAssistantRef.current) {
@@ -632,7 +641,7 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
                         h3: ({ node, ...props }) => <h3 {...props} className={isDark ? 'text-indigo-200 text-base font-black mt-3 mb-1' : 'text-indigo-700 text-base font-black mt-3 mb-1'} />
                       }}
                     >
-                      {msg.content}
+                      {preprocessLatex(msg.content)}
                     </ReactMarkdown>
                   ) : (
                     <p className="whitespace-pre-wrap">{msg.content}</p>
