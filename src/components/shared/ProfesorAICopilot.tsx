@@ -209,7 +209,7 @@ export function ProfesorAICopilot({ userId, userName, onClose }: ProfesorAICopil
           messages: apiMessages,
           userId,
           sessionId: session.id,
-          institucionNombre: config?.nombre_corto || config?.nombre,
+          institucionNombre: config?.nombre || config?.nombre_corto,
           aiName: config?.nombre_ia,
           userName: userName
         }),
