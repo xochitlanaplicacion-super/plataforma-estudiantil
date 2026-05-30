@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { checkAIServiceStatus, aiServiceDisabledResponse } from "@/utils/aiServiceValidation";
 
 // ── Tipos ──────────────────────────────────────────────────────────────
 interface ChatSession {
@@ -31,6 +32,12 @@ export async function POST(req: Request) {
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!
     );
+
+    // ── VALIDACIÓN DE PAGO: si no hay cuota activa, no se contacta a la IA ──
+    const isActive = await checkAIServiceStatus(supabaseAdmin);
+    if (!isActive) {
+      return aiServiceDisabledResponse();
+    }
 
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - numDays);
@@ -151,14 +158,18 @@ Reglas:
 Sesiones a analizar:
 ${JSON.stringify(condensed)}`;
 
-    const aiResponse = await fetch("https://api.deepseek.com/v1/chat/completions", {
+    const apiKey = process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_SLIDES_API_KEY;
+
+    const aiResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
+        "HTTP-Referer": "https://institutoemilianozapata.edu.mx", // Required by OpenRouter
+        "X-Title": "Monitoreo IA"
       },
       body: JSON.stringify({
-        model: "deepseek-chat",
+        model: "deepseek/deepseek-chat", // OpenRouter model syntax
         messages: [{ role: "user", content: prompt }],
         temperature: 0.1,
         response_format: { type: "json_object" },
@@ -178,7 +189,7 @@ ${JSON.stringify(condensed)}`;
         .replace(/^```json/g, "").replace(/```$/g, "").trim();
       result = JSON.parse(raw);
     } catch (e) {
-      throw new Error("DeepSeek devolvió un formato inesperado");
+      throw new Error("El servicio de análisis devolvió un formato inesperado");
     }
 
     const now = new Date().toISOString();
