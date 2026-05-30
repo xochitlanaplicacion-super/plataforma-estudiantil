@@ -63,6 +63,20 @@ export default function MonitoreoIAPage() {
   const [selectedUserForChat, setSelectedUserForChat] = useState<{ id: string, name: string, type: "alumno"|"profesor" } | null>(null);
 
   const primaryColor = config?.color_primario || "#4f46e5";
+  
+  // Paleta de colores vibrantes y distintos para la gráfica
+  const CHART_COLORS = [
+    primaryColor, 
+    "#10b981", // emerald
+    "#f59e0b", // amber
+    "#ef4444", // red
+    "#8b5cf6", // violet
+    "#06b6d4", // cyan
+    "#ec4899", // pink
+    "#f97316", // orange
+    "#14b8a6", // teal
+    "#6366f1", // indigo
+  ];
 
   // ── Carga de datos desde BD local (instántaneo) ────────────────────
   const loadDashboardData = useCallback(async () => {
@@ -337,13 +351,10 @@ export default function MonitoreoIAPage() {
                       cornerRadius={8}
                     >
                       {currentStats.map((entry, index) => {
-                        // Generar variaciones del color primario
-                        const opacity = Math.max(0.3, 1 - (index * 0.15));
                         return (
                           <Cell 
                             key={`cell-${index}`} 
-                            fill={primaryColor} 
-                            opacity={opacity}
+                            fill={CHART_COLORS[index % CHART_COLORS.length]}
                             style={{ filter: "drop-shadow(0px 4px 6px rgba(0,0,0,0.1))" }}
                           />
                         );
@@ -358,7 +369,7 @@ export default function MonitoreoIAPage() {
                         fontSize: "13px",
                         fontWeight: "bold"
                       }}
-                      formatter={(value: any) => [`${value} sesiones`, "Total"]}
+                      formatter={(value: any, name: string) => [`${value} sesiones`, name]}
                     />
                     <Legend 
                       verticalAlign="bottom" 
