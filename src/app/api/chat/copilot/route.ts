@@ -335,14 +335,14 @@ Ejemplo de cómo debe empezar tu respuesta:
   // Si ya agotó sus búsquedas, ahorramos usando Qwen 3.5 Flash (excelente redacción interna). Si falla, DeepSeek.
   const activeModels = canUseWebSearch
     ? [
-        { id: "deepseek/deepseek-v4-flash", costInput: 0.14, costOutput: 0.28 },
-        { id: "qwen/qwen3.5-flash-02-23", costInput: 0.065, costOutput: 0.26 },
-        { id: "openai/gpt-oss-120b", costInput: 0.0, costOutput: 0.0 }
+        { id: "deepseek/deepseek-v4-flash", costInput: 0.14, costOutput: 0.28, providerConfig: { order: ["Baidu"], quantizations: ["fp8"] } },
+        { id: "qwen/qwen3.5-flash-02-23", costInput: 0.065, costOutput: 0.26, providerConfig: { order: ["Alibaba"] } },
+        { id: "openai/gpt-oss-120b", costInput: 0.0, costOutput: 0.0, providerConfig: { order: ["Novita"], quantizations: ["fp4"] } }
       ]
     : [
-        { id: "qwen/qwen3.5-flash-02-23", costInput: 0.065, costOutput: 0.26 },
-        { id: "deepseek/deepseek-v4-flash", costInput: 0.14, costOutput: 0.28 },
-        { id: "openai/gpt-oss-120b", costInput: 0.0, costOutput: 0.0 }
+        { id: "qwen/qwen3.5-flash-02-23", costInput: 0.065, costOutput: 0.26, providerConfig: { order: ["Alibaba"] } },
+        { id: "deepseek/deepseek-v4-flash", costInput: 0.14, costOutput: 0.28, providerConfig: { order: ["Baidu"], quantizations: ["fp8"] } },
+        { id: "openai/gpt-oss-120b", costInput: 0.0, costOutput: 0.0, providerConfig: { order: ["Novita"], quantizations: ["fp4"] } }
       ];
 
   for (const model of activeModels) {
@@ -362,7 +362,10 @@ Ejemplo de cómo debe empezar tu respuesta:
           model: model.id,
           messages: fullMessagesPayload,
           stream: true,
-          provider: { data_collection: "deny" },
+          provider: {
+            data_collection: "deny",
+            ...(model.providerConfig || {})
+          },
           ...(canUseWebSearch ? { plugins: [{ id: "web", max_results: 5 }] } : {})
         }),
         signal: fetchController.signal
