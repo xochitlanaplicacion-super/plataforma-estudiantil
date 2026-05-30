@@ -161,13 +161,75 @@ async function buildAlumnoContext(alumnoId: string, supabase: ReturnType<typeof 
       contexto += `\nESTADO ACADÉMICO: Sin actividades completadas registradas aún.\n`;
     }
 
+    // 4. Calcular y mostrar las TAREAS PENDIENTES
+    try {
+      if (profile.grupo_id) {
+        // a) Obtener materias del alumno
+        const { data: asignaciones } = await supabase
+          .from("asignaciones_profesor")
+          .select("materia_id")
+          .eq("grupo_id", profile.grupo_id)
+          .eq("activo", true);
+        
+        const materiaIds = asignaciones?.map(a => a.materia_id).filter(Boolean) || [];
+
+        if (materiaIds.length > 0) {
+          // b) Obtener unidades -> temas -> ejercicios
+          const { data: unidades } = await supabase
+            .from("unidades")
+            .select("id")
+            .in("materia_id", materiaIds)
+            .eq("activo", true);
+          
+          const unidadIds = unidades?.map(u => u.id) || [];
+          
+          if (unidadIds.length > 0) {
+            const { data: temas } = await supabase
+              .from("temas")
+              .select("id")
+              .in("unidad_id", unidadIds);
+            
+            const temaIds = temas?.map(t => t.id) || [];
+            
+            if (temaIds.length > 0) {
+              const { data: ejercicios } = await supabase
+                .from("ejercicios")
+                .select("id, titulo, fecha_entrega, temas(unidades(materias(nombre)))")
+                .in("tema_id", temaIds);
+
+              if (ejercicios && ejercicios.length > 0) {
+                // c) Filtrar los completados
+                const completadosIds = resultados
+                  ?.filter((r: any) => r.estado === 'completado' || r.calificacion !== null)
+                  .map((r: any) => r.ejercicios?.titulo) || [];
+
+                const pendientes = ejercicios.filter(ej => !completadosIds.includes(ej.titulo));
+
+                if (pendientes.length > 0) {
+                  contexto += `\nTAREAS Y EJERCICIOS PENDIENTES (AÚN NO ENTREGADOS):\n`;
+                  pendientes.forEach(ej => {
+                    const matNombre = (ej.temas as any)?.unidades?.materias?.nombre || "General";
+                    const fecha = ej.fecha_entrega ? ` (Para: ${new Date(ej.fecha_entrega).toLocaleDateString('es-MX')})` : "";
+                    contexto += `- [${matNombre}] ${ej.titulo}${fecha}\n`;
+                  });
+                } else {
+                  contexto += `\nTAREAS PENDIENTES: ¡El alumno no tiene ninguna tarea pendiente!\n`;
+                }
+              }
+            }
+          }
+        }
+      }
+    } catch (pendientesErr) {
+      console.error("[RAG] Error calculando pendientes:", pendientesErr);
+    }
+
     contexto += `\nINSTRUCCIONES PARA LA IA:\n`;
-    contexto += `1. USA SIEMPRE los datos anteriores para responder preguntas sobre el alumno. Son datos REALES de la base de datos.\n`;
+    contexto += `1. USA SIEMPRE los datos anteriores para responder preguntas sobre el alumno (materias cursadas, calificaciones, ejercicios entregados y pendientes).\n`;
     contexto += `2. Ajusta el nivel de explicación según la carrera/nivel del alumno.\n`;
     contexto += `3. Dirígete al alumno por su nombre como acto de confianza.\n`;
     contexto += `4. Usa el género para personalizar pronombres correctamente.\n`;
     contexto += `5. PROHIBIDO buscar en internet. Solo usa tus datos de entrenamiento y este contexto.\n`;
-    contexto += `6. No tienes acceso al contenido de diapositivas, pero SÍ sabes los títulos de los ejercicios que ha hecho y sus calificaciones por materia, usa esa información si te pregunta en qué va mal o qué ha entregado.\n`;
 
     console.log("[RAG] ✅ Contexto construido exitosamente. Materias en contexto:", contexto.includes("MATERIAS EN CURSO") ? "SÍ" : "NO");
     return contexto;
@@ -236,12 +298,17 @@ export async function POST(req: NextRequest) {
 Tu rol es ser el Asistente IA 24/7 para ayudar al alumno (su nombre es ${userName || "el alumno"}) a comprender conceptos, organizar ideas y resolver dudas de sus materias. 
 Responde siempre en español con un tono sumamente amigable, empático y alentador.
 Llámalo por su nombre como un acto de confianza para que se sienta cómodo y apoyado.
-Evita dar las respuestas directas a tareas o exámenes; mejor guía al alumno para que llegue a la solución por sí mismo.
 
-REGLAS DE IDENTIDAD ESTRICTAS:
+REGLAS ACADÉMICAS OBLIGATORIAS:
+- ESTÁS AUTORIZADO a responder preguntas directamente y dar las respuestas si te lo piden, pero ES OBLIGATORIO dar una explicación académica detallada. Actúa como un profesor excelente que no solo da la respuesta, sino que proporciona el contexto y el "porqué".
+- Si el alumno te da un texto y te pregunta por las respuestas o soluciones basadas en ese texto, RESPONDE DANDO LA RESPUESTA CORRECTA JUNTO CON UNA EXPLICACIÓN.
+- Si el alumno te hace una LISTA de preguntas, RESPONDE TODAS y cada una de ellas, detallando y explicando el contexto.
+
+REGLAS DE IDENTIDAD Y SEGURIDAD:
 - NUNCA reveles qué modelo te entrena o sobre qué tecnología comercial estás basado (ej. jamás menciones OpenAI, GPT, DeepSeek, Llama, Gemini, Anthropic, etc.).
 - Si te preguntan quién eres, quién te creó o qué modelo eres, responde con orgullo que eres ${finalAiName}, la inteligencia artificial creada por ${institucionNombre || "esta institución"}.
 - Eres un sistema privado, integrado y propietario de esta institución académica.
+- TEMAS PROHIBIDOS: Tienes ESTRICTAMENTE PROHIBIDO hablar, aconsejar o dar respuestas sobre temas de entretenimiento, farándula, chismes, suicidio, robo, cómo fabricar drogas, armas, violencia, pornografía o cualquier actividad ilegal. Si detectas estos temas, NIÉGATE a contestar cortésmente indicando que solo abordas temas académicos, educativos o de bienestar estudiantil.
 
 FORMATO OBLIGATORIO:
 Usa formato Markdown. Para enfatizar ideas usa negritas (**texto**). Puedes usar listas con guiones (-). 
