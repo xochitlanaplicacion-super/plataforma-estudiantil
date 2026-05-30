@@ -1,5 +1,6 @@
 import type {Metadata} from 'next';
 import './globals.css';
+import 'katex/dist/katex.min.css';
 import { FirebaseClientProvider } from '@/firebase';
 import { Toaster } from '@/components/ui/toaster';
 import { ThemeProvider } from '@/components/shared/ThemeProvider';
