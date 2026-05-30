@@ -196,6 +196,7 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
           userId,
           sessionId: session.id,
           institucionNombre: config?.nombre_corto || config?.nombre,
+          aiName: config?.nombre_ia,
           userName: userName
         }),
       });

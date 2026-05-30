@@ -60,6 +60,7 @@ export default function InstitucionPage() {
   const [direccion, setDireccion] = useState('');
   const [sitio_web, setSitioWeb] = useState('');
   const [url_plataforma, setUrlPlataforma] = useState('');
+  const [nombre_ia, setNombreIa] = useState('');
   const [logo_url, setLogoUrl] = useState('');
   const [favicon_url, setFaviconUrl] = useState('');
   const [color_primario, setColorPrimario] = useState('#8B2332');
@@ -134,6 +135,7 @@ export default function InstitucionPage() {
       setDireccion(initialConfig.direccion || '');
       setSitioWeb(initialConfig.sitio_web || '');
       setUrlPlataforma(initialConfig.url_plataforma || '');
+      setNombreIa(initialConfig.nombre_ia || '');
       setLogoUrl(initialConfig.logo_url || '');
       setFaviconUrl(initialConfig.favicon_url || '');
       setColorPrimario(initialConfig.color_primario);
@@ -283,8 +285,9 @@ export default function InstitucionPage() {
     }
     setSaving(true);
     const result = await updateInstitucionConfig({
-      nombre_completo, nombre_corto, siglas, codigo_matricula: codigo_matricula.toUpperCase(), slogan, direccion: direccion || undefined,
-      sitio_web: sitio_web || undefined, url_plataforma: url_plataforma || undefined, logo_url: logo_url, favicon_url: favicon_url,
+      nombre_completo, nombre_corto, siglas, codigo_matricula: codigo_matricula, slogan, direccion: direccion || undefined,
+      sitio_web: sitio_web || undefined, url_plataforma: url_plataforma || undefined, 
+      nombre_ia: nombre_ia || undefined, logo_url: logo_url, favicon_url: favicon_url,
       color_primario, color_secundario, temas_login, modo_tema_login, tema_fijo_index,
       niveles_nombres, telefono_contacto: telefono, correo_contacto: correo,
       horarios_atencion: bloques,
@@ -383,6 +386,7 @@ export default function InstitucionPage() {
           <div className="space-y-2"><Label className="font-bold">Prefijo de Matrícula (Código)</Label><Input value={codigo_matricula} onChange={e => setCodigoMatricula(e.target.value.toUpperCase())} placeholder="XXXXXX" className="uppercase" /></div>
           <div className="space-y-2"><Label className="font-bold">Slogan / Subtítulo</Label><Input value={slogan} onChange={e => setSlogan(e.target.value)} placeholder="Ej. Plataforma Académica" /></div>
           <div className="space-y-2"><Label className="font-bold">URL de la Plataforma (Botones Correo)</Label><Input value={url_plataforma} onChange={e => setUrlPlataforma(e.target.value)} placeholder="Ej. https://plataforma.ejemplo.edu/" /></div>
+          <div className="space-y-2"><Label className="font-bold">Nombre de IA</Label><Input value={nombre_ia} onChange={e => setNombreIa(e.target.value)} placeholder="Ej. Zapatito AI" /></div>
           <div className="space-y-2"><Label className="font-bold">Sitio Web Oficial</Label><Input value={sitio_web} onChange={e => setSitioWeb(e.target.value)} placeholder="Ej. https://mi-escuela.com" /></div>
           <div className="space-y-2 md:col-span-2"><Label className="font-bold">Dirección Física</Label><Input value={direccion} onChange={e => setDireccion(e.target.value)} placeholder="Av. Principal #123..." /></div>
         </CardContent>

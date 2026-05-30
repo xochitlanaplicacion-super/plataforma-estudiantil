@@ -247,4 +247,5 @@ export interface InstitucionConfig {
   smtp_user?: string;
   smtp_password?: string;
   smtp_from_name?: string;
+  nombre_ia?: string;
 }

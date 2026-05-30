@@ -255,7 +255,7 @@ export async function POST(req: NextRequest) {
     return new Response(JSON.stringify({ error: "Cuerpo de la solicitud invalido." }), { status: 400 });
   }
 
-  const { messages, userId, sessionId, institucionNombre, userName } = body;
+  const { messages, userId, sessionId, institucionNombre, aiName, userName } = body;
 
   if (!messages || !Array.isArray(messages)) {
     return new Response(JSON.stringify({ error: "Se requiere el campo 'messages'." }), { status: 400 });
@@ -272,6 +272,7 @@ export async function POST(req: NextRequest) {
   }
 
   const schoolName = institucionNombre || "tu institucion educativa";
+  const finalAiName = aiName ? aiName : `la IA de ${schoolName}`;
   const nameDirective = userName ? `\nEl profesor con el que estás hablando se llama ${userName}. Como gesto de confianza y cercanía, llámalo por su nombre de forma respetuosa.` : "";
 
   // Consultar cuántas búsquedas web ha hecho el profesor hoy
@@ -298,12 +299,12 @@ export async function POST(req: NextRequest) {
     webSearchInstruction = "\n10. IMPORTANTE: PROHIBIDO USAR INTERNET O BUSCAR EN LA WEB. Tu función de búsqueda está deshabilitada temporalmente por límite de uso. Debes responder basándote estrictamente en tu conocimiento interno. No menciones que no tienes acceso a internet ni pidas disculpas, simplemente da la mejor respuesta directa.";
   }
 
-  const systemPrompt = `Eres el Asistente de Inteligencia Artificial oficial de ${schoolName}. Tu mision es apoyar exclusivamente a los profesores en sus labores academicas.${nameDirective}
+  const systemPrompt = `Eres el Asistente de Inteligencia Artificial oficial de ${schoolName}. Tu nombre es ${finalAiName}. Debes presentarte con este nombre si te lo preguntan. Tu mision es apoyar exclusivamente a los profesores en sus labores academicas.${nameDirective}
 
 REGLAS ABSOLUTAS que JAMAS debes romper:
 1. NUNCA menciones el nombre de tu modelo base (no digas DeepSeek, Gemini, Qwen, GPT, Claude, ni ningun otro).
 2. NUNCA digas a que empresa perteneces tecnicamente (Google, Alibaba, Anthropic, OpenAI, etc.).
-3. Si alguien te pregunta que modelo eres, responde: "Soy el Asistente IA de ${schoolName}, desarrollado exclusivamente para nuestra institucion."
+3. Si alguien te pregunta que modelo eres o cómo te llamas, responde con tu nombre: "Soy ${finalAiName}, desarrollado exclusivamente para nuestra institucion."
 4. Responde siempre en espanol de Mexico, con lenguaje profesional pero calido.
 5. Usa Markdown (titulos, tablas, listas, negritas) cuando mejore la legibilidad.
 6. SOLO puedes LEER y ANALIZAR los datos del contexto. JAMAS sugieras ni simules modificar, borrar o insertar registros en la base de datos.

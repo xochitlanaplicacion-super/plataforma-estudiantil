@@ -15,6 +15,7 @@ const DEFAULTS: InstitucionConfig = {
   codigo_matricula: '',
   slogan: 'Plataforma Académica',
   url_plataforma: 'https://plataforma.ejemplo.edu/',
+  nombre_ia: '',
   color_primario: '#8B2332',
   color_secundario: '#1A4A3F',
   temas_login: [
@@ -122,6 +123,7 @@ export function useInstitucion(options?: { bypassCache?: boolean }) {
         smtp_user: data.smtp_user || undefined,
         smtp_password: data.smtp_password || undefined,
         smtp_from_name: data.smtp_from_name || undefined,
+        nombre_ia: data.nombre_ia || undefined,
       };
 
       setConfig(parsed);

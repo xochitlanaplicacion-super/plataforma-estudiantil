@@ -63,6 +63,7 @@ export async function getInstitucionConfig(): Promise<InstitucionConfig> {
       direccion: data.direccion || undefined,
       sitio_web: data.sitio_web || undefined,
       url_plataforma: data.url_plataforma || undefined,
+      nombre_ia: data.nombre_ia || undefined,
       logo_url: data.logo_url || DEFAULTS.logo_url,
       logo_dark_url: data.logo_dark_url || DEFAULTS.logo_dark_url,
       favicon_url: data.favicon_url || DEFAULTS.favicon_url,
@@ -112,6 +113,7 @@ export async function getInstitucionConfigAuth(): Promise<InstitucionConfig> {
     direccion: data.direccion || undefined,
     sitio_web: data.sitio_web || undefined,
     url_plataforma: data.url_plataforma || undefined,
+    nombre_ia: data.nombre_ia || undefined,
     logo_url: data.logo_url || DEFAULTS.logo_url,
     logo_dark_url: data.logo_dark_url || DEFAULTS.logo_dark_url,
     favicon_url: data.favicon_url || DEFAULTS.favicon_url,
@@ -151,7 +153,7 @@ export async function updateInstitucionConfig(config: Partial<InstitucionConfig>
 
   const textFields = [
     'nombre_completo', 'nombre_corto', 'siglas', 'slogan', 'direccion',
-    'sitio_web', 'url_plataforma', 'logo_url', 'logo_dark_url', 'favicon_url',
+    'sitio_web', 'url_plataforma', 'nombre_ia', 'logo_url', 'logo_dark_url', 'favicon_url',
     'color_primario', 'color_secundario', 'modo_tema_login',
     'telefono_contacto', 'correo_contacto', 'codigo_matricula',
     'smtp_host', 'smtp_user', 'smtp_password', 'smtp_from_name'

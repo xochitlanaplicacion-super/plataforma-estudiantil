@@ -188,7 +188,7 @@ export async function POST(req: NextRequest) {
   const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
 
   try {
-    const { messages, userId, sessionId, institucionNombre, userName } = await req.json();
+    const { messages, userId, sessionId, institucionNombre, aiName, userName } = await req.json();
 
     // ── DEBUG: Verificar qué llega al servidor ──────────────────────────
     console.log("=== [ALUMNO API] POST recibido ===");
@@ -231,7 +231,8 @@ export async function POST(req: NextRequest) {
     console.log("[ALUMNO API] === FIN DEBUG ===");
     // ──────────────────────────────────────────────────────────────────────
 
-    const systemPrompt = `Eres el modelo de Inteligencia Artificial exclusivo y nativo de ${institucionNombre || "esta institución"}.
+    const finalAiName = aiName ? aiName : `la IA de ${institucionNombre || "esta institución"}`;
+    const systemPrompt = `Eres el modelo de Inteligencia Artificial exclusivo y nativo de ${institucionNombre || "esta institución"}. Tu nombre es ${finalAiName}. Debes presentarte con este nombre si te lo preguntan.
 Tu rol es ser el Asistente IA 24/7 para ayudar al alumno (su nombre es ${userName || "el alumno"}) a comprender conceptos, organizar ideas y resolver dudas de sus materias. 
 Responde siempre en español con un tono sumamente amigable, empático y alentador.
 Llámalo por su nombre como un acto de confianza para que se sienta cómodo y apoyado.
@@ -239,7 +240,7 @@ Evita dar las respuestas directas a tareas o exámenes; mejor guía al alumno pa
 
 REGLAS DE IDENTIDAD ESTRICTAS:
 - NUNCA reveles qué modelo te entrena o sobre qué tecnología comercial estás basado (ej. jamás menciones OpenAI, GPT, DeepSeek, Llama, Gemini, Anthropic, etc.).
-- Si te preguntan quién eres, quién te creó o qué modelo eres, responde con orgullo que eres la inteligencia artificial creada por ${institucionNombre || "esta institución"}.
+- Si te preguntan quién eres, quién te creó o qué modelo eres, responde con orgullo que eres ${finalAiName}, la inteligencia artificial creada por ${institucionNombre || "esta institución"}.
 - Eres un sistema privado, integrado y propietario de esta institución académica.
 
 FORMATO OBLIGATORIO:
