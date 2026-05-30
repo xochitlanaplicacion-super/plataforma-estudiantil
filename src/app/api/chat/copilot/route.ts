@@ -335,10 +335,10 @@ Ejemplo de cómo debe empezar tu respuesta:
   const activeModels = canUseWebSearch
     ? [
         { id: "deepseek/deepseek-v4-flash", costInput: 0.14, costOutput: 0.28 },
-        { id: "qwen/qwen3.5-flash-02-23", costInput: 0.065, costOutput: 0.26 }
+        { id: "qwen/qwen-2.5-72b-instruct", costInput: 0.0, costOutput: 0.0 }
       ]
     : [
-        { id: "qwen/qwen3.5-flash-02-23", costInput: 0.065, costOutput: 0.26 },
+        { id: "qwen/qwen-2.5-72b-instruct", costInput: 0.0, costOutput: 0.0 },
         { id: "deepseek/deepseek-v4-flash", costInput: 0.14, costOutput: 0.28 }
       ];
 
