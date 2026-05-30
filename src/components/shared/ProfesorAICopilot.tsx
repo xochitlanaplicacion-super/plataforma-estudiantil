@@ -446,15 +446,6 @@ export function ProfesorAICopilot({ userId, userName, onClose }: ProfesorAICopil
                     <Edit2 size={11} />
                   </button>
                 )}
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setDeleteConfirmSession(s.id);
-                  }}
-                  className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-300 transition-all shrink-0"
-                >
-                  <Trash2 size={11} />
-                </button>
               </div>
             ))}
             {sessions.length === 0 && (

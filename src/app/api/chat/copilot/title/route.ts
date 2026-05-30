@@ -1,11 +1,14 @@
 import { NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { checkAIServiceStatus, aiServiceDisabledResponse } from "@/utils/aiServiceValidation";
+
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const MODEL = "openai/gpt-oss-120b"; // Modelo gratuito sugerido para generar titulo
 
 export async function POST(req: NextRequest) {
-  const apiKey = process.env.OPENROUTER_SLIDES_API_KEY || process.env.OPENROUTER_API_KEY;
+    if (!(await checkAIServiceStatus())) return aiServiceDisabledResponse();
+const apiKey = process.env.OPENROUTER_SLIDES_API_KEY || process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     return new Response(JSON.stringify({ error: "API Key de OpenRouter no configurada." }), { status: 500 });
   }

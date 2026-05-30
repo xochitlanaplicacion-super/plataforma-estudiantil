@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { checkAIServiceStatus, aiServiceDisabledResponse } from "@/utils/aiServiceValidation";
+
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const MODEL_ID = "google/gemini-2.5-flash-lite";
@@ -7,7 +9,8 @@ const COST_PER_M_INPUT = 0.10;
 const COST_PER_M_OUTPUT = 0.40;
 
 export async function POST(req: Request) {
-  try {
+    if (!(await checkAIServiceStatus())) return aiServiceDisabledResponse();
+try {
     const body = await req.json();
     const { prompt, numTarjetas, userId } = body;
 

@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { checkAIServiceStatus, aiServiceDisabledResponse } from "@/utils/aiServiceValidation";
+
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -55,7 +57,8 @@ const TEMPLATE_META: Record<string, { titleColor: string; contentColor: string; 
 };
 
 export async function POST(req: Request) {
-  try {
+    if (!(await checkAIServiceStatus())) return aiServiceDisabledResponse();
+try {
     const body = await req.json();
     const { tema, numSlides, instrucciones, estilo, userId } = body;
 

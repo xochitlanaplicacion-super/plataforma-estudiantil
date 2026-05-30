@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { checkAIServiceStatus, aiServiceDisabledResponse } from "@/utils/aiServiceValidation";
+
 
 // Usamos el modelo principal de los alumnos para mantener coherencia, o gemini-2.5-flash-lite que es rápido para JSON
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -9,7 +11,8 @@ const ALUMNO_MODELS = [
 ];
 
 export async function POST(req: Request) {
-  try {
+    if (!(await checkAIServiceStatus())) return aiServiceDisabledResponse();
+try {
     const body = await req.json();
     const { source, type, count, userId, chatMessages, materiaId, unidadId, temaId } = body;
 
