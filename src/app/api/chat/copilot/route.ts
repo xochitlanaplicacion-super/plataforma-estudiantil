@@ -373,18 +373,19 @@ Ejemplo de cómo debe empezar tu respuesta:
           const reader = response.body!.getReader();
           const decoder = new TextDecoder();
 
-          let buffer = "";
-          let lastFinishReason = "";
+          // Helper: read an entire OpenRouter stream, forwarding deltas to the client
+          async function readStream(streamReader: ReadableStreamDefaultReader<Uint8Array>): Promise<{ finishReason: string; hadToolCalls: boolean }> {
+            let buf = "";
+            let finishReason = "";
+            let hadToolCalls = false;
 
-          try {
-            // ── Phase 1: Read the stream from OpenRouter ──
             while (true) {
-              const { done, value } = await reader.read();
+              const { done, value } = await streamReader.read();
               if (done) break;
 
-              buffer += decoder.decode(value, { stream: true });
-              const lines = buffer.split("\n");
-              buffer = lines.pop() || "";
+              buf += decoder.decode(value, { stream: true });
+              const lines = buf.split("\n");
+              buf = lines.pop() || "";
 
               for (const line of lines) {
                 if (line.startsWith("data: ")) {
@@ -394,14 +395,16 @@ Ejemplo de cómo debe empezar tu respuesta:
                   try {
                     const data = JSON.parse(dataStr);
                     const chunk = data.choices?.[0]?.delta?.content || "";
-                    
-                    if (data.choices?.[0]?.finish_reason) {
-                      lastFinishReason = data.choices[0].finish_reason;
-                    }
 
+                    if (data.choices?.[0]?.finish_reason) {
+                      finishReason = data.choices[0].finish_reason;
+                    }
+                    if (data.choices?.[0]?.delta?.tool_calls) {
+                      hadToolCalls = true;
+                    }
                     if (data.usage) {
-                      promptTokens = data.usage.prompt_tokens || promptTokens;
-                      completionTokens = data.usage.completion_tokens || completionTokens;
+                      promptTokens = (data.usage.prompt_tokens || 0) + promptTokens;
+                      completionTokens = (data.usage.completion_tokens || 0) + completionTokens;
                     }
 
                     if (chunk) {
@@ -416,82 +419,69 @@ Ejemplo de cómo debe empezar tu respuesta:
                 }
               }
             }
+            return { finishReason, hadToolCalls };
+          }
 
-            // ── Phase 2: Auto-resume if the response was cut off ──
-            let resumesDone = 0;
-            const MAX_RESUMES = 2; // Prevent infinite loops and massive token burn
+          // Helper: detect if text looks cut off (incomplete sentence/section)
+          function looksIncomplete(text: string): boolean {
+            const trimmed = text.trim();
+            if (!trimmed) return false;
+            // If it ends mid-word, mid-table, mid-list, or without terminal punctuation
+            const lastChar = trimmed[trimmed.length - 1];
+            const endsCleanly = ['.', '!', '?', ':', '|', '-', '*', ')', ']', '`'].includes(lastChar);
+            // Also check if the last 100 chars suggest a table/list was being built
+            const tail = trimmed.slice(-100);
+            const hasOpenStructure = (tail.includes('|') && !tail.endsWith('|')) || 
+                                     tail.match(/\d+\.\s+\S+$/) !== null;
+            return !endsCleanly || hasOpenStructure;
+          }
 
-            while ((lastFinishReason === "length" || lastFinishReason === "max_tokens") && resumesDone < MAX_RESUMES) {
-              resumesDone++;
-              lastFinishReason = ""; // Reset for the next stream
-              
-              const followUpMessages = [
-                ...fullMessagesPayload,
-                { role: "assistant", content: fullText },
-                { role: "user", content: "Continúa generando tu respuesta exactamente desde donde te quedaste. No repitas nada de lo que ya dijiste, simplemente continúa el texto de forma fluida y natural." }
+          try {
+            // ── Phase 1: Read the main stream ──
+            const { finishReason, hadToolCalls } = await readStream(reader);
+
+            // ── Phase 2: Auto-continuation if response was cut off ──
+            // Cases: finish_reason is "length" (max tokens), "tool_calls", 
+            // or the text just ends abruptly
+            const wasCutOff = finishReason === "length" || 
+                              finishReason === "tool_calls" || 
+                              hadToolCalls ||
+                              (finishReason !== "stop" && looksIncomplete(fullText));
+
+            if (wasCutOff && fullText.trim().length > 50) {
+              console.log(`[Copilot] Response cut off (finish_reason: ${finishReason}). Auto-continuing...`);
+              didWebSearch = hadToolCalls || didWebSearch;
+
+              // Take the last ~500 chars as context for seamless continuation
+              const contextTail = fullText.slice(-500);
+
+              const continuationMessages = [
+                { role: "system", content: fullMessagesPayload[0].content + 
+                  `\n\n[INSTRUCCIÓN DE CONTINUACIÓN]\nTu respuesta anterior fue cortada. Los últimos caracteres que escribiste fueron:\n"...${contextTail}"\n\nCONTINÚA EXACTAMENTE desde donde te quedaste. NO repitas nada de lo anterior. NO saludes de nuevo. NO pongas título. Simplemente continúa la respuesta de forma natural desde el punto exacto donde se cortó.` },
+                ...fullMessagesPayload.slice(1),
               ];
 
-              const followUpResponse = await fetch(OPENROUTER_URL, {
+              const contResponse = await fetch(OPENROUTER_URL, {
                 method: "POST",
                 headers: {
                   Authorization: `Bearer ${apiKey}`,
                   "Content-Type": "application/json",
                   "HTTP-Referer": "https://iez.edu.mx",
-                  "X-Title": "IEZ Platform - Copiloto Profesor Auto-Resume",
+                  "X-Title": "IEZ Platform - Copiloto Profesor",
                 },
                 body: JSON.stringify({
                   model: model.id,
-                  messages: followUpMessages,
+                  messages: continuationMessages,
                   stream: true,
-                  provider: { data_collection: "deny" }
-                  // Intentionally NOT including plugins here to save time and just continue text
+                  provider: { data_collection: "deny" },
+                  // NO plugins/tools in continuation - just answer directly
                 }),
               });
 
-              if (followUpResponse.ok && followUpResponse.body) {
-                const followUpReader = followUpResponse.body.getReader();
-                let followUpBuffer = "";
-
-                while (true) {
-                  const { done: done2, value: value2 } = await followUpReader.read();
-                  if (done2) break;
-
-                  followUpBuffer += decoder.decode(value2, { stream: true });
-                  const followUpLines = followUpBuffer.split("\n");
-                  followUpBuffer = followUpLines.pop() || "";
-
-                  for (const line of followUpLines) {
-                    if (line.startsWith("data: ")) {
-                      const dataStr = line.replace("data: ", "").trim();
-                      if (dataStr === "[DONE]") continue;
-
-                      try {
-                        const data = JSON.parse(dataStr);
-                        const chunk = data.choices?.[0]?.delta?.content || "";
-                        
-                        if (data.choices?.[0]?.finish_reason) {
-                          lastFinishReason = data.choices[0].finish_reason;
-                        }
-
-                        if (data.usage) {
-                          promptTokens += data.usage.prompt_tokens || 0;
-                          completionTokens += data.usage.completion_tokens || 0;
-                        }
-
-                        if (chunk) {
-                          fullText += chunk;
-                          controller.enqueue(
-                            encoder.encode(`data: ${JSON.stringify({ delta: chunk })}\n\n`)
-                          );
-                        }
-                      } catch (e) {
-                        // ignorar
-                      }
-                    }
-                  }
-                }
+              if (contResponse.ok && contResponse.body) {
+                await readStream(contResponse.body.getReader());
               } else {
-                break; // If fetch fails, break out of resume loop
+                console.error("[Copilot] Continuation request failed:", contResponse.status);
               }
             }
 
