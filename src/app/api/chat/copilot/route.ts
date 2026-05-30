@@ -294,7 +294,7 @@ export async function POST(req: NextRequest) {
   if (canUseWebSearch) {
     webSearchInstruction = "\n10. Tienes ACCESO A INTERNET mediante búsqueda web. Si el profesor te pide recursos, planes de acción, sugerencias de ejercicios externos, artículos, o información actualizada para apoyar a sus alumnos, ¡usa tu herramienta de búsqueda web para encontrar e incluir enlaces y recursos reales y útiles!";
   } else {
-    webSearchInstruction = "\n10. IMPORTANTE: Tu acceso a internet está deshabilitado temporalmente. Debes responder con la mayor calidad posible basándote estrictamente en tu conocimiento interno. No menciones bajo ninguna circunstancia que no tienes acceso a internet o que no puedes buscar, simplemente disimula y da la mejor respuesta posible que puedas inventar o recordar.";
+    webSearchInstruction = "\n10. IMPORTANTE: PROHIBIDO USAR INTERNET O BUSCAR EN LA WEB. Tu función de búsqueda está deshabilitada temporalmente por límite de uso. Debes responder basándote estrictamente en tu conocimiento interno. No menciones que no tienes acceso a internet ni pidas disculpas, simplemente da la mejor respuesta directa.";
   }
 
   const systemPrompt = `Eres el Asistente de Inteligencia Artificial oficial de ${schoolName}. Tu mision es apoyar exclusivamente a los profesores en sus labores academicas.${nameDirective}
@@ -491,17 +491,31 @@ Ejemplo de cómo debe empezar tu respuesta:
                 (promptTokens / 1_000_000) * model.costInput +
                 (completionTokens / 1_000_000) * model.costOutput;
 
-              const hasLink = /(https?:\/\/|www\.|[a-zA-Z0-9-]+\.(com|es|mx|net|org|edu|gob)\b)/i.test(fullText);
-              if (canUseWebSearch && hasLink) didWebSearch = true;
+              if (canUseWebSearch) didWebSearch = true;
 
               if (didWebSearch) {
                 const today = new Date().toISOString().split('T')[0];
-                supabaseAdmin.from("ai_daily_web_searches").upsert(
-                  { profesor_id: userId, fecha: today, search_count: todaySearchCount + 1 },
-                  { onConflict: 'profesor_id, fecha' }
-                ).then(({ error }: any) => {
-                  if (error) console.error("[Copilot] Error upsert web search:", error);
-                });
+                try {
+                  const { data: existing } = await supabaseAdmin
+                    .from("ai_daily_web_searches")
+                    .select("id, search_count")
+                    .eq("profesor_id", userId)
+                    .eq("fecha", today)
+                    .maybeSingle();
+
+                  if (existing) {
+                    await supabaseAdmin
+                      .from("ai_daily_web_searches")
+                      .update({ search_count: existing.search_count + 1 })
+                      .eq("id", existing.id);
+                  } else {
+                    await supabaseAdmin
+                      .from("ai_daily_web_searches")
+                      .insert({ profesor_id: userId, fecha: today, search_count: 1 });
+                  }
+                } catch (error) {
+                  console.error("[Copilot] Error guardando uso de web search:", error);
+                }
               }
 
               const usageLogPromise = supabaseAdmin.from("ai_usage_log").insert({
