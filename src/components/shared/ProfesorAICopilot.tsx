@@ -760,7 +760,7 @@ export function ProfesorAICopilot({ userId, userName, onClose }: ProfesorAICopil
               />
 
               <button
-                onClick={sendMessage}
+                onClick={() => sendMessage()}
                 disabled={isThinking || !inputText.trim()}
                 className={cn(
                   "p-2.5 rounded-xl transition-all shrink-0",

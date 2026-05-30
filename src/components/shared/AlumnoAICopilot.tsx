@@ -714,7 +714,7 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
               />
 
               <button
-                onClick={sendMessage}
+                onClick={() => sendMessage()}
                 disabled={isThinking || !inputText.trim()}
                 className={cn(
                   "p-2.5 md:p-3 rounded-xl transition-all shrink-0 mb-0.5",
