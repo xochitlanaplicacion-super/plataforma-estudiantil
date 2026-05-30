@@ -103,6 +103,7 @@ export function DashboardLayout({ children, userRole, userName, userId }: Dashbo
       { group: "Módulo 10: Reportes", items: [
         { icon: CreditCard, label: 'Control de Pagos', href: '/dashboard/admin/vigencias' },
         { icon: BarChart3, label: 'Reportes y Auditoría', href: '/dashboard/admin/auditoria' },
+        { icon: ShieldAlert, label: 'Monitoreo IA', href: '/dashboard/admin/monitoreo-ia' },
       ]},
       { group: "Configuración del Sistema", items: [
         { icon: Building2, label: 'Datos de la Institución', href: '/dashboard/admin/institucion' },

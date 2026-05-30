@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useInstitucion } from "@/hooks/use-institucion";
 import Image from "next/image";
 import {
-  X, Send, Copy, Check, Plus, MessageSquare, Loader2, Edit2, ChevronUp, ChevronDown, BookOpen, Sun, Moon
+  X, Send, Copy, Check, Plus, MessageSquare, Loader2, Edit2, ChevronUp, ChevronDown, BookOpen, Sun, Moon, ShieldAlert
 } from "lucide-react";
 import { AlumnoExerciseModal } from "./AlumnoExerciseModal";
 import { InlineExercise, type ExerciseState } from "./InlineExercise";
@@ -93,8 +93,16 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
   const [editingTitle, setEditingTitle] = useState("");
   const [isExerciseModalOpen, setIsExerciseModalOpen] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [showPrivacyNotice, setShowPrivacyNotice] = useState(false);
 
   const isDark = theme === 'dark';
+
+  useEffect(() => {
+    const accepted = localStorage.getItem('ez-ai-privacy-accepted');
+    if (!accepted) {
+      setShowPrivacyNotice(true);
+    }
+  }, []);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -358,6 +366,30 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
       {/* ── FONDO BLUR ── */}
       <div className={cn("absolute inset-0 backdrop-blur-md", isDark ? 'bg-slate-950/70' : 'bg-black/30')} onClick={onClose} />
 
+      {/* ── AVISO DE PRIVACIDAD MODAL ── */}
+      {showPrivacyNotice && (
+        <div className="absolute inset-0 z-[100000] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className={cn("max-w-md p-6 rounded-2xl shadow-2xl flex flex-col gap-4 text-center border animate-in fade-in zoom-in duration-300", isDark ? 'bg-[#0d0a1e] border-indigo-500/30 text-slate-200' : 'bg-white border-gray-200 text-slate-800')}>
+            <div className="mx-auto bg-primary/10 p-3 rounded-full text-primary">
+              <ShieldAlert size={32} />
+            </div>
+            <h3 className="text-xl font-black">Aviso de Privacidad</h3>
+            <p className="text-sm font-medium leading-relaxed opacity-90">
+              Los chats que se mantengan con la IA pueden ser monitoreados para garantizar el adecuado uso del servicio IA que brinda la escuela. El uso de este servicio de chat confirma que está de acuerdo.
+            </p>
+            <button
+              onClick={() => {
+                localStorage.setItem('ez-ai-privacy-accepted', 'true');
+                setShowPrivacyNotice(false);
+              }}
+              className="mt-4 bg-primary text-primary-foreground font-bold py-3 px-6 rounded-xl shadow hover:bg-primary/90 transition-all hover:-translate-y-1"
+            >
+              Aceptar y Continuar
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* ── CONTENEDOR PRINCIPAL ── */}
       <div className={cn("relative m-4 md:m-8 flex-1 flex rounded-[28px] overflow-hidden border", isDark ? 'shadow-[0_0_80px_rgba(99,102,241,0.3)] border-indigo-900/50 bg-[#080514]' : 'shadow-xl border-gray-200 bg-white')}>
 
@@ -554,6 +586,16 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
                 title={isDark ? 'Modo claro' : 'Modo oscuro'}
               >
                 {isDark ? <Sun size={18} /> : <Moon size={18} />}
+              </button>
+              <button
+                onClick={() => setShowPrivacyNotice(true)}
+                className={cn(
+                  'p-2 rounded-xl transition-all',
+                  isDark ? 'text-indigo-400 hover:bg-indigo-900/30' : 'text-gray-500 hover:bg-gray-100'
+                )}
+                title="Aviso de Privacidad"
+              >
+                <ShieldAlert size={18} />
               </button>
               <button
                 onClick={onClose}
