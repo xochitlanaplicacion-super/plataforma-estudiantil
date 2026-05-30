@@ -12,7 +12,7 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip,
   ResponsiveContainer, Cell
 } from "recharts";
-import { toast } from "sonner";
+import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 
 // ── Tipos ──────────────────────────────────────────────────────────────
@@ -43,6 +43,7 @@ interface SyncResult {
 export default function MonitoreoIAPage() {
   const { config } = useInstitucion();
   const supabase = createClient();
+  const { toast } = useToast();
 
   const [alerts, setAlerts] = useState<RedListAlert[]>([]);
   const [alumnoStats, setAlumnoStats] = useState<CategoryStat[]>([]);
@@ -112,18 +113,18 @@ export default function MonitoreoIAPage() {
 
       if (data.success) {
         setSyncResult(data);
-        toast.success(
-          data.sesiones_analizadas === 0
+        toast({
+          title: data.sesiones_analizadas === 0
             ? "✅ Todo al día. No hay mensajes nuevos."
-            : `✅ ${data.sesiones_analizadas} sesión(es) sincronizada(s).`
-        );
+            : `✅ ${data.sesiones_analizadas} sesión(es) sincronizada(s).`,
+        });
         // Recargar las gráficas con la nueva data
         await loadDashboardData();
       } else {
-        toast.error("Error en el análisis: " + data.error);
+        toast({ title: "Error en el análisis", description: data.error, variant: "destructive" });
       }
     } catch {
-      toast.error("Error de conexión al analizar");
+      toast({ title: "Error de conexión al analizar", variant: "destructive" });
     } finally {
       setIsAnalyzing(false);
     }
