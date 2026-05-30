@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 // Los modelos se definen dinámicamente dentro de la función POST según la cuota de búsqueda.
 

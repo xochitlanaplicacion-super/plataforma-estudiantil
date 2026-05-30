@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSULTA SEGURA: Solo los datos del alumno autenticado (READ-ONLY)
@@ -336,17 +336,26 @@ Ejemplo de cómo debe empezar tu respuesta:
       }),
     ];
 
+    // Evaluar si es un problema de matemáticas, cálculo, física o lógica que requiera mucho razonamiento
+    const lastUserMessage = messages.slice().reverse().find((m: any) => m.role === "user")?.content?.toLowerCase() || "";
+    const isMathQuery = /matemática|matematica|ecuación|ecuacion|polinomio|factoriz|álgebra|algebra|cálculo|calculo|derivada|integral|trigonometría|trigonometria|geometría|geometria|física|fisica|÷|x\s*[\+\-\*\/]\s*\d|resuelve|simplifica/i.test(lastUserMessage);
+
     // ── LLAMADA CON FALLBACK AUTOMÁTICO ─────────────────────────────────
     let response: globalThis.Response | null = null;
     
-    const activeModels = todayMessageCount < 5
-      ? [
-          { id: "openai/gpt-oss-120b", label: "GPT-oss 120B", providerConfig: { order: ["Novita"], quantizations: ["fp4"] } },
-          { id: "google/gemma-3-27b-it", label: "Gemma 3 27B", providerConfig: { order: ["DeepInfra"], quantizations: ["fp8"] } }
-        ]
-      : [
-          { id: "google/gemma-3-27b-it", label: "Gemma 3 27B", providerConfig: { order: ["DeepInfra"], quantizations: ["fp8"] } }
-        ];
+    let activeModels = [];
+    
+    if (isMathQuery) {
+      // Si detectamos que es matemáticas, usamos DeepSeek-V4-Flash como modelo primario
+      console.log("[ALUMNO API] Consulta matemática detectada, usando DeepSeek V4 Flash.");
+      activeModels.push({ id: "deepseek/deepseek-v4-flash", label: "DeepSeek V4 Flash (Math Mode)", providerConfig: { order: ["Baidu"], quantizations: ["fp8"] } });
+    }
+
+    if (todayMessageCount < 5) {
+      activeModels.push({ id: "openai/gpt-oss-120b", label: "GPT-oss 120B", providerConfig: { order: ["Novita"], quantizations: ["fp4"] } });
+    }
+    
+    activeModels.push({ id: "google/gemma-3-27b-it", label: "Gemma 3 27B", providerConfig: { order: ["DeepInfra"], quantizations: ["fp8"] } });
 
     let usedModel = activeModels[0];
 

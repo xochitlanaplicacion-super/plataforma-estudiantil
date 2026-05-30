@@ -276,9 +276,14 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
       }
     } catch (err: any) {
       console.error("[Copilot] Error enviando mensaje:", err);
+      let fallbackText = "⚠️ Ocurrió un error al contactar la IA. Por favor intenta de nuevo.";
+      if (accumulated) {
+        fallbackText = accumulated.replace(/<titulo>[\s\S]*?<\/titulo>\n*/g, "") + "\n\n*[El mensaje de la IA se cortó por tiempo de espera o porque era muy largo]*";
+      }
+      
       const errorMessage: ChatMessage = {
         role: "assistant",
-        content: "⚠️ Ocurrió un error al contactar la IA. Por favor intenta de nuevo.",
+        content: fallbackText,
         timestamp: new Date().toISOString(),
       };
       const finalMessages = [...updatedMessages, errorMessage];
