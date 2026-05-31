@@ -44,6 +44,7 @@ interface UserChatViewerModalProps {
   userName: string;
   userType: "alumno" | "profesor";
   primaryColor: string;
+  defaultSessionId?: string;
 }
 
 export function UserChatViewerModal({
@@ -53,6 +54,7 @@ export function UserChatViewerModal({
   userName,
   userType,
   primaryColor,
+  defaultSessionId,
 }: UserChatViewerModalProps) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSession, setActiveSession] = useState<ChatSession | null>(null);
@@ -74,7 +76,12 @@ export function UserChatViewerModal({
       if (data.success) {
         setSessions(data.chats || []);
         if (data.chats && data.chats.length > 0) {
-          setActiveSession(data.chats[0]);
+          if (defaultSessionId) {
+            const found = data.chats.find((c: ChatSession) => c.id === defaultSessionId);
+            setActiveSession(found || data.chats[0]);
+          } else {
+            setActiveSession(data.chats[0]);
+          }
         }
       } else {
         setError(data.error || "Error al cargar chats");

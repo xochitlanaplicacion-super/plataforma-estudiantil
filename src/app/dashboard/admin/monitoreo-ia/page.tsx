@@ -22,6 +22,7 @@ interface RedListAlert {
   session_id: string;
   user_id: string;
   user_type: string;
+  user_name?: string;
   session_name: string;
   motivo: string;
   fecha_chat: string;
@@ -60,7 +61,7 @@ export default function MonitoreoIAPage() {
   const [activeDirectoryTab, setActiveDirectoryTab] = useState<"alumnos" | "profesores">("alumnos");
   const [directoryUsers, setDirectoryUsers] = useState<any[]>([]);
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(false);
-  const [selectedUserForChat, setSelectedUserForChat] = useState<{ id: string, name: string, type: "alumno"|"profesor" } | null>(null);
+  const [selectedUserForChat, setSelectedUserForChat] = useState<{ id: string, name: string, type: "alumno"|"profesor", defaultSessionId?: string } | null>(null);
 
   const primaryColor = config?.color_primario || "#4f46e5";
   
@@ -430,16 +431,21 @@ export default function MonitoreoIAPage() {
                     className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm
                       hover:border-red-200 hover:shadow-md transition-all duration-200"
                   >
-                    <div className="flex justify-between items-start mb-2">
-                      <span className={cn(
-                        "text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md",
-                        alert.user_type === "alumno"
-                          ? "bg-blue-50 text-blue-600"
-                          : "bg-purple-50 text-purple-600"
-                      )}>
-                        {alert.user_type}
-                      </span>
-                      <span className="text-[10px] text-gray-400 font-medium">
+                    <div className="flex justify-between items-start mb-2 gap-2">
+                      <div className="flex flex-col">
+                        <span className={cn(
+                          "text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md w-max mb-1",
+                          alert.user_type === "alumno"
+                            ? "bg-blue-50 text-blue-600"
+                            : "bg-purple-50 text-purple-600"
+                        )}>
+                          {alert.user_type}
+                        </span>
+                        <span className="text-xs font-bold text-gray-700 line-clamp-1" title={alert.user_name || "Usuario Desconocido"}>
+                          {alert.user_name || alert.user_type.toUpperCase()}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-gray-400 font-medium shrink-0">
                         {formatDate(alert.fecha_chat)}
                       </span>
                     </div>
@@ -447,10 +453,19 @@ export default function MonitoreoIAPage() {
                       title={alert.session_name}>
                       {alert.session_name}
                     </h4>
-                    <p className="text-xs text-gray-600 bg-red-50 p-2.5 rounded-lg italic mb-3 leading-relaxed">
+                    <p 
+                      className="text-xs text-gray-600 bg-red-50 p-2.5 rounded-lg italic mb-3 leading-relaxed line-clamp-2"
+                      title={alert.motivo}
+                    >
                       "{alert.motivo}"
                     </p>
                     <button
+                      onClick={() => setSelectedUserForChat({
+                        id: alert.user_id,
+                        name: alert.user_name || alert.user_type.toUpperCase(),
+                        type: alert.user_type as "alumno" | "profesor",
+                        defaultSessionId: alert.session_id
+                      })}
                       className="w-full text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100
                         py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors"
                     >
@@ -554,6 +569,7 @@ export default function MonitoreoIAPage() {
           userId={selectedUserForChat.id}
           userName={selectedUserForChat.name}
           userType={selectedUserForChat.type}
+          defaultSessionId={selectedUserForChat.defaultSessionId}
           primaryColor={primaryColor}
         />
       )}
