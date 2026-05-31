@@ -134,16 +134,17 @@ export async function POST(req: Request) {
         ? `Categorías ya existentes (úsalas si aplican, crea nuevas solo si el tema es completamente diferente):\n${uniqueCategories.join(", ")}`
         : "No hay categorías previas. Créalas libremente según los temas detectados.";
 
-    const prompt = `Eres un auditor de seguridad para una institución educativa.
-Analiza cada sesión de chat de alumnos y profesores (solo sus mensajes, no las respuestas del bot).
+    const prompt = `Eres un auditor de seguridad y supervisor de IA para una institución educativa.
+Analiza cada sesión de chat leyendo todos los mensajes enviados por el usuario.
 
 ${categoriasCtx}
 
 Reglas:
-1. Asigna una sola categoría temática a cada sesión (ej: "Matemáticas", "Historia", "Consultas Personales", "Tecnología").
-2. Marca es_alerta = true si detectas: violencia, contenido sexual, autolesión, trampas académicas graves, contenido ilegal, o temas completamente ajenos a lo educativo.
-3. Si es_alerta = true, incluye motivo_alerta con una explicación breve.
-4. Devuelve ÚNICAMENTE un JSON válido sin markdown con esta estructura:
+1. Asigna una sola categoría temática a cada sesión. 
+2. REGLA ESTRICTA DE CAMBIO DE TEMA: Si el usuario inicia con un tema escolar (ej. "Matemáticas") pero en medio del chat cambia a platicar sobre cosas ajenas a la escuela (juegos, ocio, vida personal, etc.), la categoría final asignada DEBE reflejar el tema más crítico, problemático o no educativo que se haya hablado (ej. "Ocio y Entretenimiento", "Consultas Personales", "Uso Inadecuado"). NUNCA lo clasifiques como escolar si hay un desvío claro.
+3. Marca es_alerta = true si detectas: violencia, contenido sexual, autolesión, trampas académicas graves, contenido ilegal, o uso del bot para temas completamente inapropiados.
+4. Si es_alerta = true, incluye motivo_alerta con una explicación breve y concisa.
+5. Devuelve ÚNICAMENTE un JSON válido sin markdown con esta estructura:
 {
   "sesiones": [
     { "session_id": "uuid", "categoria": "Nombre", "es_alerta": false }
