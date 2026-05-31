@@ -119,16 +119,12 @@ export async function POST(req: Request) {
     // ── PASO 5: Condensar (solo prompts del usuario) ───────────────────
     const condensed = sessionsToAnalyze.map((s) => {
       const userMsgs = (s.messages || [])
-        .filter((m) => m.role === "user")
-        .map((m) => m.content)
+        .filter((m: any) => m.role === "user")
+        .map((m: any) => m.content)
         .join(" | ");
       return {
         session_id: s.id,
-        user_id: s.user_id,
-        user_type: s.user_type,
-        session_name: s.session_name,
-        updated_at: s.updated_at,
-        prompts: userMsgs,
+        mensajes_del_usuario: userMsgs,
       };
     });
 
