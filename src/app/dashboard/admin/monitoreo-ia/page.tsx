@@ -5,7 +5,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useInstitucion } from "@/hooks/use-institucion";
 import {
   ShieldAlert, Play, AlertTriangle, MessageSquare,
-  Loader2, Calendar, RefreshCw, CheckCircle2, Layers
+  Loader2, Calendar, RefreshCw, CheckCircle2, Layers,
+  ChevronDown, ChevronUp, Users
 } from "lucide-react";
 import Image from "next/image";
 import {
@@ -62,6 +63,9 @@ export default function MonitoreoIAPage() {
   const [directoryUsers, setDirectoryUsers] = useState<any[]>([]);
   const [isLoadingDirectory, setIsLoadingDirectory] = useState(false);
   const [selectedUserForChat, setSelectedUserForChat] = useState<{ id: string, name: string, type: "alumno"|"profesor", defaultSessionId?: string } | null>(null);
+  
+  // Estado para acordeón de Lista Roja
+  const [expandedAlertUsers, setExpandedAlertUsers] = useState<Record<string, boolean>>({});
 
   const primaryColor = config?.color_primario || "#4f46e5";
   
@@ -104,7 +108,30 @@ export default function MonitoreoIAPage() {
           .single(),
       ]);
 
-      if (alertsRes.data) setAlerts(alertsRes.data);
+      if (alertsRes.data) {
+        let alertsData = alertsRes.data;
+        if (alertsData.length > 0) {
+          const alumnoIds = Array.from(new Set(alertsData.filter(a => a.user_type === "alumno").map(a => a.user_id)));
+          const profesorIds = Array.from(new Set(alertsData.filter(a => a.user_type === "profesor").map(a => a.user_id)));
+
+          const nameMap = new Map<string, string>();
+
+          if (alumnoIds.length > 0) {
+            const { data: alumnos } = await supabase.from("profiles").select("id, nombre, apellidos").in("id", alumnoIds);
+            alumnos?.forEach(a => nameMap.set(a.id, `${a.nombre} ${a.apellidos || ''}`.trim()));
+          }
+          if (profesorIds.length > 0) {
+            const { data: profes } = await supabase.from("profesores_profiles").select("id, nombre, apellidos").in("id", profesorIds);
+            profes?.forEach(a => nameMap.set(a.id, `${a.nombre} ${a.apellidos || ''}`.trim()));
+          }
+
+          alertsData = alertsData.map(a => ({
+            ...a,
+            user_name: nameMap.get(a.user_id) || a.user_name || "Usuario Desconocido"
+          }));
+        }
+        setAlerts(alertsData);
+      }
       if (catsRes.data) {
         setAlumnoStats(catsRes.data.filter((r: any) => r.user_type === "alumno"));
         setProfesorStats(catsRes.data.filter((r: any) => r.user_type === "profesor"));
@@ -180,6 +207,27 @@ export default function MonitoreoIAPage() {
     });
 
   const currentStats = activeTab === "alumnos" ? alumnoStats : profesorStats;
+
+  const groupedAlerts = React.useMemo(() => {
+    const groups: Record<string, { user_id: string; user_name: string; user_type: string; alerts: RedListAlert[] }> = {};
+    alerts.forEach(alert => {
+      if (!groups[alert.user_id]) {
+        groups[alert.user_id] = {
+          user_id: alert.user_id,
+          user_name: alert.user_name || alert.user_type,
+          user_type: alert.user_type,
+          alerts: []
+        };
+      }
+      groups[alert.user_id].alerts.push(alert);
+    });
+    // Sort so users with more alerts appear first
+    return Object.values(groups).sort((a, b) => b.alerts.length - a.alerts.length);
+  }, [alerts]);
+
+  const toggleUserExpanded = (userId: string) => {
+    setExpandedAlertUsers(prev => ({ ...prev, [userId]: !prev[userId] }));
+  };
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
@@ -415,7 +463,7 @@ export default function MonitoreoIAPage() {
                 <div className="flex justify-center py-10">
                   <Loader2 className="animate-spin text-red-300" size={24} />
                 </div>
-              ) : alerts.length === 0 ? (
+              ) : groupedAlerts.length === 0 ? (
                 <div className="text-center py-12 space-y-3">
                   <div className="w-12 h-12 bg-green-50 rounded-full flex items-center justify-center mx-auto">
                     <CheckCircle2 className="text-green-400" size={24} />
@@ -425,55 +473,81 @@ export default function MonitoreoIAPage() {
                   </p>
                 </div>
               ) : (
-                alerts.map((alert) => (
-                  <div
-                    key={alert.id}
-                    className="bg-white border border-gray-100 rounded-xl p-4 shadow-sm
-                      hover:border-red-200 hover:shadow-md transition-all duration-200"
-                  >
-                    <div className="flex justify-between items-start mb-2 gap-2">
-                      <div className="flex flex-col">
-                        <span className={cn(
-                          "text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-md w-max mb-1",
-                          alert.user_type === "alumno"
-                            ? "bg-blue-50 text-blue-600"
-                            : "bg-purple-50 text-purple-600"
-                        )}>
-                          {alert.user_type}
-                        </span>
-                        <span className="text-xs font-bold text-gray-700 line-clamp-1" title={alert.user_name || "Usuario Desconocido"}>
-                          {alert.user_name || alert.user_type.toUpperCase()}
-                        </span>
-                      </div>
-                      <span className="text-[10px] text-gray-400 font-medium shrink-0">
-                        {formatDate(alert.fecha_chat)}
-                      </span>
+                groupedAlerts.map((group) => {
+                  const isExpanded = expandedAlertUsers[group.user_id];
+                  return (
+                    <div
+                      key={group.user_id}
+                      className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden"
+                    >
+                      {/* Accordion Header */}
+                      <button
+                        onClick={() => toggleUserExpanded(group.user_id)}
+                        className="w-full flex items-center justify-between p-4 hover:bg-gray-50 transition-colors text-left"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className={cn(
+                            "w-10 h-10 rounded-full flex items-center justify-center text-white font-black text-lg",
+                            group.user_type === "alumno" ? "bg-blue-500" : "bg-purple-500"
+                          )}>
+                            {group.user_name.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <h4 className="text-sm font-bold text-gray-900">{group.user_name}</h4>
+                            <div className="flex items-center gap-2 mt-0.5">
+                              <span className={cn(
+                                "text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md",
+                                group.user_type === "alumno" ? "bg-blue-50 text-blue-600" : "bg-purple-50 text-purple-600"
+                              )}>
+                                {group.user_type}
+                              </span>
+                              <span className="text-[10px] text-gray-500 font-medium">
+                                {group.alerts.length} caso{group.alerts.length !== 1 ? "s" : ""}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-gray-400">
+                          {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                        </div>
+                      </button>
+
+                      {/* Accordion Content */}
+                      {isExpanded && (
+                        <div className="p-4 pt-0 border-t border-gray-50 bg-slate-50/50 space-y-3">
+                          {group.alerts.map((alert) => (
+                            <div key={alert.id} className="bg-white border border-red-100 rounded-lg p-3 shadow-sm mt-3">
+                              <div className="flex justify-between items-start mb-2 gap-2">
+                                <h5 className="text-xs font-bold text-gray-900 line-clamp-1" title={alert.session_name}>
+                                  {alert.session_name}
+                                </h5>
+                                <span className="text-[10px] text-gray-400 font-medium shrink-0">
+                                  {formatDate(alert.fecha_chat)}
+                                </span>
+                              </div>
+                              <p className="text-xs text-gray-700 bg-red-50/50 p-2.5 rounded-lg italic mb-3 leading-relaxed">
+                                "{alert.motivo}"
+                              </p>
+                              <button
+                                onClick={() => setSelectedUserForChat({
+                                  id: alert.user_id,
+                                  name: alert.user_name || alert.user_type.toUpperCase(),
+                                  type: alert.user_type as "alumno" | "profesor",
+                                  defaultSessionId: alert.session_id
+                                })}
+                                className="w-full text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100
+                                  py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors"
+                              >
+                                <MessageSquare size={12} />
+                                Ver Chat Completo
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <h4 className="text-sm font-bold text-gray-900 line-clamp-1 mb-1.5"
-                      title={alert.session_name}>
-                      {alert.session_name}
-                    </h4>
-                    <p 
-                      className="text-xs text-gray-600 bg-red-50 p-2.5 rounded-lg italic mb-3 leading-relaxed line-clamp-2"
-                      title={alert.motivo}
-                    >
-                      "{alert.motivo}"
-                    </p>
-                    <button
-                      onClick={() => setSelectedUserForChat({
-                        id: alert.user_id,
-                        name: alert.user_name || alert.user_type.toUpperCase(),
-                        type: alert.user_type as "alumno" | "profesor",
-                        defaultSessionId: alert.session_id
-                      })}
-                      className="w-full text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100
-                        py-2 rounded-lg flex items-center justify-center gap-1.5 transition-colors"
-                    >
-                      <MessageSquare size={12} />
-                      Ver Chat Completo
-                    </button>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
