@@ -142,7 +142,7 @@ ${categoriasCtx}
 Reglas:
 1. Asigna una sola categoría temática a cada sesión. 
 2. REGLA ESTRICTA DE CAMBIO DE TEMA: Si el usuario inicia con un tema escolar (ej. "Matemáticas") pero en medio del chat cambia a platicar sobre cosas ajenas a la escuela (juegos, ocio, vida personal, etc.), la categoría final asignada DEBE reflejar el tema más crítico, problemático o no educativo que se haya hablado (ej. "Ocio y Entretenimiento", "Consultas Personales", "Uso Inadecuado"). NUNCA lo clasifiques como escolar si hay un desvío claro.
-3. Marca es_alerta = true si detectas: violencia, contenido sexual, autolesión, trampas académicas graves, contenido ilegal, o uso del bot para temas completamente inapropiados.
+3. REGLA ESTRICTA DE ALERTAS: Marca es_alerta = true OBLIGATORIAMENTE si el usuario habla de cualquier tema que NO sea estrictamente académico o escolar. Esto incluye: pedir hacks/trucos para videojuegos (ej. Fortnite, Roblox), platicar de su vida personal, uso de groserías, violencia, contenido sexual, autolesión, trampas académicas, o usar la IA como entretenimiento/ocio. CERO TOLERANCIA a temas no escolares.
 4. Si es_alerta = true, incluye motivo_alerta con una explicación breve y concisa.
 5. Devuelve ÚNICAMENTE un JSON válido sin markdown con esta estructura:
 {
