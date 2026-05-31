@@ -63,7 +63,7 @@ export function ProfesorAIAssistant({ userId, userName }: ProfesorAIAssistantPro
       {/* TUTORIAL BOT OVERLAY */}
       <div 
         className={cn(
-          "fixed inset-0 z-[99999] flex items-center justify-center transition-all duration-700 ease-in-out",
+          "fixed inset-0 z-40 flex items-center justify-center transition-all duration-700 ease-in-out",
           isVisible ? "opacity-100 pointer-events-auto backdrop-blur-md bg-slate-900/40" : "opacity-0 pointer-events-none"
         )}
       >
@@ -205,7 +205,7 @@ export function ProfesorAIAssistant({ userId, userName }: ProfesorAIAssistantPro
 
       {/* BOTON FLOTANTE + MENU */}
       {!isVisible && !copilotOpen && (
-        <div className="fixed bottom-6 right-6 z-[99999] flex flex-col items-end gap-2">
+        <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2">
           {menuOpen && (
             <div className="flex flex-col items-end gap-2 animate-in slide-in-from-bottom-4 duration-200">
               <button
