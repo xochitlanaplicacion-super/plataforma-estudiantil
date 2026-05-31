@@ -4,7 +4,6 @@ import { getAlumnoDashboardData } from '@/lib/actions/alumno';
 import { getMaterialPublicoPorNivel } from '@/lib/actions/material';
 import { getNotificacionesAlumno } from '@/lib/actions/pagos';
 import { getInstitucionConfig } from '@/lib/actions/institucion';
-import { getEstadoPagoIA } from '@/lib/actions/pagos';
 import {
   BookOpen,
   CalendarDays,
@@ -31,7 +30,6 @@ import { PaginationTasks } from './components/PaginationTasks';
 import MaterialCarousel from './components/MaterialCarousel';
 import { PaymentNotificationPopup } from './components/PaymentNotificationPopup';
 import { AcreditacionNotificationPopup } from './components/AcreditacionNotificationPopup';
-import { AlumnoAIAssistant } from '@/components/shared/AlumnoAIAssistant';
 import Image from 'next/image';
 import { getDatosContactoFormateados } from '@/lib/actions/horarios';
 
@@ -126,14 +124,10 @@ export default async function AlumnoDashboard() {
   const latestNotification = notifications && notifications.length > 0 ? notifications[0] : null;
 
   const inst = await getInstitucionConfig();
-  const pagoIA = await getEstadoPagoIA();
 
   return (
     <div className="space-y-12 pb-16 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       
-      {/* ONBOARDING DE IA PARA ALUMNO */}
-      {pagoIA && <AlumnoAIAssistant userId={user.id} userName={nombreCompleto} />}
-
       {/* HEADER TOP (Mobile/Tablet View adjustment since Sidebar handles desktop) */}
       <header className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 py-4 md:py-0">
         <div>

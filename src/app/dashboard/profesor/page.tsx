@@ -2348,9 +2348,6 @@ export default function ProfesorDashboard() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* ONBOARDING / COPILOTO IA PARA PROFESORES */}
-      {pagoIA && <ProfesorAIAssistant userId={currentUserId || undefined} userName={currentUserName || undefined} />}
     </div>
   );
 }
