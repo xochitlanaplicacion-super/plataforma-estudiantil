@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useInstitucion } from "@/hooks/use-institucion";
 import Image from "next/image";
 import {
-  X, Send, Copy, Check, Plus, MessageSquare, Loader2, Edit2, ChevronUp, ChevronDown, BookOpen, Sun, Moon, ShieldAlert
+  X, Send, Copy, Check, Plus, MessageSquare, Loader2, Edit2, ChevronUp, ChevronDown, BookOpen, Sun, Moon, ShieldAlert, Bot
 } from "lucide-react";
 import { AlumnoExerciseModal } from "./AlumnoExerciseModal";
 import { InlineExercise, type ExerciseState } from "./InlineExercise";
