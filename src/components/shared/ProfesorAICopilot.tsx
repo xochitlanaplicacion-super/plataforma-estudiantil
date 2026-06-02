@@ -180,7 +180,8 @@ export function ProfesorAICopilot({ userId, userName, onClose }: ProfesorAICopil
     reader.onload = async (ev) => {
       // Guardamos el base64 para enviarlo al API — el servidor lo tratará como contexto de texto
       const base64 = (ev.target?.result as string).split(",")[1];
-      setPdfText(`[Documento adjunto: ${file.name}] El profesor ha adjuntado un PDF. A continuación el contenido en base64 que el asistente debe procesar como contexto de referencia para responder su pregunta: ${base64.substring(0, 8000)}...`);
+      setPdfText(`[Documento adjunto: ${file.name}] El profesor ha adjuntado un PDF. A continuación el contenido en base64 que el ${config?.nombre_ia || "asistente"} debe procesar como contexto de referencia para responder su pregunta: ${base64.substring(0, 8000)}...`);
+      setPdfName(file.name);
     };
     reader.readAsDataURL(file);
 
@@ -580,10 +581,10 @@ export function ProfesorAICopilot({ userId, userName, onClose }: ProfesorAICopil
             </button>
             <div className="flex-1">
               <h2 className={cn("text-sm font-black uppercase tracking-wider", isDark ? 'text-white' : 'text-gray-900')}>
-                {activeSession?.session_name || "Copiloto IA · Asistente del Profesor"}
+                {activeSession?.session_name || `Copiloto IA · ${config?.nombre_ia || "Asistente"} del Profesor`}
               </h2>
               <p className={cn("text-[10px] font-medium uppercase tracking-widest", isDark ? 'text-indigo-400' : 'text-indigo-500')}>
-                Asistente exclusivo de {config.nombre_corto || "tu institución"}
+                {config?.nombre_ia || "Asistente"} exclusivo de {config.nombre_corto || "tu institución"}
               </p>
             </div>
             {/* Botones navegar último mensaje */}
@@ -800,8 +801,9 @@ export function ProfesorAICopilot({ userId, userName, onClose }: ProfesorAICopil
                 {isThinking ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
               </button>
             </div>
-            <p className={cn("text-center text-[10px] mt-2 font-medium", isDark ? 'text-slate-700' : 'text-gray-400')}>
-              Asistente IA de {config.nombre_corto} · Las respuestas son orientativas
+            <p className={cn("text-center text-[10px] mt-2 font-medium flex items-center justify-center gap-1.5", isDark ? 'text-slate-700' : 'text-gray-400')}>
+              <Bot size={12} className="opacity-50" />
+              {config?.nombre_ia || "Asistente"} IA de {config.nombre_corto || "tu institución"} · Las respuestas son orientativas
             </p>
           </div>
         </div>

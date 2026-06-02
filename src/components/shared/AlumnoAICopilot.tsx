@@ -536,7 +536,7 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
             </button>
             <div className="flex-1 min-w-0">
               <h2 className={cn("text-sm font-black uppercase tracking-wider truncate", isDark ? 'text-white' : 'text-gray-900')}>
-                {activeSession?.session_name || "Copiloto IA · Tu Asistente"}
+                {activeSession?.session_name || `Copiloto IA · Tu ${config?.nombre_ia || "Asistente"}`}
               </h2>
               <p className={cn("text-[10px] font-medium uppercase tracking-widest truncate", isDark ? 'text-indigo-400' : 'text-indigo-500')}>
                 Ayuda para tus clases en {config.nombre_corto || "tu institución"}
@@ -611,9 +611,11 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
             {displayMessages.length === 0 && !isThinking && (
               <div className="h-full flex flex-col items-center justify-center text-center space-y-4 py-10 md:py-20">
                 <div className="text-5xl">🤖</div>
-                <h3 className={cn("text-lg font-black px-4", isDark ? 'text-white' : 'text-gray-900')}>¿En qué te puedo ayudar hoy?</h3>
+                <h3 className={cn("text-lg font-black px-4", isDark ? 'text-white' : 'text-gray-900')}>
+                  ¡Hola, {userName?.split(' ')[0] || 'Alumno'}! 👋
+                </h3>
                 <p className={cn("text-sm max-w-xs leading-relaxed px-4", isDark ? 'text-slate-400' : 'text-gray-500')}>
-                  Soy tu Asistente IA 24/7. Pregúntame sobre los temas de clase y te ayudaré a entenderlos mejor.
+                  Soy tu {config?.nombre_ia || "Asistente"} IA 24/7. Pregúntame sobre los temas de clase y te ayudaré a entenderlos mejor.
                 </p>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-4 w-full max-w-lg px-4">
                   {[
@@ -760,8 +762,9 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
               </button>
             </div>
             <div className="flex flex-col sm:flex-row items-center justify-between mt-2 md:mt-3 gap-2">
-              <p className={cn("text-[10px] font-medium", isDark ? 'text-slate-700' : 'text-gray-400')}>
-                Asistente IA de {config.nombre_corto} · Las respuestas pueden variar
+              <p className="text-[10px] text-slate-400 font-medium flex items-center justify-center gap-1.5 flex-wrap">
+                <Bot size={12} className="text-indigo-400" />
+                {config?.nombre_ia || "Asistente"} IA de {config.nombre_corto} · Las respuestas pueden variar
               </p>
               <button 
                 onClick={() => setIsExerciseModalOpen(true)}

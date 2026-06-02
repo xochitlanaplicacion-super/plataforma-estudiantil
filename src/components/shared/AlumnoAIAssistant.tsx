@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Sparkles, X, MessageSquare, HelpCircle, BookOpen } from "lucide-react";
 import Image from "next/image";
 import { AlumnoAICopilot } from "./AlumnoAICopilot";
+import { useInstitucion } from "@/hooks/use-institucion";
 
 type DialogStep = 'INIT' | 'CLOSED';
 
@@ -21,6 +22,9 @@ export function AlumnoAIAssistant({ userId, userName }: AlumnoAIAssistantProps) 
   const [hasMounted, setHasMounted] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [copilotOpen, setCopilotOpen] = useState(false);
+  const { config } = useInstitucion();
+
+  const aiName = config?.nombre_ia || "Asistente";
 
   useEffect(() => {
     setHasMounted(true);
@@ -92,7 +96,7 @@ export function AlumnoAIAssistant({ userId, userName }: AlumnoAIAssistantProps) 
                   
                   <div className="space-y-4 text-base sm:text-lg text-slate-600 font-medium leading-relaxed">
                     <p>
-                      Me presento, soy el <strong className="text-indigo-600 font-black">Asistente IA 24/7</strong> de tu plataforma.
+                      Me presento, soy el <strong className="text-indigo-600 font-black">{aiName} IA 24/7</strong> de tu plataforma.
                     </p>
                     <p>
                       A partir de hoy estoy disponible para ayudarte a entender mejor cualquier tema visto en clase, explicarte conceptos difíciles, o simplemente charlar sobre tus dudas académicas en cualquier momento.
@@ -123,7 +127,7 @@ export function AlumnoAIAssistant({ userId, userName }: AlumnoAIAssistantProps) 
                 }}
                 className="flex items-center gap-3 px-4 py-3 bg-white border border-slate-200 shadow-xl rounded-full hover:bg-slate-50 hover:scale-105 transition-all"
               >
-                <span className="text-xs font-black uppercase tracking-widest text-slate-700">Chat Asistente</span>
+                <span className="text-xs font-black uppercase tracking-widest text-slate-700">Chat {aiName}</span>
                 <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-blue-600 to-cyan-500 flex items-center justify-center text-white">
                   <MessageSquare size={14} />
                 </div>
@@ -163,7 +167,7 @@ export function AlumnoAIAssistant({ userId, userName }: AlumnoAIAssistantProps) 
             )}>
               <HelpCircle size={20} />
             </div>
-            <span className="font-black text-xs uppercase tracking-widest text-slate-700">Asistente</span>
+            <span className="font-black text-xs uppercase tracking-widest text-slate-700">{aiName}</span>
           </button>
         </div>
       )}
