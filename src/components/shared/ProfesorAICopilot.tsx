@@ -12,7 +12,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useInstitucion } from "@/hooks/use-institucion";
 import Image from "next/image";
 import {
-  X, Send, Paperclip, Copy, Check, Plus, MessageSquare, Loader2, Trash2, Edit2, ChevronUp, ChevronDown, Sun, Moon, ShieldAlert
+  X, Send, Paperclip, Copy, Check, Plus, MessageSquare, Loader2, Trash2, Edit2, ChevronUp, ChevronDown, Sun, Moon, ShieldAlert, Bot
 } from "lucide-react";
 
 // ── Tipos ──────────────────────────────────────────────────────────────
