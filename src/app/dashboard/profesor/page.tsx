@@ -1206,7 +1206,7 @@ export default function ProfesorDashboard() {
       if (dialog.type === 'unidad') {
         if (!selectedMateria?.id) { toast({ variant: "destructive", title: "Error", description: "No hay materia seleccionada." }); return; }
         // unidades.materia_id stores materias.id. We need unique materia_ids from all asignaciones.
-        const targetMateriaIds = (isGroupMode && d.syncToAll && selectedAgrupacion) ? 
+        const targetMateriaIds = (isGroupMode && d.syncToAll !== false && selectedAgrupacion) ? 
           Array.from(new Set(
             selectedAgrupacion.asignaciones_ids
               .map((aId: string) => asignaciones.find((a: any) => a.id === aId)?.materia_id)
@@ -1217,13 +1217,13 @@ export default function ProfesorDashboard() {
       
       if (dialog.type === 'tema') {
         if (!selectedUnidad?.id) { toast({ variant: "destructive", title: "Error", description: "No hay unidad seleccionada." }); return; }
-        result = await upsertTema({...d, unidad_id: selectedUnidad.id, created_by: user?.id}, isGroupMode && d.syncToAll);
+        result = await upsertTema({...d, unidad_id: selectedUnidad.id, created_by: user?.id}, isGroupMode && d.syncToAll !== false);
       }
       
       if (dialog.type === 'ejercicio') {
         if (!selectedTema?.id) { toast({ variant: "destructive", title: "Error", description: "No hay tema seleccionado." }); return; }
         const finalContent = typeof d.contenido === 'string' ? d.contenido : JSON.stringify(d.contenido || {});
-        result = await upsertEjercicio({...d, contenido: finalContent, tema_id: selectedTema.id, created_by: user?.id}, isGroupMode && d.syncToAll);
+        result = await upsertEjercicio({...d, contenido: finalContent, tema_id: selectedTema.id, created_by: user?.id}, isGroupMode && d.syncToAll !== false);
       }
 
       if (result && !result.error) {
