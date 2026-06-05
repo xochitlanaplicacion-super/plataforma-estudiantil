@@ -45,7 +45,7 @@ const prepareForUpsert = (data: any) => {
       return;
     }
     if (cleanData[key] !== null && typeof cleanData[key] === 'object' && !(cleanData[key] instanceof Date)) {
-      if (key !== 'videos' && key !== 'slides') {
+      if (key !== 'videos' && key !== 'slides' && key !== 'asignaciones_ids') {
         delete cleanData[key];
       }
     }
@@ -57,6 +57,29 @@ const prepareForUpsert = (data: any) => {
 
   return cleanData;
 };
+
+// --- AGRUPACIONES PROFESOR ---
+export async function getMisAgrupaciones(profesorId: string) {
+  const { data, error } = await supabaseAdmin
+    .from('agrupaciones_profesor')
+    .select('*')
+    .eq('profesor_id', profesorId)
+    .order('created_at', { ascending: false });
+  return { data, error };
+}
+
+export async function upsertAgrupacion(agrupacion: any) {
+  const cleanData = prepareForUpsert(agrupacion);
+  const { data, error } = await supabaseAdmin.from('agrupaciones_profesor').upsert(cleanData).select().single();
+  revalidatePath('/dashboard/profesor');
+  return { data, error };
+}
+
+export async function deleteAgrupacion(id: string) {
+  const { error } = await supabaseAdmin.from('agrupaciones_profesor').delete().eq('id', id);
+  revalidatePath('/dashboard/profesor');
+  return { error };
+}
 
 // --- NIVELES ---
 export async function getNiveles() {
@@ -170,14 +193,41 @@ export async function getUnidades(materiaId: string) {
   return { data, error };
 }
 
-export async function upsertUnidad(unidad: any) {
+export async function upsertUnidad(unidad: any, syncTargetMateriaIds?: string[]) {
   const cleanData = prepareForUpsert(unidad);
+
+  if (syncTargetMateriaIds && syncTargetMateriaIds.length > 0 && !cleanData.id) {
+    const sync_id = crypto.randomUUID();
+    const recordsToInsert = syncTargetMateriaIds.map(mId => ({
+      ...cleanData,
+      materia_id: mId,
+      sync_id
+    }));
+    const { data, error } = await supabaseAdmin.from('unidades').insert(recordsToInsert).select();
+    revalidatePath('/dashboard/profesor');
+    return { data: data?.find(d => d.materia_id === cleanData.materia_id) || data?.[0], error };
+  }
+
+  if (cleanData.sync_id && cleanData.id) {
+    const updateData = { ...cleanData };
+    delete updateData.id;
+    delete updateData.materia_id;
+    const { data, error } = await supabaseAdmin.from('unidades').update(updateData).eq('sync_id', cleanData.sync_id).select();
+    revalidatePath('/dashboard/profesor');
+    return { data: data?.find(d => d.id === cleanData.id) || null, error };
+  }
+
   const { data, error } = await supabaseAdmin.from('unidades').upsert(cleanData).select().single();
   revalidatePath('/dashboard/profesor');
   return { data, error };
 }
 
-export async function deleteUnidad(id: string) {
+export async function deleteUnidad(id: string, sync_id?: string) {
+  if (sync_id) {
+    const { error } = await supabaseAdmin.from('unidades').delete().eq('sync_id', sync_id);
+    revalidatePath('/dashboard/profesor');
+    return { error };
+  }
   const { error } = await supabaseAdmin.from('unidades').delete().eq('id', id);
   revalidatePath('/dashboard/profesor');
   return { error };
@@ -189,14 +239,47 @@ export async function getTemas(unidadId: string) {
   return { data, error };
 }
 
-export async function upsertTema(tema: any) {
+export async function upsertTema(tema: any, isSyncCreation: boolean = false) {
   const cleanData = prepareForUpsert(tema);
+
+  if (isSyncCreation && !cleanData.id && cleanData.unidad_id) {
+    const { data: unidadObj } = await supabaseAdmin.from('unidades').select('sync_id').eq('id', cleanData.unidad_id).single();
+    if (unidadObj?.sync_id) {
+      const { data: unidadesSync } = await supabaseAdmin.from('unidades').select('id').eq('sync_id', unidadObj.sync_id);
+      if (unidadesSync && unidadesSync.length > 0) {
+        const sync_id = crypto.randomUUID();
+        const recordsToInsert = unidadesSync.map(u => ({
+          ...cleanData,
+          unidad_id: u.id,
+          sync_id
+        }));
+        const { data, error } = await supabaseAdmin.from('temas').insert(recordsToInsert).select();
+        revalidatePath('/dashboard/profesor');
+        return { data: data?.find(d => d.unidad_id === cleanData.unidad_id) || data?.[0], error };
+      }
+    }
+  }
+
+  if (cleanData.sync_id && cleanData.id) {
+    const updateData = { ...cleanData };
+    delete updateData.id;
+    delete updateData.unidad_id;
+    const { data, error } = await supabaseAdmin.from('temas').update(updateData).eq('sync_id', cleanData.sync_id).select();
+    revalidatePath('/dashboard/profesor');
+    return { data: data?.find(d => d.id === cleanData.id) || null, error };
+  }
+
   const { data, error } = await supabaseAdmin.from('temas').upsert(cleanData).select().single();
   revalidatePath('/dashboard/profesor');
   return { data, error };
 }
 
-export async function deleteTema(id: string) {
+export async function deleteTema(id: string, sync_id?: string) {
+  if (sync_id) {
+    const { error } = await supabaseAdmin.from('temas').delete().eq('sync_id', sync_id);
+    revalidatePath('/dashboard/profesor');
+    return { error };
+  }
   const { error } = await supabaseAdmin.from('temas').delete().eq('id', id);
   revalidatePath('/dashboard/profesor');
   return { error };
@@ -208,14 +291,47 @@ export async function getEjercicios(temaId: string) {
   return { data, error };
 }
 
-export async function upsertEjercicio(ejercicio: any) {
+export async function upsertEjercicio(ejercicio: any, isSyncCreation: boolean = false) {
   const cleanData = prepareForUpsert(ejercicio);
+
+  if (isSyncCreation && !cleanData.id && cleanData.tema_id) {
+    const { data: temaObj } = await supabaseAdmin.from('temas').select('sync_id').eq('id', cleanData.tema_id).single();
+    if (temaObj?.sync_id) {
+      const { data: temasSync } = await supabaseAdmin.from('temas').select('id').eq('sync_id', temaObj.sync_id);
+      if (temasSync && temasSync.length > 0) {
+        const sync_id = crypto.randomUUID();
+        const recordsToInsert = temasSync.map(t => ({
+          ...cleanData,
+          tema_id: t.id,
+          sync_id
+        }));
+        const { data, error } = await supabaseAdmin.from('ejercicios').insert(recordsToInsert).select();
+        revalidatePath('/dashboard/profesor');
+        return { data: data?.find(d => d.tema_id === cleanData.tema_id) || data?.[0], error };
+      }
+    }
+  }
+
+  if (cleanData.sync_id && cleanData.id) {
+    const updateData = { ...cleanData };
+    delete updateData.id;
+    delete updateData.tema_id;
+    const { data, error } = await supabaseAdmin.from('ejercicios').update(updateData).eq('sync_id', cleanData.sync_id).select();
+    revalidatePath('/dashboard/profesor');
+    return { data: data?.find(d => d.id === cleanData.id) || null, error };
+  }
+
   const { data, error } = await supabaseAdmin.from('ejercicios').upsert(cleanData).select().single();
   revalidatePath('/dashboard/profesor');
   return { data, error };
 }
 
-export async function deleteEjercicio(id: string) {
+export async function deleteEjercicio(id: string, sync_id?: string) {
+  if (sync_id) {
+    const { error } = await supabaseAdmin.from('ejercicios').delete().eq('sync_id', sync_id);
+    revalidatePath('/dashboard/profesor');
+    return { error };
+  }
   const { error } = await supabaseAdmin.from('ejercicios').delete().eq('id', id);
   revalidatePath('/dashboard/profesor');
   return { error };
@@ -231,20 +347,43 @@ export async function getSlides(temaId: string) {
   return { data, error };
 }
 
-export async function upsertSlide(slide: any) {
+export async function upsertSlide(slide: any, isSyncCreation: boolean = false) {
   try {
     const cleanData = prepareForUpsert(slide);
-    const { data, error } = await supabaseAdmin.from('slides').upsert(cleanData).select().single();
 
-    // Manejo especial de error si la columna no existe en el DB
-    if (error && error.code === 'PGRST204') {
-      console.warn("La columna created_by o estilo no existe en slides. Reintentando sin ellas...");
-      const fallbackData = { ...cleanData };
-      delete fallbackData.created_by;
-      delete fallbackData.estilo;
-      return await supabaseAdmin.from('slides').upsert(fallbackData).select().single();
+    // Intentamos limpiarlo antes por si acaso (PGRST204)
+    const fallbackData = { ...cleanData };
+    delete fallbackData.created_by;
+    delete fallbackData.estilo;
+
+    if (isSyncCreation && !fallbackData.id && fallbackData.tema_id) {
+      const { data: temaObj } = await supabaseAdmin.from('temas').select('sync_id').eq('id', fallbackData.tema_id).single();
+      if (temaObj?.sync_id) {
+        const { data: temasSync } = await supabaseAdmin.from('temas').select('id').eq('sync_id', temaObj.sync_id);
+        if (temasSync && temasSync.length > 0) {
+          const sync_id = crypto.randomUUID();
+          const recordsToInsert = temasSync.map(t => ({
+            ...fallbackData,
+            tema_id: t.id,
+            sync_id
+          }));
+          const { data, error } = await supabaseAdmin.from('slides').insert(recordsToInsert).select();
+          revalidatePath('/dashboard/profesor');
+          return { data: data?.find(d => d.tema_id === fallbackData.tema_id) || data?.[0], error };
+        }
+      }
     }
 
+    if (fallbackData.sync_id && fallbackData.id) {
+      const updateData = { ...fallbackData };
+      delete updateData.id;
+      delete updateData.tema_id;
+      const { data, error } = await supabaseAdmin.from('slides').update(updateData).eq('sync_id', fallbackData.sync_id).select();
+      revalidatePath('/dashboard/profesor');
+      return { data: data?.find(d => d.id === fallbackData.id) || null, error };
+    }
+
+    const { data, error } = await supabaseAdmin.from('slides').upsert(fallbackData).select().single();
     revalidatePath('/dashboard/profesor');
     return { data, error };
   } catch (err: any) {
@@ -276,7 +415,12 @@ export async function updateSlidesOrder(updates: { id: string, orden: number }[]
   }
 }
 
-export async function deleteSlide(id: string) {
+export async function deleteSlide(id: string, sync_id?: string) {
+  if (sync_id) {
+    const { error } = await supabaseAdmin.from('slides').delete().eq('sync_id', sync_id);
+    revalidatePath('/dashboard/profesor');
+    return { error };
+  }
   const { error } = await supabaseAdmin.from('slides').delete().eq('id', id);
   revalidatePath('/dashboard/profesor');
   return { error };
@@ -292,14 +436,47 @@ export async function getResources(temaId: string) {
   return { data, error };
 }
 
-export async function upsertResource(resource: any) {
+export async function upsertResource(resource: any, isSyncCreation: boolean = false) {
   const cleanData = prepareForUpsert(resource);
+
+  if (isSyncCreation && !cleanData.id && cleanData.tema_id) {
+    const { data: temaObj } = await supabaseAdmin.from('temas').select('sync_id').eq('id', cleanData.tema_id).single();
+    if (temaObj?.sync_id) {
+      const { data: temasSync } = await supabaseAdmin.from('temas').select('id').eq('sync_id', temaObj.sync_id);
+      if (temasSync && temasSync.length > 0) {
+        const sync_id = crypto.randomUUID();
+        const recordsToInsert = temasSync.map(t => ({
+          ...cleanData,
+          tema_id: t.id,
+          sync_id
+        }));
+        const { data, error } = await supabaseAdmin.from('resources').insert(recordsToInsert).select();
+        revalidatePath('/dashboard/profesor');
+        return { data: data?.find(d => d.tema_id === cleanData.tema_id) || data?.[0], error };
+      }
+    }
+  }
+
+  if (cleanData.sync_id && cleanData.id) {
+    const updateData = { ...cleanData };
+    delete updateData.id;
+    delete updateData.tema_id;
+    const { data, error } = await supabaseAdmin.from('resources').update(updateData).eq('sync_id', cleanData.sync_id).select();
+    revalidatePath('/dashboard/profesor');
+    return { data: data?.find(d => d.id === cleanData.id) || null, error };
+  }
+
   const { data, error } = await supabaseAdmin.from('resources').upsert(cleanData).select().single();
   revalidatePath('/dashboard/profesor');
   return { data, error };
 }
 
-export async function deleteResourceRecord(id: string) {
+export async function deleteResourceRecord(id: string, sync_id?: string) {
+  if (sync_id) {
+    const { error } = await supabaseAdmin.from('resources').delete().eq('sync_id', sync_id);
+    revalidatePath('/dashboard/profesor');
+    return { error };
+  }
   const { error } = await supabaseAdmin.from('resources').delete().eq('id', id);
   revalidatePath('/dashboard/profesor');
   return { error };

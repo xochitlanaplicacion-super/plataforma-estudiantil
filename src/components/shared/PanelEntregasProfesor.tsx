@@ -6,7 +6,7 @@ import {
   Users, FileText, ChevronDown, ChevronUp, Star, BookOpen, Activity, History, Target
 } from 'lucide-react';
 import { cn, parseFechaLocal } from '@/lib/utils';
-import { calificarEntregaDescriptiva, getEntregasDeEjercicio } from '@/lib/actions/entregas';
+import { calificarEntregaDescriptiva, getEntregasDeEjercicio, getEntregasAgrupadasPorSyncId } from '@/lib/actions/entregas';
 import { useToast } from '@/hooks/use-toast';
 import {
   Dialog,
@@ -35,6 +35,7 @@ interface Entrega {
     apellidos: string;
     email: string;
   } | null;
+  grupo_nombre?: string;
 }
 
 interface Ejercicio {
@@ -42,12 +43,14 @@ interface Ejercicio {
   titulo: string;
   fecha_entrega: string | null;
   tipo: string;
+  sync_id?: string;
 }
 
 interface Props {
   ejercicios: Ejercicio[];
   materiaId: string;
   materiaNombre: string;
+  isGroupMode?: boolean;
 }
 
 function getDiasRestantes(caduca_el: string) {
@@ -319,20 +322,29 @@ function EntregaRow({
   );
 }
 
-export function PanelEntregasProfesor({ ejercicios, materiaNombre }: Props) {
+export function PanelEntregasProfesor({ ejercicios, materiaNombre, isGroupMode }: Props) {
   const [ejercicioActivo, setEjercicioActivo] = useState<string | null>(null);
   const [entregas, setEntregas] = useState<Entrega[]>([]);
   const [cargando, setCargando] = useState(false);
+  const [filtroGrupo, setFiltroGrupo] = useState<string>('TODOS');
 
-  const cargarEntregas = async (ejercicioId: string) => {
-    if (ejercicioActivo === ejercicioId) {
+  const cargarEntregas = async (ej: Ejercicio) => {
+    if (ejercicioActivo === ej.id) {
       setEjercicioActivo(null);
       return;
     }
     setCargando(true);
-    setEjercicioActivo(ejercicioId);
-    const res = await getEntregasDeEjercicio(ejercicioId);
+    setEjercicioActivo(ej.id);
+    
+    let res;
+    if (isGroupMode && ej.sync_id) {
+      res = await getEntregasAgrupadasPorSyncId(ej.sync_id);
+    } else {
+      res = await getEntregasDeEjercicio(ej.id);
+    }
+    
     setEntregas((res.data as any) || []);
+    setFiltroGrupo('TODOS');
     setCargando(false);
   };
 
@@ -367,7 +379,7 @@ export function PanelEntregasProfesor({ ejercicios, materiaNombre }: Props) {
           <div key={ej.id} className="border border-slate-200 rounded-2xl overflow-hidden">
             {/* Cabecera del ejercicio */}
             <button
-              onClick={() => cargarEntregas(ej.id)}
+              onClick={() => cargarEntregas(ej)}
               className="w-full flex items-center justify-between p-5 bg-white hover:bg-slate-50 transition-all"
             >
               <div className="flex items-center gap-3">
@@ -399,6 +411,21 @@ export function PanelEntregasProfesor({ ejercicios, materiaNombre }: Props) {
             {/* Lista de entregas */}
             {activo && (
               <div className="border-t border-slate-100 bg-slate-50/50 p-5 space-y-4">
+                {isGroupMode && !cargando && entregas.length > 0 && (
+                  <div className="flex items-center justify-end mb-4 gap-2">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Filtrar por grupo:</span>
+                    <select 
+                      value={filtroGrupo} 
+                      onChange={e => setFiltroGrupo(e.target.value)}
+                      className="text-xs font-bold bg-white border border-slate-200 rounded-lg px-3 py-1.5 outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary uppercase"
+                    >
+                      <option value="TODOS">Todos los Grupos</option>
+                      {Array.from(new Set(entregas.map(e => e.grupo_nombre).filter(Boolean))).map(g => (
+                        <option key={g} value={g as string}>{g}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 {cargando ? (
                   <div className="flex items-center justify-center py-8 gap-3 text-slate-400">
                     <Loader2 className="w-5 h-5 animate-spin" />
@@ -410,15 +437,23 @@ export function PanelEntregasProfesor({ ejercicios, materiaNombre }: Props) {
                     <p className="text-sm font-bold uppercase">Ningún alumno ha entregado aún</p>
                   </div>
                 ) : (
-                  entregas.map((entrega) => (
-                    <EntregaRow
-                      key={entrega.alumno_id}
-                      entrega={entrega}
-                      ejercicioId={ej.id}
-                      ejercicioTipo={ej.tipo}
-                      onCalificado={handleCalificado}
-                    />
-                  ))
+                  entregas
+                    .filter(entrega => filtroGrupo === 'TODOS' || entrega.grupo_nombre === filtroGrupo)
+                    .map((entrega) => (
+                      <div key={entrega.alumno_id} className="space-y-1">
+                        {isGroupMode && filtroGrupo === 'TODOS' && entrega.grupo_nombre && (
+                          <div className="text-[10px] font-black uppercase text-indigo-500 tracking-widest ml-2 mb-1">
+                            Grupo: {entrega.grupo_nombre}
+                          </div>
+                        )}
+                        <EntregaRow
+                          entrega={entrega}
+                          ejercicioId={ej.id}
+                          ejercicioTipo={ej.tipo}
+                          onCalificado={handleCalificado}
+                        />
+                      </div>
+                    ))
                 )}
               </div>
             )}

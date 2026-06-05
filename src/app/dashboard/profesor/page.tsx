@@ -58,6 +58,9 @@ import {
 
 import { 
   getMyAsignaciones, 
+  getMisAgrupaciones,
+  upsertAgrupacion,
+  deleteAgrupacion,
   getUnidades, 
   getTemas, 
   getEjercicios, 
@@ -926,6 +929,9 @@ export default function ProfesorDashboard() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserName, setCurrentUserName] = useState<string | null>(null);
   const [asignaciones, setAsignaciones] = useState<any[]>([]);
+  const [agrupaciones, setAgrupaciones] = useState<any[]>([]);
+  const [selectedAgrupacion, setSelectedAgrupacion] = useState<any>(null);
+  const [isGroupMode, setIsGroupMode] = useState(false);
   
   const [selectedMateria, setSelectedMateria] = useState<any>(null);
   const [unidades, setUnidades] = useState<any[]>([]);
@@ -979,7 +985,7 @@ export default function ProfesorDashboard() {
           const slideToUpdate = slides.find(s => s.id === id);
           if (slideToUpdate) {
             try {
-              await upsertSlide(slideToUpdate);
+              await upsertSlide(slideToUpdate, isGroupMode);
             } catch (err) {
               console.error("Error flushing on close:", err);
             }
@@ -1001,7 +1007,7 @@ export default function ProfesorDashboard() {
         delete pendingUpserts.current[prevSlideId];
         const slideToUpdate = slides.find(s => s.id === prevSlideId);
         if (slideToUpdate) {
-          upsertSlide(slideToUpdate).catch(err => {
+          upsertSlide(slideToUpdate, isGroupMode).catch(err => {
             console.error("Error flushing on slide change:", err);
           });
         }
@@ -1056,7 +1062,7 @@ export default function ProfesorDashboard() {
             estilo: slide.estilo,
             orden: slide.orden + slides.length
           };
-          await upsertSlide(newSlideData);
+          await upsertSlide(newSlideData, isGroupMode);
         }
         
         await fetchSlides(selectedTema.id);
@@ -1084,6 +1090,8 @@ export default function ProfesorDashboard() {
       }
       const { data } = await getMyAsignaciones(user.id);
       if (data) setAsignaciones(data);
+      const { data: agrupos } = await getMisAgrupaciones(user.id);
+      if (agrupos) setAgrupaciones(agrupos);
     }
     setLoading(false);
   };
@@ -1140,20 +1148,31 @@ export default function ProfesorDashboard() {
     }
 
     try {
+      if (dialog.type === 'agrupacion') {
+        const ag = { ...d, profesor_id: currentUserId };
+        result = await upsertAgrupacion(ag);
+        if (!result.error) {
+          const { data: agrupos } = await getMisAgrupaciones(currentUserId!);
+          if (agrupos) setAgrupaciones(agrupos);
+        }
+      }
+
       if (dialog.type === 'unidad') {
         if (!selectedMateria?.id) { toast({ variant: "destructive", title: "Error", description: "No hay materia seleccionada." }); return; }
-        result = await upsertUnidad({...d, materia_id: selectedMateria.id, created_by: user?.id});
+        const targetMateriaIds = (isGroupMode && d.syncToAll) ? 
+          selectedAgrupacion?.asignaciones_ids.map((id:string) => asignaciones.find((a:any) => a.id === id)?.materia_id).filter(Boolean) : undefined;
+        result = await upsertUnidad({...d, materia_id: selectedMateria.id, created_by: user?.id}, targetMateriaIds);
       }
       
       if (dialog.type === 'tema') {
         if (!selectedUnidad?.id) { toast({ variant: "destructive", title: "Error", description: "No hay unidad seleccionada." }); return; }
-        result = await upsertTema({...d, unidad_id: selectedUnidad.id, created_by: user?.id});
+        result = await upsertTema({...d, unidad_id: selectedUnidad.id, created_by: user?.id}, isGroupMode && d.syncToAll);
       }
       
       if (dialog.type === 'ejercicio') {
         if (!selectedTema?.id) { toast({ variant: "destructive", title: "Error", description: "No hay tema seleccionado." }); return; }
         const finalContent = typeof d.contenido === 'string' ? d.contenido : JSON.stringify(d.contenido || {});
-        result = await upsertEjercicio({...d, contenido: finalContent, tema_id: selectedTema.id, created_by: user?.id});
+        result = await upsertEjercicio({...d, contenido: finalContent, tema_id: selectedTema.id, created_by: user?.id}, isGroupMode && d.syncToAll);
       }
 
       if (result && !result.error) {
@@ -1168,9 +1187,9 @@ export default function ProfesorDashboard() {
     } catch (e) { console.error(e); }
   };
 
-  const handleDelete = async (type: string, id: string, title?: string) => {
-    if (type === 'unidad' || type === 'tema' || type === 'ejercicio') {
-      setDeleteConfirmTarget({ type, id, title });
+  const handleDelete = async (type: string, id: string, title?: string, sync_id?: string) => {
+    if (type === 'unidad' || type === 'tema' || type === 'ejercicio' || type === 'agrupacion') {
+      setDeleteConfirmTarget({ type, id, title, sync_id: (isGroupMode || type === 'agrupacion') ? sync_id : undefined });
       setDeleteConfirmInput("");
       setDeleteConfirmOpen(true);
       return;
@@ -1184,9 +1203,16 @@ export default function ProfesorDashboard() {
     let error;
     const { type, id } = deleteConfirmTarget;
 
-    if (type === 'unidad') ({ error } = await deleteUnidad(id));
-    if (type === 'tema') ({ error } = await deleteTema(id));
-    if (type === 'ejercicio') ({ error } = await deleteEjercicio(id));
+    if (type === 'unidad') ({ error } = await deleteUnidad(id, deleteConfirmTarget.sync_id));
+    if (type === 'tema') ({ error } = await deleteTema(id, deleteConfirmTarget.sync_id));
+    if (type === 'ejercicio') ({ error } = await deleteEjercicio(id, deleteConfirmTarget.sync_id));
+    if (type === 'agrupacion') {
+      ({ error } = await deleteAgrupacion(id));
+      if (!error) {
+        const { data: agrupos } = await getMisAgrupaciones(currentUserId!);
+        if (agrupos) setAgrupaciones(agrupos);
+      }
+    }
 
     if (!error) {
       toast({ title: "Eliminado con éxito", description: `Se ha borrado el/la ${type === 'ejercicio' ? 'actividad' : type} y todo su contenido.` });
@@ -1234,7 +1260,7 @@ export default function ProfesorDashboard() {
       created_by: user?.id,
       estilo: 'canva_estrellas_1'
     };
-    const { data, error } = await upsertSlide(newSlide);
+    const { data, error } = await upsertSlide(newSlide, isGroupMode);
     if (error) { toast({ variant: "destructive", title: "Error", description: "Problema al crear diapositiva." }); return; }
     if (data) {
       setSlides([...slides, data]);
@@ -1256,7 +1282,7 @@ export default function ProfesorDashboard() {
       // Programar el upsert en la base de datos después de 1 segundo de inactividad
       pendingUpserts.current[id] = setTimeout(async () => {
         try {
-          await upsertSlide(updated);
+          await upsertSlide(updated, isGroupMode);
           delete pendingUpserts.current[id];
         } catch (err) {
           console.error("Error doing autosave:", err);
@@ -1293,7 +1319,7 @@ export default function ProfesorDashboard() {
           if (hasChanges) {
             const updatedSlide = { ...slide, contenido: serializeSlideContent(data) };
             newSlides[i] = updatedSlide;
-            await upsertSlide(updatedSlide);
+            await upsertSlide(updatedSlide, isGroupMode);
           }
         }
       } catch (e) {
@@ -1370,7 +1396,8 @@ export default function ProfesorDashboard() {
       }
     }
 
-    const { error } = await deleteSlide(slideToDelete);
+    const slideToDeleteObj = slides.find(s => s.id === slideToDelete);
+    const { error } = await deleteSlide(slideToDelete, isGroupMode ? slideToDeleteObj?.sync_id : undefined);
     if (!error) {
       const newSlides = slides.filter(s => s.id !== slideToDelete);
       setSlides(newSlides);
@@ -1409,7 +1436,7 @@ export default function ProfesorDashboard() {
         tipo: fileExt?.toLowerCase(),
         created_by: user.id
       };
-      const { error: dbError } = await upsertResource(newResource);
+      const { error: dbError } = await upsertResource(newResource, isGroupMode);
       if (dbError) throw dbError;
       toast({ title: "Archivo cargado" });
       fetchResources(selectedTema.id);
@@ -1419,7 +1446,7 @@ export default function ProfesorDashboard() {
   const handleDeleteResource = async (resource: any) => {
     try {
       await supabase.storage.from('recursos-educativos').remove([resource.file_path]);
-      const { error: dbError } = await deleteResourceRecord(resource.id);
+      const { error: dbError } = await deleteResourceRecord(resource.id, isGroupMode ? resource.sync_id : undefined);
       if (dbError) throw dbError;
       toast({ title: "Recurso eliminado" });
       setResources(resources.filter(r => r.id !== resource.id));
@@ -1565,10 +1592,52 @@ export default function ProfesorDashboard() {
           </TabsList>
 
           <TabsContent value="materias">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-black text-slate-800 uppercase tracking-tight">Mis Clases</h3>
+              <Button size="sm" onClick={() => setDialog({ open: true, type: 'agrupacion', data: { nombre: '', asignaciones_ids: [] } })} className="bg-indigo-600 text-white rounded-xl font-bold uppercase text-[10px] tracking-widest hover:bg-indigo-700">
+                <Plus size={14} className="mr-2" /> Crear Agrupación
+              </Button>
+            </div>
+
+            {agrupaciones.length > 0 && (
+              <div className="mb-8">
+                <h4 className="text-[10px] font-black uppercase text-indigo-400 tracking-widest mb-4">Agrupaciones</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {agrupaciones.map((agr) => {
+                    // Pre-calculate title using first matching asignacion
+                    const firstAsig = asignaciones.find(a => a.id === agr.asignaciones_ids[0]);
+                    return (
+                      <Card key={agr.id} onClick={() => { 
+                        setIsGroupMode(true);
+                        setSelectedAgrupacion(agr);
+                        if (firstAsig) {
+                          setSelectedMateria({...firstAsig.materias, id: firstAsig.materia_id, isAgrupacion: true, agrupacionNombre: agr.nombre }); 
+                          fetchUnidades(firstAsig.materia_id); 
+                          setCurrentTab('unidades');
+                        }
+                      }} className="cursor-pointer hover:shadow-2xl transition-all duration-300 border-2 border-indigo-100 hover:border-indigo-400 rounded-3xl bg-indigo-50/30 relative">
+                        <div className="h-2 bg-indigo-500 rounded-t-[30px]" />
+                        <CardHeader className="p-6">
+                          <Badge variant="outline" className="text-[9px] font-black bg-indigo-100 text-indigo-700 border-indigo-200 uppercase mb-4">Agrupación ({agr.asignaciones_ids.length} Grupos)</Badge>
+                          <CardTitle className="text-xl font-black text-slate-800 uppercase leading-tight">{agr.nombre}</CardTitle>
+                          {firstAsig && <p className="text-[10px] font-bold text-muted-foreground uppercase mt-2">{firstAsig.materias?.nombre}</p>}
+                          <div className="absolute top-4 right-4 flex gap-1 bg-white/50 rounded-lg p-1 backdrop-blur-sm">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-blue-500" onClick={(e) => { e.stopPropagation(); setDialog({ open: true, type: 'agrupacion', data: agr }); }}><Edit size={14}/></Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-400 hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleDelete('agrupacion', agr.id, agr.nombre); }}><Trash2 size={14}/></Button>
+                          </div>
+                        </CardHeader>
+                      </Card>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">Grupos Individuales</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {asignaciones.map((asig) => (
-                <Card key={asig.id} onClick={() => { setSelectedMateria({...asig.materias, id: asig.materia_id}); fetchUnidades(asig.materia_id); setCurrentTab('unidades'); }} className="cursor-pointer hover:shadow-2xl transition-all duration-300 border-2 border-slate-100 hover:border-primary/40 rounded-3xl bg-white">
-                  <div className="h-2 bg-primary/20" />
+                <Card key={asig.id} onClick={() => { setIsGroupMode(false); setSelectedAgrupacion(null); setSelectedMateria({...asig.materias, id: asig.materia_id}); fetchUnidades(asig.materia_id); setCurrentTab('unidades'); }} className="cursor-pointer hover:shadow-2xl transition-all duration-300 border-2 border-slate-100 hover:border-primary/40 rounded-3xl bg-white">
+                  <div className="h-2 bg-primary/20 rounded-t-[30px]" />
                   <CardHeader className="p-6">
                     <Badge variant="outline" className="text-[9px] font-black bg-primary/5 text-primary border-primary/20 uppercase mb-4">{asig.niveles?.nombre}</Badge>
                     <CardTitle className="text-xl font-black text-slate-800 uppercase leading-tight">{asig.materias?.nombre}</CardTitle>
@@ -1708,7 +1777,8 @@ export default function ProfesorDashboard() {
                <PanelEntregasProfesor 
                  ejercicios={ejercicios} 
                  materiaId={selectedMateria?.id} 
-                 materiaNombre={selectedMateria?.nombre} 
+                 materiaNombre={isGroupMode ? (selectedAgrupacion?.nombre || '') : selectedMateria.materias?.nombre || ''}
+                 isGroupMode={isGroupMode}
                />
              </Card>
            </TabsContent>
@@ -1722,8 +1792,12 @@ export default function ProfesorDashboard() {
             <div className="flex items-center gap-4">
               <div className={cn("p-3 rounded-2xl text-white", dialog.type === 'ejercicio' ? 'bg-amber-500' : 'bg-primary')}><FileText size={24} /></div>
               <div>
-                <DialogTitle className="font-black text-2xl uppercase tracking-tight text-slate-800">Editar {dialog.type}</DialogTitle>
-                <DialogDescription className="text-xs uppercase font-bold text-slate-400">Configura los parámetros de la actividad.</DialogDescription>
+                <DialogTitle className="font-black text-2xl uppercase tracking-tight text-slate-800">
+                  {dialog.type === 'agrupacion' ? 'Gestión de Agrupación' : `Editar ${dialog.type}`}
+                </DialogTitle>
+                <DialogDescription className="text-xs uppercase font-bold text-slate-400">
+                  {dialog.type === 'agrupacion' ? 'Configura la agrupación de múltiples clases.' : 'Configura los parámetros de la actividad.'}
+                </DialogDescription>
               </div>
             </div>
             {dialog.type === 'ejercicio' && (
@@ -1734,16 +1808,63 @@ export default function ProfesorDashboard() {
           </DialogHeader>
           
           <div className="flex-1 overflow-y-auto px-8 py-6 custom-scrollbar space-y-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Título Principal *</label>
-                <Input className="h-12 rounded-xl uppercase font-bold" value={dialog.data.titulo || ''} onChange={e => setDialog({...dialog, data: {...dialog.data, titulo: e.target.value.toUpperCase()}})} />
+            {isGroupMode && dialog.type !== 'agrupacion' && (
+              <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-between">
+                <div>
+                  <h4 className="text-sm font-black text-indigo-900 uppercase">Sincronizar a toda la Agrupación</h4>
+                  <p className="text-xs text-indigo-700/70 font-medium mt-1">Este contenido se replicará en todos los grupos de la agrupación.</p>
+                </div>
+                <Switch 
+                  checked={dialog.data.syncToAll !== false} 
+                  onCheckedChange={(c) => setDialog({...dialog, data: {...dialog.data, syncToAll: c}})} 
+                />
               </div>
-              <div className="space-y-2">
-                <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Orden</label>
-                <Input type="number" className="h-12 rounded-xl" value={dialog.data.orden || 1} onChange={e => setDialog({...dialog, data: {...dialog.data, orden: parseInt(e.target.value)}})} />
+            )}
+
+            {dialog.type === 'agrupacion' && (
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Nombre de la Agrupación *</label>
+                  <Input placeholder="Ej. Prepa 2do Semestre Todos" className="h-12 rounded-xl uppercase font-bold" value={dialog.data.nombre || ''} onChange={e => setDialog({...dialog, data: {...dialog.data, nombre: e.target.value}})} />
+                </div>
+                <div className="space-y-4">
+                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Seleccionar Grupos</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {asignaciones.map(asig => (
+                      <div key={asig.id} className="flex items-center space-x-3 p-3 border rounded-xl hover:bg-slate-50 cursor-pointer" onClick={() => {
+                        const ids = dialog.data.asignaciones_ids || [];
+                        if (ids.includes(asig.id)) {
+                          setDialog({...dialog, data: {...dialog.data, asignaciones_ids: ids.filter((id: string) => id !== asig.id)}});
+                        } else {
+                          setDialog({...dialog, data: {...dialog.data, asignaciones_ids: [...ids, asig.id]}});
+                        }
+                      }}>
+                        <div className={cn("w-5 h-5 rounded border flex items-center justify-center", (dialog.data.asignaciones_ids || []).includes(asig.id) ? "bg-primary border-primary text-white" : "border-slate-300")}>
+                          {(dialog.data.asignaciones_ids || []).includes(asig.id) && <CheckCircle size={14} />}
+                        </div>
+                        <div>
+                          <p className="font-bold text-sm uppercase">{asig.materias?.nombre}</p>
+                          <p className="text-[10px] text-muted-foreground uppercase">{asig.niveles?.nombre} • {asig.grupos?.nombre}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </div>
-            </div>
+            )}
+
+            {dialog.type !== 'agrupacion' && (
+              <>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Título Principal *</label>
+                    <Input className="h-12 rounded-xl uppercase font-bold" value={dialog.data.titulo || ''} onChange={e => setDialog({...dialog, data: {...dialog.data, titulo: e.target.value.toUpperCase()}})} />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Orden</label>
+                    <Input type="number" className="h-12 rounded-xl" value={dialog.data.orden || 1} onChange={e => setDialog({...dialog, data: {...dialog.data, orden: parseInt(e.target.value)}})} />
+                  </div>
+                </div>
 
             {dialog.type === 'ejercicio' && (
               <div className="p-5 rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50/60 space-y-3">
@@ -1880,6 +2001,8 @@ export default function ProfesorDashboard() {
                 <Separator />
                 <TemplateEditor type={dialog.data.tipo} content={dialog.data.contenido || {}} updateContent={(newContent) => setDialog({ ...dialog, data: { ...dialog.data, contenido: newContent } })} pagoIA={pagoIA} />
               </div>
+            )}
+              </>
             )}
           </div>
 

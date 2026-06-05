@@ -217,6 +217,88 @@ export async function getEntregasDeEjercicio(ejercicioId: string) {
   return { data: result };
 }
 
+export async function getEntregasAgrupadasPorSyncId(syncId: string) {
+  // 1. Obtener todos los ejercicios con este sync_id y sus nombres de grupo
+  const { data: ejercicios } = await supabaseAdmin
+    .from('ejercicios')
+    .select(`
+      id,
+      temas (
+        unidades (
+          materias (
+            asignaciones_profesor (
+              grupos (nombre)
+            )
+          )
+        )
+      )
+    `)
+    .eq('sync_id', syncId);
+
+  if (!ejercicios || ejercicios.length === 0) return { data: [] };
+
+  const ejercicioIds = ejercicios.map(e => e.id);
+  const mapEjercicioGrupo = new Map<string, string>();
+  
+  ejercicios.forEach((e: any) => {
+    // Navigating the nested object
+    const asigList = e.temas?.unidades?.materias?.asignaciones_profesor;
+    let grupoNombre = 'Grupo Desconocido';
+    if (asigList && asigList.length > 0 && asigList[0].grupos?.nombre) {
+      grupoNombre = asigList[0].grupos.nombre;
+    }
+    mapEjercicioGrupo.set(e.id, grupoNombre);
+  });
+
+  // 2. Fetch entregas para esos IDs
+  const { data: entregasData, error } = await supabaseAdmin
+    .from('resultados_ejercicios')
+    .select(`
+      alumno_id,
+      ejercicio_id,
+      archivo_url,
+      archivo_nombre,
+      archivo_path,
+      primer_envio_en,
+      caduca_el,
+      calificacion_manual,
+      estado,
+      calificacion,
+      aciertos,
+      total_preguntas,
+      intentos,
+      bloqueado,
+      fecha_completado,
+      historico_intentos
+    `)
+    .in('ejercicio_id', ejercicioIds)
+    .order('primer_envio_en', { ascending: true });
+
+  if (error) return { error: error.message };
+  if (!entregasData || entregasData.length === 0) return { data: [] };
+
+  const alumnoIds = Array.from(new Set(entregasData.map(e => e.alumno_id)));
+  
+  const { data: profilesData } = await supabaseAdmin
+    .from('profiles')
+    .select('id, nombre, apellidos, email')
+    .in('id', alumnoIds);
+
+  const profilesMap = new Map();
+  if (profilesData) {
+    profilesData.forEach(p => profilesMap.set(p.id, p));
+  }
+
+  // 3. Combinar todo
+  const result = entregasData.map(entrega => ({
+    ...entrega,
+    grupo_nombre: mapEjercicioGrupo.get(entrega.ejercicio_id),
+    profiles: profilesMap.get(entrega.alumno_id) || null
+  }));
+
+  return { data: result };
+}
+
 // -------------------------------------------------------------------
 // 5. OBTENER EJERCICIOS DESCRIPTIVOS DE UN TEMA (PARA PROFESOR)
 // -------------------------------------------------------------------
