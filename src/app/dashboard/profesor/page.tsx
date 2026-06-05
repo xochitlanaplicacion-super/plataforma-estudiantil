@@ -1777,7 +1777,7 @@ export default function ProfesorDashboard() {
                <PanelEntregasProfesor 
                  ejercicios={ejercicios} 
                  materiaId={selectedMateria?.id} 
-                 materiaNombre={isGroupMode ? (selectedAgrupacion?.nombre || '') : selectedMateria.materias?.nombre || ''}
+                 materiaNombre={isGroupMode ? (selectedAgrupacion?.nombre || '') : selectedMateria?.materias?.nombre || ''}
                  isGroupMode={isGroupMode}
                />
              </Card>
