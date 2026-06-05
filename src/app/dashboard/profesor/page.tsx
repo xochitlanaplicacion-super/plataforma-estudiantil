@@ -61,7 +61,12 @@ import {
   getMisAgrupaciones,
   upsertAgrupacion,
   deleteAgrupacion,
-  getUnidades, 
+  getUnidades,
+  getUnidadesAgrupacion,
+  getTemasAgrupacion,
+  getEjerciciosAgrupacion,
+  getSlidesAgrupacion,
+  getResourcesAgrupacion,
   getTemas, 
   getEjercicios, 
   upsertUnidad, 
@@ -1107,28 +1112,62 @@ export default function ProfesorDashboard() {
   }, []);
 
   const fetchUnidades = async (mId: string) => {
-    const { data } = await getUnidades(mId);
-    if (data) setUnidades(data);
+    if (isGroupMode && selectedAgrupacion) {
+      // Get all materia_ids from the agrupacion's asignaciones
+      const materiaIds = selectedAgrupacion.asignaciones_ids
+        .map((aId: string) => asignaciones.find((a: any) => a.id === aId)?.materia_id)
+        .filter(Boolean);
+      const { data } = await getUnidadesAgrupacion(materiaIds);
+      if (data) setUnidades(data);
+    } else {
+      const { data } = await getUnidades(mId);
+      if (data) setUnidades(data);
+    }
   };
 
   const fetchTemas = async (uId: string) => {
-    const { data } = await getTemas(uId);
-    if (data) setTemas(data);
+    // In group mode, fetch temas for all synced unidades
+    const unidad = unidades.find(u => u.id === uId);
+    if (isGroupMode && unidad?.sync_id) {
+      const { data } = await getTemasAgrupacion(unidad.sync_id);
+      if (data) setTemas(data);
+    } else {
+      const { data } = await getTemas(uId);
+      if (data) setTemas(data);
+    }
   };
 
   const fetchEjercicios = async (tId: string) => {
-    const { data } = await getEjercicios(tId);
-    if (data) setEjercicios(data);
+    const tema = temas.find(t => t.id === tId);
+    if (isGroupMode && tema?.sync_id) {
+      const { data } = await getEjerciciosAgrupacion(tema.sync_id);
+      if (data) setEjercicios(data);
+    } else {
+      const { data } = await getEjercicios(tId);
+      if (data) setEjercicios(data);
+    }
   };
 
   const fetchSlides = async (tId: string) => {
-    const { data } = await getSlides(tId);
-    if (data) setSlides(data || []);
+    const tema = temas.find(t => t.id === tId);
+    if (isGroupMode && tema?.sync_id) {
+      const { data } = await getSlidesAgrupacion(tema.sync_id);
+      if (data) setSlides(data || []);
+    } else {
+      const { data } = await getSlides(tId);
+      if (data) setSlides(data || []);
+    }
   };
 
   const fetchResources = async (tId: string) => {
-    const { data } = await getResources(tId);
-    if (data) setResources(data || []);
+    const tema = temas.find(t => t.id === tId);
+    if (isGroupMode && tema?.sync_id) {
+      const { data } = await getResourcesAgrupacion(tema.sync_id);
+      if (data) setResources(data || []);
+    } else {
+      const { data } = await getResources(tId);
+      if (data) setResources(data || []);
+    }
   };
 
   const handleSave = async () => {
@@ -1166,10 +1205,13 @@ export default function ProfesorDashboard() {
 
       if (dialog.type === 'unidad') {
         if (!selectedMateria?.id) { toast({ variant: "destructive", title: "Error", description: "No hay materia seleccionada." }); return; }
-        // En la tabla unidades, materia_id almacena el ID de la asignación (asignaciones_profesor.id),
-        // no el ID de la tabla materias. Usamos asignaciones_ids directamente.
-        const targetMateriaIds = (isGroupMode && d.syncToAll) ? 
-          selectedAgrupacion?.asignaciones_ids : undefined;
+        // unidades.materia_id stores materias.id. We need unique materia_ids from all asignaciones.
+        const targetMateriaIds = (isGroupMode && d.syncToAll && selectedAgrupacion) ? 
+          Array.from(new Set(
+            selectedAgrupacion.asignaciones_ids
+              .map((aId: string) => asignaciones.find((a: any) => a.id === aId)?.materia_id)
+              .filter(Boolean)
+          )) as string[] : undefined;
         result = await upsertUnidad({...d, materia_id: selectedMateria.id, created_by: user?.id}, targetMateriaIds);
       }
       
@@ -1613,17 +1655,20 @@ export default function ProfesorDashboard() {
                 <h4 className="text-[10px] font-black uppercase text-indigo-400 tracking-widest mb-4">Agrupaciones</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {agrupaciones.map((agr) => {
-                    // Pre-calculate title using first matching asignacion
                     const firstAsig = asignaciones.find(a => a.id === agr.asignaciones_ids[0]);
                     return (
-                      <Card key={agr.id} onClick={() => { 
+                      <Card key={agr.id} onClick={async () => { 
                         setIsGroupMode(true);
                         setSelectedAgrupacion(agr);
-                        if (firstAsig) {
-                          setSelectedMateria({...firstAsig.materias, id: firstAsig.materia_id, isAgrupacion: true, agrupacionNombre: agr.nombre }); 
-                          fetchUnidades(firstAsig.materia_id); 
-                          setCurrentTab('unidades');
-                        }
+                        // Use the agrupacion name as the header, not a single group
+                        setSelectedMateria({ nombre: agr.nombre, id: firstAsig?.materia_id, isAgrupacion: true });
+                        // Fetch unidades for ALL materia_ids in the agrupacion
+                        const materiaIds = agr.asignaciones_ids
+                          .map((aId: string) => asignaciones.find((a: any) => a.id === aId)?.materia_id)
+                          .filter(Boolean);
+                        const { data } = await getUnidadesAgrupacion(materiaIds);
+                        if (data) setUnidades(data);
+                        setCurrentTab('unidades');
                       }} className="cursor-pointer hover:shadow-2xl transition-all duration-300 border-2 border-indigo-100 hover:border-indigo-400 rounded-3xl bg-indigo-50/30 relative">
                         <div className="h-2 bg-indigo-500 rounded-t-[30px]" />
                         <CardHeader className="p-6">
@@ -1669,8 +1714,14 @@ export default function ProfesorDashboard() {
             <Card className="rounded-[32px] border-muted/60 shadow-xl overflow-hidden h-[70vh] flex flex-col">
               <CardHeader className="bg-slate-50/50 pb-6 border-b shrink-0 flex flex-row items-center justify-between">
                 <div>
-                  <Button variant="ghost" size="sm" onClick={() => setCurrentTab('materias')} className="text-primary font-black uppercase text-[10px]"><ArrowLeft size={14} /> Volver</Button>
-                  <CardTitle className="text-2xl font-black uppercase text-slate-800 flex items-center gap-3"><ListTree className="text-primary" /> {selectedMateria?.nombre}</CardTitle>
+                  <Button variant="ghost" size="sm" onClick={() => { setCurrentTab('materias'); if (isGroupMode) { setIsGroupMode(false); setSelectedAgrupacion(null); } }} className="text-primary font-black uppercase text-[10px]"><ArrowLeft size={14} /> Volver</Button>
+                  <CardTitle className="text-2xl font-black uppercase text-slate-800 flex items-center gap-3">
+                    <ListTree className={isGroupMode ? "text-indigo-600" : "text-primary"} /> 
+                    {isGroupMode ? selectedAgrupacion?.nombre : selectedMateria?.nombre}
+                  </CardTitle>
+                  {isGroupMode && (
+                    <Badge variant="outline" className="text-[9px] font-black bg-indigo-100 text-indigo-700 border-indigo-200 uppercase mt-2">Agrupación • {selectedAgrupacion?.asignaciones_ids?.length} Grupos Sincronizados</Badge>
+                  )}
                 </div>
                 <Button size="lg" className="rounded-2xl bg-primary text-white font-black uppercase tracking-widest gap-2" onClick={() => setDialog({ open: true, type: 'unidad', data: { titulo: '', orden: unidades.length + 1 } })}><Plus size={18} /> Nueva Unidad</Button>
               </CardHeader>

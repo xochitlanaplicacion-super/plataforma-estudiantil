@@ -193,6 +193,122 @@ export async function getUnidades(materiaId: string) {
   return { data, error };
 }
 
+// Fetches unidades for ALL materia_ids in an agrupación.
+// Deduplicates by sync_id so we show one entry per synced unit.
+export async function getUnidadesAgrupacion(materiaIds: string[]) {
+  const uniqueIds = Array.from(new Set(materiaIds));
+  const { data, error } = await supabaseAdmin
+    .from('unidades')
+    .select('*')
+    .in('materia_id', uniqueIds)
+    .order('orden');
+  if (error || !data) return { data, error };
+  
+  // Deduplicate: for units with sync_id, keep only the first occurrence
+  const seen = new Set<string>();
+  const deduped = data.filter(u => {
+    if (u.sync_id) {
+      if (seen.has(u.sync_id)) return false;
+      seen.add(u.sync_id);
+    }
+    return true;
+  });
+  return { data: deduped, error: null };
+}
+
+export async function getTemasAgrupacion(unidadSyncId: string) {
+  // Get all unidad IDs that share this sync_id
+  const { data: unidadesSync } = await supabaseAdmin.from('unidades').select('id').eq('sync_id', unidadSyncId);
+  if (!unidadesSync || unidadesSync.length === 0) return { data: [], error: null };
+  
+  const unidadIds = unidadesSync.map(u => u.id);
+  const { data, error } = await supabaseAdmin
+    .from('temas')
+    .select('*')
+    .in('unidad_id', unidadIds)
+    .order('orden');
+  if (error || !data) return { data, error };
+  
+  const seen = new Set<string>();
+  const deduped = data.filter(t => {
+    if (t.sync_id) {
+      if (seen.has(t.sync_id)) return false;
+      seen.add(t.sync_id);
+    }
+    return true;
+  });
+  return { data: deduped, error: null };
+}
+
+export async function getEjerciciosAgrupacion(temaSyncId: string) {
+  const { data: temasSync } = await supabaseAdmin.from('temas').select('id').eq('sync_id', temaSyncId);
+  if (!temasSync || temasSync.length === 0) return { data: [], error: null };
+  
+  const temaIds = temasSync.map(t => t.id);
+  const { data, error } = await supabaseAdmin
+    .from('ejercicios')
+    .select('*')
+    .in('tema_id', temaIds)
+    .order('orden');
+  if (error || !data) return { data, error };
+  
+  const seen = new Set<string>();
+  const deduped = data.filter(e => {
+    if (e.sync_id) {
+      if (seen.has(e.sync_id)) return false;
+      seen.add(e.sync_id);
+    }
+    return true;
+  });
+  return { data: deduped, error: null };
+}
+
+export async function getSlidesAgrupacion(temaSyncId: string) {
+  const { data: temasSync } = await supabaseAdmin.from('temas').select('id').eq('sync_id', temaSyncId);
+  if (!temasSync || temasSync.length === 0) return { data: [], error: null };
+  
+  const temaIds = temasSync.map(t => t.id);
+  const { data, error } = await supabaseAdmin
+    .from('slides')
+    .select('*')
+    .in('tema_id', temaIds)
+    .order('orden');
+  if (error || !data) return { data, error };
+  
+  const seen = new Set<string>();
+  const deduped = data.filter(s => {
+    if (s.sync_id) {
+      if (seen.has(s.sync_id)) return false;
+      seen.add(s.sync_id);
+    }
+    return true;
+  });
+  return { data: deduped, error: null };
+}
+
+export async function getResourcesAgrupacion(temaSyncId: string) {
+  const { data: temasSync } = await supabaseAdmin.from('temas').select('id').eq('sync_id', temaSyncId);
+  if (!temasSync || temasSync.length === 0) return { data: [], error: null };
+  
+  const temaIds = temasSync.map(t => t.id);
+  const { data, error } = await supabaseAdmin
+    .from('resources')
+    .select('*')
+    .in('tema_id', temaIds)
+    .order('created_at');
+  if (error || !data) return { data, error };
+  
+  const seen = new Set<string>();
+  const deduped = data.filter(r => {
+    if (r.sync_id) {
+      if (seen.has(r.sync_id)) return false;
+      seen.add(r.sync_id);
+    }
+    return true;
+  });
+  return { data: deduped, error: null };
+}
+
 export async function upsertUnidad(unidad: any, syncTargetMateriaIds?: string[]) {
   const cleanData = prepareForUpsert(unidad);
 
