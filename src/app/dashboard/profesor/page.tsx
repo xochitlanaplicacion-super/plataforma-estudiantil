@@ -1166,8 +1166,10 @@ export default function ProfesorDashboard() {
 
       if (dialog.type === 'unidad') {
         if (!selectedMateria?.id) { toast({ variant: "destructive", title: "Error", description: "No hay materia seleccionada." }); return; }
+        // En la tabla unidades, materia_id almacena el ID de la asignación (asignaciones_profesor.id),
+        // no el ID de la tabla materias. Usamos asignaciones_ids directamente.
         const targetMateriaIds = (isGroupMode && d.syncToAll) ? 
-          selectedAgrupacion?.asignaciones_ids.map((id:string) => asignaciones.find((a:any) => a.id === id)?.materia_id).filter(Boolean) : undefined;
+          selectedAgrupacion?.asignaciones_ids : undefined;
         result = await upsertUnidad({...d, materia_id: selectedMateria.id, created_by: user?.id}, targetMateriaIds);
       }
       
