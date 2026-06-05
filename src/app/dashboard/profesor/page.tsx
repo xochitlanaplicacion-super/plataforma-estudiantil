@@ -1136,9 +1136,16 @@ export default function ProfesorDashboard() {
     const d = dialog.data;
     const { data: { user } } = await supabase.auth.getUser();
     
-    if (!d.titulo || d.titulo.trim() === '') {
-      toast({ variant: "destructive", title: "Campo requerido", description: "El título principal es obligatorio para guardar." });
-      return;
+    if (dialog.type === 'agrupacion') {
+      if (!d.nombre || d.nombre.trim() === '') {
+        toast({ variant: "destructive", title: "Campo requerido", description: "El nombre de la agrupación es obligatorio." });
+        return;
+      }
+    } else {
+      if (!d.titulo || d.titulo.trim() === '') {
+        toast({ variant: "destructive", title: "Campo requerido", description: "El título principal es obligatorio para guardar." });
+        return;
+      }
     }
 
     // Validación obligatoria: fecha de entrega en ejercicios
