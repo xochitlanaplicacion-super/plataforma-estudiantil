@@ -1573,6 +1573,14 @@ export default function ProfesorDashboard() {
                     <Badge variant="outline" className="text-[9px] font-black bg-primary/5 text-primary border-primary/20 uppercase mb-4">{asig.niveles?.nombre}</Badge>
                     <CardTitle className="text-xl font-black text-slate-800 uppercase leading-tight">{asig.materias?.nombre}</CardTitle>
                     <p className="text-[10px] font-bold text-muted-foreground uppercase mt-2">{asig.carreras?.nombre}</p>
+                    {asig.grupos && (
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-primary font-black text-[10px] shrink-0">G</span>
+                        <p className="text-[10px] font-bold text-primary/80 uppercase leading-tight">
+                          {asig.grupos.grados?.nombre ? `${asig.grupos.grados.nombre} - ` : ''}{asig.grupos.nombre}
+                        </p>
+                      </div>
+                    )}
                   </CardHeader>
                 </Card>
               ))}

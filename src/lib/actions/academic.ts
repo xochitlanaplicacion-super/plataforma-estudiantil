@@ -326,7 +326,7 @@ export async function getAsignacionesProfesor() {
 export async function getMyAsignaciones(profesorId: string) {
   const { data, error } = await supabaseAdmin
     .from('asignaciones_profesor')
-    .select('*, niveles(nombre), carreras(nombre), materias(nombre)')
+    .select('*, niveles(nombre), carreras(nombre), materias(nombre), grupos(nombre, grados(nombre))')
     .eq('profesor_id', profesorId)
     .eq('activo', true)
     .order('created_at', { ascending: false });
