@@ -294,40 +294,108 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
   }, [exercise]);
 
   const generateSopaGrid = useCallback(() => {
-    const size = content.size || 12;
-    const grid = Array.from({ length: size }, () => Array(size).fill(''));
     const words = (content.words || []).filter((w: string) => w.length > 0);
+    const maxWordLen = words.reduce((max: number, w: string) => Math.max(max, w.length), 0);
+    const numWords = words.length;
+    
+    // Calculate size dynamically
+    const minCalculatedSize = Math.max(content.size || 12, maxWordLen + 2, Math.ceil(Math.sqrt(numWords * maxWordLen * 1.5)));
+    const startSize = Math.min(minCalculatedSize, 20); // Cap initially at 20x20
+    
+    // Sort words from longest to shortest
+    const sortedWords = [...words].sort((a, b) => b.length - a.length);
 
-    words.forEach((rawWord: string) => {
-      // BUG 2b FIX: Normalizar a mayúsculas para consistencia con el relleno
-      const word = rawWord.toUpperCase();
-      let placed = false;
-      let attempts = 0;
-      while (!placed && attempts < 50) {
-        const direction = Math.floor(Math.random() * 3);
-        const row = Math.floor(Math.random() * size);
-        const col = Math.floor(Math.random() * size);
-        let canPlace = true;
-        if (direction === 0 && col + word.length <= size) {
-          for (let i = 0; i < word.length; i++) if (grid[row][col + i] !== '' && grid[row][col + i] !== word[i]) canPlace = false;
-          if (canPlace) { for (let i = 0; i < word.length; i++) grid[row][col + i] = word[i]; placed = true; }
-        } else if (direction === 1 && row + word.length <= size) {
-          for (let i = 0; i < word.length; i++) if (grid[row + i][col] !== '' && grid[row + i][col] !== word[i]) canPlace = false;
-          if (canPlace) { for (let i = 0; i < word.length; i++) grid[row + i][col] = word[i]; placed = true; }
-        } else if (direction === 2 && row + word.length <= size && col + word.length <= size) {
-          for (let i = 0; i < word.length; i++) if (grid[row + i][col + i] !== '' && grid[row + i][col + i] !== word[i]) canPlace = false;
-          if (canPlace) { for (let i = 0; i < word.length; i++) grid[row + i][col + i] = word[i]; placed = true; }
+    let bestGrid: string[][] = [];
+    let maxPlaced = -1;
+
+    // Try grids of increasing sizes if we can't fit them
+    for (let currentSize = startSize; currentSize <= 25; currentSize++) {
+      const grid = Array.from({ length: currentSize }, () => Array(currentSize).fill(''));
+      let placedCount = 0;
+
+      for (const rawWord of sortedWords) {
+        const word = rawWord.toUpperCase();
+        let placed = false;
+        
+        // 0: E, 1: S, 2: SE, 3: W, 4: N, 5: NW, 6: NE, 7: SW
+        const dirs = [0, 1, 2, 3, 4, 5, 6, 7].sort(() => Math.random() - 0.5);
+
+        const coords = [];
+        for (let r = 0; r < currentSize; r++) {
+          for (let c = 0; c < currentSize; c++) {
+            coords.push({ r, c });
+          }
         }
-        attempts++;
-      }
-    });
+        coords.sort(() => Math.random() - 0.5);
 
-    for (let r = 0; r < size; r++) {
-      for (let c = 0; c < size; c++) {
-        if (grid[r][c] === '') grid[r][c] = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+        placementLoop:
+        for (const coord of coords) {
+          const row = coord.r;
+          const col = coord.c;
+          
+          for (const dir of dirs) {
+            let canPlace = true;
+            let dr = 0, dc = 0;
+            
+            if (dir === 0) { dc = 1; }
+            else if (dir === 1) { dr = 1; }
+            else if (dir === 2) { dr = 1; dc = 1; }
+            else if (dir === 3) { dc = -1; }
+            else if (dir === 4) { dr = -1; }
+            else if (dir === 5) { dr = -1; dc = -1; }
+            else if (dir === 6) { dr = -1; dc = 1; }
+            else if (dir === 7) { dr = 1; dc = -1; }
+
+            const endRow = row + dr * (word.length - 1);
+            const endCol = col + dc * (word.length - 1);
+            if (endRow < 0 || endRow >= currentSize || endCol < 0 || endCol >= currentSize) {
+              continue;
+            }
+
+            for (let i = 0; i < word.length; i++) {
+              const r = row + dr * i;
+              const c = col + dc * i;
+              if (grid[r][c] !== '' && grid[r][c] !== word[i]) {
+                canPlace = false;
+                break;
+              }
+            }
+
+            if (canPlace) {
+              for (let i = 0; i < word.length; i++) {
+                grid[row + dr * i][col + dc * i] = word[i];
+              }
+              placed = true;
+              break placementLoop;
+            }
+          }
+        }
+
+        if (placed) {
+          placedCount++;
+        } else {
+          break; // Optimization: If one fails, try larger grid
+        }
+      }
+
+      if (placedCount > maxPlaced) {
+        maxPlaced = placedCount;
+        bestGrid = grid;
+      }
+
+      if (placedCount === sortedWords.length) {
+        break; // All placed, no need to increase size
       }
     }
-    setSopaGrid(grid);
+
+    if (bestGrid.length > 0) {
+      for (let r = 0; r < bestGrid.length; r++) {
+        for (let c = 0; c < bestGrid.length; c++) {
+          if (bestGrid[r][c] === '') bestGrid[r][c] = String.fromCharCode(65 + Math.floor(Math.random() * 26));
+        }
+      }
+      setSopaGrid(bestGrid);
+    }
   }, [content]);
 
   useEffect(() => {
@@ -1020,7 +1088,7 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-10 items-start">
             <div className="lg:col-span-7 bg-white p-8 rounded-[40px] border-2 border-slate-100 shadow-2xl flex justify-center">
-              <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${content.size || 12}, minmax(0, 1fr))` }}>
+              <div className="grid gap-1" style={{ gridTemplateColumns: `repeat(${sopaGrid.length || 12}, minmax(0, 1fr))` }}>
                 {sopaGrid.map((row, r) => row.map((char, c) => {
                   const isSelected = selectedSopaCells.some(cell => cell.r === r && cell.c === c);
                   const isFoundCell = foundWordCells.some(cell => cell.r === r && cell.c === c);
