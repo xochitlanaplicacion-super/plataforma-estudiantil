@@ -469,8 +469,6 @@ export async function upsertSlide(slide: any, isSyncCreation: boolean = false) {
 
     // Intentamos limpiarlo antes por si acaso (PGRST204)
     const fallbackData = { ...cleanData };
-    delete fallbackData.created_by;
-    delete fallbackData.estilo;
 
     if (isSyncCreation && !fallbackData.id && fallbackData.tema_id) {
       const { data: temaObj } = await supabaseAdmin.from('temas').select('sync_id').eq('id', fallbackData.tema_id).single();
