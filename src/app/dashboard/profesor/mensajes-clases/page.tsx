@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { MessageSquare, Send, Check, CheckCheck, Eye, Users, BookOpen, User, Megaphone, ArrowLeft } from 'lucide-react';
+import { MessageSquare, Send, Check, CheckCheck, Eye, Users, BookOpen, User, Megaphone, ArrowLeft, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,16 @@ import { cn } from '@/lib/utils';
 import { Avatar } from '@/components/ui/avatar';
 import { useSearchParams } from 'next/navigation';
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   enviarMensajeClase,
   obtenerAvisosClase,
   obtenerChatGrupal,
@@ -23,7 +33,8 @@ import {
   marcarMensajeClaseLeido,
   marcarAvisoClaseVisto,
   obtenerUnreadGrupales,
-  marcarGrupalVisto
+  marcarGrupalVisto,
+  eliminarMensajeClase
 } from '@/lib/actions/mensajes_clases';
 
 type Contacto = {
@@ -67,6 +78,7 @@ function MensajesClasesProfesorContent() {
   const [selectedGrupo, setSelectedGrupo] = useState<GrupoClase | null>(null);
   const [selectedContacto, setSelectedContacto] = useState<Contacto | null>(null);
   const [nuevoMsg, setNuevoMsg] = useState('');
+  const [avisoToDelete, setAvisoToDelete] = useState<string | null>(null);
   
   // Typing indicators
   const [escribiendo, setEscribiendo] = useState<Record<string, string>>({}); // socketId -> userName
@@ -139,7 +151,14 @@ function MensajesClasesProfesorContent() {
     if (!userId) return;
     if (tab === 'grupales' && selectedGrupo) {
       const res = await obtenerChatGrupal(selectedGrupo.materia_id, selectedGrupo.grupo_id);
-      if (res.success) setMensajesChat(res.data || []);
+      if (res.success) {
+        setMensajesChat(res.data || []);
+        res.data?.forEach(m => {
+          if (!m.leido && m.remitente_id !== userId) {
+            marcarGrupalVisto(m.id, userId);
+          }
+        });
+      }
     } else if (tab === 'directos' && selectedContacto) {
       const res = await obtenerChatIndividual(userId, selectedContacto.alumno_id);
       if (res.success) {
@@ -272,6 +291,7 @@ function MensajesClasesProfesorContent() {
   // ==== ACCIONES ====
   const enviarAviso = async () => {
     if (!avisoTexto.trim() || !avisoDestino || !userId) return;
+    const g = grupos.find(g => `${g.materia_id}_${g.grupo_id}` === avisoDestino);
     const [materia_id, grupo_id] = avisoDestino.split('_');
     const res = await enviarMensajeClase({
       remitente_id: userId,
@@ -280,11 +300,17 @@ function MensajesClasesProfesorContent() {
       tipo_mensaje: 'AVISO',
       contenido: avisoTexto
     });
-    if (res.success) {
-      toast({ title: 'Aviso enviado con éxito' });
+    if (res.success && res.data) {
+      setAvisos([{
+        ...res.data,
+        remitente_nombre: 'Profesor',
+        materia_nombre: g?.materia_nombre || '',
+        grupo_nombre: g?.grupo_nombre || '',
+        vistosCount: 0
+      }, ...avisos]);
+      toast({ title: 'Aviso publicado', description: 'Tu clase ha sido notificada.' });
       setAvisoTexto('');
       setAvisoDestino('');
-      cargarDatosIniciales();
     } else {
       toast({ variant: 'destructive', title: 'Error', description: res.error });
     }
@@ -333,8 +359,22 @@ function MensajesClasesProfesorContent() {
   };
 
   const marcarAvisoVisto = async (msgId: string) => {
-    await marcarAvisoClaseVisto(msgId, userId);
-    setAvisos(prev => prev.map(g => g.id === msgId ? { ...g, yaVisto: true } : g));
+    const res = await marcarAvisoClaseVisto(msgId, userId);
+    if (res.success) {
+      setAvisos(prev => prev.map(a => a.id === msgId ? { ...a, yaVisto: true } : a));
+    }
+  };
+
+  const handleEliminarAviso = async () => {
+    if (!avisoToDelete) return;
+    const res = await eliminarMensajeClase(avisoToDelete);
+    if (res.success) {
+      setAvisos(prev => prev.filter(a => a.id !== avisoToDelete));
+      toast({ title: 'Aviso eliminado', description: 'El aviso ha sido borrado exitosamente.' });
+    } else {
+      toast({ title: 'Error', description: 'Hubo un problema al eliminar el aviso.', variant: 'destructive' });
+    }
+    setAvisoToDelete(null);
   };
 
   const fmt = (f: string) => { const d = new Date(f); return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) + ' ' + d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }); };
@@ -401,14 +441,22 @@ function MensajesClasesProfesorContent() {
               <h3 className="font-bold text-lg mb-2">Historial de Avisos</h3>
               {avisos.length === 0 && <p className="text-muted-foreground text-sm py-8 text-center bg-gray-50 rounded-xl border border-dashed">No has publicado ni recibido avisos aún.</p>}
               {avisos.map(a => (
-                <Card key={a.id} className={cn("rounded-xl transition-all", a.yaVisto ? 'opacity-70' : 'border-l-4 border-l-primary shadow-sm')}>
+                <Card key={a.id} className={cn("rounded-xl transition-all relative group", a.yaVisto ? 'opacity-70' : 'border-l-4 border-l-primary shadow-sm')}>
                   <CardContent className="p-4">
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex gap-2 items-center">
+                    {a.remitente_id === userId && (
+                      <button 
+                        className="absolute top-2 right-2 text-slate-300 hover:text-red-500 transition-colors p-2 rounded-full hover:bg-red-50"
+                        onClick={() => setAvisoToDelete(a.id)}
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    )}
+                    <div className="flex justify-between items-start mb-2 pr-8">
+                      <div className="flex gap-2 items-center flex-wrap">
                         <Badge variant="outline" className="bg-primary/5 text-primary border-primary/20">{a.materia_nombre}</Badge>
                         <Badge variant="secondary" className="text-[10px] uppercase">Grupo {a.grupo_nombre}</Badge>
                       </div>
-                      <span className="text-[10px] text-muted-foreground">{fmt(a.created_at)}</span>
+                      <span className="text-[10px] text-muted-foreground shrink-0">{fmt(a.created_at)}</span>
                     </div>
                     <p className="text-sm my-3">{a.contenido}</p>
                     <div className="flex justify-between items-center mt-2 border-t pt-2">
@@ -416,7 +464,17 @@ function MensajesClasesProfesorContent() {
                       {a.remitente_id !== userId && !a.yaVisto ? (
                         <Button variant="ghost" size="sm" className="h-6 text-[10px]" onClick={() => marcarAvisoVisto(a.id)}>Marcar Visto</Button>
                       ) : (
-                        <span className="text-[10px] text-emerald-600 flex items-center gap-1"><CheckCheck size={12}/> {a.remitente_id === userId ? 'Enviado' : 'Visto'}</span>
+                        <span className="text-[10px] text-emerald-600 flex items-center gap-1">
+                          {a.remitente_id === userId ? (
+                            <>
+                              <Users size={12} /> Visto por {a.vistosCount || 0} alumno(s)
+                            </>
+                          ) : (
+                            <>
+                              <CheckCheck size={12}/> Visto
+                            </>
+                          )}
+                        </span>
                       )}
                     </div>
                   </CardContent>
@@ -610,6 +668,21 @@ function MensajesClasesProfesorContent() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <AlertDialog open={!!avisoToDelete} onOpenChange={(open) => !open && setAvisoToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>¿Eliminar este aviso?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción no se puede deshacer. El aviso será eliminado de la plataforma y los alumnos ya no podrán verlo.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleEliminarAviso} className="bg-red-500 hover:bg-red-600">Eliminar</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

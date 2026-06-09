@@ -142,7 +142,14 @@ function MensajesClasesAlumnoContent() {
     if (!userId) return;
     if (tab === 'grupales' && selectedGrupo) {
       const res = await obtenerChatGrupal(selectedGrupo.materia_id, selectedGrupo.grupo_id);
-      if (res.success) setMensajesChat(res.data || []);
+      if (res.success) {
+        setMensajesChat(res.data || []);
+        res.data?.forEach(m => {
+          if (!m.leido && m.remitente_id !== userId) {
+            marcarGrupalVisto(m.id, userId);
+          }
+        });
+      }
     } else if (tab === 'directos' && selectedContacto) {
       const res = await obtenerChatIndividual(userId, selectedContacto.profesor_id);
       if (res.success) {

@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { enviarMensaje, marcarChatComoLeido, marcarComunicadoVisto } from '@/lib/actions/mensajes';
-import { obtenerMensajesGrupalesPendientes } from '@/lib/actions/mensajes_clases';
+import { obtenerMensajesGrupalesPendientes, marcarAvisoClaseVisto } from '@/lib/actions/mensajes_clases';
 
 const playNotificationSound = () => {
   try {
@@ -417,7 +417,11 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
             ) : (
               <button
                 onClick={async () => {
-                  await marcarComunicadoVisto(activeAviso.id, userId);
+                  if (['TODOS', 'ALUMNOS', 'PROFESORES'].includes(activeAviso.tipo)) {
+                    await marcarComunicadoVisto(activeAviso.id, userId);
+                  } else {
+                    await marcarAvisoClaseVisto(activeAviso.id, userId);
+                  }
                   setIsAvisoOpen(false);
                 }}
                 className="w-full py-2.5 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl text-sm transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2"

@@ -85,14 +85,19 @@ export async function obtenerAvisosClase(userId: string, rol: string) {
 
     const avisosIds = (avisos || []).map(a => a.id);
     let vistosSet = new Set<string>();
+    let conteoVistos: Record<string, number> = {};
     
     if (avisosIds.length > 0) {
       const { data: vistos } = await supabaseAdmin
         .from('mensajes_clases_vistos')
-        .select('mensaje_id')
-        .eq('usuario_id', userId)
+        .select('mensaje_id, usuario_id')
         .in('mensaje_id', avisosIds);
-      vistosSet = new Set((vistos || []).map(v => v.mensaje_id));
+
+      vistosSet = new Set((vistos || []).filter(v => v.usuario_id === userId).map(v => v.mensaje_id));
+      
+      (vistos || []).forEach(v => {
+        conteoVistos[v.mensaje_id] = (conteoVistos[v.mensaje_id] || 0) + 1;
+      });
     }
 
     const result = (avisos || []).map(a => ({
@@ -100,13 +105,25 @@ export async function obtenerAvisosClase(userId: string, rol: string) {
       remitente_nombre: a.remitente ? `${(a.remitente as any).nombre} ${(a.remitente as any).apellidos}` : 'Usuario',
       materia_nombre: (a.materia as any)?.nombre || '',
       grupo_nombre: (a.grupo as any)?.nombre || '',
-      yaVisto: vistosSet.has(a.id)
+      yaVisto: vistosSet.has(a.id),
+      vistosCount: conteoVistos[a.id] || 0
     }));
 
     return { success: true, data: result };
   } catch (err: any) {
     console.error('Error obteniendo avisos clase:', err);
     return { success: false, data: [], error: err.message };
+  }
+}
+
+export async function eliminarMensajeClase(mensajeId: string) {
+  noStore();
+  try {
+    const { error } = await supabaseAdmin.from('mensajes_clases').delete().eq('id', mensajeId);
+    if (error) throw error;
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
   }
 }
 
