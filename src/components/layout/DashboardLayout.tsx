@@ -50,6 +50,7 @@ import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import { GlobalChatNotification } from '@/components/shared/GlobalChatNotification';
 import { useInstitucion } from '@/hooks/use-institucion';
+import { verificarMensajesClasePendientes } from '@/lib/actions/mensajes_clases';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -65,12 +66,22 @@ export function DashboardLayout({ children, userRole, userName, userId }: Dashbo
   const [theme, setTheme] = useState<string | null>(null);
   const [formattedDate, setFormattedDate] = useState<string>('');
   const { config: inst } = useInstitucion();
+  const [hasUnreadClases, setHasUnreadClases] = useState(false);
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('ez-theme');
     if (savedTheme) setTheme(savedTheme);
     setFormattedDate(new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' }));
-  }, []);
+    
+    // Verificar si hay mensajes de clase pendientes
+    if (userId && (userRole === 'alumno' || userRole === 'profesor')) {
+      verificarMensajesClasePendientes(userId, userRole).then(res => {
+        if (res.success && res.hasUnread) {
+          setHasUnreadClases(true);
+        }
+      });
+    }
+  }, [userId, userRole]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -130,7 +141,8 @@ export function DashboardLayout({ children, userRole, userName, userId }: Dashbo
       { group: "Docencia", items: [
         { icon: LayoutDashboard, label: 'Mis Asignaturas', href: '/dashboard/profesor' },
         { icon: Users, label: 'Listas de grupos', href: '/dashboard/profesor/grupos' },
-        { icon: MessageSquare, label: 'Mensajes', href: '/dashboard/profesor/mensajes' },
+        { icon: MessageSquare, label: 'Mensajes de Clases', href: '/dashboard/profesor/mensajes-clases' },
+        { icon: Mail, label: 'Mensajes Administración', href: '/dashboard/profesor/mensajes' },
       ]}
     ],
     alumno: [
@@ -139,7 +151,8 @@ export function DashboardLayout({ children, userRole, userName, userId }: Dashbo
         { icon: BookOpen, label: 'Mis Materias', href: '/dashboard/alumno/materias' },
         { icon: CreditCard, label: 'Mis Pagos', href: '/dashboard/alumno/pagos' },
         { icon: FileText, label: 'Documento de Acreditación', href: '/dashboard/alumno/acreditacion' },
-        { icon: MessageSquare, label: 'Mensajes', href: '/dashboard/alumno/mensajes' },
+        { icon: MessageSquare, label: 'Mensajes de Clases', href: '/dashboard/alumno/mensajes-clases' },
+        { icon: Mail, label: 'Mensajes Administración', href: '/dashboard/alumno/mensajes' },
       ]}
     ],
   };
@@ -166,9 +179,12 @@ export function DashboardLayout({ children, userRole, userName, userId }: Dashbo
                 {group.items.map((item) => (
                   <SidebarMenuItem key={item.label}>
                     <SidebarMenuButton asChild tooltip={item.label} isActive={pathname === item.href} className={pathname === item.href ? "bg-primary/10 text-primary font-bold" : "hover:bg-primary/5"}>
-                      <Link href={item.href} className="flex items-center gap-3 py-6">
+                      <Link href={item.href} className="flex items-center gap-3 py-6 relative">
                         <item.icon className={`h-5 w-5 ${pathname === item.href ? "text-primary" : "text-muted-foreground"}`} />
-                        <span className="text-sm">{item.label}</span>
+                        <span className="text-sm flex-1">{item.label}</span>
+                        {item.href.includes('mensajes-clases') && hasUnreadClases && (
+                          <span className="absolute right-4 w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                        )}
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

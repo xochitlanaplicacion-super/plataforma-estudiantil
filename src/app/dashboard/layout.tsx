@@ -6,6 +6,7 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { getEstadoPagoIA } from '@/lib/actions/pagos';
 import { AlumnoAIAssistant } from '@/components/shared/AlumnoAIAssistant';
 import { ProfesorAIAssistant } from '@/components/shared/ProfesorAIAssistant';
+import { AIAssistantWrapper } from '@/components/shared/AIAssistantWrapper';
 
 export default async function Layout({ children }: { children: React.ReactNode }) {
   const supabase = await createServerSupabaseClient();
@@ -39,13 +40,15 @@ export default async function Layout({ children }: { children: React.ReactNode }
         {children}
       </DashboardLayout>
 
-      {pagoIA && profile.rol === 'alumno' && (
-        <AlumnoAIAssistant userId={user.id} userName={userName} />
-      )}
+      <AIAssistantWrapper>
+        {pagoIA && profile.rol === 'alumno' && (
+          <AlumnoAIAssistant userId={user.id} userName={userName} />
+        )}
 
-      {pagoIA && profile.rol === 'profesor' && (
-        <ProfesorAIAssistant userId={user.id} userName={userName} />
-      )}
+        {pagoIA && profile.rol === 'profesor' && (
+          <ProfesorAIAssistant userId={user.id} userName={userName} />
+        )}
+      </AIAssistantWrapper>
     </>
   );
 }

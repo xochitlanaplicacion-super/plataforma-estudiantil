@@ -114,8 +114,8 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
           setIsAvisoOpen(true);
         }
 
-        // Buscar mensajes privados no leídos al iniciar sesión
-        const { data, error } = await supabase
+        // Buscar mensajes privados no leídos (Internos)
+        const { data: internosData, error: internosError } = await supabase
           .from('mensajes_internos')
           .select('*, perfiles:remitente_id(nombre, apellidos)')
           .eq('tipo_destino', 'INDIVIDUAL')
@@ -123,19 +123,53 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
           .eq('leido', false)
           .order('created_at', { ascending: true });
 
-        if (!error && data && data.length > 0) {
-          const formattedMsgs = data.map(m => ({
+        // Buscar mensajes privados no leídos (Clases)
+        const { data: clasesData, error: clasesError } = await supabase
+          .from('mensajes_clases')
+          .select('*, profiles:remitente_id(nombre, apellidos, rol)')
+          .eq('tipo_mensaje', 'INDIVIDUAL')
+          .eq('destinatario_id', userId)
+          .eq('leido', false)
+          .order('created_at', { ascending: true });
+
+        const todosMsg: any[] = [];
+        
+        if (!internosError && internosData) {
+          todosMsg.push(...internosData.map(m => ({
             ...m,
+            source: 'internos',
             remitenteNombre: m.perfiles ? `${(m.perfiles as any).nombre} ${(m.perfiles as any).apellidos}` : 'Usuario'
+          })));
+        }
+
+        if (!clasesError && clasesData) {
+          todosMsg.push(...clasesData.map(m => {
+            const remitente = m.profiles as any;
+            const prefix = remitente?.rol === 'profesor' ? 'Prof. ' : '';
+            return {
+              ...m,
+              source: 'clases',
+              remitenteNombre: remitente ? `${prefix}${remitente.nombre} ${remitente.apellidos}` : 'Usuario'
+            };
           }));
+        }
+
+        if (todosMsg.length > 0) {
+          // Ordenar por fecha todos juntos
+          todosMsg.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
           
-          const latestMsg = formattedMsgs[formattedMsgs.length - 1];
-          setMessages(formattedMsgs);
+          const latestMsg = todosMsg[todosMsg.length - 1];
+          setMessages(todosMsg);
           setActiveChatId(latestMsg.remitente_id);
           setActiveChatName(latestMsg.remitenteNombre);
           setIsOpen(true);
+          
           // Marcar como leídos al abrir el popup
-          marcarChatComoLeido(userId, latestMsg.remitente_id);
+          if (latestMsg.source === 'internos') {
+            marcarChatComoLeido(userId, latestMsg.remitente_id);
+          } else {
+            supabase.from('mensajes_clases').update({ leido: true }).eq('destinatario_id', userId).eq('remitente_id', latestMsg.remitente_id).then();
+          }
         }
       }
     };
@@ -190,7 +224,7 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
           setTimeout(() => setIsAvisoOpen(true), 50);
         } else {
           // Mensaje privado: mostrar popup de chat con respuesta
-          setMessages(prev => [...prev, { ...msg, remitenteNombre }]);
+          setMessages(prev => [...prev, { ...msg, source: 'internos', remitenteNombre }]);
           setActiveChatId(msg.remitente_id);
           setActiveChatName(remitenteNombre);
           setIsOpen(false);
@@ -200,8 +234,47 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
       })
       .subscribe();
 
+    // Nueva suscripción para mensajes de clases (Profesor <-> Alumno o Grupal)
+    const channelClases = supabase.channel(`chat_clases_notif_${userId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'mensajes_clases' }, async (payload) => {
+        const msg = payload.new;
+        if (msg.remitente_id === userId) return;
+
+        // Obtener datos del remitente
+        const { data: remitente } = await supabase.from('profiles').select('nombre, apellidos, rol').eq('id', msg.remitente_id).single();
+        const remitenteNombre = remitente ? `${remitente.nombre} ${remitente.apellidos}` : 'Usuario';
+        const prefix = remitente?.rol === 'profesor' ? 'Prof. ' : '';
+
+        // Manejar mensajes grupales
+        if (msg.tipo_mensaje === 'CHAT_GRUPAL') {
+          const { data: materia } = await supabase.from('materias').select('nombre').eq('id', msg.materia_id).single();
+          if (materia) {
+            toast({
+              title: `Chat de Clase: ${materia.nombre}`,
+              description: `Nuevo mensaje de ${prefix}${remitenteNombre}`,
+              duration: 5000,
+            });
+            playNotificationSound();
+          }
+          return;
+        }
+
+        // Manejar mensajes individuales
+        if (msg.tipo_mensaje === 'INDIVIDUAL' && msg.destinatario_id === userId) {
+          playNotificationSound();
+          setMessages(prev => [...prev, { ...msg, source: 'clases', remitenteNombre: prefix + remitenteNombre }]);
+          setActiveChatId(msg.remitente_id);
+          setActiveChatName(prefix + remitenteNombre);
+          setIsOpen(false);
+          setTimeout(() => setIsOpen(true), 50);
+          await supabase.from('mensajes_clases').update({ leido: true }).eq('id', msg.id);
+        }
+      })
+      .subscribe();
+
     return () => {
       supabase.removeChannel(channel);
+      supabase.removeChannel(channelClases);
     };
   }, [userId, isMessagingPage, isAdmin]);
 
@@ -221,17 +294,38 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
       remitenteNombre: 'Tú'
     }]);
 
-    const res = await enviarMensaje({
-      remitente_id: userId,
-      destinatario_id: activeChatId,
-      tipo_destino: 'INDIVIDUAL',
-      contenido: replyText
-    });
+    // Diferenciar si respondemos a admin o a una clase
+    // Asumimos por la ruta o el rol, pero para ser seguros intentamos enviar a mensajes_internos por defecto.
+    // Opcionalmente podemos mejorar esto para responder correctamente a la clase si el remitente era un profesor.
+    // Como es solo notificación rápida, enviamos a mensajes_internos si es Admin o si no, a mensajes_clases.
+    
+    const lastMsg = messages[messages.length - 1];
+    const isClase = lastMsg && lastMsg.source === 'clases';
 
-    if (res.success) {
+    let res;
+    if (isClase) {
+      const { enviarMensajeClase } = await import('@/lib/actions/mensajes_clases');
+      res = await enviarMensajeClase({
+        remitente_id: userId,
+        destinatario_id: activeChatId,
+        materia_id: null, 
+        grupo_id: null,
+        tipo_mensaje: 'INDIVIDUAL',
+        contenido: replyText
+      });
+    } else {
+      res = await enviarMensaje({
+        remitente_id: userId,
+        destinatario_id: activeChatId,
+        tipo_destino: 'INDIVIDUAL',
+        contenido: replyText
+      });
+    }
+
+    if (res && res.success) {
       setReplyText('');
     } else {
-      toast({ variant: 'destructive', title: 'Error al enviar', description: res.error });
+      toast({ variant: 'destructive', title: 'Error al enviar', description: res?.error || 'Error' });
     }
   };
 
