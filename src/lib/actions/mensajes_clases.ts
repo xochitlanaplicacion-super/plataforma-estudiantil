@@ -464,7 +464,7 @@ export async function verificarMensajesClasePendientes(userId: string, rol: stri
       
     if (directos && directos > 0) return { success: true, hasUnread: true };
 
-    // 2. Revisar avisos no vistos
+    // 2. Revisar avisos y grupales no vistos
     let orConditions: string[] = [];
     if (rol === 'profesor') {
       const { data: asig } = await supabaseAdmin.from('asignaciones_profesor').select('grupo_id, materia_id').eq('profesor_id', userId).eq('activo', true);
@@ -479,20 +479,21 @@ export async function verificarMensajesClasePendientes(userId: string, rol: stri
     }
 
     if (orConditions.length > 0) {
-      const { data: avisos } = await supabaseAdmin
+      const { data: mensajes } = await supabaseAdmin
         .from('mensajes_clases')
         .select('id')
-        .eq('tipo_mensaje', 'AVISO')
+        .in('tipo_mensaje', ['AVISO', 'CHAT_GRUPAL'])
+        .neq('remitente_id', userId)
         .or(orConditions.join(','));
 
-      if (avisos && avisos.length > 0) {
+      if (mensajes && mensajes.length > 0) {
         const { data: vistos } = await supabaseAdmin
           .from('mensajes_clases_vistos')
           .select('mensaje_id')
           .eq('usuario_id', userId)
-          .in('mensaje_id', avisos.map(a => a.id));
+          .in('mensaje_id', mensajes.map(m => m.id));
         
-        if (!vistos || vistos.length < avisos.length) {
+        if (!vistos || vistos.length < mensajes.length) {
           return { success: true, hasUnread: true };
         }
       }
