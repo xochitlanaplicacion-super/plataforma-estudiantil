@@ -407,7 +407,7 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
               <button
                 onClick={() => {
                   setIsAvisoOpen(false);
-                  router.push(`/dashboard/${userRole}/mensajes-clases`);
+                  router.push(`/dashboard/${userRole}/mensajes-clases?tab=grupales&grupo_id=${activeAviso.grupo_id || ''}&materia_id=${activeAviso.materia_id || ''}`);
                 }}
                 className="w-full py-2.5 bg-primary hover:bg-primary/90 text-white font-bold rounded-xl text-sm transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2"
               >

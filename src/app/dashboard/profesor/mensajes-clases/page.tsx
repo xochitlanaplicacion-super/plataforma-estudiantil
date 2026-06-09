@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, Suspense } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { MessageSquare, Send, Check, CheckCheck, Eye, Users, BookOpen, User, Megaphone, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { createClient } from '@/lib/supabase/client';
 import { cn } from '@/lib/utils';
 import { Avatar } from '@/components/ui/avatar';
+import { useSearchParams } from 'next/navigation';
 import {
   enviarMensajeClase,
   obtenerAvisosClase,
@@ -42,7 +43,16 @@ type GrupoClase = {
 };
 
 export default function MensajesClasesProfesor() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-slate-500">Cargando mensajes...</div>}>
+      <MensajesClasesProfesorContent />
+    </Suspense>
+  );
+}
+
+function MensajesClasesProfesorContent() {
   const { toast } = useToast();
+  const searchParams = useSearchParams();
   const supabase = createClient();
   const [userId, setUserId] = useState('');
   const [tab, setTab] = useState('avisos');
@@ -108,6 +118,21 @@ export default function MensajesClasesProfesor() {
   }, [userId]);
 
   useEffect(() => { cargarDatosIniciales(); }, [cargarDatosIniciales]);
+
+  // Autoseleccionar tab y grupo basado en la URL
+  useEffect(() => {
+    const tabParam = searchParams?.get('tab');
+    const grupoId = searchParams?.get('grupo_id');
+    const materiaId = searchParams?.get('materia_id');
+
+    if (tabParam === 'grupales' && grupoId && materiaId && grupos.length > 0) {
+      setTab('grupales');
+      const grupoObj = grupos.find(g => g.grupo_id === grupoId && g.materia_id === materiaId);
+      if (grupoObj) {
+        setSelectedGrupo(grupoObj);
+      }
+    }
+  }, [searchParams, grupos]);
 
   // Cargar chat seleccionado
   const cargarChat = useCallback(async () => {
