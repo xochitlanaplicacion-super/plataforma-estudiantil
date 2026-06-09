@@ -20,7 +20,9 @@ import {
   obtenerContactosProfesor,
   obtenerGruposProfesor,
   marcarMensajeClaseLeido,
-  marcarAvisoClaseVisto
+  marcarAvisoClaseVisto,
+  obtenerUnreadGrupales,
+  marcarGrupalVisto
 } from '@/lib/actions/mensajes_clases';
 
 type Contacto = {
@@ -61,6 +63,7 @@ export default function MensajesClasesProfesor() {
   
   // Unread counts
   const [unreadDirectos, setUnreadDirectos] = useState<Record<string, number>>({});
+  const [unreadGrupales, setUnreadGrupales] = useState<Record<string, number>>({});
   
   // Form states for AVISOS
   const [avisoTexto, setAvisoTexto] = useState('');
@@ -87,6 +90,10 @@ export default function MensajesClasesProfesor() {
     }
     if (resGrupos.success && resGrupos.data) {
       setGrupos(resGrupos.data);
+      const resGrupales = await obtenerUnreadGrupales(userId, resGrupos.data.map(g => ({ materia_id: g.materia_id, grupo_id: g.grupo_id })));
+      if (resGrupales.success && resGrupales.data) {
+        setUnreadGrupales(resGrupales.data);
+      }
     }
     if (resAvisos.success && resAvisos.data) {
       setAvisos(resAvisos.data);
@@ -170,9 +177,11 @@ export default function MensajesClasesProfesor() {
             setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
           }
         } else {
-          // Si el mensaje es para mí, individual y no estoy en ese chat actual, aumentar contador
           if (msg.tipo_mensaje === 'INDIVIDUAL' && msg.destinatario_id === userId) {
             setUnreadDirectos(prev => ({ ...prev, [msg.remitente_id]: (prev[msg.remitente_id] || 0) + 1 }));
+          } else if (msg.tipo_mensaje === 'CHAT_GRUPAL' && msg.remitente_id !== userId) {
+            const key = `${msg.materia_id}_${msg.grupo_id}`;
+            setUnreadGrupales(prev => ({ ...prev, [key]: (prev[key] || 0) + 1 }));
           }
         }
       })
@@ -401,14 +410,26 @@ export default function MensajesClasesProfesor() {
                 {grupos.length === 0 && <p className="text-xs text-center p-4 text-muted-foreground">No tienes grupos asignados.</p>}
                 {grupos.map(g => {
                   const isSelected = selectedGrupo?.materia_id === g.materia_id && selectedGrupo?.grupo_id === g.grupo_id;
+                  const groupKey = `${g.materia_id}_${g.grupo_id}`;
                   return (
                     <button 
-                      key={`${g.materia_id}_${g.grupo_id}`}
-                      className={cn("w-full text-left p-3 rounded-xl transition-all text-sm", isSelected ? "bg-primary text-primary-foreground shadow-md" : "hover:bg-primary/5")}
-                      onClick={() => setSelectedGrupo(g)}
+                      key={groupKey}
+                      className={cn("w-full text-left p-3 rounded-xl transition-all text-sm flex items-center", isSelected ? "bg-primary text-primary-foreground shadow-md" : "hover:bg-primary/5")}
+                      onClick={() => {
+                        setSelectedGrupo(g);
+                        setUnreadGrupales(prev => ({ ...prev, [groupKey]: 0 }));
+                        marcarGrupalVisto(userId, g.materia_id, g.grupo_id);
+                      }}
                     >
-                      <p className="font-bold truncate">{g.materia_nombre}</p>
-                      <p className={cn("text-[11px]", isSelected ? "text-primary-foreground/80" : "text-muted-foreground")}>Grupo: {g.grupo_nombre}</p>
+                      <div className="flex-1 overflow-hidden">
+                        <p className="font-bold truncate">{g.materia_nombre}</p>
+                        <p className={cn("text-[11px]", isSelected ? "text-primary-foreground/80" : "text-muted-foreground")}>Grupo: {g.grupo_nombre}</p>
+                      </div>
+                      {unreadGrupales[groupKey] > 0 && (
+                        <Badge className={cn("ml-2 border-0 h-5 px-1.5 min-w-5 flex items-center justify-center text-[10px] shadow-sm", isSelected ? "bg-white text-primary" : "bg-red-500 text-white")}>
+                          {unreadGrupales[groupKey]}
+                        </Badge>
+                      )}
                     </button>
                   )
                 })}

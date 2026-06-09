@@ -19,7 +19,9 @@ import {
   obtenerContactosAlumno,
   obtenerGruposAlumno,
   marcarMensajeClaseLeido,
-  marcarAvisoClaseVisto
+  marcarAvisoClaseVisto,
+  obtenerUnreadGrupales,
+  marcarGrupalVisto
 } from '@/lib/actions/mensajes_clases';
 
 type Contacto = {
@@ -59,6 +61,7 @@ export default function MensajesClasesAlumno() {
   
   // Unread counts
   const [unreadDirectos, setUnreadDirectos] = useState<Record<string, number>>({});
+  const [unreadGrupales, setUnreadGrupales] = useState<Record<string, number>>({});
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const channelRef = useRef<any>(null);
@@ -91,6 +94,10 @@ export default function MensajesClasesAlumno() {
     }
     if (resGrupos.success && resGrupos.data) {
       setGrupos(resGrupos.data);
+      const resGrupales = await obtenerUnreadGrupales(userId, resGrupos.data.map(g => ({ materia_id: g.materia_id, grupo_id: g.grupo_id })));
+      if (resGrupales.success && resGrupales.data) {
+        setUnreadGrupales(resGrupales.data);
+      }
     }
     if (resAvisos.success && resAvisos.data) {
       setAvisos(resAvisos.data);
@@ -173,6 +180,9 @@ export default function MensajesClasesAlumno() {
           // Si el mensaje es para mí, individual y no estoy en ese chat actual, aumentar contador
           if (msgCompleto.tipo_mensaje === 'INDIVIDUAL' && msgCompleto.destinatario_id === userId) {
             setUnreadDirectos(prev => ({ ...prev, [msgCompleto.remitente_id]: (prev[msgCompleto.remitente_id] || 0) + 1 }));
+          } else if (msgCompleto.tipo_mensaje === 'CHAT_GRUPAL') {
+            const key = `${msgCompleto.materia_id}_${msgCompleto.grupo_id}`;
+            setUnreadGrupales(prev => ({ ...prev, [key]: (prev[key] || 0) + 1 }));
           }
         }
       })
@@ -344,14 +354,26 @@ export default function MensajesClasesAlumno() {
                 {grupos.length === 0 && <p className="text-xs text-center p-4 text-muted-foreground">No tienes clases asignadas.</p>}
                 {grupos.map(g => {
                   const isSelected = selectedGrupo?.materia_id === g.materia_id && selectedGrupo?.grupo_id === g.grupo_id;
+                  const groupKey = `${g.materia_id}_${g.grupo_id}`;
                   return (
                     <button 
-                      key={`${g.materia_id}_${g.grupo_id}`}
-                      className={cn("w-full text-left p-3 rounded-xl transition-all text-sm", isSelected ? "bg-primary text-primary-foreground shadow-md" : "hover:bg-primary/5")}
-                      onClick={() => setSelectedGrupo(g)}
+                      key={groupKey}
+                      className={cn("w-full text-left p-3 rounded-xl transition-all text-sm flex items-center", isSelected ? "bg-primary text-primary-foreground shadow-md" : "hover:bg-primary/5")}
+                      onClick={() => { 
+                        setSelectedGrupo(g); 
+                        setUnreadGrupales(prev => ({ ...prev, [groupKey]: 0 }));
+                        marcarGrupalVisto(userId, g.materia_id, g.grupo_id);
+                      }}
                     >
-                      <p className="font-bold truncate">{g.materia_nombre}</p>
-                      <p className={cn("text-[11px]", isSelected ? "text-primary-foreground/80" : "text-muted-foreground")}>Chat de Clase</p>
+                      <div className="flex-1 overflow-hidden">
+                        <p className="font-bold truncate">{g.materia_nombre}</p>
+                        <p className={cn("text-[11px]", isSelected ? "text-primary-foreground/80" : "text-muted-foreground")}>Chat de Clase</p>
+                      </div>
+                      {unreadGrupales[groupKey] > 0 && (
+                        <Badge className={cn("ml-2 border-0 h-5 px-1.5 min-w-5 flex items-center justify-center text-[10px] shadow-sm", isSelected ? "bg-white text-primary" : "bg-red-500 text-white")}>
+                          {unreadGrupales[groupKey]}
+                        </Badge>
+                      )}
                     </button>
                   )
                 })}

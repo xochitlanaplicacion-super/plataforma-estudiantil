@@ -372,6 +372,85 @@ export async function marcarAvisoClaseVisto(mensajeId: string, usuarioId: string
   }
 }
 
+// Obtiene el conteo de mensajes grupales no vistos, agrupados por materia_id+grupo_id
+export async function obtenerUnreadGrupales(userId: string, grupoIds: { materia_id: string; grupo_id: string }[]) {
+  noStore();
+  try {
+    if (grupoIds.length === 0) return { success: true, data: {} };
+
+    // Obtener todos los mensajes grupales de los grupos del usuario
+    const orConditions = grupoIds.map(g => `and(grupo_id.eq.${g.grupo_id},materia_id.eq.${g.materia_id})`);
+    
+    const { data: mensajes, error } = await supabaseAdmin
+      .from('mensajes_clases')
+      .select('id, materia_id, grupo_id')
+      .eq('tipo_mensaje', 'CHAT_GRUPAL')
+      .neq('remitente_id', userId)
+      .or(orConditions.join(','));
+
+    if (error) throw error;
+    if (!mensajes || mensajes.length === 0) return { success: true, data: {} };
+
+    // Obtener cuáles ya vio el usuario
+    const { data: vistos } = await supabaseAdmin
+      .from('mensajes_clases_vistos')
+      .select('mensaje_id')
+      .eq('usuario_id', userId)
+      .in('mensaje_id', mensajes.map(m => m.id));
+
+    const vistosSet = new Set((vistos || []).map(v => v.mensaje_id));
+
+    // Contar no vistos por grupo
+    const counts: Record<string, number> = {};
+    for (const m of mensajes) {
+      if (!vistosSet.has(m.id)) {
+        const key = `${m.materia_id}_${m.grupo_id}`;
+        counts[key] = (counts[key] || 0) + 1;
+      }
+    }
+
+    return { success: true, data: counts };
+  } catch (err: any) {
+    console.error('Error obteniendo unread grupales:', err);
+    return { success: false, data: {} };
+  }
+}
+
+// Marca todos los mensajes grupales de un grupo como vistos por el usuario
+export async function marcarGrupalVisto(userId: string, materia_id: string, grupo_id: string) {
+  try {
+    // Obtener mensajes no vistos de este grupo
+    const { data: mensajes } = await supabaseAdmin
+      .from('mensajes_clases')
+      .select('id')
+      .eq('tipo_mensaje', 'CHAT_GRUPAL')
+      .eq('materia_id', materia_id)
+      .eq('grupo_id', grupo_id)
+      .neq('remitente_id', userId);
+
+    if (!mensajes || mensajes.length === 0) return { success: true };
+
+    // Obtener cuáles ya están vistos
+    const { data: yaVistos } = await supabaseAdmin
+      .from('mensajes_clases_vistos')
+      .select('mensaje_id')
+      .eq('usuario_id', userId)
+      .in('mensaje_id', mensajes.map(m => m.id));
+
+    const vistosSet = new Set((yaVistos || []).map(v => v.mensaje_id));
+    const nuevos = mensajes.filter(m => !vistosSet.has(m.id));
+
+    if (nuevos.length > 0) {
+      const rows = nuevos.map(m => ({ mensaje_id: m.id, usuario_id: userId }));
+      await supabaseAdmin.from('mensajes_clases_vistos').upsert(rows, { onConflict: 'mensaje_id,usuario_id' });
+    }
+
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
 export async function verificarMensajesClasePendientes(userId: string, rol: string) {
   noStore();
   try {
