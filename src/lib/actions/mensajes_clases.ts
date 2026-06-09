@@ -504,3 +504,50 @@ export async function verificarMensajesClasePendientes(userId: string, rol: stri
     return { success: false, hasUnread: false };
   }
 }
+
+export async function obtenerMensajesGrupalesPendientes(userId: string, rol: string) {
+  noStore();
+  try {
+    let orConditions: string[] = [];
+    if (rol === 'profesor') {
+      const { data: asig } = await supabaseAdmin.from('asignaciones_profesor').select('grupo_id, materia_id').eq('profesor_id', userId).eq('activo', true);
+      if (asig && asig.length > 0) {
+        orConditions = asig.map(a => `and(grupo_id.eq.${a.grupo_id},materia_id.eq.${a.materia_id})`);
+      }
+    } else if (rol === 'alumno') {
+      const { data: profile } = await supabaseAdmin.from('profiles').select('grupo_id').eq('id', userId).single();
+      if (profile && profile.grupo_id) {
+        orConditions = [`grupo_id.eq.${profile.grupo_id}`];
+      }
+    }
+
+    if (orConditions.length > 0) {
+      const { data: mensajes } = await supabaseAdmin
+        .from('mensajes_clases')
+        .select('*, profiles:remitente_id(nombre, apellidos, rol), materias(nombre)')
+        .in('tipo_mensaje', ['AVISO', 'CHAT_GRUPAL'])
+        .neq('remitente_id', userId)
+        .or(orConditions.join(','));
+
+      if (mensajes && mensajes.length > 0) {
+        const { data: vistos } = await supabaseAdmin
+          .from('mensajes_clases_vistos')
+          .select('mensaje_id')
+          .eq('usuario_id', userId)
+          .in('mensaje_id', mensajes.map(m => m.id));
+        
+        const vistosIds = new Set((vistos || []).map(v => v.mensaje_id));
+        const noVistos = mensajes.filter(m => !vistosIds.has(m.id));
+        
+        if (noVistos.length > 0) {
+           return { success: true, data: noVistos };
+        }
+      }
+    }
+
+    return { success: true, data: [] };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+

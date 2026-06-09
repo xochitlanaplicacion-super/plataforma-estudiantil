@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { enviarMensaje, marcarChatComoLeido, marcarComunicadoVisto } from '@/lib/actions/mensajes';
+import { obtenerMensajesGrupalesPendientes } from '@/lib/actions/mensajes_clases';
 
 const playNotificationSound = () => {
   try {
@@ -174,7 +175,43 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
       }
     };
 
+    const checkGrupalesFallback = async () => {
+      if (isAdmin || isAvisoOpen) return;
+      const res = await obtenerMensajesGrupalesPendientes(userId, userRole);
+      if (res.success && res.data && res.data.length > 0) {
+        // Encontramos mensajes grupales o avisos pendientes
+        // Solo mostramos el último
+        const latest = res.data[res.data.length - 1];
+        
+        // Si ya tenemos un activeAviso con el mismo ID, no hacer nada para evitar loop
+        if (activeAviso?.id === latest.id) return;
+        
+        const prefix = latest.profiles?.rol === 'profesor' ? 'Prof. ' : '';
+        const remitenteNombre = latest.profiles ? `${prefix}${latest.profiles.nombre} ${latest.profiles.apellidos}` : 'Usuario';
+        
+        const tituloGrupo = latest.tipo_mensaje === 'CHAT_GRUPAL' && latest.materias 
+           ? `${remitenteNombre} (Grupo: ${latest.materias.nombre})` 
+           : remitenteNombre;
+
+        playNotificationSound();
+        setActiveAviso({ 
+          id: latest.id, 
+          contenido: latest.contenido, 
+          remitente: tituloGrupo, 
+          tipo: latest.tipo_mensaje,
+          materia_id: latest.materia_id,
+          grupo_id: latest.grupo_id
+        });
+        setIsAvisoOpen(false);
+        setTimeout(() => setIsAvisoOpen(true), 50);
+      }
+    };
+
     checkUnread();
+    
+    // Ejecutar inmediatamente y luego cada 10 segundos
+    checkGrupalesFallback();
+    const fallbackInterval = setInterval(checkGrupalesFallback, 10000);
 
     // Suscripción a Realtime
     const channel = supabase.channel(`chat_notifications_${userId}`)
@@ -278,10 +315,11 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
       .subscribe();
 
     return () => {
+      clearInterval(fallbackInterval);
       supabase.removeChannel(channel);
       supabase.removeChannel(channelClases);
     };
-  }, [userId, isMessagingPage, isAdmin]);
+  }, [userId, isMessagingPage, isAdmin, userRole, activeAviso?.id]);
 
   const handleReply = async () => {
     if (!replyText.trim() || !activeChatId) return;
