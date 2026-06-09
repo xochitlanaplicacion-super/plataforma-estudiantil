@@ -303,10 +303,10 @@ export default function MensajesClasesAlumno() {
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="mb-4 h-auto w-full justify-start overflow-x-auto flex-nowrap no-scrollbar pb-1">
-          <TabsTrigger value="avisos" className="gap-1 shrink-0"><Megaphone size={16} /> Avisos de Profesores</TabsTrigger>
-          <TabsTrigger value="grupales" className="gap-1 shrink-0"><Users size={16} /> Chats de Clase</TabsTrigger>
-          <TabsTrigger value="directos" className="gap-1 shrink-0"><User size={16} /> Chat Directo</TabsTrigger>
+        <TabsList className="mb-4 h-auto w-full flex-wrap justify-start gap-1 p-1">
+          <TabsTrigger value="avisos" className="gap-1 flex-1 min-w-[100px] text-xs md:text-sm whitespace-normal text-center h-auto py-2"><Megaphone size={16} className="shrink-0 hidden md:block" /> Avisos</TabsTrigger>
+          <TabsTrigger value="grupales" className="gap-1 flex-1 min-w-[100px] text-xs md:text-sm whitespace-normal text-center h-auto py-2"><Users size={16} className="shrink-0 hidden md:block" /> Grupos</TabsTrigger>
+          <TabsTrigger value="directos" className="gap-1 flex-1 min-w-[100px] text-xs md:text-sm whitespace-normal text-center h-auto py-2"><User size={16} className="shrink-0 hidden md:block" /> Directos</TabsTrigger>
         </TabsList>
 
         <TabsContent value="avisos">
