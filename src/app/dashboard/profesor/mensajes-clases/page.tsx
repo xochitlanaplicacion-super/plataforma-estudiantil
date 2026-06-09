@@ -24,6 +24,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   enviarMensajeClase,
   obtenerAvisosClase,
   obtenerChatGrupal,
@@ -34,7 +40,8 @@ import {
   marcarAvisoClaseVisto,
   obtenerUnreadGrupales,
   marcarGrupalVisto,
-  eliminarMensajeClase
+  eliminarMensajeClase,
+  obtenerDetalleVistosAviso
 } from '@/lib/actions/mensajes_clases';
 
 type Contacto = {
@@ -79,6 +86,7 @@ function MensajesClasesProfesorContent() {
   const [selectedContacto, setSelectedContacto] = useState<Contacto | null>(null);
   const [nuevoMsg, setNuevoMsg] = useState('');
   const [avisoToDelete, setAvisoToDelete] = useState<string | null>(null);
+  const [avisoDetails, setAvisoDetails] = useState<{ isOpen: boolean, avisoId: string | null, details: any[], loading: boolean }>({ isOpen: false, avisoId: null, details: [], loading: false });
   
   // Typing indicators
   const [escribiendo, setEscribiendo] = useState<Record<string, string>>({}); // socketId -> userName
@@ -374,6 +382,17 @@ function MensajesClasesProfesorContent() {
     setAvisoToDelete(null);
   };
 
+  const handleVerDetallesAviso = async (avisoId: string, grupoId: string) => {
+    setAvisoDetails({ isOpen: true, avisoId, details: [], loading: true });
+    const res = await obtenerDetalleVistosAviso(avisoId, grupoId);
+    if (res.success) {
+      setAvisoDetails(prev => ({ ...prev, details: res.data || [], loading: false }));
+    } else {
+      setAvisoDetails(prev => ({ ...prev, loading: false }));
+      toast({ title: 'Error', description: 'No se pudieron obtener los detalles.', variant: 'destructive' });
+    }
+  };
+
   const fmt = (f: string) => { const d = new Date(f); return d.toLocaleDateString('es-MX', { day: '2-digit', month: 'short' }) + ' ' + d.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }); };
 
   // Eliminar agrupación por materias para directos, usamos lista única
@@ -463,9 +482,12 @@ function MensajesClasesProfesorContent() {
                       ) : (
                         <span className="text-[10px] text-emerald-600 flex items-center gap-1">
                           {a.remitente_id === userId ? (
-                            <>
-                              <Users size={12} /> Visto por {a.vistosCount || 0} alumno(s)
-                            </>
+                            <button 
+                              onClick={() => handleVerDetallesAviso(a.id, a.grupo_id)}
+                              className="flex items-center gap-1 hover:underline hover:text-emerald-700 transition-colors cursor-pointer p-1 rounded-sm hover:bg-emerald-50"
+                            >
+                              <Users size={12} /> Visto por {a.vistosCount || 0} de {a.totalAlumnos || 0} alumno(s)
+                            </button>
                           ) : (
                             <>
                               <CheckCheck size={12}/> Visto
@@ -665,6 +687,36 @@ function MensajesClasesProfesorContent() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Modal para detalles de Vistos */}
+      <Dialog open={avisoDetails.isOpen} onOpenChange={(open) => !open && setAvisoDetails(prev => ({ ...prev, isOpen: false }))}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Detalle de Visualizaciones</DialogTitle>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto pr-2 space-y-2 mt-4">
+            {avisoDetails.loading ? (
+              <p className="text-center text-sm text-muted-foreground py-4">Cargando detalles...</p>
+            ) : avisoDetails.details.length === 0 ? (
+              <p className="text-center text-sm text-muted-foreground py-4">No hay alumnos registrados en este grupo.</p>
+            ) : (
+              avisoDetails.details.map((d: any) => (
+                <div key={d.id} className="flex justify-between items-center p-3 bg-slate-50 border rounded-lg">
+                  <span className="text-sm font-medium">{d.nombre}</span>
+                  {d.visto ? (
+                    <Badge variant="outline" className="bg-emerald-50 text-emerald-600 border-emerald-200"><CheckCheck size={14} className="mr-1"/> Visto</Badge>
+                  ) : (
+                    <Badge variant="outline" className="bg-slate-100 text-slate-500 border-slate-200">No visto</Badge>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+          <div className="flex justify-end pt-4">
+            <Button variant="outline" onClick={() => setAvisoDetails(prev => ({ ...prev, isOpen: false }))}>Cerrar</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={!!avisoToDelete} onOpenChange={(open) => !open && setAvisoToDelete(null)}>
         <AlertDialogContent>

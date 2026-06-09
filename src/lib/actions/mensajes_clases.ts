@@ -100,18 +100,69 @@ export async function obtenerAvisosClase(userId: string, rol: string) {
       });
     }
 
+    // Contar total de alumnos por grupo
+    let totalAlumnosPorGrupo: Record<string, number> = {};
+    const grupoIds = [...new Set((avisos || []).map(a => a.grupo_id).filter(Boolean))];
+    if (grupoIds.length > 0) {
+      const { data: conteoAlumnos } = await supabaseAdmin
+        .from('profiles')
+        .select('grupo_id')
+        .in('grupo_id', grupoIds)
+        .eq('rol', 'alumno');
+        
+      (conteoAlumnos || []).forEach(a => {
+        if (a.grupo_id) {
+          totalAlumnosPorGrupo[a.grupo_id] = (totalAlumnosPorGrupo[a.grupo_id] || 0) + 1;
+        }
+      });
+    }
+
     const result = (avisos || []).map(a => ({
       ...a,
       remitente_nombre: a.remitente ? `${(a.remitente as any).nombre} ${(a.remitente as any).apellidos}` : 'Usuario',
       materia_nombre: (a.materia as any)?.nombre || '',
       grupo_nombre: (a.grupo as any)?.nombre || '',
       yaVisto: vistosSet.has(a.id),
-      vistosCount: conteoVistos[a.id] || 0
+      vistosCount: conteoVistos[a.id] || 0,
+      totalAlumnos: totalAlumnosPorGrupo[a.grupo_id] || 0
     }));
 
     return { success: true, data: result };
   } catch (err: any) {
     console.error('Error obteniendo avisos clase:', err);
+    return { success: false, data: [], error: err.message };
+  }
+}
+
+export async function obtenerDetalleVistosAviso(avisoId: string, grupoId: string) {
+  noStore();
+  try {
+    // Obtener todos los alumnos del grupo
+    const { data: alumnos } = await supabaseAdmin
+      .from('profiles')
+      .select('id, nombre, apellidos')
+      .eq('grupo_id', grupoId)
+      .eq('rol', 'alumno')
+      .order('nombre', { ascending: true });
+
+    if (!alumnos) return { success: true, data: [] };
+
+    // Obtener los registros de quiénes han visto este aviso
+    const { data: vistos } = await supabaseAdmin
+      .from('mensajes_clases_vistos')
+      .select('usuario_id')
+      .eq('mensaje_id', avisoId);
+
+    const vistosSet = new Set((vistos || []).map(v => v.usuario_id));
+
+    const detalle = alumnos.map(a => ({
+      id: a.id,
+      nombre: `${a.nombre} ${a.apellidos}`,
+      visto: vistosSet.has(a.id)
+    }));
+
+    return { success: true, data: detalle };
+  } catch (err: any) {
     return { success: false, data: [], error: err.message };
   }
 }
