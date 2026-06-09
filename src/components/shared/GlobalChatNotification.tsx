@@ -249,12 +249,17 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
         if (msg.tipo_mensaje === 'CHAT_GRUPAL') {
           const { data: materia } = await supabase.from('materias').select('nombre').eq('id', msg.materia_id).single();
           if (materia) {
-            toast({
-              title: `Chat de Clase: ${materia.nombre}`,
-              description: `Nuevo mensaje de ${prefix}${remitenteNombre}`,
-              duration: 5000,
-            });
             playNotificationSound();
+            setActiveAviso({ 
+              id: msg.id, 
+              contenido: msg.contenido, 
+              remitente: `${prefix}${remitenteNombre} (Grupo: ${materia.nombre})`, 
+              tipo: 'CHAT_GRUPAL',
+              materia_id: msg.materia_id,
+              grupo_id: msg.grupo_id
+            });
+            setIsAvisoOpen(false);
+            setTimeout(() => setIsAvisoOpen(true), 50);
           }
           return;
         }
@@ -358,18 +363,31 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
               <span className="text-[10px] text-slate-400 mt-2 block text-right">{activeAviso.remitente}</span>
             </div>
           </div>
-          {/* Botón Marcar Visto */}
+          {/* Botón Marcar Visto / Ir al chat */}
           <div className="p-3 bg-slate-50 border-t border-slate-100">
-            <button
-              onClick={async () => {
-                await marcarComunicadoVisto(activeAviso.id, userId);
-                setIsAvisoOpen(false);
-              }}
-              className="w-full py-2.5 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl text-sm transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2"
-            >
-              <Send size={16} />
-              Marcar como enterado
-            </button>
+            {activeAviso.tipo === 'CHAT_GRUPAL' ? (
+              <button
+                onClick={() => {
+                  setIsAvisoOpen(false);
+                  router.push(`/dashboard/${userRole}/mensajes-clases`);
+                }}
+                className="w-full py-2.5 bg-primary hover:bg-primary/90 text-white font-bold rounded-xl text-sm transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2"
+              >
+                <Users size={16} />
+                Ir al chat de grupo
+              </button>
+            ) : (
+              <button
+                onClick={async () => {
+                  await marcarComunicadoVisto(activeAviso.id, userId);
+                  setIsAvisoOpen(false);
+                }}
+                className="w-full py-2.5 bg-green-500 hover:bg-green-600 text-white font-bold rounded-xl text-sm transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2"
+              >
+                <Send size={16} />
+                Marcar como enterado
+              </button>
+            )}
           </div>
         </div>
       </div>
