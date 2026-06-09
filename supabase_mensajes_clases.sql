@@ -61,23 +61,31 @@ USING (
   (remitente_id = auth.uid() OR destinatario_id = auth.uid())
 );
 
--- Usuarios pueden ver avisos y chats grupales si pertenecen al grupo o materia (simplificado: si están involucrados de alguna forma).
--- Nota: Para simplificar el RLS y dado que los datos se filtrarán en el backend (Server Actions), 
--- permitimos a los autenticados ver los grupales/avisos donde su id esté relacionado con el grupo.
+-- Usuarios pueden ver avisos y chats grupales si pertenecen al grupo.
+-- Usa profiles.grupo_id (para alumnos) y asignaciones_profesor (para profesores).
 CREATE POLICY "Alumnos ven grupales/avisos de sus grupos"
 ON public.mensajes_clases
 FOR SELECT
 USING (
   tipo_mensaje IN ('AVISO', 'CHAT_GRUPAL') AND (
+    -- Alumno: su grupo_id en profiles coincide con el grupo del mensaje
     EXISTS (
-      SELECT 1 FROM inscripciones_alumno 
-      WHERE alumno_id = auth.uid() AND inscripciones_alumno.grupo_id = mensajes_clases.grupo_id AND inscripciones_alumno.activo = true
+      SELECT 1 FROM public.profiles 
+      WHERE profiles.id = auth.uid() 
+      AND profiles.grupo_id = mensajes_clases.grupo_id
     )
     OR
+    -- Profesor: tiene asignación activa al grupo+materia del mensaje
     EXISTS (
       SELECT 1 FROM asignaciones_profesor 
-      WHERE profesor_id = auth.uid() AND asignaciones_profesor.grupo_id = mensajes_clases.grupo_id AND asignaciones_profesor.materia_id = mensajes_clases.materia_id AND asignaciones_profesor.activo = true
+      WHERE profesor_id = auth.uid() 
+      AND asignaciones_profesor.grupo_id = mensajes_clases.grupo_id 
+      AND asignaciones_profesor.materia_id = mensajes_clases.materia_id 
+      AND asignaciones_profesor.activo = true
     )
+    OR
+    -- Remitente: siempre puede ver sus propios mensajes
+    remitente_id = auth.uid()
   )
 );
 
