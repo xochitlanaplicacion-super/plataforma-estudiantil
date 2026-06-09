@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { MessageSquare, Send, Check, CheckCheck, Eye, Users, BookOpen, User, Megaphone } from 'lucide-react';
+import { MessageSquare, Send, Check, CheckCheck, Eye, Users, BookOpen, User, Megaphone, ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -320,10 +320,10 @@ export default function MensajesClasesProfesor() {
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="mb-4">
-          <TabsTrigger value="avisos" className="gap-1"><Megaphone size={16} /> Tablón de Avisos</TabsTrigger>
-          <TabsTrigger value="grupales" className="gap-1"><Users size={16} /> Chats Grupales</TabsTrigger>
-          <TabsTrigger value="directos" className="gap-1"><User size={16} /> Directos</TabsTrigger>
+        <TabsList className="mb-4 h-auto w-full justify-start overflow-x-auto flex-nowrap no-scrollbar pb-1">
+          <TabsTrigger value="avisos" className="gap-1 shrink-0"><Megaphone size={16} /> Tablón de Avisos</TabsTrigger>
+          <TabsTrigger value="grupales" className="gap-1 shrink-0"><Users size={16} /> Chats Grupales</TabsTrigger>
+          <TabsTrigger value="directos" className="gap-1 shrink-0"><User size={16} /> Directos</TabsTrigger>
         </TabsList>
 
         <TabsContent value="avisos">
@@ -393,9 +393,9 @@ export default function MensajesClasesProfesor() {
         </TabsContent>
 
         <TabsContent value="grupales">
-          <Card className="rounded-2xl border overflow-hidden flex h-[600px]">
+          <Card className="rounded-2xl border overflow-hidden flex h-[600px] shadow-sm">
             {/* Lista de Grupos */}
-            <div className="w-1/3 border-r bg-muted/10 overflow-y-auto">
+            <div className={cn("border-r bg-muted/10 overflow-y-auto w-full md:w-1/3 shrink-0", selectedGrupo ? "hidden md:block" : "block")}>
               <div className="p-4 border-b bg-white sticky top-0"><h3 className="font-bold text-sm">Mis Clases</h3></div>
               <div className="p-2 space-y-1">
                 {grupos.length === 0 && <p className="text-xs text-center p-4 text-muted-foreground">No tienes grupos asignados.</p>}
@@ -415,11 +415,14 @@ export default function MensajesClasesProfesor() {
               </div>
             </div>
             {/* Area de Chat Grupal */}
-            <div className="w-2/3 flex flex-col bg-[#f0ebe3]">
+            <div className={cn("flex-col bg-[#f0ebe3] w-full md:w-2/3 flex-1", selectedGrupo ? "flex" : "hidden md:flex")}>
               {selectedGrupo ? (
                 <>
                   <div className="p-3 bg-white border-b flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary"><Users size={20} /></div>
+                    <Button variant="ghost" size="icon" className="md:hidden shrink-0 -ml-2" onClick={() => setSelectedGrupo(null)}>
+                      <ArrowLeft size={18} />
+                    </Button>
+                    <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center text-primary shrink-0"><Users size={20} /></div>
                     <div>
                       <p className="font-bold text-sm">{selectedGrupo.materia_nombre}</p>
                       <p className="text-[11px] text-muted-foreground font-semibold">Chat Grupal - {selectedGrupo.grupo_nombre}</p>
@@ -461,9 +464,9 @@ export default function MensajesClasesProfesor() {
         </TabsContent>
 
         <TabsContent value="directos">
-          <Card className="rounded-2xl border overflow-hidden flex h-[600px]">
+          <Card className="rounded-2xl border overflow-hidden flex h-[600px] shadow-sm">
             {/* Lista de Alumnos agrupados por grupo */}
-            <div className="w-1/3 border-r bg-muted/10 overflow-y-auto">
+            <div className={cn("border-r bg-muted/10 overflow-y-auto w-full md:w-1/3 shrink-0", selectedContacto ? "hidden md:block" : "block")}>
               <div className="p-4 border-b bg-white sticky top-0"><h3 className="font-bold text-sm">Mis Alumnos</h3></div>
               <div className="p-2 space-y-1">
                 {contactos.length === 0 && <p className="text-xs text-center p-4 text-muted-foreground">No tienes alumnos asignados.</p>}
@@ -512,10 +515,13 @@ export default function MensajesClasesProfesor() {
               </div>
             </div>
             {/* Area de Chat Individual */}
-            <div className="w-2/3 flex flex-col bg-[#f0ebe3]">
+            <div className={cn("flex-col bg-[#f0ebe3] w-full md:w-2/3 flex-1", selectedContacto ? "flex" : "hidden md:flex")}>
               {selectedContacto ? (
                 <>
                   <div className="p-3 bg-white border-b flex items-center gap-3">
+                    <Button variant="ghost" size="icon" className="md:hidden shrink-0 -ml-2" onClick={() => setSelectedContacto(null)}>
+                      <ArrowLeft size={18} />
+                    </Button>
                     <Avatar className="h-10 w-10 shrink-0">
                        <div className="bg-primary text-primary-foreground w-full h-full flex items-center justify-center font-bold text-sm">{selectedContacto.alumno_nombre.charAt(0)}</div>
                     </Avatar>
