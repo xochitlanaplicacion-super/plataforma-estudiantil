@@ -50,7 +50,7 @@ export async function GET(req: Request) {
 
     // ── Si piden el directorio de usuarios ──
     // Se extrae la lista de perfiles que tengan al menos 1 chat en la tabla correspondiente
-    const profileTable = type === "alumno" ? "profiles" : "profesores_profiles";
+    const profileTable = "profiles"; // Both alumnos and profesores live in the same table
     const chatTable = type === "alumno" ? "alumno_chat_history" : "profesor_chat_history";
     const fkColumn = type === "alumno" ? "alumno_id" : "profesor_id";
 

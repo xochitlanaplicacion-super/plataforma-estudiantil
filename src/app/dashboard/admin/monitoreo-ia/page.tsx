@@ -121,7 +121,7 @@ export default function MonitoreoIAPage() {
             alumnos?.forEach(a => nameMap.set(a.id, `${a.nombre} ${a.apellidos || ''}`.trim()));
           }
           if (profesorIds.length > 0) {
-            const { data: profes } = await supabase.from("profesores_profiles").select("id, nombre, apellidos").in("id", profesorIds);
+            const { data: profes } = await supabase.from("profiles").select("id, nombre, apellidos").in("id", profesorIds);
             profes?.forEach(a => nameMap.set(a.id, `${a.nombre} ${a.apellidos || ''}`.trim()));
           }
 
