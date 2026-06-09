@@ -144,11 +144,8 @@ function MensajesClasesAlumnoContent() {
       const res = await obtenerChatGrupal(selectedGrupo.materia_id, selectedGrupo.grupo_id);
       if (res.success) {
         setMensajesChat(res.data || []);
-        res.data?.forEach(m => {
-          if (!m.leido && m.remitente_id !== userId) {
-            marcarGrupalVisto(m.id, userId);
-          }
-        });
+        // Marcar todos los mensajes del grupo como vistos de un solo golpe
+        await marcarGrupalVisto(userId, selectedGrupo.materia_id, selectedGrupo.grupo_id);
       }
     } else if (tab === 'directos' && selectedContacto) {
       const res = await obtenerChatIndividual(userId, selectedContacto.profesor_id);

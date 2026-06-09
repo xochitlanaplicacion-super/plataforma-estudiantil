@@ -10,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { enviarMensaje, marcarChatComoLeido, marcarComunicadoVisto } from '@/lib/actions/mensajes';
-import { obtenerMensajesGrupalesPendientes, marcarAvisoClaseVisto } from '@/lib/actions/mensajes_clases';
+import { obtenerMensajesGrupalesPendientes, marcarAvisoClaseVisto, marcarGrupalVisto } from '@/lib/actions/mensajes_clases';
 
 const playNotificationSound = () => {
   try {
@@ -405,8 +405,12 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
           <div className="p-3 bg-slate-50 border-t border-slate-100">
             {activeAviso.tipo === 'CHAT_GRUPAL' ? (
               <button
-                onClick={() => {
+                onClick={async () => {
                   setIsAvisoOpen(false);
+                  // Marcar como vistos ANTES de navegar
+                  if (activeAviso.grupo_id && activeAviso.materia_id) {
+                    await marcarGrupalVisto(userId, activeAviso.materia_id, activeAviso.grupo_id);
+                  }
                   router.push(`/dashboard/${userRole}/mensajes-clases?tab=grupales&grupo_id=${activeAviso.grupo_id || ''}&materia_id=${activeAviso.materia_id || ''}`);
                 }}
                 className="w-full py-2.5 bg-primary hover:bg-primary/90 text-white font-bold rounded-xl text-sm transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2"
