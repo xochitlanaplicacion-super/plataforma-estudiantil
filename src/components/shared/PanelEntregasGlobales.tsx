@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { cn, parseFechaLocal } from '@/lib/utils';
 import { calificarEntregaDescriptiva, getEntregasGlobalesProfesor } from '@/lib/actions/entregas';
-import { enviarMensaje } from '@/lib/actions/mensajes';
+import { enviarMensajeClase } from '@/lib/actions/mensajes_clases';
 import { useToast } from '@/hooks/use-toast';
 import {
   Dialog,
@@ -111,10 +111,10 @@ function EntregaRowGlobal({
     if (!msgText.trim()) return;
     setMsgSending(true);
     try {
-      const res = await enviarMensaje({
+      const res = await enviarMensajeClase({
         remitente_id: profesorId,
         destinatario_id: entrega.alumno_id,
-        tipo_destino: 'INDIVIDUAL',
+        tipo_mensaje: 'INDIVIDUAL',
         contenido: msgText.trim(),
       });
       if (res.success) {
