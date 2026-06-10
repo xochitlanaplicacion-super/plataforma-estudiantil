@@ -42,7 +42,8 @@ import {
   Mail,
   Building2,
   MonitorPlay,
-  UserCircle
+  UserCircle,
+  IdCard
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -148,6 +149,7 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
         { icon: UserPlus, label: 'Matrícula y Salones', href: '/dashboard/admin/inscripciones' },
         { icon: BookMarked, label: 'Material de Apoyo Oficial', href: '/dashboard/admin/material' },
         { icon: FileText, label: 'Dictámenes de Acreditación', href: '/dashboard/admin/acreditaciones' },
+        { icon: IdCard, label: 'Credenciales de Institución', href: '/dashboard/admin/credenciales' },
       ]},
       { group: "Módulo 10: Reportes", items: [
         { icon: CreditCard, label: 'Control de Pagos', href: '/dashboard/admin/vigencias' },
@@ -172,6 +174,7 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
         { icon: UserPlus, label: 'Matrícula y Salones', href: '/dashboard/admin/inscripciones' },
         { icon: BookMarked, label: 'Material de Apoyo Oficial', href: '/dashboard/admin/material' },
         { icon: FileText, label: 'Dictámenes de Acreditación', href: '/dashboard/admin/acreditaciones' },
+        { icon: IdCard, label: 'Credenciales de Institución', href: '/dashboard/admin/credenciales' },
         { icon: CreditCard, label: 'Control de Pagos', href: '/dashboard/admin/vigencias' },
       ]}
     ],
