@@ -23,6 +23,8 @@ interface CredencialPreviewProps {
     carrera: string;
     matricula: string;
     foto_perfil: string | null;
+    fecha_inicio?: string | null;
+    fecha_expiracion?: string | null;
   } | null;
   institucion: {
     logo_url?: string;
@@ -161,6 +163,17 @@ export function CredencialPreview({ config, alumno, institucion, showDownloadOpt
                   <p className="text-[10px] uppercase opacity-80 mb-0.5" style={{ color: config.color_texto_secundario }}>Programa Académico</p>
                   <p className="font-semibold text-xs md:text-sm uppercase leading-tight">{safeNivel}</p>
                   <p className="font-semibold text-xs md:text-sm uppercase leading-tight">{safeCarrera}</p>
+                </div>
+
+                <div className="flex gap-4 mt-1">
+                  <div>
+                    <p className="text-[8px] md:text-[9px] uppercase opacity-80 mb-0.5" style={{ color: config.color_texto_secundario }}>Fecha Ingreso</p>
+                    <p className="font-bold text-[10px] md:text-xs uppercase">{alumno?.fecha_inicio ? new Date(alumno.fecha_inicio).toLocaleDateString() : 'N/A'}</p>
+                  </div>
+                  <div>
+                    <p className="text-[8px] md:text-[9px] uppercase opacity-80 mb-0.5" style={{ color: config.color_texto_secundario }}>Vigencia</p>
+                    <p className="font-bold text-[10px] md:text-xs uppercase">{alumno?.fecha_expiracion ? new Date(alumno.fecha_expiracion).toLocaleDateString() : 'N/A'}</p>
+                  </div>
                 </div>
               </div>
 

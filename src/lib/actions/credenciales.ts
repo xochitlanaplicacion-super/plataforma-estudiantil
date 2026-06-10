@@ -59,10 +59,10 @@ export async function getAlumnosCredenciales() {
 
   const ids = alumnosView.map((a: any) => a.id);
 
-  // 2. Fetch profiles for foto_perfil and fecha_inicio
+  // 2. Fetch profiles for foto_perfil, fecha_inicio, and fecha_expiracion
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, foto_perfil, fecha_inicio')
+    .select('id, foto_perfil, fecha_inicio, fecha_expiracion')
     .in('id', ids);
 
   const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
@@ -82,6 +82,7 @@ export async function getAlumnosCredenciales() {
       ...alumno,
       foto_perfil: p?.foto_perfil || null,
       fecha_inicio: p?.fecha_inicio || null,
+      fecha_expiracion: p?.fecha_expiracion || null,
       autorizado: authMap.get(alumno.id) || false
     };
   });

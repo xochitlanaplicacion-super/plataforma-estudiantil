@@ -153,8 +153,8 @@ export function TablaCredenciales({ alumnos: initialAlumnos, config, institucion
                     </div>
                   </TableCell>
                   <TableCell>
-                    <p className="text-sm font-medium">{alumno.carrera}</p>
-                    <p className="text-xs text-muted-foreground">{alumno.nivel} • Grupo {alumno.grupo}</p>
+                    <p className="text-sm font-medium">{alumno.carrera || 'Sin Carrera'}</p>
+                    <p className="text-xs text-muted-foreground">{alumno.nivel || 'Sin Nivel'} • {alumno.grupo ? `Grupo ${alumno.grupo}` : 'Sin Grupo'}</p>
                   </TableCell>
                   <TableCell className="font-mono text-sm">{alumno.matricula || 'S/N'}</TableCell>
                   <TableCell className="text-center">
