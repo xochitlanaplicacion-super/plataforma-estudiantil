@@ -19,7 +19,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('rol, nombre, apellidos, estatus')
+    .select('rol, nombre, apellidos, estatus, foto_perfil')
     .eq('id', user.id)
     .single();
 
@@ -36,6 +36,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
         userRole={profile.rol as any} 
         userName={userName}
         userId={user.id}
+        userAvatar={profile.foto_perfil}
       >
         {children}
       </DashboardLayout>

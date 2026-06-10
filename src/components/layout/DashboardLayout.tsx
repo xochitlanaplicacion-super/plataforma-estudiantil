@@ -41,9 +41,10 @@ import {
   BookMarked,
   Mail,
   Building2,
-  MonitorPlay
+  MonitorPlay,
+  UserCircle
 } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { UserRole } from '@/lib/types';
@@ -58,6 +59,7 @@ interface DashboardLayoutProps {
   userRole: UserRole;
   userName: string;
   userId: string;
+  userAvatar?: string | null;
 }
 
 function SidebarNav({ activeMenus, pathname, hasUnreadClases }: { activeMenus: any[], pathname: string, hasUnreadClases: boolean }) {
@@ -95,7 +97,7 @@ function SidebarNav({ activeMenus, pathname, hasUnreadClases }: { activeMenus: a
   );
 }
 
-export function DashboardLayout({ children, userRole, userName, userId }: DashboardLayoutProps) {
+export function DashboardLayout({ children, userRole, userName, userId, userAvatar }: DashboardLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
@@ -185,6 +187,7 @@ export function DashboardLayout({ children, userRole, userName, userId }: Dashbo
     alumno: [
       { group: "Mi Portal", items: [
         { icon: LayoutDashboard, label: 'Mi Portal Educativo', href: '/dashboard/alumno' },
+        { icon: UserCircle, label: 'Mis Datos', href: '/dashboard/alumno/perfil' },
         { icon: BookOpen, label: 'Mis Materias', href: '/dashboard/alumno/materias' },
         { icon: CreditCard, label: 'Mis Pagos', href: '/dashboard/alumno/pagos' },
         { icon: FileText, label: 'Documento de Acreditación', href: '/dashboard/alumno/acreditacion' },
@@ -230,6 +233,7 @@ export function DashboardLayout({ children, userRole, userName, userId }: Dashbo
                <div className="flex items-center gap-2 sm:gap-4 bg-muted/30 p-1 rounded-full border border-border/50">
                 <div className="flex items-center gap-2 pl-1 sm:pl-2">
                   <Avatar className="h-7 w-7 sm:h-8 sm:w-8 border-2 border-white shadow-sm shrink-0">
+                    {userAvatar && <AvatarImage src={userAvatar} className="object-cover" />}
                     <AvatarFallback className="bg-primary text-primary-foreground font-bold text-[10px]">{getInitials(userName)}</AvatarFallback>
                   </Avatar>
                   <div className="flex flex-col pr-1 sm:pr-2">
