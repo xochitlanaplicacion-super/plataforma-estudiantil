@@ -21,6 +21,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
+import { useRouter } from 'next/navigation';
+
 const GOOGLE_FONTS = [
   'Montserrat', 'Open Sans', 'Roboto', 'Inter', 'Poppins', 
   'Lato', 'Oswald', 'Raleway', 'Nunito', 'Playfair Display',
@@ -63,6 +65,7 @@ interface CredencialDesignerProps {
 
 export function CredencialDesigner({ initialConfig, institucion }: CredencialDesignerProps) {
   const { toast } = useToast();
+  const router = useRouter();
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -95,6 +98,7 @@ export function CredencialDesigner({ initialConfig, institucion }: CredencialDes
       const res = await updateConfigCredenciales(config);
       if (res.success) {
         toast({ title: 'Diseño guardado correctamente' });
+        router.refresh();
       } else {
         throw new Error(res.error);
       }

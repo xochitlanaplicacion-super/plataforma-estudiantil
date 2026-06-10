@@ -44,22 +44,23 @@ function getPatternCSS(tipo: string, color: string, escala: number): React.CSSPr
 }
 
 // ============================================================
-// Panel left SVG clipPath definitions
+// Panel left SVG path definitions (viewBox="0 0 100 100" preserveAspectRatio="none")
 // ============================================================
-function getPanelClipPath(diseno: string): string {
+function getPanelSvgPath(diseno: string): string {
   switch (diseno) {
     case 'ondas':
-      return 'polygon(0 0, 85% 0, 100% 15%, 85% 30%, 100% 45%, 85% 60%, 100% 75%, 85% 100%, 0 100%)';
+      // Smooth 'S' wave
+      return 'M0,0 L85,0 C115,30 65,70 85,100 L0,100 Z';
     case 'diagonal':
-      return 'polygon(0 0, 100% 0, 80% 100%, 0 100%)';
+      return 'M0,0 L100,0 L80,100 L0,100 Z';
     case 'arco':
-      return 'ellipse(85% 50% at 30% 50%)';
+      return 'M0,0 L70,0 Q130,50 70,100 L0,100 Z';
     case 'doble_onda':
-      return 'polygon(0 0, 90% 0, 80% 20%, 95% 40%, 80% 60%, 95% 80%, 85% 100%, 0 100%)';
+      return 'M0,0 L85,0 Q105,25 85,50 Q65,75 85,100 L0,100 Z';
     case 'geometrico':
-      return 'polygon(0 0, 100% 0, 85% 25%, 100% 50%, 85% 75%, 100% 100%, 0 100%)';
+      return 'M0,0 L100,0 L80,25 L100,50 L80,75 L100,100 L0,100 Z';
     default: // 'plano'
-      return 'none';
+      return 'M0,0 L100,0 L100,100 L0,100 Z';
   }
 }
 
@@ -178,7 +179,7 @@ export function CredencialPreview({ config, alumno, institucion, showDownloadOpt
   const logoX = config.logo_x ?? 0;
   const logoY = config.logo_y ?? 0;
   const panelDiseno = config.panel_diseno || 'plano';
-  const panelClipPath = getPanelClipPath(panelDiseno);
+  const panelSvgPath = getPanelSvgPath(panelDiseno);
 
   // Build pattern layer style
   const isImagePattern = tramaTipo === 'imagen' && tramaImagenUrl;
@@ -225,15 +226,15 @@ export function CredencialPreview({ config, alumno, institucion, showDownloadOpt
             />
           )}
 
-          {/* Left Column - Logo with Panel Design */}
-          <div 
-            className="w-1/3 h-full flex flex-col items-center justify-center p-4 relative z-10" 
-            style={{ 
-              backgroundColor: '#ffffff',
-              clipPath: panelClipPath !== 'none' ? panelClipPath : undefined,
-              WebkitClipPath: panelClipPath !== 'none' ? panelClipPath : undefined,
-            }}
-          >
+          {/* Left Column Background Shape (SVG) */}
+          <div className="absolute top-0 left-0 w-[40%] h-full z-10 pointer-events-none">
+            <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
+              <path d={panelSvgPath} fill="#ffffff" />
+            </svg>
+          </div>
+
+          {/* Left Column - Logo Container */}
+          <div className="w-1/3 h-full flex flex-col items-center justify-center p-4 relative z-20">
             <div 
               className="w-full h-full flex items-center justify-center"
               style={{ 
