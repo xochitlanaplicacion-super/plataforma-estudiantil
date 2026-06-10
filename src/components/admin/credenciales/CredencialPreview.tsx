@@ -49,15 +49,19 @@ function getPatternCSS(tipo: string, color: string, escala: number): React.CSSPr
 function getPanelSvgPath(diseno: string): string {
   switch (diseno) {
     case 'ondas':
-      // Smooth 'S' wave
-      return 'M0,0 L85,0 C115,30 65,70 85,100 L0,100 Z';
+      // Base at 85, bulges right to 100, dips left to 70
+      return 'M0,0 L85,0 C100,30 70,70 85,100 L0,100 Z';
     case 'diagonal':
-      return 'M0,0 L100,0 L80,100 L0,100 Z';
+      // Top at 100, bottom at 75
+      return 'M0,0 L100,0 L75,100 L0,100 Z';
     case 'arco':
-      return 'M0,0 L70,0 Q130,50 70,100 L0,100 Z';
+      // Base at 75, bulges to 100 in the middle
+      return 'M0,0 L75,0 Q100,50 75,100 L0,100 Z';
     case 'doble_onda':
-      return 'M0,0 L85,0 Q105,25 85,50 Q65,75 85,100 L0,100 Z';
+      // Base at 85, bulges to 100, dips to 70
+      return 'M0,0 L85,0 Q100,25 85,50 Q70,75 85,100 L0,100 Z';
     case 'geometrico':
+      // Zig zag peaking at 100
       return 'M0,0 L100,0 L80,25 L100,50 L80,75 L100,100 L0,100 Z';
     default: // 'plano'
       return 'M0,0 L100,0 L100,100 L0,100 Z';
@@ -227,7 +231,7 @@ export function CredencialPreview({ config, alumno, institucion, showDownloadOpt
           )}
 
           {/* Left Column Background Shape (SVG) */}
-          <div className="absolute top-0 left-0 w-[40%] h-full z-10 pointer-events-none">
+          <div className="absolute top-0 left-0 w-[34%] h-full z-10 pointer-events-none">
             <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
               <path d={panelSvgPath} fill="#ffffff" />
             </svg>
