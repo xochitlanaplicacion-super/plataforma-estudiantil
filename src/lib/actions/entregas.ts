@@ -323,3 +323,173 @@ export async function renovarUrlFirmada(filePath: string) {
     .createSignedUrl(filePath, 60 * 60 * 24 * 7);
   return data?.signedUrl || null;
 }
+
+// -------------------------------------------------------------------
+// 7. OBTENER TODAS LAS ENTREGAS ACTIVAS DE ACTIVIDADES DESCRIPTIVAS
+//    PARA UN PROFESOR (vista global, agrupadas por materia)
+// -------------------------------------------------------------------
+export async function getEntregasGlobalesProfesor(profesorId: string) {
+  try {
+    // 1. Obtener asignaciones activas del profesor
+    const { data: asignaciones, error: asigError } = await supabaseAdmin
+      .from('asignaciones_profesor')
+      .select('materia_id, grupo_id, materias(id, nombre), grupos(id, nombre)')
+      .eq('profesor_id', profesorId)
+      .eq('activo', true);
+
+    if (asigError || !asignaciones || asignaciones.length === 0) {
+      return { data: [], error: asigError?.message };
+    }
+
+    // Recopilar IDs únicos de materias
+    const materiaIds = Array.from(new Set(asignaciones.map(a => a.materia_id).filter(Boolean))) as string[];
+
+    if (materiaIds.length === 0) return { data: [] };
+
+    // 2. Obtener unidades de esas materias
+    const { data: unidades } = await supabaseAdmin
+      .from('unidades')
+      .select('id, materia_id')
+      .in('materia_id', materiaIds);
+
+    if (!unidades || unidades.length === 0) return { data: [] };
+    const unidadIds = unidades.map(u => u.id);
+
+    // 3. Obtener temas de esas unidades
+    const { data: temas } = await supabaseAdmin
+      .from('temas')
+      .select('id, unidad_id')
+      .in('unidad_id', unidadIds);
+
+    if (!temas || temas.length === 0) return { data: [] };
+    const temaIds = temas.map(t => t.id);
+
+    // 4. Obtener solo ejercicios de tipo actividad_descriptiva
+    const { data: ejercicios } = await supabaseAdmin
+      .from('ejercicios')
+      .select('id, tema_id, titulo, fecha_entrega, tipo, sync_id')
+      .in('tema_id', temaIds)
+      .eq('tipo', 'actividad_descriptiva');
+
+    if (!ejercicios || ejercicios.length === 0) return { data: [] };
+    const ejercicioIds = ejercicios.map(e => e.id);
+
+    // 5. Obtener entregas (resultados) que aún no caducaron
+    const ahora = new Date().toISOString();
+    const { data: entregas } = await supabaseAdmin
+      .from('resultados_ejercicios')
+      .select(`
+        alumno_id,
+        ejercicio_id,
+        archivo_url,
+        archivo_nombre,
+        archivo_path,
+        primer_envio_en,
+        caduca_el,
+        calificacion_manual,
+        estado
+      `)
+      .in('ejercicio_id', ejercicioIds)
+      .not('archivo_path', 'is', null)
+      .gte('caduca_el', ahora)
+      .order('primer_envio_en', { ascending: true });
+
+    if (!entregas || entregas.length === 0) return { data: [] };
+
+    // 6. Obtener perfiles de los alumnos
+    const alumnoIds = Array.from(new Set(entregas.map(e => e.alumno_id)));
+    const { data: profiles } = await supabaseAdmin
+      .from('profiles')
+      .select('id, nombre, apellidos, email, grupo_id')
+      .in('id', alumnoIds);
+
+    const profilesMap = new Map<string, any>();
+    profiles?.forEach(p => profilesMap.set(p.id, p));
+
+    // 7. Obtener nombres de grupos de los alumnos
+    const grupoIdsAlumnos = Array.from(new Set((profiles || []).map(p => p.grupo_id).filter(Boolean)));
+    const gruposMap = new Map<string, string>();
+    if (grupoIdsAlumnos.length > 0) {
+      const { data: gruposData } = await supabaseAdmin
+        .from('grupos')
+        .select('id, nombre')
+        .in('id', grupoIdsAlumnos);
+      gruposData?.forEach(g => gruposMap.set(g.id, g.nombre));
+    }
+
+    // 8. Construir mapeo de ejercicio -> materia
+    const temaToUnidadMap = new Map<string, string>();
+    temas.forEach(t => temaToUnidadMap.set(t.id, t.unidad_id));
+    const unidadToMateriaMap = new Map<string, string>();
+    unidades.forEach(u => unidadToMateriaMap.set(u.id, u.materia_id));
+
+    // Mapeo de materia_id -> nombre
+    const materiaNombreMap = new Map<string, string>();
+    asignaciones.forEach((a: any) => {
+      if (a.materias?.id && a.materias?.nombre) {
+        materiaNombreMap.set(a.materias.id, a.materias.nombre);
+      }
+    });
+
+    // 9. Agrupar por materia
+    const materiaGroups = new Map<string, {
+      materiaId: string;
+      materiaNombre: string;
+      ejercicios: Map<string, {
+        ejercicioId: string;
+        ejercicioTitulo: string;
+        fechaEntrega: string | null;
+        entregas: any[];
+      }>;
+    }>();
+
+    for (const entrega of entregas) {
+      const ejercicio = ejercicios.find(e => e.id === entrega.ejercicio_id);
+      if (!ejercicio) continue;
+
+      const unidadId = temaToUnidadMap.get(ejercicio.tema_id);
+      if (!unidadId) continue;
+      const materiaId = unidadToMateriaMap.get(unidadId);
+      if (!materiaId) continue;
+
+      if (!materiaGroups.has(materiaId)) {
+        materiaGroups.set(materiaId, {
+          materiaId,
+          materiaNombre: materiaNombreMap.get(materiaId) || 'Materia',
+          ejercicios: new Map(),
+        });
+      }
+
+      const group = materiaGroups.get(materiaId)!;
+      if (!group.ejercicios.has(ejercicio.id)) {
+        group.ejercicios.set(ejercicio.id, {
+          ejercicioId: ejercicio.id,
+          ejercicioTitulo: ejercicio.titulo,
+          fechaEntrega: ejercicio.fecha_entrega,
+          entregas: [],
+        });
+      }
+
+      const profile = profilesMap.get(entrega.alumno_id);
+      const grupoNombre = profile?.grupo_id ? gruposMap.get(profile.grupo_id) || null : null;
+
+      group.ejercicios.get(ejercicio.id)!.entregas.push({
+        ...entrega,
+        profiles: profile ? { nombre: profile.nombre, apellidos: profile.apellidos, email: profile.email } : null,
+        grupo_nombre: grupoNombre,
+      });
+    }
+
+    // 10. Convertir a array serializable
+    const result = Array.from(materiaGroups.values()).map(group => ({
+      materiaId: group.materiaId,
+      materiaNombre: group.materiaNombre,
+      ejercicios: Array.from(group.ejercicios.values()),
+    }));
+
+    return { data: result };
+  } catch (err: any) {
+    console.error('Error en getEntregasGlobalesProfesor:', err);
+    return { data: [], error: err.message };
+  }
+}

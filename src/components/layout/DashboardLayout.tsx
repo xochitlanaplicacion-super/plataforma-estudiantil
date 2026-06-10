@@ -140,6 +140,7 @@ export function DashboardLayout({ children, userRole, userName, userId }: Dashbo
     profesor: [
       { group: "Docencia", items: [
         { icon: LayoutDashboard, label: 'Mis Asignaturas', href: '/dashboard/profesor' },
+        { icon: ClipboardList, label: 'Entregas de Actividades', href: '/dashboard/profesor/entregas' },
         { icon: Users, label: 'Listas de grupos', href: '/dashboard/profesor/grupos' },
         { icon: MessageSquare, label: 'Mensajes de Clases', href: '/dashboard/profesor/mensajes-clases' },
         { icon: Mail, label: 'Mensajes Administración', href: '/dashboard/profesor/mensajes' },
