@@ -16,7 +16,8 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupLabel,
-  SidebarTrigger
+  SidebarTrigger,
+  useSidebar
 } from '@/components/ui/sidebar';
 import { 
   LayoutDashboard, 
@@ -57,6 +58,41 @@ interface DashboardLayoutProps {
   userRole: UserRole;
   userName: string;
   userId: string;
+}
+
+function SidebarNav({ activeMenus, pathname, hasUnreadClases }: { activeMenus: any[], pathname: string, hasUnreadClases: boolean }) {
+  const { setOpenMobile, isMobile } = useSidebar();
+
+  const handleLinkClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
+
+  return (
+    <>
+      {activeMenus.map((group, idx) => (
+        <SidebarGroup key={idx} className="mb-4">
+          <SidebarGroupLabel className="text-[9px] uppercase tracking-[0.15em] font-bold text-primary/60 px-4 mb-2">{group.group}</SidebarGroupLabel>
+          <SidebarMenu>
+            {group.items.map((item: any) => (
+              <SidebarMenuItem key={item.label}>
+                <SidebarMenuButton asChild tooltip={item.label} isActive={pathname === item.href} className={pathname === item.href ? "bg-primary/10 text-primary font-bold" : "hover:bg-primary/5"}>
+                  <Link href={item.href} onClick={handleLinkClick} className="flex items-center gap-3 py-6 relative">
+                    <item.icon className={`h-5 w-5 ${pathname === item.href ? "text-primary" : "text-muted-foreground"}`} />
+                    <span className="text-sm flex-1">{item.label}</span>
+                    {item.href.includes('mensajes-clases') && hasUnreadClases && (
+                      <span className="absolute right-4 w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+                    )}
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            ))}
+          </SidebarMenu>
+        </SidebarGroup>
+      ))}
+    </>
+  );
 }
 
 export function DashboardLayout({ children, userRole, userName, userId }: DashboardLayoutProps) {
@@ -173,26 +209,7 @@ export function DashboardLayout({ children, userRole, userName, userId }: Dashbo
           </div>
         </SidebarHeader>
         <SidebarContent className="px-2">
-          {activeMenus.map((group, idx) => (
-            <SidebarGroup key={idx} className="mb-4">
-              <SidebarGroupLabel className="text-[9px] uppercase tracking-[0.15em] font-bold text-primary/60 px-4 mb-2">{group.group}</SidebarGroupLabel>
-              <SidebarMenu>
-                {group.items.map((item) => (
-                  <SidebarMenuItem key={item.label}>
-                    <SidebarMenuButton asChild tooltip={item.label} isActive={pathname === item.href} className={pathname === item.href ? "bg-primary/10 text-primary font-bold" : "hover:bg-primary/5"}>
-                      <Link href={item.href} className="flex items-center gap-3 py-6 relative">
-                        <item.icon className={`h-5 w-5 ${pathname === item.href ? "text-primary" : "text-muted-foreground"}`} />
-                        <span className="text-sm flex-1">{item.label}</span>
-                        {item.href.includes('mensajes-clases') && hasUnreadClases && (
-                          <span className="absolute right-4 w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
-                        )}
-                      </Link>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-              </SidebarMenu>
-            </SidebarGroup>
-          ))}
+          <SidebarNav activeMenus={activeMenus} pathname={pathname} hasUnreadClases={hasUnreadClases} />
         </SidebarContent>
         <SidebarFooter className="p-4 bg-muted/30">
           <div className="flex justify-center group-data-[collapsible=icon]:hidden">
