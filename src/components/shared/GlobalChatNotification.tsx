@@ -164,13 +164,6 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
           setActiveChatId(latestMsg.remitente_id);
           setActiveChatName(latestMsg.remitenteNombre);
           setIsOpen(true);
-          
-          // Marcar como leídos al abrir el popup
-          if (latestMsg.source === 'internos') {
-            marcarChatComoLeido(userId, latestMsg.remitente_id);
-          } else {
-            supabase.from('mensajes_clases').update({ leido: true }).eq('destinatario_id', userId).eq('remitente_id', latestMsg.remitente_id).then();
-          }
         }
       }
     };
@@ -266,7 +259,6 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
           setActiveChatName(remitenteNombre);
           setIsOpen(false);
           setTimeout(() => setIsOpen(true), 50);
-          marcarChatComoLeido(userId, msg.remitente_id);
         }
       })
       .subscribe();
@@ -309,7 +301,6 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
           setActiveChatName(prefix + remitenteNombre);
           setIsOpen(false);
           setTimeout(() => setIsOpen(true), 50);
-          await supabase.from('mensajes_clases').update({ leido: true }).eq('id', msg.id);
         }
       })
       .subscribe();
@@ -324,8 +315,15 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
   const handleReply = async () => {
     if (!replyText.trim() || !activeChatId) return;
 
+    const lastMsg = messages[messages.length - 1];
+    const isClase = lastMsg && lastMsg.source === 'clases';
+
     // Marcar como leídos al responder
-    marcarChatComoLeido(userId, activeChatId);
+    if (isClase) {
+      await supabase.from('mensajes_clases').update({ leido: true }).eq('destinatario_id', userId).eq('remitente_id', activeChatId);
+    } else {
+      marcarChatComoLeido(userId, activeChatId);
+    }
 
     // Mostrar el mensaje optimisticamente
     setMessages(prev => [...prev, {
@@ -341,9 +339,6 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
     // Asumimos por la ruta o el rol, pero para ser seguros intentamos enviar a mensajes_internos por defecto.
     // Opcionalmente podemos mejorar esto para responder correctamente a la clase si el remitente era un profesor.
     // Como es solo notificación rápida, enviamos a mensajes_internos si es Admin o si no, a mensajes_clases.
-    
-    const lastMsg = messages[messages.length - 1];
-    const isClase = lastMsg && lastMsg.source === 'clases';
 
     let res;
     if (isClase) {
