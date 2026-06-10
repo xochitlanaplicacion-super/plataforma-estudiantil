@@ -1,11 +1,22 @@
 'use client';
 
 import React, { useRef, useState } from 'react';
-import { Camera, Upload, User, Loader2, CheckCircle2 } from 'lucide-react';
+import { Camera, Upload, User, Loader2, CheckCircle2, Trash2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { uploadProfilePicture } from '@/lib/actions/perfil';
+import { uploadProfilePicture, deleteProfilePicture } from '@/lib/actions/perfil';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface ProfilePictureUploaderProps {
   currentUrl?: string | null;
@@ -15,6 +26,7 @@ interface ProfilePictureUploaderProps {
 export function ProfilePictureUploader({ currentUrl, userName }: ProfilePictureUploaderProps) {
   const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [progress, setProgress] = useState(0);
   const [previewUrl, setPreviewUrl] = useState<string | null>(currentUrl || null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -159,6 +171,24 @@ export function ProfilePictureUploader({ currentUrl, userName }: ProfilePictureU
     }
   };
 
+  const handleDelete = async () => {
+    try {
+      setIsDeleting(true);
+      const result = await deleteProfilePicture();
+      if (result.success) {
+        setPreviewUrl(null);
+        toast({ title: 'Foto de perfil eliminada correctamente' });
+      } else {
+        throw new Error(result.error);
+      }
+    } catch (error: any) {
+      console.error('Delete error:', error);
+      toast({ title: error.message || 'Error al eliminar la foto de perfil', variant: 'destructive' });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className="flex flex-col items-center gap-6 p-6 bg-white rounded-xl border shadow-sm">
       <div className="relative group">
@@ -254,6 +284,31 @@ export function ProfilePictureUploader({ currentUrl, userName }: ProfilePictureU
           Cámara
         </Button>
       </div>
+
+      {previewUrl && (
+        <AlertDialog>
+          <AlertDialogTrigger asChild>
+            <Button variant="ghost" disabled={isUploading || isDeleting} className="text-red-500 hover:text-red-600 hover:bg-red-50 rounded-full px-6 transition-all group">
+              {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4 group-hover:rotate-12 transition-transform" />}
+              Eliminar foto
+            </Button>
+          </AlertDialogTrigger>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>¿Estás seguro?</AlertDialogTitle>
+              <AlertDialogDescription>
+                Esta acción eliminará tu foto de perfil de manera permanente. No podrás deshacer esta acción.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Cancelar</AlertDialogCancel>
+              <AlertDialogAction onClick={handleDelete} className="bg-red-500 hover:bg-red-600 text-white">
+                Sí, eliminar foto
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      )}
       
       <p className="text-xs text-muted-foreground text-center max-w-[250px]">
         Sube una imagen de frente. Se redimensionará automáticamente.

@@ -79,3 +79,50 @@ export async function uploadProfilePicture(formData: FormData) {
     return { success: false, error: error.message || 'Error inesperado' };
   }
 }
+
+export async function deleteProfilePicture() {
+  try {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return { success: false, error: 'No autorizado' };
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('foto_perfil')
+      .eq('id', user.id)
+      .single();
+
+    if (profile?.foto_perfil) {
+      try {
+        const urlObj = new URL(profile.foto_perfil);
+        const pathParts = urlObj.pathname.split('/avatars/');
+        if (pathParts.length > 1) {
+          const oldFilePath = pathParts[1];
+          await supabase.storage.from('avatars').remove([oldFilePath]);
+        }
+      } catch (e) {
+        console.error('Failed to parse old avatar URL to delete:', e);
+      }
+
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ foto_perfil: null })
+        .eq('id', user.id);
+
+      if (updateError) {
+        return { success: false, error: 'Error al actualizar el perfil en la base de datos' };
+      }
+    }
+
+    revalidatePath('/dashboard/alumno/perfil');
+    revalidatePath('/dashboard', 'layout'); 
+    
+    return { success: true };
+  } catch (error: any) {
+    console.error('Delete profile picture error:', error);
+    return { success: false, error: error.message || 'Error inesperado' };
+  }
+}
