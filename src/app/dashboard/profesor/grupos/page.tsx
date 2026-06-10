@@ -16,11 +16,20 @@ import {
   AlertCircle,
   Loader2,
   Download,
-  FileText
+  FileText,
+  ChevronDown,
+  ChevronRight,
+  CheckCircle,
+  Circle,
+  BookOpen,
+  Target,
+  BarChart,
+  List
 } from 'lucide-react';
 import {
   getMyAsignaciones,
-  getAlumnosPorGrupo
+  getAlumnosPorGrupo,
+  getRendimientoGrupoParaProfesor
 } from '@/lib/actions/academic';
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -46,11 +55,16 @@ export default function GruposProfesorPage() {
   const [professorName, setProfessorName] = useState('');
   const [catalogoGrupos, setCatalogoGrupos] = useState<any[]>([]);
   const [catalogoGrados, setCatalogoGrados] = useState<any[]>([]);
+  const [userId, setUserId] = useState<string>('');
+  const [resumenGrupo, setResumenGrupo] = useState<any[]>([]);
+  const [expandedAlumnoId, setExpandedAlumnoId] = useState<string | null>(null);
+  const [expandedMateriaId, setExpandedMateriaId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
+        setUserId(user.id);
         const { data, error } = await getMyAsignaciones(user.id);
         if (data) {
           // Filtrar asignaciones únicas por grupo para evitar duplicados si tiene varias materias en el mismo grupo
@@ -107,9 +121,12 @@ export default function GruposProfesorPage() {
   const handleSelectGrupo = async (asig: any) => {
     setSelectedAsignacion(asig);
     setLoadingAlumnos(true);
-    const { data, error } = await getAlumnosPorGrupo(asig.grupo_id);
-    if (data) {
-      setAlumnos(data);
+    setExpandedAlumnoId(null);
+    setExpandedMateriaId(null);
+    const result = await getRendimientoGrupoParaProfesor(asig.grupo_id, userId);
+    if (result && result.alumnos) {
+      setAlumnos(result.alumnos);
+      setResumenGrupo(result.resumenGrupo || []);
     } else {
       toast({ variant: "destructive", title: "Error", description: "No se pudieron cargar los alumnos." });
     }
@@ -417,9 +434,23 @@ export default function GruposProfesorPage() {
                   </div>
                 </div>
               </div>
-              <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[32px] p-8 text-center min-w-[200px]">
-                <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] mb-2">Alumnos Totales</p>
-                <span className="text-6xl font-black text-white tabular-nums">{alumnos.length}</span>
+              <div className="flex gap-4 overflow-x-auto pb-2">
+                {resumenGrupo && resumenGrupo.length > 0 ? (
+                  resumenGrupo.map(res => (
+                    <div key={res.materiaId} className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[32px] p-6 text-center min-w-[160px] flex-shrink-0">
+                      <p className="text-[10px] font-black text-white/60 uppercase tracking-widest mb-1 truncate max-w-[140px]" title={res.materiaNombre}>{res.materiaNombre}</p>
+                      <p className="text-[9px] font-bold text-white/40 uppercase tracking-[0.2em] mb-2">Promedio Grupal</p>
+                      <span className={cn("text-5xl font-black tabular-nums", res.promedioGrupo >= 6 ? "text-emerald-400" : "text-red-400")}>
+                        {res.promedioGrupo.toFixed(1)}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="bg-white/5 backdrop-blur-xl border border-white/10 rounded-[32px] p-8 text-center min-w-[200px]">
+                    <p className="text-[10px] font-black text-white/40 uppercase tracking-[0.3em] mb-2">Alumnos Totales</p>
+                    <span className="text-6xl font-black text-white tabular-nums">{alumnos.length}</span>
+                  </div>
+                )}
               </div>
             </div>
           </Card>
@@ -469,7 +500,7 @@ export default function GruposProfesorPage() {
                       <TableHead className="py-6 px-10 font-black uppercase tracking-widest text-slate-400 text-[10px]">Alumno</TableHead>
                       <TableHead className="py-6 font-black uppercase tracking-widest text-slate-400 text-[10px]">Matrícula</TableHead>
                       <TableHead className="py-6 font-black uppercase tracking-widest text-slate-400 text-[10px]">Contacto</TableHead>
-                      <TableHead className="py-6 pr-10 text-right font-black uppercase tracking-widest text-slate-400 text-[10px]">Fecha Expiración</TableHead>
+                      <TableHead className="py-6 pr-10 text-right font-black uppercase tracking-widest text-slate-400 text-[10px]">Acciones</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -484,41 +515,188 @@ export default function GruposProfesorPage() {
                       </TableRow>
                     ) : (
                       filteredAlumnos.map((alum) => (
-                        <TableRow key={alum.id} className="group border-slate-50 hover:bg-slate-50/50 transition-colors">
-                          <TableCell className="py-6 px-10">
-                            <div className="flex items-center gap-4">
-                              <div className="h-12 w-12 rounded-2xl bg-primary/5 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all duration-300">
-                                <UserCircle size={24} />
+                        <React.Fragment key={alum.id}>
+                          <TableRow className="group border-slate-50 hover:bg-slate-50/50 transition-colors">
+                            <TableCell className="py-6 px-10">
+                              <div className="flex items-center gap-4">
+                                <div className="h-12 w-12 rounded-2xl bg-primary/5 flex items-center justify-center text-primary group-hover:bg-primary group-hover:text-white transition-all duration-300">
+                                  <UserCircle size={24} />
+                                </div>
+                                <div className="flex flex-col">
+                                  <span className="font-black text-slate-800 uppercase tracking-tight text-lg leading-tight">{alum.apellidos}</span>
+                                  <span className="font-black text-primary uppercase text-[10px] tracking-wide mt-0.5">{alum.nombre}</span>
+                                </div>
                               </div>
-                              <div className="flex flex-col">
-                                <span className="font-black text-slate-800 uppercase tracking-tight text-lg leading-tight">{alum.apellidos}</span>
-                                <span className="font-black text-primary uppercase text-[10px] tracking-wide mt-0.5">{alum.nombre}</span>
+                            </TableCell>
+                            <TableCell className="py-6">
+                              <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100/50 border border-slate-200 w-fit">
+                                <IdCard className="h-4 w-4 text-slate-400" />
+                                <span className="font-bold text-slate-600 font-mono text-sm">{alum.matricula || 'SIN MATRÍCULA'}</span>
                               </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="py-6">
-                            <div className="flex items-center gap-2 px-4 py-2 rounded-xl bg-slate-100/50 border border-slate-200 w-fit">
-                              <IdCard className="h-4 w-4 text-slate-400" />
-                              <span className="font-bold text-slate-600 font-mono text-sm">{alum.matricula || 'SIN MATRÍCULA'}</span>
-                            </div>
-                          </TableCell>
-                          <TableCell className="py-6">
-                            <div className="flex flex-col gap-1">
-                              <div className="flex items-center gap-2 text-slate-500 hover:text-primary cursor-pointer transition-colors group/mail">
-                                <Mail className="h-3 w-3" />
-                                <span className="text-[11px] font-bold lowercase truncate max-w-[150px]">{alum.email}</span>
+                            </TableCell>
+                            <TableCell className="py-6">
+                              <div className="flex flex-col gap-1">
+                                <div className="flex items-center gap-2 text-slate-500 hover:text-primary cursor-pointer transition-colors group/mail">
+                                  <Mail className="h-3 w-3" />
+                                  <span className="text-[11px] font-bold lowercase truncate max-w-[150px]">{alum.email}</span>
+                                </div>
                               </div>
-                            </div>
-                          </TableCell>
-                          <TableCell className="py-6 pr-10 text-right">
-                            <div className="flex flex-col items-end gap-1">
-                              <div className="flex items-center gap-2 text-slate-700 font-black uppercase text-[10px]">
-                                <Calendar className="h-3 w-3 text-primary" />
-                                {alum.fecha_expiracion ? new Date(alum.fecha_expiracion).toLocaleDateString('es-MX', { year: 'numeric', month: 'short', day: 'numeric' }) : 'VIGENTE'}
-                              </div>
-                            </div>
-                          </TableCell>
-                        </TableRow>
+                            </TableCell>
+                            <TableCell className="py-6 pr-10 text-right">
+                              <Button
+                                variant="ghost"
+                                onClick={() => {
+                                  setExpandedAlumnoId(expandedAlumnoId === alum.id ? null : alum.id);
+                                  setExpandedMateriaId(null);
+                                }}
+                                className={cn(
+                                  "rounded-xl border-2 font-black uppercase text-[10px] tracking-widest px-6 transition-all",
+                                  expandedAlumnoId === alum.id
+                                    ? "bg-primary text-white border-primary"
+                                    : "border-slate-200 text-slate-600 hover:border-primary/50 hover:bg-primary/5"
+                                )}
+                              >
+                                {expandedAlumnoId === alum.id ? 'Ocultar Rendimiento' : 'Ver Rendimiento'}
+                                {expandedAlumnoId === alum.id ? <ChevronDown className="ml-2 h-4 w-4" /> : <ChevronRight className="ml-2 h-4 w-4" />}
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+
+                          {/* NIVEL 2: MATERIAS DEL ALUMNO */}
+                          {expandedAlumnoId === alum.id && alum.materiasDesglose && (
+                            <TableRow className="bg-slate-50/80">
+                              <TableCell colSpan={4} className="p-0 border-b border-slate-200">
+                                <div className="p-8 pb-12 animate-in slide-in-from-top-4 duration-300">
+                                  <div className="flex items-center gap-3 mb-6">
+                                    <BarChart className="h-5 w-5 text-primary" />
+                                    <h3 className="text-lg font-black uppercase tracking-tight text-slate-800">
+                                      Desglose de Rendimiento
+                                    </h3>
+                                  </div>
+                                  
+                                  {alum.materiasDesglose.length === 0 ? (
+                                    <p className="text-sm text-slate-500 font-medium">No impartes materias a este alumno.</p>
+                                  ) : (
+                                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                      {alum.materiasDesglose.map((materia: any) => (
+                                        <div key={materia.id} className="bg-white rounded-3xl border border-slate-200 p-6 shadow-sm flex flex-col">
+                                          <div className="flex justify-between items-start mb-6">
+                                            <div className="flex items-center gap-3">
+                                              <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center text-primary">
+                                                <BookOpen size={20} />
+                                              </div>
+                                              <div>
+                                                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Materia</p>
+                                                <h4 className="text-base font-black text-slate-800 uppercase leading-tight line-clamp-1" title={materia.nombre}>
+                                                  {materia.nombre}
+                                                </h4>
+                                              </div>
+                                            </div>
+                                            <div className="text-right">
+                                              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Promedio</p>
+                                              <span className={cn("text-2xl font-black tabular-nums", materia.promedio >= 6 ? "text-emerald-500" : "text-red-500")}>
+                                                {materia.promedio.toFixed(1)}
+                                              </span>
+                                            </div>
+                                          </div>
+
+                                          <div className="grid grid-cols-3 gap-4 mb-6">
+                                            <div className="bg-slate-50 rounded-2xl p-4 text-center">
+                                              <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1">Ejercicios</p>
+                                              <p className="text-xl font-black text-slate-700">{materia.ejerciciosTotales}</p>
+                                            </div>
+                                            <div className="bg-emerald-50 rounded-2xl p-4 text-center">
+                                              <p className="text-[9px] font-black text-emerald-600/70 uppercase tracking-widest mb-1">Realizados</p>
+                                              <p className="text-xl font-black text-emerald-600">{materia.ejerciciosCompletados}</p>
+                                            </div>
+                                            <div className="bg-amber-50 rounded-2xl p-4 text-center">
+                                              <p className="text-[9px] font-black text-amber-600/70 uppercase tracking-widest mb-1">Pendientes</p>
+                                              <p className="text-xl font-black text-amber-600">{materia.ejerciciosPendientes}</p>
+                                            </div>
+                                          </div>
+
+                                          <Button
+                                            variant="outline"
+                                            className="w-full mt-auto rounded-xl border-2 font-black uppercase text-[10px] tracking-widest"
+                                            onClick={() => setExpandedMateriaId(expandedMateriaId === materia.id ? null : materia.id)}
+                                          >
+                                            {expandedMateriaId === materia.id ? 'Ocultar Detalle' : 'Ver Detalle por Tema'}
+                                          </Button>
+
+                                          {/* NIVEL 3: DETALLE DE UNIDADES/TEMAS/EJERCICIOS */}
+                                          {expandedMateriaId === materia.id && (
+                                            <div className="mt-6 border-t-2 border-dashed border-slate-100 pt-6 animate-in slide-in-from-top-2 duration-300">
+                                              {materia.unidades.length === 0 ? (
+                                                <p className="text-xs text-slate-500 text-center py-4">No hay contenido estructurado.</p>
+                                              ) : (
+                                                <div className="space-y-6">
+                                                  {materia.unidades.map((unidad: any) => (
+                                                    <div key={unidad.id} className="space-y-3">
+                                                      <h5 className="text-sm font-black text-slate-800 uppercase tracking-tight border-b pb-2 flex items-center gap-2">
+                                                        <Target className="h-4 w-4 text-slate-400" />
+                                                        {unidad.titulo}
+                                                      </h5>
+                                                      
+                                                      {unidad.temas.length === 0 ? (
+                                                        <p className="text-[10px] text-slate-400 uppercase tracking-widest pl-6">Sin temas.</p>
+                                                      ) : (
+                                                        <div className="space-y-4 pl-2">
+                                                          {unidad.temas.map((tema: any) => (
+                                                            <div key={tema.id} className="bg-slate-50 rounded-xl p-4 border border-slate-100">
+                                                              <h6 className="text-xs font-bold text-slate-700 mb-3 flex items-center gap-2">
+                                                                <List className="h-3 w-3 text-primary" />
+                                                                {tema.titulo}
+                                                              </h6>
+                                                              
+                                                              {tema.ejercicios.length === 0 ? (
+                                                                <p className="text-[10px] text-slate-400 uppercase tracking-widest ml-5">Sin ejercicios.</p>
+                                                              ) : (
+                                                                <ul className="space-y-2 ml-5">
+                                                                  {tema.ejercicios.map((ej: any) => (
+                                                                    <li key={ej.id} className="flex items-center justify-between gap-4 bg-white p-2.5 rounded-lg border border-slate-200/60 shadow-sm">
+                                                                      <div className="flex items-center gap-2 overflow-hidden">
+                                                                        {ej.completado ? (
+                                                                          <CheckCircle className="h-4 w-4 text-emerald-500 shrink-0" />
+                                                                        ) : (
+                                                                          <Circle className="h-4 w-4 text-slate-300 shrink-0" />
+                                                                        )}
+                                                                        <span className="text-[11px] font-semibold text-slate-600 truncate" title={ej.titulo}>{ej.titulo}</span>
+                                                                      </div>
+                                                                      <div className="shrink-0">
+                                                                        {ej.completado ? (
+                                                                          <Badge className={cn("text-[9px] font-black tracking-widest", (ej.calificacion || 0) >= 6 ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100" : "bg-red-100 text-red-700 hover:bg-red-100")}>
+                                                                            {ej.calificacion !== null ? ej.calificacion.toFixed(1) : 'S/C'}
+                                                                          </Badge>
+                                                                        ) : (
+                                                                          <Badge variant="outline" className="text-[9px] font-black tracking-widest text-slate-400 border-slate-200">
+                                                                            PEND
+                                                                          </Badge>
+                                                                        )}
+                                                                      </div>
+                                                                    </li>
+                                                                  ))}
+                                                                </ul>
+                                                              )}
+                                                            </div>
+                                                          ))}
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                  ))}
+                                                </div>
+                                              )}
+                                            </div>
+                                          )}
+
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                        </React.Fragment>
                       ))
                     )}
                   </TableBody>

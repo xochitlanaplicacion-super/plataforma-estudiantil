@@ -3,6 +3,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { revalidatePath, unstable_noStore as noStore } from 'next/cache';
+import { parseFechaLocal } from '@/lib/utils';
 
 const supabaseAdmin = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cuuohbztrxxneozagecr.supabase.co',
@@ -716,7 +717,6 @@ export async function bulkAssignGroup(userIds: string[], groupId: string | null)
   }
 }
 
-// --- GRUPOS Y ALUMNOS ---
 export async function getAlumnosPorGrupo(groupId: string) {
   const { data, error } = await supabaseAdmin
     .from('profiles')
@@ -726,4 +726,197 @@ export async function getAlumnosPorGrupo(groupId: string) {
     .eq('estatus', 'activo')
     .order('apellidos');
   return { data, error };
+}
+
+// ────────────────────────────────────────────────────────────────────
+// RENDIMIENTO DETALLADO DE ALUMNOS (VISTA PROFESOR)
+// ────────────────────────────────────────────────────────────────────
+export async function getRendimientoGrupoParaProfesor(grupoId: string, profesorId: string) {
+  const hoy = new Date().toISOString().split('T')[0];
+  const ahora = new Date();
+
+  // 1. Obtener las materias que ESTE profesor imparte a ESTE grupo
+  const { data: asignaciones } = await supabaseAdmin
+    .from('asignaciones_profesor')
+    .select('materia_id, materias(id, nombre)')
+    .eq('grupo_id', grupoId)
+    .eq('profesor_id', profesorId)
+    .eq('activo', true);
+
+  const materiasProfesor = asignaciones?.map((a: any) => ({
+    id: a.materias?.id,
+    nombre: a.materias?.nombre
+  })).filter(m => m.id) || [];
+
+  const materiaIds = materiasProfesor.map(m => m.id);
+
+  if (materiaIds.length === 0) {
+    return { alumnos: [], materias: [], resumenGrupo: [] };
+  }
+
+  // 2. Obtener alumnos activos del grupo
+  const { data: alumnos } = await supabaseAdmin
+    .from('profiles')
+    .select('id, nombre, apellidos, matricula, email, fecha_expiracion, estatus, grupo_id')
+    .eq('grupo_id', grupoId)
+    .eq('rol', 'alumno')
+    .eq('estatus', 'activo')
+    .gte('fecha_expiracion', hoy)
+    .order('apellidos');
+
+  if (!alumnos || alumnos.length === 0) {
+    return { alumnos: [], materias: materiasProfesor, resumenGrupo: [] };
+  }
+  const alumnoIds = alumnos.map(a => a.id);
+
+  // 3. Obtener currícula (unidades, temas) y ejercicios de esas materias
+  const { data: unidades } = await supabaseAdmin
+    .from('unidades')
+    .select('id, materia_id, titulo')
+    .in('materia_id', materiaIds)
+    .eq('activo', true)
+    .order('orden');
+
+  const unidadIds = unidades?.map(u => u.id) || [];
+
+  const { data: temas } = await supabaseAdmin
+    .from('temas')
+    .select('id, unidad_id, titulo')
+    .in('unidad_id', unidadIds.length > 0 ? unidadIds : ['__none__'])
+    .order('orden');
+
+  const temaIds = temas?.map(t => t.id) || [];
+
+  const { data: ejercicios } = await supabaseAdmin
+    .from('ejercicios')
+    .select('id, tema_id, titulo, tipo, fecha_entrega, orden')
+    .in('tema_id', temaIds.length > 0 ? temaIds : ['__none__'])
+    .order('orden');
+
+  // Mapear currícula para facilitar agrupaciones
+  const temaToUnidad = new Map(temas?.map(t => [t.id, t]) || []);
+  const unidadToMateria = new Map(unidades?.map(u => [u.id, u]) || []);
+  const ejercicioToMateria = new Map<string, string>();
+  
+  ejercicios?.forEach(ej => {
+    const tema = temaToUnidad.get(ej.tema_id);
+    if (tema) {
+      const unidad = unidadToMateria.get(tema.unidad_id);
+      if (unidad) {
+        ejercicioToMateria.set(ej.id, unidad.materia_id);
+      }
+    }
+  });
+
+  // 4. Obtener resultados de ejercicios para estos alumnos y estos ejercicios
+  const ejercicioIds = ejercicios?.map(e => e.id) || [];
+  const { data: resultados } = await supabaseAdmin
+    .from('resultados_ejercicios')
+    .select('alumno_id, ejercicio_id, calificacion, calificacion_manual, estado, intentos, bloqueado')
+    .in('alumno_id', alumnoIds)
+    .in('ejercicio_id', ejercicioIds.length > 0 ? ejercicioIds : ['__none__']);
+
+  // 5. Construir los datos jerárquicos por alumno
+  const alumnosRendimiento = alumnos.map(alumno => {
+    const misResultados = resultados?.filter(r => r.alumno_id === alumno.id) || [];
+
+    // Por cada materia que da el profe
+    const desgloseMaterias = materiasProfesor.map(materia => {
+      // Filtrar unidades de esta materia
+      const unidsMateria = unidades?.filter(u => u.materia_id === materia.id) || [];
+      
+      let sumaMateria = 0;
+      let evaluablesMateria = 0;
+      let completadosMateria = 0;
+      let totalEjerciciosMateria = 0;
+
+      const jerarquiaUnidades = unidsMateria.map(unidad => {
+        const temasUnidad = temas?.filter(t => t.unidad_id === unidad.id) || [];
+        
+        const jerarquiaTemas = temasUnidad.map(tema => {
+          const ejerciciosTema = ejercicios?.filter(e => e.tema_id === tema.id) || [];
+          totalEjerciciosMateria += ejerciciosTema.length;
+
+          const detalleEjercicios = ejerciciosTema.map(ej => {
+            const res = misResultados.find(r => r.ejercicio_id === ej.id);
+            const estaCompletado = res && (res.estado === 'completado' || res.calificacion !== null || res.calificacion_manual !== null);
+            const estaVencido = ej.fecha_entrega ? parseFechaLocal(ej.fecha_entrega) < ahora : false;
+            
+            const calificacionFinal = res?.calificacion ?? res?.calificacion_manual ?? null;
+
+            if (estaCompletado) {
+              evaluablesMateria++;
+              completadosMateria++;
+              sumaMateria += (calificacionFinal || 0);
+            } else if (estaVencido) {
+              evaluablesMateria++;
+            }
+
+            return {
+              id: ej.id,
+              titulo: ej.titulo,
+              completado: !!estaCompletado,
+              calificacion: calificacionFinal,
+              bloqueado: res?.bloqueado || false
+            };
+          });
+
+          return {
+            id: tema.id,
+            titulo: tema.titulo,
+            ejercicios: detalleEjercicios
+          };
+        });
+
+        return {
+          id: unidad.id,
+          titulo: unidad.titulo,
+          temas: jerarquiaTemas
+        };
+      });
+
+      const promedioBase100 = evaluablesMateria > 0 ? sumaMateria / evaluablesMateria : 0;
+      const promedio = evaluablesMateria > 0 ? Math.round((promedioBase100 / 10) * 10) / 10 : 0;
+      const progreso = totalEjerciciosMateria > 0 ? Math.round((completadosMateria / totalEjerciciosMateria) * 100) : 0;
+
+      return {
+        id: materia.id,
+        nombre: materia.nombre,
+        promedio,
+        progreso,
+        ejerciciosTotales: totalEjerciciosMateria,
+        ejerciciosCompletados: completadosMateria,
+        ejerciciosPendientes: totalEjerciciosMateria - completadosMateria,
+        unidades: jerarquiaUnidades
+      };
+    });
+
+    return {
+      ...alumno,
+      materiasDesglose: desgloseMaterias
+    };
+  });
+
+  // 6. Resumen de promedios del grupo (por materia)
+  const resumenGrupo = materiasProfesor.map(materia => {
+    const promediosAlumnos = alumnosRendimiento.map(a => {
+      const matInfo = a.materiasDesglose.find((m: any) => m.id === materia.id);
+      return matInfo?.promedio || 0;
+    });
+
+    const sum = promediosAlumnos.reduce((acc, curr) => acc + curr, 0);
+    const promGrupo = promediosAlumnos.length > 0 ? Math.round((sum / promediosAlumnos.length) * 10) / 10 : 0;
+
+    return {
+      materiaId: materia.id,
+      materiaNombre: materia.nombre,
+      promedioGrupo: promGrupo
+    };
+  });
+
+  return {
+    alumnos: alumnosRendimiento,
+    materias: materiasProfesor,
+    resumenGrupo
+  };
 }
