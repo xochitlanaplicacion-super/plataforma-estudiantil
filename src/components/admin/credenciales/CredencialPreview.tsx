@@ -182,7 +182,9 @@ export function CredencialPreview({ config, alumno, institucion, showDownloadOpt
   const tramaImagenUrl = config.trama_imagen_url || null;
   const logoX = config.logo_x ?? 0;
   const logoY = config.logo_y ?? 0;
+  const logoEscala = config.logo_escala ?? 100;
   const panelDiseno = config.panel_diseno || 'plano';
+  const colorPanelIzquierdo = config.color_panel_izquierdo || '#ffffff';
   const panelSvgPath = getPanelSvgPath(panelDiseno);
 
   // Build pattern layer style
@@ -233,16 +235,16 @@ export function CredencialPreview({ config, alumno, institucion, showDownloadOpt
           {/* Left Column Background Shape (SVG) */}
           <div className="absolute top-0 left-0 w-[34%] h-full z-10 pointer-events-none">
             <svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none">
-              <path d={panelSvgPath} fill="#ffffff" />
+              <path d={panelSvgPath} fill={colorPanelIzquierdo} />
             </svg>
           </div>
 
           {/* Left Column - Logo Container */}
           <div className="w-1/3 h-full flex flex-col items-center justify-center p-4 relative z-20">
             <div 
-              className="w-full h-full flex items-center justify-center"
+              className="w-full h-full flex items-center justify-center transition-transform"
               style={{ 
-                transform: `translate(${logoX}px, ${logoY}px)`,
+                transform: `translate(${logoX}px, ${logoY}px) scale(${logoEscala / 100})`,
               }}
             >
               {institucion?.logo_url ? (

@@ -79,7 +79,9 @@ export function CredencialDesigner({ initialConfig, institucion }: CredencialDes
     trama_imagen_url: initialConfig.trama_imagen_url || null,
     logo_x: initialConfig.logo_x || 0,
     logo_y: initialConfig.logo_y || 0,
+    logo_escala: initialConfig.logo_escala || 100,
     panel_diseno: initialConfig.panel_diseno || 'plano',
+    color_panel_izquierdo: initialConfig.color_panel_izquierdo || '#ffffff',
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -221,6 +223,23 @@ export function CredencialDesigner({ initialConfig, institucion }: CredencialDes
                 <Input 
                   value={config.color_texto_secundario} 
                   onChange={(e) => setConfig({ ...config, color_texto_secundario: e.target.value })}
+                  className="flex-1 font-mono uppercase"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Color del Panel Izquierdo</Label>
+              <div className="flex gap-2">
+                <Input 
+                  type="color" 
+                  value={config.color_panel_izquierdo} 
+                  onChange={(e) => setConfig({ ...config, color_panel_izquierdo: e.target.value })}
+                  className="w-12 h-10 p-1 cursor-pointer"
+                />
+                <Input 
+                  value={config.color_panel_izquierdo} 
+                  onChange={(e) => setConfig({ ...config, color_panel_izquierdo: e.target.value })}
                   className="flex-1 font-mono uppercase"
                 />
               </div>
@@ -392,12 +411,24 @@ export function CredencialDesigner({ initialConfig, institucion }: CredencialDes
           </div>
         </div>
 
-        {/* ===================== POSICIÓN DEL LOGO ===================== */}
+        {/* ===================== TAMAÑO Y POSICIÓN DEL LOGO ===================== */}
         <div className="border-t pt-6">
-          <h3 className="text-lg font-semibold mb-1">Posición del Logo</h3>
-          <p className="text-sm text-muted-foreground mb-4">Ajusta la posición del logo dentro de la franja blanca.</p>
+          <h3 className="text-lg font-semibold mb-1">Ajustes del Logo</h3>
+          <p className="text-sm text-muted-foreground mb-4">Ajusta el tamaño y la posición del logo dentro del panel izquierdo.</p>
 
           <div className="space-y-4">
+            <div className="space-y-2">
+              <div className="flex justify-between items-center">
+                <Label className="text-sm">Tamaño / Escala del Logo</Label>
+                <span className="text-xs text-muted-foreground font-mono">{config.logo_escala}%</span>
+              </div>
+              <Slider 
+                value={[config.logo_escala]} 
+                onValueChange={([v]) => setConfig({ ...config, logo_escala: v })} 
+                min={20} max={200} step={1}
+              />
+            </div>
+
             <div className="space-y-2">
               <div className="flex justify-between items-center">
                 <Label className="text-sm">Posición Horizontal (X)</Label>
