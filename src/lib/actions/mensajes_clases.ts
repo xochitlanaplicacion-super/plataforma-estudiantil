@@ -619,3 +619,27 @@ export async function obtenerMensajesGrupalesPendientes(userId: string, rol: str
   }
 }
 
+export async function obtenerUnreadDirectos(userId: string) {
+  noStore();
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('mensajes_clases')
+      .select('remitente_id')
+      .eq('destinatario_id', userId)
+      .eq('tipo_mensaje', 'INDIVIDUAL')
+      .eq('leido', false);
+
+    if (error) throw error;
+
+    const counts: Record<string, number> = {};
+    (data || []).forEach((m: any) => {
+      counts[m.remitente_id] = (counts[m.remitente_id] || 0) + 1;
+    });
+
+    return { success: true, data: counts };
+  } catch (err: any) {
+    console.error('Error obteniendo unread directos:', err);
+    return { success: false, data: {} };
+  }
+}
+

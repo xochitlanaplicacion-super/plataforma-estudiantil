@@ -41,7 +41,8 @@ import {
   obtenerUnreadGrupales,
   marcarGrupalVisto,
   eliminarMensajeClase,
-  obtenerDetalleVistosAviso
+  obtenerDetalleVistosAviso,
+  obtenerUnreadDirectos
 } from '@/lib/actions/mensajes_clases';
 
 type Contacto = {
@@ -112,7 +113,7 @@ function MensajesClasesProfesorContent() {
       obtenerContactosProfesor(userId),
       obtenerAvisosClase(userId, 'profesor'),
       obtenerGruposProfesor(userId),
-      supabase.from('mensajes_clases').select('remitente_id').eq('destinatario_id', userId).eq('leido', false).eq('tipo_mensaje', 'INDIVIDUAL')
+      obtenerUnreadDirectos(userId)
     ]);
 
     if (resContactos.success && resContactos.data) {
@@ -128,12 +129,8 @@ function MensajesClasesProfesorContent() {
     if (resAvisos.success && resAvisos.data) {
       setAvisos(resAvisos.data);
     }
-    if (resUnread.data) {
-      const counts = resUnread.data.reduce((acc: Record<string, number>, curr: any) => {
-        acc[curr.remitente_id] = (acc[curr.remitente_id] || 0) + 1;
-        return acc;
-      }, {});
-      setUnreadDirectos(counts);
+    if (resUnread.success && resUnread.data) {
+      setUnreadDirectos(resUnread.data);
     }
   }, [userId]);
 
