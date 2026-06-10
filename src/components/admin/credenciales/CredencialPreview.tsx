@@ -108,18 +108,15 @@ export function CredencialPreview({ config, alumno, institucion, showDownloadOpt
     <div className="flex flex-col items-center gap-4 w-full">
       {/* Container proportional to standard ID Card (CR80) 1011x638 */}
       <div 
-        className="relative w-full max-w-[600px] overflow-hidden rounded-xl shadow-2xl shrink-0"
-        style={{ aspectRatio: '1011/638' }}
+        ref={cardRef} 
+        className="relative w-full max-w-[600px] overflow-hidden rounded-xl shadow-2xl shrink-0 flex"
+        style={{ 
+          aspectRatio: '1011/638',
+          backgroundColor: config.color_primario,
+          color: config.color_texto_primario,
+          fontFamily: `"${config.fuente_principal}", sans-serif`
+        }}
       >
-        <div 
-          ref={cardRef} 
-          className="absolute inset-0 flex"
-          style={{ 
-            backgroundColor: config.color_primario,
-            color: config.color_texto_primario,
-            fontFamily: `"${config.fuente_principal}", sans-serif`
-          }}
-        >
           {/* Background Patterns (optional subtlety) */}
           <div className="absolute inset-0 opacity-10" style={{
             backgroundImage: `radial-gradient(circle at 50% 50%, ${config.color_secundario} 2px, transparent 2px)`,
@@ -173,8 +170,8 @@ export function CredencialPreview({ config, alumno, institucion, showDownloadOpt
               </div>
 
               {/* Photo & ID */}
-              <div className="w-32 md:w-40 flex flex-col items-center gap-3 shrink-0 overflow-hidden">
-                <Avatar className="w-28 h-36 md:w-36 md:h-44 rounded-lg border-2 shadow-md bg-white" style={{ borderColor: config.color_secundario, borderRadius: '12px' }}>
+              <div className="w-28 md:w-36 flex flex-col items-center gap-2 shrink-0">
+                <Avatar className="w-24 h-32 md:w-32 md:h-40 rounded-lg border-2 shadow-md bg-white" style={{ borderColor: config.color_secundario, borderRadius: '12px' }}>
                   {alumno?.foto_perfil ? (
                     <AvatarImage src={alumno.foto_perfil} className="object-cover rounded-[10px]" crossOrigin="anonymous" />
                   ) : (
@@ -188,7 +185,7 @@ export function CredencialPreview({ config, alumno, institucion, showDownloadOpt
                   <p 
                     className="font-black tracking-wide text-center whitespace-nowrap" 
                     style={{ 
-                      fontSize: safeMatricula.length > 15 ? 'clamp(8px, 1.8vw, 12px)' : 'clamp(12px, 2.5vw, 16px)'
+                      fontSize: safeMatricula.length > 15 ? 'clamp(8px, 1.5vw, 11px)' : 'clamp(11px, 2vw, 14px)'
                     }}
                   >
                     {safeMatricula}
@@ -204,7 +201,6 @@ export function CredencialPreview({ config, alumno, institucion, showDownloadOpt
               </p>
             </div>
           </div>
-        </div>
       </div>
 
       {showDownloadOptions && alumno && (
