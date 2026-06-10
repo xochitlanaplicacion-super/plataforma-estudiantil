@@ -184,11 +184,11 @@ export function CredencialPreview({ config, alumno, institucion, showDownloadOpt
                   )}
                 </Avatar>
                 <div className="text-center w-full px-1">
+                  <p className="text-[9px] md:text-[10px] uppercase opacity-90 mb-0.5" style={{ color: config.color_texto_secundario }}>Matrícula:</p>
                   <p 
-                    className="font-black tracking-wide text-center" 
+                    className="font-black tracking-wide text-center whitespace-nowrap" 
                     style={{ 
-                      fontSize: safeMatricula.length > 15 ? 'clamp(10px, 2.5vw, 14px)' : 'clamp(14px, 3vw, 18px)',
-                      wordBreak: 'break-all'
+                      fontSize: safeMatricula.length > 15 ? 'clamp(8px, 1.8vw, 12px)' : 'clamp(12px, 2.5vw, 16px)'
                     }}
                   >
                     {safeMatricula}
