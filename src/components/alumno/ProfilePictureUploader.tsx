@@ -4,7 +4,7 @@ import React, { useRef, useState } from 'react';
 import { Camera, Upload, User, Loader2, CheckCircle2 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
+import { useToast } from '@/hooks/use-toast';
 import { uploadProfilePicture } from '@/lib/actions/perfil';
 
 interface ProfilePictureUploaderProps {
@@ -13,6 +13,7 @@ interface ProfilePictureUploaderProps {
 }
 
 export function ProfilePictureUploader({ currentUrl, userName }: ProfilePictureUploaderProps) {
+  const { toast } = useToast();
   const [isUploading, setIsUploading] = useState(false);
   const [progress, setProgress] = useState(0);
   const [previewUrl, setPreviewUrl] = useState<string | null>(currentUrl || null);
@@ -91,7 +92,7 @@ export function ProfilePictureUploader({ currentUrl, userName }: ProfilePictureU
     if (!file) return;
 
     if (!file.type.startsWith('image/')) {
-      toast.error('Por favor selecciona un archivo de imagen válido');
+      toast({ title: 'Por favor selecciona un archivo de imagen válido', variant: 'destructive' });
       return;
     }
 
@@ -140,14 +141,14 @@ export function ProfilePictureUploader({ currentUrl, userName }: ProfilePictureU
       if (result.success && result.url) {
         setProgress(100);
         setPreviewUrl(result.url);
-        toast.success('Foto de perfil actualizada correctamente');
+        toast({ title: 'Foto de perfil actualizada correctamente' });
         setTimeout(() => setIsUploading(false), 1000);
       } else {
         throw new Error(result.error);
       }
     } catch (error: any) {
       console.error('Upload error:', error);
-      toast.error(error.message || 'Error al actualizar la foto de perfil');
+      toast({ title: error.message || 'Error al actualizar la foto de perfil', variant: 'destructive' });
       setPreviewUrl(currentUrl || null); // Revert on error
       setIsUploading(false);
       setProgress(0);
