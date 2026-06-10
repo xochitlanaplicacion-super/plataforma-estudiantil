@@ -7,6 +7,62 @@ import { Button } from '@/components/ui/button';
 import { Download, Loader2, FileImage, FileText } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
+// ============================================================
+// Pattern generator functions (pure CSS patterns)
+// ============================================================
+function getPatternCSS(tipo: string, color: string, escala: number): React.CSSProperties {
+  const s = escala;
+  const c = color;
+  switch (tipo) {
+    case 'puntos':
+      return { backgroundImage: `radial-gradient(circle, ${c} 1.5px, transparent 1.5px)`, backgroundSize: `${s}px ${s}px` };
+    case 'rayas_diag':
+      return { backgroundImage: `repeating-linear-gradient(45deg, ${c} 0, ${c} 1px, transparent 1px, transparent ${s}px)` };
+    case 'rayas_horiz':
+      return { backgroundImage: `repeating-linear-gradient(0deg, ${c} 0, ${c} 1px, transparent 1px, transparent ${s}px)` };
+    case 'cuadricula':
+      return { backgroundImage: `linear-gradient(${c} 1px, transparent 1px), linear-gradient(90deg, ${c} 1px, transparent 1px)`, backgroundSize: `${s}px ${s}px` };
+    case 'rombos':
+      return { backgroundImage: `linear-gradient(45deg, ${c} 25%, transparent 25%), linear-gradient(-45deg, ${c} 25%, transparent 25%), linear-gradient(45deg, transparent 75%, ${c} 75%), linear-gradient(-45deg, transparent 75%, ${c} 75%)`, backgroundSize: `${s}px ${s}px` };
+    case 'hexagonos':
+      return { backgroundImage: `radial-gradient(circle farthest-side at 0% 50%, ${c} 23.5%, transparent 0) ${s/4}px 0, radial-gradient(circle farthest-side at 0% 50%, ${c} 24%, transparent 0) ${s*3/4}px ${s/2}px`, backgroundSize: `${s}px ${s}px` };
+    case 'chevron':
+      return { backgroundImage: `linear-gradient(135deg, ${c} 25%, transparent 25%) -${s/2}px 0, linear-gradient(225deg, ${c} 25%, transparent 25%) -${s/2}px 0, linear-gradient(315deg, ${c} 25%, transparent 25%), linear-gradient(45deg, ${c} 25%, transparent 25%)`, backgroundSize: `${s}px ${s}px` };
+    case 'escamas':
+      return { backgroundImage: `radial-gradient(circle at 50% 0%, transparent 70%, ${c} 70%, ${c} 72%, transparent 72%), radial-gradient(circle at 0% 50%, transparent 70%, ${c} 70%, ${c} 72%, transparent 72%)`, backgroundSize: `${s}px ${s}px` };
+    case 'cruces':
+      return { backgroundImage: `linear-gradient(${c} 2px, transparent 2px), linear-gradient(90deg, ${c} 2px, transparent 2px)`, backgroundSize: `${s}px ${s}px`, backgroundPosition: `center center` };
+    case 'estrellas':
+      return { backgroundImage: `radial-gradient(circle, ${c} 1px, transparent 1px), radial-gradient(circle, ${c} 1px, transparent 1px)`, backgroundSize: `${s}px ${s}px`, backgroundPosition: `0 0, ${s/2}px ${s/2}px` };
+    case 'circulos_conc':
+      return { backgroundImage: `radial-gradient(circle, transparent 40%, ${c} 40%, ${c} 43%, transparent 43%)`, backgroundSize: `${s}px ${s}px` };
+    case 'ondas':
+      return { backgroundImage: `radial-gradient(circle at 100% 50%, transparent 20%, ${c} 21%, ${c} 22%, transparent 23%, transparent 100%), radial-gradient(circle at 0% 50%, transparent 20%, ${c} 21%, ${c} 22%, transparent 23%, transparent 100%)`, backgroundSize: `${s}px ${s/2}px` };
+    default:
+      return {};
+  }
+}
+
+// ============================================================
+// Panel left SVG clipPath definitions
+// ============================================================
+function getPanelClipPath(diseno: string): string {
+  switch (diseno) {
+    case 'ondas':
+      return 'polygon(0 0, 85% 0, 100% 15%, 85% 30%, 100% 45%, 85% 60%, 100% 75%, 85% 100%, 0 100%)';
+    case 'diagonal':
+      return 'polygon(0 0, 100% 0, 80% 100%, 0 100%)';
+    case 'arco':
+      return 'ellipse(85% 50% at 30% 50%)';
+    case 'doble_onda':
+      return 'polygon(0 0, 90% 0, 80% 20%, 95% 40%, 80% 60%, 95% 80%, 85% 100%, 0 100%)';
+    case 'geometrico':
+      return 'polygon(0 0, 100% 0, 85% 25%, 100% 50%, 85% 75%, 100% 100%, 0 100%)';
+    default: // 'plano'
+      return 'none';
+  }
+}
+
 interface CredencialPreviewProps {
   config: {
     color_primario: string;
@@ -15,6 +71,14 @@ interface CredencialPreviewProps {
     color_texto_secundario: string;
     fuente_principal: string;
     fuente_secundaria: string;
+    trama_tipo?: string;
+    trama_imagen_url?: string | null;
+    trama_escala?: number;
+    trama_rotacion?: number;
+    trama_opacidad?: number;
+    logo_x?: number;
+    logo_y?: number;
+    panel_diseno?: string;
   };
   alumno: {
     nombre: string;
@@ -64,9 +128,10 @@ export function CredencialPreview({ config, alumno, institucion, showDownloadOpt
       else setIsDownloadingPdf(true);
 
       const canvas = await html2canvas(cardRef.current, {
-        scale: 3, // High quality
+        scale: 4, // High quality for PVC printers
         useCORS: true,
         backgroundColor: null,
+        logging: false,
       });
 
       if (format === 'png') {
@@ -104,6 +169,32 @@ export function CredencialPreview({ config, alumno, institucion, showDownloadOpt
   const safeNivel = alumno?.nivel || '';
   const safeCarrera = alumno?.carrera || '';
 
+  // Trama config with defaults
+  const tramaTipo = config.trama_tipo || 'ninguno';
+  const tramaEscala = config.trama_escala ?? 50;
+  const tramaRotacion = config.trama_rotacion ?? 0;
+  const tramaOpacidad = (config.trama_opacidad ?? 10) / 100;
+  const tramaImagenUrl = config.trama_imagen_url || null;
+  const logoX = config.logo_x ?? 0;
+  const logoY = config.logo_y ?? 0;
+  const panelDiseno = config.panel_diseno || 'plano';
+  const panelClipPath = getPanelClipPath(panelDiseno);
+
+  // Build pattern layer style
+  const isImagePattern = tramaTipo === 'imagen' && tramaImagenUrl;
+  const patternStyle: React.CSSProperties = isImagePattern
+    ? {
+        backgroundImage: `url(${tramaImagenUrl})`,
+        backgroundSize: `${tramaEscala}px ${tramaEscala}px`,
+        backgroundRepeat: 'repeat',
+        filter: 'brightness(0) invert(1)',
+      }
+    : tramaTipo !== 'ninguno'
+      ? getPatternCSS(tramaTipo, 'rgba(255,255,255,1)', tramaEscala)
+      : {};
+
+  const showPattern = tramaTipo !== 'ninguno';
+
   return (
     <div className="flex flex-col items-center gap-4 w-full">
       {/* Container proportional to standard ID Card (CR80) 1011x638 */}
@@ -117,20 +208,45 @@ export function CredencialPreview({ config, alumno, institucion, showDownloadOpt
           fontFamily: `"${config.fuente_principal}", sans-serif`
         }}
       >
-          {/* Background Patterns (optional subtlety) */}
-          <div className="absolute inset-0 opacity-10" style={{
-            backgroundImage: `radial-gradient(circle at 50% 50%, ${config.color_secundario} 2px, transparent 2px)`,
-            backgroundSize: '24px 24px'
-          }}></div>
+          {/* Background Pattern Layer — Oversized + Rotated to fill corners */}
+          {showPattern && (
+            <div 
+              className="absolute pointer-events-none" 
+              style={{
+                width: '200%',
+                height: '200%',
+                top: '-50%',
+                left: '-50%',
+                opacity: tramaOpacidad,
+                transform: `rotate(${tramaRotacion}deg)`,
+                ...patternStyle,
+                zIndex: 1,
+              }}
+            />
+          )}
 
-          {/* Left Column - Logo */}
-          <div className="w-1/3 h-full flex flex-col items-center justify-center p-6 relative z-10" style={{ backgroundColor: '#ffffff' }}>
-            {institucion?.logo_url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={institucion.logo_url} alt="Logo" className="w-full h-auto object-contain max-h-[80%]" crossOrigin="anonymous" />
-            ) : (
-              <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center text-gray-400">Logo</div>
-            )}
+          {/* Left Column - Logo with Panel Design */}
+          <div 
+            className="w-1/3 h-full flex flex-col items-center justify-center p-4 relative z-10" 
+            style={{ 
+              backgroundColor: '#ffffff',
+              clipPath: panelClipPath !== 'none' ? panelClipPath : undefined,
+              WebkitClipPath: panelClipPath !== 'none' ? panelClipPath : undefined,
+            }}
+          >
+            <div 
+              className="w-full h-full flex items-center justify-center"
+              style={{ 
+                transform: `translate(${logoX}px, ${logoY}px)`,
+              }}
+            >
+              {institucion?.logo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={institucion.logo_url} alt="Logo" className="w-full h-auto object-contain max-h-[85%]" crossOrigin="anonymous" />
+              ) : (
+                <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center text-gray-400 text-xs">Logo</div>
+              )}
+            </div>
           </div>
 
           {/* Right Column - Data */}

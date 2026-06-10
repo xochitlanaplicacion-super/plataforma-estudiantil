@@ -159,3 +159,52 @@ export async function getInstitutionConfig() {
     .maybeSingle();
   return data || {};
 }
+
+export async function uploadWatermarkImage(formData: FormData) {
+  const supabase = await createServerSupabaseClient();
+  const file = formData.get('file') as File;
+  if (!file) return { success: false, error: 'No file provided' };
+
+  // Delete previous watermark images in the bucket
+  const { data: existingFiles } = await supabase.storage.from('credenciales-watermark').list();
+  if (existingFiles && existingFiles.length > 0) {
+    const filePaths = existingFiles.map((f: any) => f.name);
+    await supabase.storage.from('credenciales-watermark').remove(filePaths);
+  }
+
+  const ext = file.name.split('.').pop();
+  const fileName = `watermark_${Date.now()}.${ext}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('credenciales-watermark')
+    .upload(fileName, file, { upsert: true });
+
+  if (uploadError) return { success: false, error: uploadError.message };
+
+  const { data: urlData } = supabase.storage
+    .from('credenciales-watermark')
+    .getPublicUrl(fileName);
+
+  // Save URL to config
+  await updateConfigCredenciales({ trama_imagen_url: urlData.publicUrl });
+
+  revalidatePath('/dashboard/admin/credenciales');
+  return { success: true, url: urlData.publicUrl };
+}
+
+export async function deleteWatermarkImage() {
+  const supabase = await createServerSupabaseClient();
+
+  // Delete all files in the watermark bucket
+  const { data: existingFiles } = await supabase.storage.from('credenciales-watermark').list();
+  if (existingFiles && existingFiles.length > 0) {
+    const filePaths = existingFiles.map((f: any) => f.name);
+    await supabase.storage.from('credenciales-watermark').remove(filePaths);
+  }
+
+  // Clear URL in config
+  await updateConfigCredenciales({ trama_imagen_url: null, trama_tipo: 'ninguno' });
+
+  revalidatePath('/dashboard/admin/credenciales');
+  return { success: true };
+}
