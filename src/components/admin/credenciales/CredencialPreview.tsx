@@ -136,35 +136,35 @@ export function CredencialPreview({ config, alumno, institucion, showDownloadOpt
           {/* Right Column - Data */}
           <div className="w-2/3 h-full flex flex-col relative z-10">
             {/* Header */}
-            <div className="w-full text-center py-3 px-4 shadow-sm min-h-[44px] flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.2)' }}>
-              <h2 className="text-sm md:text-base font-bold uppercase tracking-wider" style={{ fontFamily: `"${config.fuente_secundaria}", sans-serif` }}>
+            <div className="w-full text-center py-2 px-4 shadow-sm min-h-[40px] flex items-center justify-center shrink-0" style={{ backgroundColor: 'rgba(0,0,0,0.2)' }}>
+              <h2 className="text-xs md:text-sm font-bold uppercase tracking-wider leading-tight" style={{ fontFamily: `"${config.fuente_secundaria}", sans-serif` }}>
                 {institucion?.nombre_completo || ''}
               </h2>
             </div>
 
             {/* Body */}
-            <div className="flex-1 flex px-6 py-4 gap-4 items-center">
-              <div className="flex-1 flex flex-col justify-center gap-4">
+            <div className="flex-1 flex px-4 md:px-6 py-2 md:py-3 gap-2 md:gap-4 items-center min-h-0 overflow-hidden">
+              <div className="flex-1 flex flex-col justify-center gap-1.5 md:gap-3">
                 <div>
-                  <p className="text-[11px] md:text-xs uppercase opacity-90 mb-1" style={{ color: config.color_texto_secundario }}>Nombre</p>
-                  <p className="font-black text-base md:text-xl leading-tight uppercase">{safeNombre}</p>
-                  <p className="font-black text-base md:text-xl leading-tight uppercase">{safeApellidos}</p>
+                  <p className="text-[10px] md:text-[11px] uppercase opacity-90 mb-0.5" style={{ color: config.color_texto_secundario }}>Nombre</p>
+                  <p className="font-black text-sm md:text-lg leading-none uppercase">{safeNombre}</p>
+                  <p className="font-black text-sm md:text-lg leading-none uppercase mt-0.5">{safeApellidos}</p>
                 </div>
                 
                 <div>
-                  <p className="text-[11px] md:text-xs uppercase opacity-90 mb-1" style={{ color: config.color_texto_secundario }}>Programa Académico</p>
-                  <p className="font-bold text-sm md:text-base uppercase leading-tight">{safeNivel}</p>
-                  <p className="font-bold text-sm md:text-base uppercase leading-tight">{safeCarrera}</p>
+                  <p className="text-[10px] md:text-[11px] uppercase opacity-90 mb-0.5" style={{ color: config.color_texto_secundario }}>Programa Académico</p>
+                  <p className="font-bold text-xs md:text-sm uppercase leading-tight">{safeNivel}</p>
+                  <p className="font-bold text-xs md:text-sm uppercase leading-tight mt-0.5">{safeCarrera}</p>
                 </div>
 
-                <div className="flex gap-6 mt-2">
+                <div className="flex gap-4 md:gap-6 mt-1">
                   <div>
-                    <p className="text-[10px] md:text-xs uppercase opacity-90 mb-1" style={{ color: config.color_texto_secundario }}>Fecha Ingreso</p>
-                    <p className="font-bold text-xs md:text-sm uppercase">{alumno?.fecha_inicio ? new Date(alumno.fecha_inicio).toLocaleDateString() : ''}</p>
+                    <p className="text-[9px] md:text-[10px] uppercase opacity-90 mb-0.5" style={{ color: config.color_texto_secundario }}>Fecha Ingreso</p>
+                    <p className="font-bold text-[11px] md:text-xs uppercase">{alumno?.fecha_inicio ? new Date(alumno.fecha_inicio).toLocaleDateString() : ''}</p>
                   </div>
                   <div>
-                    <p className="text-[10px] md:text-xs uppercase opacity-90 mb-1" style={{ color: config.color_texto_secundario }}>Vigencia</p>
-                    <p className="font-bold text-xs md:text-sm uppercase">{alumno?.fecha_expiracion ? new Date(alumno.fecha_expiracion).toLocaleDateString() : ''}</p>
+                    <p className="text-[9px] md:text-[10px] uppercase opacity-90 mb-0.5" style={{ color: config.color_texto_secundario }}>Vigencia</p>
+                    <p className="font-bold text-[11px] md:text-xs uppercase">{alumno?.fecha_expiracion ? new Date(alumno.fecha_expiracion).toLocaleDateString() : ''}</p>
                   </div>
                 </div>
               </div>
@@ -195,8 +195,8 @@ export function CredencialPreview({ config, alumno, institucion, showDownloadOpt
             </div>
 
             {/* Footer */}
-            <div className="w-full text-center py-2 px-4 border-t-4" style={{ backgroundColor: config.color_secundario, borderColor: 'rgba(0,0,0,0.1)' }}>
-              <p className="text-sm md:text-base font-black uppercase tracking-widest" style={{ color: config.color_primario }}>
+            <div className="w-full text-center py-1.5 px-4 border-t-4 shrink-0" style={{ backgroundColor: config.color_secundario, borderColor: 'rgba(0,0,0,0.1)' }}>
+              <p className="text-xs md:text-sm font-black uppercase tracking-widest" style={{ color: config.color_primario }}>
                 CREDENCIAL DE ESTUDIANTE
               </p>
             </div>
