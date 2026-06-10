@@ -98,11 +98,11 @@ export function CredencialPreview({ config, alumno, institucion, showDownloadOpt
     return `${n?.charAt(0) || ''}${a?.charAt(0) || ''}`.toUpperCase() || 'AL';
   };
 
-  const safeNombre = alumno?.nombre || 'NOMBRE DEL ALUMNO';
-  const safeApellidos = alumno?.apellidos || 'APELLIDOS';
-  const safeMatricula = alumno?.matricula || '00000000';
-  const safeNivel = alumno?.nivel || 'NIVEL ACADÉMICO';
-  const safeCarrera = alumno?.carrera || 'PROGRAMA EDUCATIVO';
+  const safeNombre = alumno?.nombre || '';
+  const safeApellidos = alumno?.apellidos || '';
+  const safeMatricula = alumno?.matricula || '';
+  const safeNivel = alumno?.nivel || '';
+  const safeCarrera = alumno?.carrera || '';
 
   return (
     <div className="flex flex-col items-center gap-4 w-full">
@@ -134,62 +134,65 @@ export function CredencialPreview({ config, alumno, institucion, showDownloadOpt
             ) : (
               <div className="w-24 h-24 bg-gray-200 rounded-full flex items-center justify-center text-gray-400">Logo</div>
             )}
-            <div className="mt-4 text-center" style={{ color: config.color_primario }}>
-              <p className="text-xs font-bold leading-tight" style={{ fontFamily: `"${config.fuente_secundaria}", sans-serif` }}>
-                {institucion?.nombre_corto || 'INSTITUCIÓN'}
-              </p>
-            </div>
           </div>
 
           {/* Right Column - Data */}
           <div className="w-2/3 h-full flex flex-col relative z-10">
             {/* Header */}
-            <div className="w-full text-center py-3 px-4 shadow-sm" style={{ backgroundColor: 'rgba(0,0,0,0.2)' }}>
+            <div className="w-full text-center py-3 px-4 shadow-sm min-h-[44px] flex items-center justify-center" style={{ backgroundColor: 'rgba(0,0,0,0.2)' }}>
               <h2 className="text-sm md:text-base font-bold uppercase tracking-wider" style={{ fontFamily: `"${config.fuente_secundaria}", sans-serif` }}>
-                {institucion?.nombre_completo || 'NOMBRE DE LA UNIVERSIDAD'}
+                {institucion?.nombre_completo || ''}
               </h2>
             </div>
 
             {/* Body */}
             <div className="flex-1 flex px-6 py-4 gap-4 items-center">
-              <div className="flex-1 flex flex-col justify-center gap-3">
+              <div className="flex-1 flex flex-col justify-center gap-4">
                 <div>
-                  <p className="text-[10px] uppercase opacity-80 mb-0.5" style={{ color: config.color_texto_secundario }}>Nombre</p>
-                  <p className="font-bold text-sm md:text-lg leading-tight uppercase">{safeNombre}</p>
-                  <p className="font-bold text-sm md:text-lg leading-tight uppercase">{safeApellidos}</p>
+                  <p className="text-[11px] md:text-xs uppercase opacity-90 mb-1" style={{ color: config.color_texto_secundario }}>Nombre</p>
+                  <p className="font-black text-base md:text-xl leading-tight uppercase">{safeNombre}</p>
+                  <p className="font-black text-base md:text-xl leading-tight uppercase">{safeApellidos}</p>
                 </div>
                 
                 <div>
-                  <p className="text-[10px] uppercase opacity-80 mb-0.5" style={{ color: config.color_texto_secundario }}>Programa Académico</p>
-                  <p className="font-semibold text-xs md:text-sm uppercase leading-tight">{safeNivel}</p>
-                  <p className="font-semibold text-xs md:text-sm uppercase leading-tight">{safeCarrera}</p>
+                  <p className="text-[11px] md:text-xs uppercase opacity-90 mb-1" style={{ color: config.color_texto_secundario }}>Programa Académico</p>
+                  <p className="font-bold text-sm md:text-base uppercase leading-tight">{safeNivel}</p>
+                  <p className="font-bold text-sm md:text-base uppercase leading-tight">{safeCarrera}</p>
                 </div>
 
-                <div className="flex gap-4 mt-1">
+                <div className="flex gap-6 mt-2">
                   <div>
-                    <p className="text-[8px] md:text-[9px] uppercase opacity-80 mb-0.5" style={{ color: config.color_texto_secundario }}>Fecha Ingreso</p>
-                    <p className="font-bold text-[10px] md:text-xs uppercase">{alumno?.fecha_inicio ? new Date(alumno.fecha_inicio).toLocaleDateString() : 'N/A'}</p>
+                    <p className="text-[10px] md:text-xs uppercase opacity-90 mb-1" style={{ color: config.color_texto_secundario }}>Fecha Ingreso</p>
+                    <p className="font-bold text-xs md:text-sm uppercase">{alumno?.fecha_inicio ? new Date(alumno.fecha_inicio).toLocaleDateString() : ''}</p>
                   </div>
                   <div>
-                    <p className="text-[8px] md:text-[9px] uppercase opacity-80 mb-0.5" style={{ color: config.color_texto_secundario }}>Vigencia</p>
-                    <p className="font-bold text-[10px] md:text-xs uppercase">{alumno?.fecha_expiracion ? new Date(alumno.fecha_expiracion).toLocaleDateString() : 'N/A'}</p>
+                    <p className="text-[10px] md:text-xs uppercase opacity-90 mb-1" style={{ color: config.color_texto_secundario }}>Vigencia</p>
+                    <p className="font-bold text-xs md:text-sm uppercase">{alumno?.fecha_expiracion ? new Date(alumno.fecha_expiracion).toLocaleDateString() : ''}</p>
                   </div>
                 </div>
               </div>
 
               {/* Photo & ID */}
-              <div className="w-28 md:w-36 flex flex-col items-center gap-3 shrink-0">
-                <Avatar className="w-24 h-32 md:w-32 md:h-40 rounded-lg border-2 shadow-md bg-white" style={{ borderColor: config.color_secundario, borderRadius: '12px' }}>
+              <div className="w-32 md:w-40 flex flex-col items-center gap-3 shrink-0 overflow-hidden">
+                <Avatar className="w-28 h-36 md:w-36 md:h-44 rounded-lg border-2 shadow-md bg-white" style={{ borderColor: config.color_secundario, borderRadius: '12px' }}>
                   {alumno?.foto_perfil ? (
                     <AvatarImage src={alumno.foto_perfil} className="object-cover rounded-[10px]" crossOrigin="anonymous" />
                   ) : (
-                    <AvatarFallback className="text-2xl font-bold rounded-[10px] bg-gray-100 text-gray-500">
+                    <AvatarFallback className="text-3xl font-bold rounded-[10px] bg-gray-100 text-gray-500">
                       {getInitials(safeNombre, safeApellidos)}
                     </AvatarFallback>
                   )}
                 </Avatar>
-                <div className="text-center w-full">
-                  <p className="font-black text-xl md:text-2xl tracking-widest">{safeMatricula}</p>
+                <div className="text-center w-full px-1">
+                  <p 
+                    className="font-black tracking-wide text-center" 
+                    style={{ 
+                      fontSize: safeMatricula.length > 15 ? 'clamp(10px, 2.5vw, 14px)' : 'clamp(14px, 3vw, 18px)',
+                      wordBreak: 'break-all'
+                    }}
+                  >
+                    {safeMatricula}
+                  </p>
                 </div>
               </div>
             </div>
