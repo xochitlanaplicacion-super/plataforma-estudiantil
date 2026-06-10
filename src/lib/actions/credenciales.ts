@@ -50,40 +50,65 @@ export async function updateConfigCredenciales(config: any) {
 export async function getAlumnosCredenciales() {
   const supabase = await createServerSupabaseClient();
   
-  // 1. Fetch active students from view
-  const { data: alumnosView } = await supabase
-    .from('vista_alumnos_inscritos')
-    .select('*');
-
-  if (!alumnosView || alumnosView.length === 0) return [];
-
-  const ids = alumnosView.map((a: any) => a.id);
-
-  // 2. Fetch profiles for foto_perfil, fecha_inicio, and fecha_expiracion
+  // 1. Fetch profiles where rol = 'alumno' and estatus = 'activo'
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('id, foto_perfil, fecha_inicio, fecha_expiracion')
-    .in('id', ids);
+    .select('*')
+    .eq('rol', 'alumno')
+    .eq('estatus', 'activo');
 
-  const profileMap = new Map((profiles || []).map((p: any) => [p.id, p]));
+  if (!profiles || profiles.length === 0) return [];
+
+  const profileIds = profiles.map((p: any) => p.id);
+  const carreraIds = [...new Set(profiles.map((p: any) => p.carrera_id).filter(Boolean))];
+  const grupoIds = [...new Set(profiles.map((p: any) => p.grupo_id).filter(Boolean))];
+
+  // 2. Fetch relations safely
+  const { data: carreras } = carreraIds.length > 0 
+    ? await supabase.from('carreras').select('id, nombre, nivel_id').in('id', carreraIds) 
+    : { data: [] };
+  
+  const { data: grupos } = grupoIds.length > 0 
+    ? await supabase.from('grupos').select('id, nombre').in('id', grupoIds) 
+    : { data: [] };
+
+  const nivelIds = [...new Set((carreras || []).map((c: any) => c.nivel_id).filter(Boolean))];
+  const { data: niveles } = nivelIds.length > 0 
+    ? await supabase.from('niveles').select('id, nombre').in('id', nivelIds) 
+    : { data: [] };
+
+  const carreraMap = new Map((carreras || []).map((c: any) => [c.id, c]));
+  const grupoMap = new Map((grupos || []).map((g: any) => [g.id, g]));
+  const nivelMap = new Map((niveles || []).map((n: any) => [n.id, n]));
 
   // 3. Fetch auth status
   const { data: autorizaciones } = await supabase
     .from('credenciales_autorizadas')
     .select('alumno_id, autorizado')
-    .in('alumno_id', ids);
+    .in('alumno_id', profileIds);
 
   const authMap = new Map((autorizaciones || []).map((a: any) => [a.alumno_id, a.autorizado]));
 
   // Merge
-  const merged = alumnosView.map((alumno: any) => {
-    const p = profileMap.get(alumno.id);
+  const merged = profiles.map((p: any) => {
+    const carrera = carreraMap.get(p.carrera_id);
+    const nivel = carrera ? nivelMap.get(carrera.nivel_id) : null;
+    const grupo = grupoMap.get(p.grupo_id);
+
     return {
-      ...alumno,
-      foto_perfil: p?.foto_perfil || null,
-      fecha_inicio: p?.fecha_inicio || null,
-      fecha_expiracion: p?.fecha_expiracion || null,
-      autorizado: authMap.get(alumno.id) || false
+      id: p.id,
+      nombre: p.nombre,
+      apellidos: p.apellidos,
+      email: p.email,
+      matricula: p.matricula,
+      foto_perfil: p.foto_perfil,
+      fecha_inicio: p.fecha_inicio,
+      fecha_expiracion: p.fecha_expiracion,
+      estatus: p.estatus,
+      carrera: carrera ? carrera.nombre : '',
+      nivel: nivel ? nivel.nombre : '',
+      grupo: grupo ? grupo.nombre : '',
+      autorizado: authMap.get(p.id) || false
     };
   });
 
