@@ -18,6 +18,7 @@ import { useToast } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import { useInstitucion } from '@/hooks/use-institucion';
+import { VigenciaPlataformaCard } from '@/components/admin/VigenciaPlataformaCard';
 
 export default function AdminDashboard() {
   const { toast } = useToast();
@@ -220,100 +221,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* ─── TARJETA PAGO DE SERVICIO PLATAFORMA ─── */}
-      <Card className={cn(
-        "border-2 shadow-lg transition-all duration-500",
-        servicioPlataforma.estado === 'NO'
-          ? "bg-red-50/60 border-red-300"
-          : servicioInfo.diasRestantes <= 5
-            ? "bg-orange-50/60 border-orange-300"
-            : "bg-emerald-50/40 border-emerald-200"
-      )}>
-        <CardContent className="py-6">
-          <div className="flex items-center gap-6">
-            {/* Indicador circular SVG */}
-            <div className="relative flex-shrink-0" style={{ width: 130, height: 130 }}>
-              {servicioPlataforma.estado === 'NO' ? (
-                /* Servicio suspendido */
-                <div className="w-full h-full rounded-full bg-red-100 border-4 border-red-300 flex flex-col items-center justify-center">
-                  <ShieldOff className="text-red-500 mb-1" size={28} />
-                  <span className="text-[10px] font-black uppercase text-red-600 tracking-wider">Suspendido</span>
-                </div>
-              ) : (
-                /* Círculo animado con arco que se agota */
-                <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
-                  {/* Track de fondo */}
-                  <circle
-                    cx="60" cy="60" r={RADIO}
-                    fill="none"
-                    stroke="#e5e7eb"
-                    strokeWidth="8"
-                  />
-                  {/* Arco de progreso */}
-                  <circle
-                    cx="60" cy="60" r={RADIO}
-                    fill="none"
-                    stroke={getColorVigencia(servicioInfo.diasRestantes)}
-                    strokeWidth="8"
-                    strokeLinecap="round"
-                    strokeDasharray={CIRCUNFERENCIA}
-                    strokeDashoffset={CIRCUNFERENCIA * (1 - servicioInfo.porcentaje)}
-                    style={{ transition: 'stroke-dashoffset 1s ease-in-out, stroke 0.5s ease' }}
-                  />
-                </svg>
-                /* Contenido central sobre el SVG */
-              )}
-              {servicioPlataforma.estado === 'SI' && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center">
-                  <span
-                    className="text-3xl font-black tabular-nums"
-                    style={{ color: getColorVigencia(servicioInfo.diasRestantes) }}
-                  >
-                    {servicioInfo.diasRestantes}
-                  </span>
-                  <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
-                    {servicioInfo.diasRestantes === 1 ? 'día' : 'días'}
-                  </span>
-                </div>
-              )}
-            </div>
-
-            {/* Info textual */}
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                {servicioPlataforma.estado === 'SI' ? (
-                  <ShieldCheck size={16} className="text-emerald-600" />
-                ) : (
-                  <ShieldOff size={16} className="text-red-500" />
-                )}
-                <h3 className="text-sm font-black uppercase tracking-wider text-slate-700">
-                  Pago de Servicio Plataforma
-                </h3>
-              </div>
-
-              {servicioPlataforma.estado === 'NO' ? (
-                <p className="text-sm text-red-600 font-semibold mt-2">
-                  El servicio está suspendido. Contacta al proveedor para renovar.
-                </p>
-              ) : servicioPlataforma.fecha_inicio ? (
-                <div className="space-y-1 mt-2">
-                  <p className="text-xs text-muted-foreground">
-                    Inicio: <span className="font-semibold text-slate-700">{formatFechaLarga(new Date(servicioPlataforma.fecha_inicio + 'T00:00:00'))}</span>
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Vence el: <span className="font-bold" style={{ color: getColorVigencia(servicioInfo.diasRestantes) }}>
-                      {formatFechaLarga(servicioInfo.fechaFin)}
-                    </span>
-                  </p>
-                </div>
-              ) : (
-                <p className="text-xs text-amber-600 font-medium mt-2">
-                  Servicio activo sin fecha de inicio configurada.
-                </p>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <VigenciaPlataformaCard servicioPlataforma={servicioPlataforma} />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         {/* NUEVA TARJETA: ASPIRANTES */}
