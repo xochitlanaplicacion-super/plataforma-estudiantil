@@ -1,10 +1,10 @@
 
 "use client";
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, GraduationCap, School, Layers, AlertCircle, Loader2, FileWarning, Mail, Send, Eye, MessageSquare, ClipboardList, ArrowRight } from 'lucide-react';
+import { Users, GraduationCap, School, Layers, AlertCircle, Loader2, FileWarning, Mail, Send, Eye, MessageSquare, ClipboardList, ArrowRight, ShieldOff, ShieldCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -37,6 +37,10 @@ export default function AdminDashboard() {
   const [recentUsers, setRecentUsers] = useState<User[]>([]);
   const [alumnosMissingDocs, setAlumnosMissingDocs] = useState<User[]>([]);
   const [sendingReminder, setSendingReminder] = useState<string | null>(null);
+  const [servicioPlataforma, setServicioPlataforma] = useState<{
+    estado: string | null;
+    fecha_inicio: string | null;
+  }>({ estado: null, fecha_inicio: null });
 
   const fetchData = async () => {
     setLoading(true);
@@ -119,6 +123,20 @@ export default function AdminDashboard() {
 
       if (missingDocsAlumnos) setAlumnosMissingDocs(missingDocsAlumnos as any);
 
+      // Consultar estado del servicio de plataforma
+      const { data: servicioData } = await supabase
+        .from('pago_de_servicios')
+        .select('estado, fecha_inicio')
+        .eq('id', 1)
+        .single();
+
+      if (servicioData) {
+        setServicioPlataforma({
+          estado: servicioData.estado,
+          fecha_inicio: servicioData.fecha_inicio,
+        });
+      }
+
     } catch (error) {
       console.error("Error fetching admin stats:", error);
     } finally {
@@ -153,6 +171,41 @@ export default function AdminDashboard() {
     { name: 'INE', count: alumnosMissingDocs.filter(u => !u.doc_ine).length, color: '#f59e0b' },
   ];
 
+  // ─── Lógica del indicador circular de vigencia ───
+  const DURACION_SERVICIO_DIAS = 30;
+
+  const servicioInfo = useMemo(() => {
+    if (!servicioPlataforma.fecha_inicio || servicioPlataforma.estado !== 'SI') {
+      return { diasRestantes: 0, fechaFin: null, porcentaje: 0, activo: servicioPlataforma.estado === 'SI' };
+    }
+    const inicio = new Date(servicioPlataforma.fecha_inicio + 'T00:00:00');
+    const fin = new Date(inicio);
+    fin.setDate(fin.getDate() + DURACION_SERVICIO_DIAS);
+    const ahora = new Date();
+    const msRestantes = fin.getTime() - ahora.getTime();
+    const diasRestantes = Math.max(0, Math.ceil(msRestantes / (1000 * 60 * 60 * 24)));
+    const porcentaje = Math.max(0, Math.min(1, diasRestantes / DURACION_SERVICIO_DIAS));
+    return { diasRestantes, fechaFin: fin, porcentaje, activo: true };
+  }, [servicioPlataforma]);
+
+  const getColorVigencia = (dias: number): string => {
+    if (dias >= 21) return '#166534'; // verde oscuro
+    if (dias >= 16) return '#22c55e'; // verde claro
+    if (dias >= 11) return '#eab308'; // amarillo
+    if (dias >= 6)  return '#f97316'; // naranja
+    if (dias >= 3)  return '#ea580c'; // naranja oscuro
+    return '#dc2626';                 // rojo
+  };
+
+  const formatFechaLarga = (date: Date | null): string => {
+    if (!date) return '—';
+    return date.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
+  };
+
+  // SVG circular constants
+  const RADIO = 54;
+  const CIRCUNFERENCIA = 2 * Math.PI * RADIO;
+
   return (
     <div className="space-y-8">
       <div className="flex justify-between items-center">
@@ -168,6 +221,102 @@ export default function AdminDashboard() {
           )}
         </div>
       </div>
+
+      {/* ─── TARJETA PAGO DE SERVICIO PLATAFORMA ─── */}
+      <Card className={cn(
+        "border-2 shadow-lg transition-all duration-500",
+        servicioPlataforma.estado === 'NO'
+          ? "bg-red-50/60 border-red-300"
+          : servicioInfo.diasRestantes <= 5
+            ? "bg-orange-50/60 border-orange-300"
+            : "bg-emerald-50/40 border-emerald-200"
+      )}>
+        <CardContent className="py-6">
+          <div className="flex items-center gap-6">
+            {/* Indicador circular SVG */}
+            <div className="relative flex-shrink-0" style={{ width: 130, height: 130 }}>
+              {servicioPlataforma.estado === 'NO' ? (
+                /* Servicio suspendido */
+                <div className="w-full h-full rounded-full bg-red-100 border-4 border-red-300 flex flex-col items-center justify-center">
+                  <ShieldOff className="text-red-500 mb-1" size={28} />
+                  <span className="text-[10px] font-black uppercase text-red-600 tracking-wider">Suspendido</span>
+                </div>
+              ) : (
+                /* Círculo animado con arco que se agota */
+                <svg viewBox="0 0 120 120" className="w-full h-full -rotate-90">
+                  {/* Track de fondo */}
+                  <circle
+                    cx="60" cy="60" r={RADIO}
+                    fill="none"
+                    stroke="#e5e7eb"
+                    strokeWidth="8"
+                  />
+                  {/* Arco de progreso */}
+                  <circle
+                    cx="60" cy="60" r={RADIO}
+                    fill="none"
+                    stroke={getColorVigencia(servicioInfo.diasRestantes)}
+                    strokeWidth="8"
+                    strokeLinecap="round"
+                    strokeDasharray={CIRCUNFERENCIA}
+                    strokeDashoffset={CIRCUNFERENCIA * (1 - servicioInfo.porcentaje)}
+                    style={{ transition: 'stroke-dashoffset 1s ease-in-out, stroke 0.5s ease' }}
+                  />
+                </svg>
+                /* Contenido central sobre el SVG */
+              )}
+              {servicioPlataforma.estado === 'SI' && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span
+                    className="text-3xl font-black tabular-nums"
+                    style={{ color: getColorVigencia(servicioInfo.diasRestantes) }}
+                  >
+                    {servicioInfo.diasRestantes}
+                  </span>
+                  <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">
+                    {servicioInfo.diasRestantes === 1 ? 'día' : 'días'}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Info textual */}
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                {servicioPlataforma.estado === 'SI' ? (
+                  <ShieldCheck size={16} className="text-emerald-600" />
+                ) : (
+                  <ShieldOff size={16} className="text-red-500" />
+                )}
+                <h3 className="text-sm font-black uppercase tracking-wider text-slate-700">
+                  Pago de Servicio Plataforma
+                </h3>
+              </div>
+
+              {servicioPlataforma.estado === 'NO' ? (
+                <p className="text-sm text-red-600 font-semibold mt-2">
+                  El servicio está suspendido. Contacta al proveedor para renovar.
+                </p>
+              ) : servicioPlataforma.fecha_inicio ? (
+                <div className="space-y-1 mt-2">
+                  <p className="text-xs text-muted-foreground">
+                    Inicio: <span className="font-semibold text-slate-700">{formatFechaLarga(new Date(servicioPlataforma.fecha_inicio + 'T00:00:00'))}</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Vence el: <span className="font-bold" style={{ color: getColorVigencia(servicioInfo.diasRestantes) }}>
+                      {formatFechaLarga(servicioInfo.fechaFin)}
+                    </span>
+                  </p>
+                </div>
+              ) : (
+                <p className="text-xs text-amber-600 font-medium mt-2">
+                  Servicio activo sin fecha de inicio configurada.
+                </p>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         {/* NUEVA TARJETA: ASPIRANTES */}

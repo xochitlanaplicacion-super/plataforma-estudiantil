@@ -7,6 +7,10 @@
     {
       "path": "/api/cron/limpiar-diapositivas",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/check-servicio-plataforma",
+      "schedule": "0 4 * * *"
     }
   ]
 }
