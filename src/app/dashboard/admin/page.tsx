@@ -13,6 +13,7 @@ import { User } from '@/lib/types';
 import { UserDialog } from '@/components/admin/UserDialog';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer, Cell } from 'recharts';
 import { sendDocReminderAction } from '@/lib/actions/users';
+import { getServicioPlataformaInfo } from '@/lib/actions/pagos';
 import { useToast } from '@/hooks/use-toast';
 import { ToastAction } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
@@ -123,17 +124,13 @@ export default function AdminDashboard() {
 
       if (missingDocsAlumnos) setAlumnosMissingDocs(missingDocsAlumnos as any);
 
-      // Consultar estado del servicio de plataforma
-      const { data: servicioData } = await supabase
-        .from('pago_de_servicios')
-        .select('estado, fecha_inicio')
-        .eq('id', 1)
-        .single();
+      // Consultar estado del servicio de plataforma usando la Server Action
+      const resServicio = await getServicioPlataformaInfo();
 
-      if (servicioData) {
+      if (resServicio.success && resServicio.data) {
         setServicioPlataforma({
-          estado: servicioData.estado,
-          fecha_inicio: servicioData.fecha_inicio,
+          estado: resServicio.data.estado,
+          fecha_inicio: resServicio.data.fecha_inicio,
         });
       }
 

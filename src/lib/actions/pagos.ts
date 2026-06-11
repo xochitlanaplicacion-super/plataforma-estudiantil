@@ -683,3 +683,23 @@ export async function getEstadoPagoIA(): Promise<boolean> {
     return false;
   }
 }
+
+export async function getServicioPlataformaInfo() {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('pago_de_servicios')
+      .select('estado, fecha_inicio')
+      .eq('id', 1)
+      .single();
+
+    if (error) {
+      console.error('Error fetching servicio plataforma info:', error);
+      return { success: false, data: null };
+    }
+
+    return { success: true, data };
+  } catch (err) {
+    console.error('Exception fetching servicio plataforma info:', err);
+    return { success: false, data: null };
+  }
+}
