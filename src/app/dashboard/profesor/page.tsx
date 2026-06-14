@@ -2652,8 +2652,8 @@ export default function ProfesorDashboard() {
                 <h4 className="font-black uppercase text-xs text-slate-500 tracking-wider mb-4">Estado Actual de los Grupos</h4>
                 <div className="space-y-2">
                   {syncAnalysis.map(info => {
-                    const materiaNombre = asignaciones.find((a: any) => a.materia_id === info.materia_id)?.materia?.nombre || 'Grupo Desconocido';
-                    const grupoNombre = asignaciones.find((a: any) => a.materia_id === info.materia_id)?.grupo?.nombre || '';
+                    const materiaNombre = asignaciones.find((a: any) => a.materia_id === info.materia_id)?.materias?.nombre || 'Grupo Desconocido';
+                    const grupoNombre = asignaciones.find((a: any) => a.materia_id === info.materia_id)?.grupos?.nombre || '';
                     const isSource = syncSourceId === info.materia_id;
                     const isTarget = syncTargetIds.includes(info.materia_id);
                     
