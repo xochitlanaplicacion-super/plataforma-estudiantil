@@ -46,6 +46,7 @@ import {
   AlertCircle,
   ArrowRight,
   RotateCcw,
+  RefreshCcw,
   XCircle,
   CalendarClock,
   Youtube,
@@ -81,7 +82,9 @@ import {
   updateSlidesOrder,
   getResources,
   upsertResource,
-  deleteResourceRecord
+  deleteResourceRecord,
+  analyzeGroupSync,
+  syncGroupFromBaseGroup
 } from '@/lib/actions/academic';
 import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -972,6 +975,13 @@ export default function ProfesorDashboard() {
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
   const [pagoIA, setPagoIA] = useState(false);
 
+  // Estados para Sincronización de Grupos
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
+  const [syncAnalysis, setSyncAnalysis] = useState<any[]>([]);
+  const [syncSourceId, setSyncSourceId] = useState<string>('');
+  const [syncTargetIds, setSyncTargetIds] = useState<string[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
+
   useEffect(() => {
     getEstadoPagoIA().then(setPagoIA);
   }, []);
@@ -1081,6 +1091,77 @@ export default function ProfesorDashboard() {
       console.error(error);
     } finally {
       setIsGeneratingAI(false);
+    }
+  };
+
+  const handleOpenSyncDialog = async () => {
+    if (!selectedAgrupacion) return;
+    
+    // Obtener todos los materia_ids de la agrupación
+    const materiaIds = selectedAgrupacion.asignaciones_ids
+      .map((aId: string) => asignaciones.find((a: any) => a.id === aId)?.materia_id)
+      .filter(Boolean);
+      
+    if (materiaIds.length === 0) return;
+    
+    setIsSyncing(true);
+    setSyncDialogOpen(true);
+    
+    try {
+      const { data, error } = await analyzeGroupSync(materiaIds);
+      if (error) throw new Error(error);
+      
+      if (data) {
+        setSyncAnalysis(data);
+        
+        // Ordenar por cantidad total de items (descendente)
+        const sorted = [...data].sort((a, b) => b.totalItems - a.totalItems);
+        
+        if (sorted.length > 0) {
+          // Por defecto sugerimos como origen el que tiene más contenido
+          const bestSource = sorted[0].materia_id;
+          setSyncSourceId(bestSource);
+          
+          // Por defecto sugerimos como destino a los que tienen menos contenido que el origen
+          const targets = sorted
+            .filter(s => s.materia_id !== bestSource && s.totalItems < sorted[0].totalItems)
+            .map(s => s.materia_id);
+          setSyncTargetIds(targets);
+        }
+      }
+    } catch (err) {
+      toast({ variant: 'destructive', title: 'Error', description: 'No se pudo analizar la sincronización de grupos.' });
+      setSyncDialogOpen(false);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleExecuteSync = async () => {
+    if (!syncSourceId || syncTargetIds.length === 0) {
+      toast({ variant: 'destructive', title: 'Selección inválida', description: 'Debes seleccionar un origen y al menos un destino.' });
+      return;
+    }
+    
+    setIsSyncing(true);
+    try {
+      const result = await syncGroupFromBaseGroup(syncSourceId, syncTargetIds);
+      if (result.success) {
+        toast({ title: 'Sincronización exitosa', description: 'Los grupos han sido sincronizados correctamente.' });
+        setSyncDialogOpen(false);
+        // Recargar la vista actual (unidades)
+        const currentMateriaIds = selectedAgrupacion.asignaciones_ids
+          .map((aId: string) => asignaciones.find((a: any) => a.id === aId)?.materia_id)
+          .filter(Boolean);
+        const { data } = await getUnidadesAgrupacion(currentMateriaIds);
+        if (data) setUnidades(data);
+      } else {
+        throw new Error(result.error || result.message);
+      }
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Error en sincronización', description: err.message || 'Error desconocido' });
+    } finally {
+      setIsSyncing(false);
     }
   };
 
@@ -1723,7 +1804,14 @@ export default function ProfesorDashboard() {
                     <Badge variant="outline" className="text-[9px] font-black bg-indigo-100 text-indigo-700 border-indigo-200 uppercase mt-2">Agrupación • {selectedAgrupacion?.asignaciones_ids?.length} Grupos Sincronizados</Badge>
                   )}
                 </div>
-                <Button size="lg" className="rounded-2xl bg-primary text-white font-black uppercase tracking-widest gap-2" onClick={() => setDialog({ open: true, type: 'unidad', data: { titulo: '', orden: unidades.length + 1 } })}><Plus size={18} /> Nueva Unidad</Button>
+                <div className="flex gap-2">
+                  {isGroupMode && (
+                    <Button size="lg" variant="outline" className="rounded-2xl border-indigo-200 text-indigo-700 hover:bg-indigo-50 font-black uppercase tracking-widest gap-2" onClick={handleOpenSyncDialog}>
+                      {isSyncing ? <Loader2 size={18} className="animate-spin" /> : <RefreshCcw size={18} />} Sincronizar Grupos Rezagados
+                    </Button>
+                  )}
+                  <Button size="lg" className="rounded-2xl bg-primary text-white font-black uppercase tracking-widest gap-2" onClick={() => setDialog({ open: true, type: 'unidad', data: { titulo: '', orden: unidades.length + 1 } })}><Plus size={18} /> Nueva Unidad</Button>
+                </div>
               </CardHeader>
               <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                 <div className="space-y-4">
@@ -2536,6 +2624,105 @@ export default function ProfesorDashboard() {
           <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-6">
             <Button variant="ghost" className="flex-1 rounded-xl h-12 font-bold uppercase text-[10px]" onClick={() => setSlideToDelete(null)}>Cancelar</Button>
             <Button variant="destructive" className="flex-1 rounded-xl h-12 font-black uppercase text-[10px] bg-red-500 text-white" onClick={confirmDeleteSlide}>Eliminar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG DE SINCRONIZACIÓN DE GRUPOS REZAGADOS */}
+      <Dialog open={syncDialogOpen} onOpenChange={setSyncDialogOpen}>
+        <DialogContent className="max-w-3xl w-[95vw] rounded-[32px] p-8 border-none shadow-2xl overflow-y-auto max-h-[90vh] custom-scrollbar">
+          <DialogHeader className="flex flex-col items-center text-center mb-6">
+            <div className="h-16 w-16 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-4">
+              <RefreshCcw size={32} />
+            </div>
+            <DialogTitle className="text-2xl font-black uppercase tracking-tight text-slate-800">Sincronizar Grupos Rezagados</DialogTitle>
+            <DialogDescription className="text-slate-500 pt-2">
+              Copia todo el contenido (Unidades, Temas, Actividades, Presentaciones y Recursos) desde un grupo origen hacia los grupos que elijas.
+            </DialogDescription>
+          </DialogHeader>
+
+          {isSyncing ? (
+            <div className="flex flex-col items-center justify-center py-12 text-slate-500">
+              <Loader2 size={48} className="animate-spin mb-4 text-indigo-500" />
+              <p className="font-bold uppercase tracking-widest text-sm text-indigo-900">Analizando / Sincronizando...</p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              <div className="bg-slate-50 p-6 rounded-2xl border-2 border-slate-100">
+                <h4 className="font-black uppercase text-xs text-slate-500 tracking-wider mb-4">Estado Actual de los Grupos</h4>
+                <div className="space-y-2">
+                  {syncAnalysis.map(info => {
+                    const materiaNombre = asignaciones.find((a: any) => a.materia_id === info.materia_id)?.materia?.nombre || 'Grupo Desconocido';
+                    const grupoNombre = asignaciones.find((a: any) => a.materia_id === info.materia_id)?.grupo?.nombre || '';
+                    const isSource = syncSourceId === info.materia_id;
+                    const isTarget = syncTargetIds.includes(info.materia_id);
+                    
+                    return (
+                      <div key={info.materia_id} className={cn(
+                        "flex items-center justify-between p-4 rounded-xl border-2 transition-colors",
+                        isSource ? "border-indigo-500 bg-indigo-50/50" : (isTarget ? "border-emerald-500 bg-emerald-50/50" : "border-slate-200 bg-white")
+                      )}>
+                        <div className="flex flex-col gap-1">
+                          <span className="font-bold text-slate-700 text-sm">{materiaNombre} {grupoNombre}</span>
+                          <span className="text-[10px] uppercase font-bold text-slate-400">
+                            {info.unidadesCount} Unidades • {info.temasCount} Temas • {info.actividadesCount} Actividades
+                          </span>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button 
+                            variant={isSource ? "default" : "outline"}
+                            size="sm"
+                            className={cn("rounded-xl text-[10px] font-bold uppercase", isSource && "bg-indigo-600 hover:bg-indigo-700")}
+                            onClick={() => {
+                              setSyncSourceId(info.materia_id);
+                              setSyncTargetIds(syncTargetIds.filter(id => id !== info.materia_id));
+                            }}
+                          >
+                            {isSource ? 'Origen ✓' : 'Origen'}
+                          </Button>
+                          <Button 
+                            variant={isTarget ? "default" : "outline"}
+                            size="sm"
+                            className={cn("rounded-xl text-[10px] font-bold uppercase", isTarget && "bg-emerald-600 hover:bg-emerald-700")}
+                            disabled={isSource}
+                            onClick={() => {
+                              if (isTarget) {
+                                setSyncTargetIds(syncTargetIds.filter(id => id !== info.materia_id));
+                              } else {
+                                setSyncTargetIds([...syncTargetIds, info.materia_id]);
+                              }
+                            }}
+                          >
+                            {isTarget ? 'Destino ✓' : 'Destino'}
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              
+              <div className="bg-amber-50 p-4 rounded-2xl border border-amber-200 flex gap-4 text-amber-800 text-sm">
+                <AlertCircle className="shrink-0 mt-0.5" size={20} />
+                <p>
+                  <strong>Atención:</strong> Esta acción copiará <b>todo</b> el contenido del grupo origen a los grupos destino. 
+                  Si los grupos destino ya tenían contenido, este se mantendrá y el nuevo contenido se añadirá.
+                </p>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="flex flex-col sm:flex-row gap-4 mt-6">
+            <Button variant="ghost" className="flex-1 rounded-2xl h-14 font-bold uppercase tracking-widest text-slate-400" onClick={() => setSyncDialogOpen(false)} disabled={isSyncing}>
+              Cancelar
+            </Button>
+            <Button 
+              className="flex-1 rounded-2xl h-14 font-black uppercase tracking-widest gap-2 bg-indigo-600 hover:bg-indigo-700 text-white" 
+              disabled={isSyncing || !syncSourceId || syncTargetIds.length === 0}
+              onClick={handleExecuteSync}
+            >
+              {isSyncing ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />} Comenzar Clonación
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

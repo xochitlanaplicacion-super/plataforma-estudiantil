@@ -920,3 +920,191 @@ export async function getRendimientoGrupoParaProfesor(grupoId: string, profesorI
     resumenGrupo
   };
 }
+
+// ────────────────────────────────────────────────────────────────────
+// SINCRONIZACIÓN DE GRUPOS REZAGADOS
+// ────────────────────────────────────────────────────────────────────
+
+export async function analyzeGroupSync(materiaIds: string[]) {
+  if (!materiaIds || materiaIds.length === 0) return { data: [], error: null };
+  
+  try {
+    const uniqueIds = Array.from(new Set(materiaIds));
+    
+    // Contar unidades por materia
+    const { data: unidades } = await supabaseAdmin
+      .from('unidades')
+      .select('id, materia_id')
+      .in('materia_id', uniqueIds);
+      
+    const unidadIds = unidades?.map(u => u.id) || [];
+    
+    // Contar temas por materia (a través de unidades)
+    const { data: temas } = await supabaseAdmin
+      .from('temas')
+      .select('id, unidad_id')
+      .in('unidad_id', unidadIds.length > 0 ? unidadIds : ['__none__']);
+      
+    const temaIds = temas?.map(t => t.id) || [];
+    
+    // Contar actividades por materia (a través de temas)
+    const { data: ejercicios } = await supabaseAdmin
+      .from('ejercicios')
+      .select('id, tema_id')
+      .in('tema_id', temaIds.length > 0 ? temaIds : ['__none__']);
+      
+    const results = uniqueIds.map(mId => {
+      const myUnidades = unidades?.filter(u => u.materia_id === mId) || [];
+      const myUnidadIds = myUnidades.map(u => u.id);
+      const myTemas = temas?.filter(t => myUnidadIds.includes(t.unidad_id)) || [];
+      const myTemaIds = myTemas.map(t => t.id);
+      const myEjercicios = ejercicios?.filter(e => myTemaIds.includes(e.tema_id)) || [];
+      
+      return {
+        materia_id: mId,
+        unidadesCount: myUnidades.length,
+        temasCount: myTemas.length,
+        actividadesCount: myEjercicios.length,
+        totalItems: myUnidades.length + myTemas.length + myEjercicios.length
+      };
+    });
+    
+    return { data: results, error: null };
+  } catch (err: any) {
+    return { data: null, error: err.message };
+  }
+}
+
+export async function syncGroupFromBaseGroup(sourceMateriaId: string, targetMateriaIds: string[]) {
+  if (!targetMateriaIds || targetMateriaIds.length === 0) return { success: true };
+  
+  try {
+    // 1. Obtener toda la jerarquía del sourceMateriaId
+    const { data: sourceUnidades, error: errU } = await supabaseAdmin
+      .from('unidades')
+      .select('*')
+      .eq('materia_id', sourceMateriaId);
+      
+    if (errU || !sourceUnidades || sourceUnidades.length === 0) {
+      return { success: true, message: 'El grupo origen no tiene contenido para sincronizar.' };
+    }
+    
+    const sourceUnidadIds = sourceUnidades.map(u => u.id);
+    
+    const { data: sourceTemas } = await supabaseAdmin
+      .from('temas')
+      .select('*')
+      .in('unidad_id', sourceUnidadIds);
+      
+    const sourceTemaIds = sourceTemas?.map(t => t.id) || [];
+    
+    const { data: sourceEjercicios } = await supabaseAdmin.from('ejercicios').select('*').in('tema_id', sourceTemaIds.length > 0 ? sourceTemaIds : ['__none__']);
+    const { data: sourceSlides } = await supabaseAdmin.from('slides').select('*').in('tema_id', sourceTemaIds.length > 0 ? sourceTemaIds : ['__none__']);
+    const { data: sourceResources } = await supabaseAdmin.from('resources').select('*').in('tema_id', sourceTemaIds.length > 0 ? sourceTemaIds : ['__none__']);
+    
+    // Función auxiliar para asegurar que tenga sync_id
+    const ensureSyncId = (item: any) => {
+      if (!item.sync_id) return crypto.randomUUID();
+      return item.sync_id;
+    };
+
+    // 2. Por cada targetMateriaId, clonamos
+    for (const targetMId of targetMateriaIds) {
+      // a. Clonar Unidades
+      const unidadMap = new Map<string, string>(); // oldId -> newId
+      
+      for (const oldU of sourceUnidades) {
+        const uToInsert = { ...oldU };
+        delete uToInsert.id;
+        delete uToInsert.created_at;
+        delete uToInsert.updated_at;
+        uToInsert.materia_id = targetMId;
+        uToInsert.sync_id = ensureSyncId(oldU);
+        
+        const { data: newU } = await supabaseAdmin.from('unidades').insert(uToInsert).select('id').single();
+        if (newU) {
+          unidadMap.set(oldU.id, newU.id);
+        }
+      }
+      
+      // b. Clonar Temas
+      const temaMap = new Map<string, string>(); // oldId -> newId
+      
+      for (const oldT of (sourceTemas || [])) {
+        const newUnidadId = unidadMap.get(oldT.unidad_id);
+        if (!newUnidadId) continue;
+        
+        const tToInsert = { ...oldT };
+        delete tToInsert.id;
+        delete tToInsert.created_at;
+        delete tToInsert.updated_at;
+        tToInsert.unidad_id = newUnidadId;
+        tToInsert.sync_id = ensureSyncId(oldT);
+        
+        const { data: newT } = await supabaseAdmin.from('temas').insert(tToInsert).select('id').single();
+        if (newT) {
+          temaMap.set(oldT.id, newT.id);
+        }
+      }
+      
+      // c. Clonar Ejercicios
+      if (sourceEjercicios && sourceEjercicios.length > 0) {
+        const ejToInsert = [];
+        for (const oldE of sourceEjercicios) {
+          const newTemaId = temaMap.get(oldE.tema_id);
+          if (!newTemaId) continue;
+          
+          const eToInsert = { ...oldE };
+          delete eToInsert.id;
+          delete eToInsert.created_at;
+          delete eToInsert.updated_at;
+          eToInsert.tema_id = newTemaId;
+          eToInsert.sync_id = ensureSyncId(oldE);
+          ejToInsert.push(eToInsert);
+        }
+        if (ejToInsert.length > 0) await supabaseAdmin.from('ejercicios').insert(ejToInsert);
+      }
+      
+      // d. Clonar Slides
+      if (sourceSlides && sourceSlides.length > 0) {
+        const slidesToInsert = [];
+        for (const oldS of sourceSlides) {
+          const newTemaId = temaMap.get(oldS.tema_id);
+          if (!newTemaId) continue;
+          
+          const sToInsert = { ...oldS };
+          delete sToInsert.id;
+          delete sToInsert.created_at;
+          delete sToInsert.updated_at;
+          sToInsert.tema_id = newTemaId;
+          sToInsert.sync_id = ensureSyncId(oldS);
+          slidesToInsert.push(sToInsert);
+        }
+        if (slidesToInsert.length > 0) await supabaseAdmin.from('slides').insert(slidesToInsert);
+      }
+      
+      // e. Clonar Recursos
+      if (sourceResources && sourceResources.length > 0) {
+        const resToInsert = [];
+        for (const oldR of sourceResources) {
+          const newTemaId = temaMap.get(oldR.tema_id);
+          if (!newTemaId) continue;
+          
+          const rToInsert = { ...oldR };
+          delete rToInsert.id;
+          delete rToInsert.created_at;
+          delete rToInsert.updated_at;
+          rToInsert.tema_id = newTemaId;
+          rToInsert.sync_id = ensureSyncId(oldR);
+          resToInsert.push(rToInsert);
+        }
+        if (resToInsert.length > 0) await supabaseAdmin.from('resources').insert(resToInsert);
+      }
+    }
+    
+    revalidatePath('/dashboard/profesor');
+    return { success: true };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
