@@ -3,8 +3,10 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ProfilePictureUploader } from '@/components/alumno/ProfilePictureUploader';
-import { UserCircle, Calendar, GraduationCap, Mail, Phone, Hash, FileText } from 'lucide-react';
+import { BotonDescargaCredencial } from '@/components/alumno/BotonDescargaCredencial';
+import { UserCircle, Calendar, GraduationCap, Mail, Phone, Hash, FileText, CreditCard } from 'lucide-react';
 import { redirect } from 'next/navigation';
+import { getConfigCredenciales, getInstitutionConfig } from '@/lib/actions/credenciales';
 
 export const metadata = {
   title: 'Mis Datos | Instituto Emiliano Zapata',
@@ -35,6 +37,25 @@ export default async function PerfilPage() {
     .select('nivel, carrera, grado, grupo')
     .eq('id', user.id)
     .single();
+
+  // Check credential authorization
+  const { data: credAuth } = await supabase
+    .from('credenciales_autorizadas')
+    .select('autorizado')
+    .eq('alumno_id', user.id)
+    .maybeSingle();
+
+  const credencialAutorizada = profile.estatus === 'activo' && credAuth?.autorizado === true;
+
+  // Load credential design config and institution data only if authorized
+  let credConfig: any = null;
+  let institucion: any = null;
+  if (credencialAutorizada) {
+    [credConfig, institucion] = await Promise.all([
+      getConfigCredenciales(),
+      getInstitutionConfig(),
+    ]);
+  }
 
   const fullName = `${profile.nombre} ${profile.apellidos}`.trim();
 
@@ -80,6 +101,36 @@ export default async function PerfilPage() {
               )}
             </CardContent>
           </Card>
+
+          {/* Credential Download — only if authorized */}
+          {credencialAutorizada && credConfig && institucion && (
+            <Card className="border-primary/10 shadow-sm bg-gradient-to-br from-primary/5 to-transparent">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm text-muted-foreground uppercase tracking-wider font-bold flex items-center gap-2">
+                  <CreditCard size={14} /> Mi Credencial
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Tu credencial está lista para descargar. Se generará un PDF tamaño carta listo para imprimir, recortar y enmicar.
+                </p>
+                <BotonDescargaCredencial
+                  config={credConfig}
+                  alumno={{
+                    nombre: profile.nombre,
+                    apellidos: profile.apellidos,
+                    nivel: academic?.nivel || '',
+                    carrera: academic?.carrera || '',
+                    matricula: profile.matricula || '',
+                    foto_perfil: profile.foto_perfil,
+                    fecha_inicio: profile.fecha_inicio,
+                    fecha_expiracion: profile.fecha_expiracion,
+                  }}
+                  institucion={institucion}
+                />
+              </CardContent>
+            </Card>
+          )}
         </div>
 
         {/* Right Column: Detailed Info */}
