@@ -154,7 +154,7 @@ export async function getInstitutionConfig() {
   const supabase = await createServerSupabaseClient();
   const { data } = await supabase
     .from('configuracion_sistema')
-    .select('logo_url, nombre_completo, nombre_corto')
+    .select('logo_url, nombre_completo, nombre_corto, direccion, telefono_contacto, correo_contacto, sitio_web')
     .limit(1)
     .maybeSingle();
   return data || {};
@@ -204,6 +204,140 @@ export async function deleteWatermarkImage() {
 
   // Clear URL in config
   await updateConfigCredenciales({ trama_imagen_url: null, trama_tipo: 'ninguno' });
+
+  revalidatePath('/dashboard/admin/credenciales');
+  return { success: true };
+}
+
+// ────────────────────────────────────────────────────────────
+// REVERSO: Imagen de fondo completo
+// ────────────────────────────────────────────────────────────
+
+async function cleanBucketFiles(supabase: any, bucket: string, prefix: string) {
+  const { data: existingFiles } = await supabase.storage.from(bucket).list('', {
+    search: prefix,
+  });
+  // Fallback: list all and filter by prefix
+  const { data: allFiles } = await supabase.storage.from(bucket).list();
+  const toDelete = (allFiles || []).filter((f: any) => f.name.startsWith(prefix));
+  if (toDelete.length > 0) {
+    await supabase.storage.from(bucket).remove(toDelete.map((f: any) => f.name));
+  }
+}
+
+export async function uploadReversoImage(formData: FormData) {
+  const supabase = await createServerSupabaseClient();
+  const file = formData.get('file') as File;
+  if (!file) return { success: false, error: 'No se proporcionó archivo' };
+  if (file.size > 10 * 1024 * 1024) return { success: false, error: 'El archivo excede 10MB' };
+
+  // Clean previous reverso images
+  await cleanBucketFiles(supabase, 'credenciales-reverso', 'reverso_');
+
+  const ext = file.name.split('.').pop();
+  const fileName = `reverso_${Date.now()}.${ext}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('credenciales-reverso')
+    .upload(fileName, file, { upsert: true });
+
+  if (uploadError) return { success: false, error: uploadError.message };
+
+  const { data: urlData } = supabase.storage
+    .from('credenciales-reverso')
+    .getPublicUrl(fileName);
+
+  await updateConfigCredenciales({ reverso_imagen_url: urlData.publicUrl });
+
+  revalidatePath('/dashboard/admin/credenciales');
+  return { success: true, url: urlData.publicUrl };
+}
+
+export async function deleteReversoImage() {
+  const supabase = await createServerSupabaseClient();
+
+  await cleanBucketFiles(supabase, 'credenciales-reverso', 'reverso_');
+  await updateConfigCredenciales({ reverso_imagen_url: null });
+
+  revalidatePath('/dashboard/admin/credenciales');
+  return { success: true };
+}
+
+// ────────────────────────────────────────────────────────────
+// REVERSO: Firma del Director
+// ────────────────────────────────────────────────────────────
+
+export async function uploadFirmaDirector(formData: FormData) {
+  const supabase = await createServerSupabaseClient();
+  const file = formData.get('file') as File;
+  if (!file) return { success: false, error: 'No se proporcionó archivo' };
+
+  await cleanBucketFiles(supabase, 'credenciales-reverso', 'firma_');
+
+  const ext = file.name.split('.').pop();
+  const fileName = `firma_${Date.now()}.${ext}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('credenciales-reverso')
+    .upload(fileName, file, { upsert: true });
+
+  if (uploadError) return { success: false, error: uploadError.message };
+
+  const { data: urlData } = supabase.storage
+    .from('credenciales-reverso')
+    .getPublicUrl(fileName);
+
+  await updateConfigCredenciales({ firma_director_url: urlData.publicUrl });
+
+  revalidatePath('/dashboard/admin/credenciales');
+  return { success: true, url: urlData.publicUrl };
+}
+
+export async function deleteFirmaDirector() {
+  const supabase = await createServerSupabaseClient();
+
+  await cleanBucketFiles(supabase, 'credenciales-reverso', 'firma_');
+  await updateConfigCredenciales({ firma_director_url: null });
+
+  revalidatePath('/dashboard/admin/credenciales');
+  return { success: true };
+}
+
+// ────────────────────────────────────────────────────────────
+// REVERSO: Sello de la Institución
+// ────────────────────────────────────────────────────────────
+
+export async function uploadSelloInstitucion(formData: FormData) {
+  const supabase = await createServerSupabaseClient();
+  const file = formData.get('file') as File;
+  if (!file) return { success: false, error: 'No se proporcionó archivo' };
+
+  await cleanBucketFiles(supabase, 'credenciales-reverso', 'sello_');
+
+  const ext = file.name.split('.').pop();
+  const fileName = `sello_${Date.now()}.${ext}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from('credenciales-reverso')
+    .upload(fileName, file, { upsert: true });
+
+  if (uploadError) return { success: false, error: uploadError.message };
+
+  const { data: urlData } = supabase.storage
+    .from('credenciales-reverso')
+    .getPublicUrl(fileName);
+
+  await updateConfigCredenciales({ sello_institucion_url: urlData.publicUrl });
+
+  revalidatePath('/dashboard/admin/credenciales');
+  return { success: true, url: urlData.publicUrl };
+}
+
+export async function deleteSelloInstitucion() {
+  const supabase = await createServerSupabaseClient();
+
+  await cleanBucketFiles(supabase, 'credenciales-reverso', 'sello_');
+  await updateConfigCredenciales({ sello_institucion_url: null });
 
   revalidatePath('/dashboard/admin/credenciales');
   return { success: true };

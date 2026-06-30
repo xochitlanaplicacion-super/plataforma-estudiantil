@@ -4,8 +4,9 @@ import React, { useRef, useState, useEffect } from 'react';
 import html2canvas from 'html2canvas';
 import jsPDF from 'jspdf';
 import { Button } from '@/components/ui/button';
-import { Download, Loader2, FileImage, FileText } from 'lucide-react';
+import { Download, Loader2, FileImage, FileText, RotateCcw } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { CredencialReversoPreview } from './CredencialReversoPreview';
 
 // ============================================================
 // Pattern generator functions (pure CSS patterns)
@@ -84,6 +85,10 @@ interface CredencialPreviewProps {
     logo_x?: number;
     logo_y?: number;
     panel_diseno?: string;
+    reverso_imagen_url?: string | null;
+    firma_director_url?: string | null;
+    sello_institucion_url?: string | null;
+    reverso_texto_legal?: string | null;
   };
   alumno: {
     nombre: string;
@@ -99,14 +104,23 @@ interface CredencialPreviewProps {
     logo_url?: string;
     nombre_completo?: string;
     nombre_corto?: string;
+    direccion?: string;
+    telefono_contacto?: string;
+    correo_contacto?: string;
+    sitio_web?: string;
   };
   showDownloadOptions?: boolean;
 }
 
 export function CredencialPreview({ config, alumno, institucion, showDownloadOptions = false }: CredencialPreviewProps) {
   const cardRef = useRef<HTMLDivElement>(null);
+  const reversoRef = useRef<HTMLDivElement>(null);
   const [isDownloadingPng, setIsDownloadingPng] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [isDownloadingReversoPng, setIsDownloadingReversoPng] = useState(false);
+  const [isDownloadingReversoPdf, setIsDownloadingReversoPdf] = useState(false);
+  const [viewSide, setViewSide] = useState<'frente' | 'reverso'>('frente');
+  const hasReverso = !!(config.reverso_imagen_url || config.firma_director_url || config.sello_institucion_url || config.reverso_texto_legal);
 
   // Dynamic font injection
   useEffect(() => {
@@ -164,6 +178,43 @@ export function CredencialPreview({ config, alumno, institucion, showDownloadOpt
     }
   };
 
+  const handleDownloadReverso = async (format: 'png' | 'pdf') => {
+    if (!reversoRef.current) return;
+    try {
+      if (format === 'png') setIsDownloadingReversoPng(true);
+      else setIsDownloadingReversoPdf(true);
+
+      const canvas = await html2canvas(reversoRef.current, {
+        scale: 4,
+        useCORS: true,
+        backgroundColor: null,
+        logging: false,
+      });
+
+      if (format === 'png') {
+        const url = canvas.toDataURL('image/png');
+        const link = document.createElement('a');
+        link.download = `credencial_reverso_${alumno?.matricula || 'demo'}.png`;
+        link.href = url;
+        link.click();
+      } else {
+        const pdf = new jsPDF({
+          orientation: 'landscape',
+          unit: 'mm',
+          format: [85.6, 54]
+        });
+        const imgData = canvas.toDataURL('image/png');
+        pdf.addImage(imgData, 'PNG', 0, 0, 85.6, 54);
+        pdf.save(`credencial_reverso_${alumno?.matricula || 'demo'}.pdf`);
+      }
+    } catch (error) {
+      console.error('Error generating reverso:', error);
+    } finally {
+      setIsDownloadingReversoPng(false);
+      setIsDownloadingReversoPdf(false);
+    }
+  };
+
   const getInitials = (n: string, a: string) => {
     return `${n?.charAt(0) || ''}${a?.charAt(0) || ''}`.toUpperCase() || 'AL';
   };
@@ -204,17 +255,21 @@ export function CredencialPreview({ config, alumno, institucion, showDownloadOpt
 
   return (
     <div className="flex flex-col items-center gap-4 w-full">
-      {/* Container proportional to standard ID Card (CR80) 1011x638 */}
+      {/* Front Container proportional to standard ID Card (CR80) 1011x638 */}
       <div 
-        ref={cardRef} 
-        className="relative w-full max-w-[600px] overflow-hidden rounded-xl shadow-2xl shrink-0 flex"
-        style={{ 
-          aspectRatio: '1011/638',
-          backgroundColor: config.color_primario,
-          color: config.color_texto_primario,
-          fontFamily: `"${config.fuente_principal}", sans-serif`
-        }}
+        style={viewSide === 'reverso' ? { position: 'absolute', left: '-9999px', top: '-9999px' } : undefined}
+        className="w-full max-w-[600px] shrink-0 flex"
       >
+        <div 
+          ref={cardRef} 
+          className="relative w-full overflow-hidden rounded-xl shadow-2xl shrink-0 flex"
+          style={{ 
+            aspectRatio: '1011/638',
+            backgroundColor: config.color_primario,
+            color: config.color_texto_primario,
+            fontFamily: `"${config.fuente_principal}", sans-serif`
+          }}
+        >
           {/* Background Pattern Layer — Oversized + Rotated to fill corners */}
           {showPattern && (
             <div 
@@ -326,28 +381,103 @@ export function CredencialPreview({ config, alumno, institucion, showDownloadOpt
               </p>
             </div>
           </div>
+        </div>
       </div>
 
       {showDownloadOptions && alumno && (
-        <div className="flex gap-4 mt-2">
-          <Button 
-            onClick={() => handleDownload('png')} 
-            disabled={isDownloadingPng || isDownloadingPdf}
-            className="w-40"
-          >
-            {isDownloadingPng ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileImage className="h-4 w-4 mr-2" />}
-            Descargar PNG
-          </Button>
-          <Button 
-            onClick={() => handleDownload('pdf')} 
-            variant="secondary"
-            disabled={isDownloadingPng || isDownloadingPdf}
-            className="w-40"
-          >
-            {isDownloadingPdf ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
-            Descargar PDF
-          </Button>
-        </div>
+        <>
+          {/* Toggle Frente / Reverso */}
+          {hasReverso && (
+            <div className="flex gap-2 mt-4">
+              <Button
+                size="sm"
+                variant={viewSide === 'frente' ? 'default' : 'outline'}
+                onClick={() => setViewSide('frente')}
+                className="text-xs"
+              >
+                Frente
+              </Button>
+              <Button
+                size="sm"
+                variant={viewSide === 'reverso' ? 'default' : 'outline'}
+                onClick={() => setViewSide('reverso')}
+                className="text-xs"
+              >
+                <RotateCcw className="h-3 w-3 mr-1" />
+                Reverso
+              </Button>
+            </div>
+          )}
+
+          {/* Reverso preview (hidden for rendering, visible when toggled) */}
+          {hasReverso && viewSide === 'reverso' && (
+            <div className="mt-4" ref={reversoRef}>
+              <CredencialReversoPreview
+                config={config}
+                alumno={alumno}
+                institucion={institucion}
+              />
+            </div>
+          )}
+
+          {/* Download buttons - Frente */}
+          <div className="flex gap-4 mt-4">
+            <Button 
+              onClick={() => handleDownload('png')} 
+              disabled={isDownloadingPng || isDownloadingPdf}
+              className="w-40"
+            >
+              {isDownloadingPng ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileImage className="h-4 w-4 mr-2" />}
+              {hasReverso ? 'Frente PNG' : 'Descargar PNG'}
+            </Button>
+            <Button 
+              onClick={() => handleDownload('pdf')} 
+              variant="secondary"
+              disabled={isDownloadingPng || isDownloadingPdf}
+              className="w-40"
+            >
+              {isDownloadingPdf ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
+              {hasReverso ? 'Frente PDF' : 'Descargar PDF'}
+            </Button>
+          </div>
+
+          {/* Download buttons - Reverso */}
+          {hasReverso && (
+            <div className="flex gap-4 mt-2">
+              <Button 
+                onClick={() => handleDownloadReverso('png')} 
+                disabled={isDownloadingReversoPng || isDownloadingReversoPdf}
+                variant="outline"
+                className="w-40"
+              >
+                {isDownloadingReversoPng ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileImage className="h-4 w-4 mr-2" />}
+                Reverso PNG
+              </Button>
+              <Button 
+                onClick={() => handleDownloadReverso('pdf')} 
+                variant="outline"
+                disabled={isDownloadingReversoPng || isDownloadingReversoPdf}
+                className="w-40"
+              >
+                {isDownloadingReversoPdf ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileText className="h-4 w-4 mr-2" />}
+                Reverso PDF
+              </Button>
+            </div>
+          )}
+
+          {/* Hidden reverso render target (needed when viewing frente but downloading reverso) */}
+          {hasReverso && viewSide === 'frente' && (
+            <div style={{ position: 'absolute', left: '-9999px', top: '-9999px' }}>
+              <div ref={reversoRef}>
+                <CredencialReversoPreview
+                  config={config}
+                  alumno={alumno}
+                  institucion={institucion}
+                />
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

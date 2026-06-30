@@ -2,14 +2,26 @@
 
 import React, { useState, useRef } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { updateConfigCredenciales, uploadWatermarkImage, deleteWatermarkImage } from '@/lib/actions/credenciales';
+import {
+  updateConfigCredenciales,
+  uploadWatermarkImage,
+  deleteWatermarkImage,
+  uploadReversoImage,
+  deleteReversoImage,
+  uploadFirmaDirector,
+  deleteFirmaDirector,
+  uploadSelloInstitucion,
+  deleteSelloInstitucion,
+} from '@/lib/actions/credenciales';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
-import { Loader2, Save, Upload, Trash2, ImageIcon, AlertTriangle } from 'lucide-react';
+import { Loader2, Save, Upload, Trash2, ImageIcon, AlertTriangle, RotateCcw, Stamp, PenLine } from 'lucide-react';
 import { CredencialPreview } from './CredencialPreview';
+import { CredencialReversoPreview } from './CredencialReversoPreview';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -70,6 +82,17 @@ export function CredencialDesigner({ initialConfig, institucion }: CredencialDes
   const [isUploading, setIsUploading] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  // Reverso states
+  const [isUploadingReverso, setIsUploadingReverso] = useState(false);
+  const [isDeletingReverso, setIsDeletingReverso] = useState(false);
+  const [showDeleteReversoDialog, setShowDeleteReversoDialog] = useState(false);
+  const [isUploadingFirma, setIsUploadingFirma] = useState(false);
+  const [isDeletingFirma, setIsDeletingFirma] = useState(false);
+  const [showDeleteFirmaDialog, setShowDeleteFirmaDialog] = useState(false);
+  const [isUploadingSello, setIsUploadingSello] = useState(false);
+  const [isDeletingSello, setIsDeletingSello] = useState(false);
+  const [showDeleteSelloDialog, setShowDeleteSelloDialog] = useState(false);
+  const [previewSide, setPreviewSide] = useState<'frente' | 'reverso'>('frente');
   const [config, setConfig] = useState({
     ...initialConfig,
     trama_tipo: initialConfig.trama_tipo || 'ninguno',
@@ -82,8 +105,15 @@ export function CredencialDesigner({ initialConfig, institucion }: CredencialDes
     logo_escala: initialConfig.logo_escala || 100,
     panel_diseno: initialConfig.panel_diseno || 'plano',
     color_panel_izquierdo: initialConfig.color_panel_izquierdo || '#ffffff',
+    reverso_imagen_url: initialConfig.reverso_imagen_url || null,
+    firma_director_url: initialConfig.firma_director_url || null,
+    sello_institucion_url: initialConfig.sello_institucion_url || null,
+    reverso_texto_legal: initialConfig.reverso_texto_legal || '',
   });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const reversoFileInputRef = useRef<HTMLInputElement>(null);
+  const firmaFileInputRef = useRef<HTMLInputElement>(null);
+  const selloFileInputRef = useRef<HTMLInputElement>(null);
 
   const demoAlumno = {
     nombre: 'JUAN PÉREZ',
@@ -146,6 +176,125 @@ export function CredencialDesigner({ initialConfig, institucion }: CredencialDes
     } finally {
       setIsDeleting(false);
       setShowDeleteDialog(false);
+    }
+  };
+
+  // ─── REVERSO HANDLERS ───────────────────────────────────
+  const handleReversoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      toast({ title: 'El archivo excede 10MB', variant: 'destructive' });
+      return;
+    }
+    setIsUploadingReverso(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await uploadReversoImage(formData);
+      if (res.success && res.url) {
+        setConfig({ ...config, reverso_imagen_url: res.url });
+        toast({ title: 'Imagen de reverso subida correctamente' });
+      } else {
+        throw new Error(res.error || 'Error al subir');
+      }
+    } catch (error: any) {
+      toast({ title: 'Error al subir imagen', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsUploadingReverso(false);
+      if (reversoFileInputRef.current) reversoFileInputRef.current.value = '';
+    }
+  };
+
+  const handleDeleteReverso = async () => {
+    setIsDeletingReverso(true);
+    try {
+      const res = await deleteReversoImage();
+      if (res.success) {
+        setConfig({ ...config, reverso_imagen_url: null });
+        toast({ title: 'Imagen de reverso eliminada' });
+      }
+    } catch (error: any) {
+      toast({ title: 'Error al eliminar', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsDeletingReverso(false);
+      setShowDeleteReversoDialog(false);
+    }
+  };
+
+  const handleFirmaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingFirma(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await uploadFirmaDirector(formData);
+      if (res.success && res.url) {
+        setConfig({ ...config, firma_director_url: res.url });
+        toast({ title: 'Firma del director subida correctamente' });
+      } else {
+        throw new Error(res.error || 'Error al subir');
+      }
+    } catch (error: any) {
+      toast({ title: 'Error al subir firma', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsUploadingFirma(false);
+      if (firmaFileInputRef.current) firmaFileInputRef.current.value = '';
+    }
+  };
+
+  const handleDeleteFirma = async () => {
+    setIsDeletingFirma(true);
+    try {
+      const res = await deleteFirmaDirector();
+      if (res.success) {
+        setConfig({ ...config, firma_director_url: null });
+        toast({ title: 'Firma eliminada' });
+      }
+    } catch (error: any) {
+      toast({ title: 'Error al eliminar', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsDeletingFirma(false);
+      setShowDeleteFirmaDialog(false);
+    }
+  };
+
+  const handleSelloUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingSello(true);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await uploadSelloInstitucion(formData);
+      if (res.success && res.url) {
+        setConfig({ ...config, sello_institucion_url: res.url });
+        toast({ title: 'Sello de institución subido correctamente' });
+      } else {
+        throw new Error(res.error || 'Error al subir');
+      }
+    } catch (error: any) {
+      toast({ title: 'Error al subir sello', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsUploadingSello(false);
+      if (selloFileInputRef.current) selloFileInputRef.current.value = '';
+    }
+  };
+
+  const handleDeleteSello = async () => {
+    setIsDeletingSello(true);
+    try {
+      const res = await deleteSelloInstitucion();
+      if (res.success) {
+        setConfig({ ...config, sello_institucion_url: null });
+        toast({ title: 'Sello eliminado' });
+      }
+    } catch (error: any) {
+      toast({ title: 'Error al eliminar', description: error.message, variant: 'destructive' });
+    } finally {
+      setIsDeletingSello(false);
+      setShowDeleteSelloDialog(false);
     }
   };
 
@@ -455,6 +604,161 @@ export function CredencialDesigner({ initialConfig, institucion }: CredencialDes
           </div>
         </div>
 
+        {/* ===================== DISEÑO DEL REVERSO ===================== */}
+        <div className="border-t pt-6">
+          <h3 className="text-lg font-semibold mb-1">Diseño del Reverso</h3>
+          <p className="text-sm text-muted-foreground mb-4">
+            Configura el reverso de la credencial. Puedes subir una imagen completa o personalizar el diseño digital.
+          </p>
+
+          {/* Imagen de Reverso Completo */}
+          <div className="space-y-3 p-4 bg-amber-50 rounded-lg border border-amber-200 mb-4">
+            <Label className="flex items-center gap-2 font-semibold">
+              <ImageIcon className="h-4 w-4" />
+              Imagen de Reverso Completo (opcional)
+            </Label>
+            <p className="text-[11px] text-muted-foreground">
+              Si subes una imagen aquí, se usará como fondo completo del reverso reemplazando el diseño digital. Máx. 10MB.
+            </p>
+
+            {config.reverso_imagen_url && (
+              <div className="flex items-center gap-3 p-2 bg-white rounded border">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={config.reverso_imagen_url} alt="Reverso" className="h-12 w-20 object-cover rounded" />
+                <span className="text-xs text-muted-foreground flex-1 truncate">Imagen de reverso cargada</span>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setShowDeleteReversoDialog(true)}
+                  disabled={isDeletingReverso}
+                >
+                  <Trash2 className="h-3 w-3 mr-1" /> Eliminar
+                </Button>
+              </div>
+            )}
+
+            <input
+              ref={reversoFileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={handleReversoUpload}
+            />
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => reversoFileInputRef.current?.click()}
+              disabled={isUploadingReverso}
+            >
+              {isUploadingReverso ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+              {config.reverso_imagen_url ? 'Reemplazar Imagen de Reverso' : 'Subir Imagen de Reverso'}
+            </Button>
+          </div>
+
+          {/* Digital reverse design (only meaningful when no image uploaded) */}
+          <div className={`space-y-4 p-4 bg-gray-50 rounded-lg border ${config.reverso_imagen_url ? 'opacity-50 pointer-events-none' : ''}`}>
+            {config.reverso_imagen_url && (
+              <p className="text-xs text-amber-600 font-semibold">⚠ El diseño digital está desactivado porque hay una imagen de reverso subida.</p>
+            )}
+
+            {/* Texto Legal */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <PenLine className="h-4 w-4" />
+                Texto Legal / Aviso
+              </Label>
+              <Textarea
+                value={config.reverso_texto_legal}
+                onChange={(e) => setConfig({ ...config, reverso_texto_legal: e.target.value })}
+                placeholder="Esta credencial es propiedad de la institución..."
+                className="text-xs min-h-[60px]"
+                maxLength={300}
+              />
+              <p className="text-[10px] text-muted-foreground text-right">{(config.reverso_texto_legal || '').length}/300</p>
+            </div>
+
+            {/* Firma del Director */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <PenLine className="h-4 w-4" />
+                Firma del Director
+              </Label>
+              {config.firma_director_url && (
+                <div className="flex items-center gap-3 p-2 bg-white rounded border">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={config.firma_director_url} alt="Firma" className="h-10 w-20 object-contain" />
+                  <span className="text-xs text-muted-foreground flex-1 truncate">Firma cargada</span>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setShowDeleteFirmaDialog(true)}
+                    disabled={isDeletingFirma}
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" /> Eliminar
+                  </Button>
+                </div>
+              )}
+              <input
+                ref={firmaFileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={handleFirmaUpload}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => firmaFileInputRef.current?.click()}
+                disabled={isUploadingFirma}
+              >
+                {isUploadingFirma ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+                {config.firma_director_url ? 'Reemplazar Firma' : 'Subir Firma'}
+              </Button>
+            </div>
+
+            {/* Sello Institucional */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-2">
+                <Stamp className="h-4 w-4" />
+                Sello de la Institución
+              </Label>
+              {config.sello_institucion_url && (
+                <div className="flex items-center gap-3 p-2 bg-white rounded border">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={config.sello_institucion_url} alt="Sello" className="h-10 w-10 object-contain" />
+                  <span className="text-xs text-muted-foreground flex-1 truncate">Sello cargado</span>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setShowDeleteSelloDialog(true)}
+                    disabled={isDeletingSello}
+                  >
+                    <Trash2 className="h-3 w-3 mr-1" /> Eliminar
+                  </Button>
+                </div>
+              )}
+              <input
+                ref={selloFileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="hidden"
+                onChange={handleSelloUpload}
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={() => selloFileInputRef.current?.click()}
+                disabled={isUploadingSello}
+              >
+                {isUploadingSello ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+                {config.sello_institucion_url ? 'Reemplazar Sello' : 'Subir Sello'}
+              </Button>
+            </div>
+          </div>
+        </div>
+
         {/* ===================== GUARDAR ===================== */}
         <div className="pt-4 border-t">
           <Button onClick={handleSave} disabled={isSaving} className="w-full">
@@ -466,19 +770,49 @@ export function CredencialDesigner({ initialConfig, institucion }: CredencialDes
 
       {/* Columna Derecha: Vista Previa */}
       <div className="flex flex-col items-center bg-gray-50 p-6 rounded-xl border justify-center min-h-[400px] sticky top-4">
-        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-6">Vista Previa en Tiempo Real</h3>
-        <CredencialPreview 
-          config={config} 
-          alumno={demoAlumno} 
-          institucion={institucion} 
-          showDownloadOptions={false}
-        />
+        <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-4">Vista Previa en Tiempo Real</h3>
+        
+        {/* Toggle Frente / Reverso */}
+        <div className="flex gap-2 mb-4">
+          <Button
+            size="sm"
+            variant={previewSide === 'frente' ? 'default' : 'outline'}
+            onClick={() => setPreviewSide('frente')}
+            className="text-xs"
+          >
+            Frente
+          </Button>
+          <Button
+            size="sm"
+            variant={previewSide === 'reverso' ? 'default' : 'outline'}
+            onClick={() => setPreviewSide('reverso')}
+            className="text-xs"
+          >
+            <RotateCcw className="h-3 w-3 mr-1" />
+            Reverso
+          </Button>
+        </div>
+
+        {previewSide === 'frente' ? (
+          <CredencialPreview 
+            config={config} 
+            alumno={demoAlumno} 
+            institucion={institucion} 
+            showDownloadOptions={false}
+          />
+        ) : (
+          <CredencialReversoPreview
+            config={config}
+            alumno={demoAlumno}
+            institucion={institucion}
+          />
+        )}
         <p className="text-xs text-gray-400 mt-6 text-center max-w-xs">
           Esta vista es solo de referencia. Los datos del alumno variarán según cada caso.
         </p>
       </div>
 
-      {/* Delete Confirmation Dialog */}
+      {/* Delete Confirmation Dialog - Watermark */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -498,6 +832,84 @@ export function CredencialDesigner({ initialConfig, institucion }: CredencialDes
               disabled={isDeleting}
             >
               {isDeleting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              Sí, eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Confirmation Dialog - Reverso Image */}
+      <AlertDialog open={showDeleteReversoDialog} onOpenChange={setShowDeleteReversoDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              ¿Eliminar imagen de reverso?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción eliminará permanentemente la imagen del reverso del servidor. Se volverá a mostrar el diseño digital por defecto.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteReverso}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={isDeletingReverso}
+            >
+              {isDeletingReverso ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              Sí, eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Confirmation Dialog - Firma */}
+      <AlertDialog open={showDeleteFirmaDialog} onOpenChange={setShowDeleteFirmaDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              ¿Eliminar firma del director?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción eliminará permanentemente la firma del servidor.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteFirma}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={isDeletingFirma}
+            >
+              {isDeletingFirma ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
+              Sí, eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Confirmation Dialog - Sello */}
+      <AlertDialog open={showDeleteSelloDialog} onOpenChange={setShowDeleteSelloDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              ¿Eliminar sello de la institución?
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta acción eliminará permanentemente el sello del servidor.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteSello}
+              className="bg-red-600 hover:bg-red-700"
+              disabled={isDeletingSello}
+            >
+              {isDeletingSello ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Trash2 className="h-4 w-4 mr-2" />}
               Sí, eliminar
             </AlertDialogAction>
           </AlertDialogFooter>
