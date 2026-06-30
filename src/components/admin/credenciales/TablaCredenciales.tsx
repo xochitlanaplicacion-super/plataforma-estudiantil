@@ -195,7 +195,7 @@ export function TablaCredenciales({ alumnos: initialAlumnos, config, institucion
           <DialogHeader className="sr-only">
             <DialogTitle>Descarga de Credencial</DialogTitle>
           </DialogHeader>
-          <div className="bg-white/95 backdrop-blur-sm p-6 rounded-2xl flex flex-col items-center">
+          <div className="bg-white/95 backdrop-blur-sm p-6 rounded-2xl flex flex-col items-center max-h-[90vh] overflow-y-auto w-full">
             <h3 className="text-lg font-bold mb-4">Revisión y Descarga</h3>
             {selectedAlumno && (
               <CredencialPreview 
