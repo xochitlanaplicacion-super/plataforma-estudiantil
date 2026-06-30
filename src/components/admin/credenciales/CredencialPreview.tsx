@@ -277,7 +277,9 @@ export function CredencialPreview({ config, alumno, institucion, showDownloadOpt
                 <div>
                   <p className="text-[10px] md:text-[11px] uppercase opacity-90 mb-0.5" style={{ color: config.color_texto_secundario }}>Programa Académico</p>
                   <p className="font-bold text-xs md:text-sm uppercase leading-tight">{safeNivel}</p>
-                  <p className="font-bold text-xs md:text-sm uppercase leading-tight mt-0.5">{safeCarrera}</p>
+                  {!(safeNivel.toLowerCase().includes('bachillerato') || safeNivel.toLowerCase().includes('preparatoria')) && (
+                    <p className="font-bold text-xs md:text-sm uppercase leading-tight mt-0.5">{safeCarrera}</p>
+                  )}
                 </div>
 
                 <div className="flex gap-4 md:gap-6 mt-1">
