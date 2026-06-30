@@ -120,7 +120,7 @@ export function CredencialPreview({ config, alumno, institucion, showDownloadOpt
   const [isDownloadingReversoPng, setIsDownloadingReversoPng] = useState(false);
   const [isDownloadingReversoPdf, setIsDownloadingReversoPdf] = useState(false);
   const [viewSide, setViewSide] = useState<'frente' | 'reverso'>('frente');
-  const hasReverso = !!(config.reverso_imagen_url || config.firma_director_url || config.sello_institucion_url || config.reverso_texto_legal);
+  const hasReverso = true; // The reverse design always exists digitally now
 
   // Dynamic font injection
   useEffect(() => {
