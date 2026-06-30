@@ -31,12 +31,39 @@ export default async function PerfilPage() {
     return <div className="p-8 text-center">No se encontró información del perfil.</div>;
   }
 
-  // Fetch academic data from view
-  const { data: academic } = await supabase
-    .from('vista_alumnos_inscritos')
-    .select('nivel, carrera, grado, grupo')
-    .eq('id', user.id)
-    .single();
+  // Fetch academic data from relations directly (like admin credential view)
+  let carreraName = '';
+  let nivelName = '';
+  let grupoName = '';
+
+  if (profile.carrera_id) {
+    const { data: carrera } = await supabase
+      .from('carreras')
+      .select('nombre, nivel_id')
+      .eq('id', profile.carrera_id)
+      .single();
+    
+    if (carrera) {
+      carreraName = carrera.nombre;
+      if (carrera.nivel_id) {
+        const { data: nivel } = await supabase
+          .from('niveles')
+          .select('nombre')
+          .eq('id', carrera.nivel_id)
+          .single();
+        if (nivel) nivelName = nivel.nombre;
+      }
+    }
+  }
+
+  if (profile.grupo_id) {
+    const { data: grupo } = await supabase
+      .from('grupos')
+      .select('nombre')
+      .eq('id', profile.grupo_id)
+      .single();
+    if (grupo) grupoName = grupo.nombre;
+  }
 
   // Check credential authorization
   const { data: credAuth } = await supabase
@@ -87,16 +114,16 @@ export default async function PerfilPage() {
                   {profile.estatus?.toUpperCase() || 'DESCONOCIDO'}
                 </Badge>
               </div>
-              {academic?.carrera && (
+              {carreraName && (
                 <div className="pt-2">
                   <p className="text-[10px] text-muted-foreground uppercase font-bold">Programa</p>
-                  <p className="text-sm font-semibold">{academic.carrera}</p>
+                  <p className="text-sm font-semibold">{carreraName}</p>
                 </div>
               )}
-              {academic?.grupo && (
+              {grupoName && (
                 <div className="pt-2">
                   <p className="text-[10px] text-muted-foreground uppercase font-bold">Grupo</p>
-                  <p className="text-sm font-semibold">{academic.grupo}</p>
+                  <p className="text-sm font-semibold">{grupoName}</p>
                 </div>
               )}
             </CardContent>
@@ -119,8 +146,8 @@ export default async function PerfilPage() {
                   alumno={{
                     nombre: profile.nombre,
                     apellidos: profile.apellidos,
-                    nivel: academic?.nivel || '',
-                    carrera: academic?.carrera || '',
+                    nivel: nivelName,
+                    carrera: carreraName,
                     matricula: profile.matricula || '',
                     foto_perfil: profile.foto_perfil,
                     fecha_inicio: profile.fecha_inicio,
