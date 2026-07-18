@@ -142,6 +142,7 @@ export async function getAlumnoDashboardData(userId: string) {
           // Estructurar Árbol: Unidades -> Temas -> Recursos & Slides
           todasLasUnidades = unidades?.map(u => ({
             ...u,
+            materias: { nombre: materiasAsignadas.find((m: any) => m.id === u.materia_id)?.nombre || 'General' },
             temas: temas?.filter(t => t.unidad_id === u.id).map(t => ({
               ...t,
               recursos: recursos?.filter(r => r.tema_id === t.id) || [],

@@ -67,7 +67,7 @@ export default function VideoCarousel({ unidades, videoProgress }: VideoCarousel
           ...v,
           tema_id: t.id,
           materia_nombre: u.materias?.nombre || 'General',
-          unidad_nombre: u.nombre,
+          unidad_nombre: u.titulo || u.nombre || 'Unidad',
           tema_titulo: t.titulo
         });
       });
