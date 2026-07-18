@@ -41,6 +41,7 @@ import { useInstitucion } from '@/hooks/use-institucion';
 import SlideViewer from '@/components/shared/slide-viewer';
 import { exportSlidesToPptx } from '@/lib/export-pptx';
 import { Button } from '@/components/ui/button';
+import TrackedVideoPlayer from '@/components/shared/TrackedVideoPlayer';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Accordion,
@@ -552,7 +553,7 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
                                         {tema.videos.map((vid: any, vIdx: number) => (
                                           <button
                                             key={`video-${tema.id}-${vIdx}`}
-                                            onClick={() => setActiveVideo(vid)}
+                                            onClick={() => setActiveVideo({...vid, tema_id: tema.id})}
                                             className="flex items-start gap-3 p-3 bg-red-50/30 border border-red-100 rounded-2xl hover:border-red-400 hover:bg-white hover:shadow-xl transition-all group/vid active:scale-[0.98] text-left"
                                           >
                                             <div className="shrink-0 relative overflow-hidden rounded-xl shadow-lg group-hover/vid:scale-105 transition-transform w-[100px] aspect-video bg-red-600">
@@ -752,16 +753,12 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
           
           <div ref={videoContainerRef} className="aspect-video w-full bg-slate-900 flex items-center justify-center relative group">
             {activeVideo && getYouTubeId(activeVideo.url) ? (
-              <iframe
-                width="100%"
-                height="100%"
-                src={`https://www.youtube.com/embed/${getYouTubeId(activeVideo.url)}?autoplay=1`}
-                title={activeVideo.titulo}
-                frameBorder="0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                className="w-full h-full shadow-2xl"
-              ></iframe>
+              <TrackedVideoPlayer
+                videoId={getYouTubeId(activeVideo.url)!}
+                videoUrl={activeVideo.url}
+                temaId={activeVideo.tema_id || ''} // We need to pass tema_id from activeVideo if available, but SubjectCard doesn't attach it by default. Let's make sure it's passed.
+                onClose={() => setActiveVideo(null)}
+              />
             ) : (
               <div className="flex flex-col items-center gap-4 text-white">
                 <AlertCircle size={48} className="text-red-500" />

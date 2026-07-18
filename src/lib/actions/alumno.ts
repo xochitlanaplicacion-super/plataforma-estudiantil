@@ -207,13 +207,22 @@ export async function getAlumnoDashboardData(userId: string) {
       // Si la tabla no existe aún, no bloquear nada
     }
 
+    // Obtener progreso de videos
+    const { data: videoProgressRaw } = await supabaseAdmin
+      .from('video_progreso_alumno')
+      .select('*')
+      .eq('alumno_id', userId);
+    
+    const videoProgress = videoProgressRaw || [];
+
     return {
       profile,
       materiasAsignadas,
       pendientes,
       todosLosEjercicios,
       unidades: todasLasUnidades,
-      fechasEvaluacion
+      fechasEvaluacion,
+      videoProgress
     };
 
   } catch (error: any) {
@@ -363,4 +372,33 @@ export async function getMateriasYTemasParaAlumno(userId: string) {
   });
   
   return materias;
+}
+
+export async function saveVideoProgress(temaId: string, videoUrl: string, progresoSegundos: number, duracionTotal: number, completado: boolean) {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+
+  if (!user) return { error: 'No user authenticated' };
+
+  try {
+    const { error } = await supabase
+      .from('video_progreso_alumno')
+      .upsert({
+        alumno_id: user.id,
+        tema_id: temaId,
+        video_url: videoUrl,
+        progreso_segundos: progresoSegundos,
+        duracion_total: duracionTotal,
+        completado: completado,
+        ultimo_visto: new Date().toISOString()
+      }, {
+        onConflict: 'alumno_id, tema_id, video_url'
+      });
+
+    if (error) throw error;
+    return { success: true };
+  } catch (err: any) {
+    console.error('Error saving video progress:', err.message);
+    return { error: err.message };
+  }
 }

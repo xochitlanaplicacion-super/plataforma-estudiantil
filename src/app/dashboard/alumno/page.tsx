@@ -28,6 +28,7 @@ import Link from 'next/link';
 import { cn, parseFechaLocal } from '@/lib/utils';
 import { PaginationTasks } from './components/PaginationTasks';
 import MaterialCarousel from './components/MaterialCarousel';
+import VideoCarousel from './components/VideoCarousel';
 import { PaymentNotificationPopup } from './components/PaymentNotificationPopup';
 import { AcreditacionNotificationPopup } from './components/AcreditacionNotificationPopup';
 import Image from 'next/image';
@@ -226,6 +227,12 @@ export default async function AlumnoDashboard() {
           </svg>
         </div>
       </section>
+
+      {/* VIDEOS (CARRUSEL ESTILO NETFLIX) */}
+      <VideoCarousel 
+        unidades={data?.unidades || []} 
+        videoProgress={data?.videoProgress || []} 
+      />
 
       {/* MATERIAL DE APOYO - CARRUSEL */}
       {materialesData.length > 0 && (
