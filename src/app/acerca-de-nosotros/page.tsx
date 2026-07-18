@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { BookOpen, GraduationCap, Users, Clock, MapPin, Phone, Mail, ChevronUp, Menu, X, CheckCircle, Award, Loader2, Briefcase, ArrowRight } from 'lucide-react';
+import { BookOpen, GraduationCap, Users, Clock, MapPin, Phone, Mail, ChevronUp, Menu, X, CheckCircle, Award, Loader2, Briefcase, ArrowRight, FileText } from 'lucide-react';
 
 if (typeof window !== 'undefined') {
   gsap.registerPlugin(useGSAP, ScrollTrigger);
@@ -17,6 +17,7 @@ import { createContactoRecord } from '@/lib/actions/contacto';
 import { useToast } from '@/hooks/use-toast';
 import Image from 'next/image';
 import { useInstitucion } from '@/hooks/use-institucion';
+import FileViewerModal from '@/components/ui/file-viewer-modal';
 
 // Eliminamos la lista de themes "hardcodeados" para que respete la tabla configuracion_sistema.
 
@@ -544,6 +545,9 @@ export const Programs = ({ theme, config }: { theme: any, config: any }) => {
 
   const educationalPrograms = config.programs?.length > 0 ? config.programs : defaultPrograms;
 
+  // Estado para el visor de archivos
+  const [viewerFile, setViewerFile] = useState<{url: string, name: string, type: string} | null>(null);
+
   const defaultModalities = ['Presencial', 'Virtual', 'Híbrida'];
   const studyOptions = config.study_options?.length > 0 ? config.study_options : defaultModalities;
 
@@ -557,6 +561,7 @@ export const Programs = ({ theme, config }: { theme: any, config: any }) => {
   };
 
   return (
+    <>
     <section id="oferta-educativa" className="py-32 bg-white relative">
       <div className="container mx-auto px-4 lg:px-8 relative z-10">
         <motion.div
@@ -646,9 +651,31 @@ export const Programs = ({ theme, config }: { theme: any, config: any }) => {
                 <p className="text-gray-600 mb-8 text-lg font-medium leading-relaxed flex-grow whitespace-pre-line">
                   {program.description}
                 </p>
-                <div className="flex items-center gap-4 text-gray-900 font-extrabold mb-10 p-5 rounded-2xl border border-gray-100 bg-gray-50 group-hover:bg-white transition-colors">
+                <div className="flex items-center gap-4 text-gray-900 font-extrabold mb-6 p-5 rounded-2xl border border-gray-100 bg-gray-50 group-hover:bg-white transition-colors">
                   <CheckCircle size={24} className="text-green-500" /> {program.validez}
                 </div>
+
+                {/* Archivos adjuntos de oferta educativa */}
+                {program.files && program.files.length > 0 && (
+                  <div className="space-y-2 mb-6">
+                    {program.files.map((f: any, fIdx: number) => (
+                      <button
+                        key={f.id || fIdx}
+                        onClick={() => setViewerFile({ url: f.url, name: f.name, type: f.type })}
+                        className="w-full flex items-center gap-3 px-5 py-3 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 hover:border-gray-300 hover:shadow-sm transition-all text-left group/file"
+                      >
+                        <div className="p-2 rounded-lg shrink-0" style={{ backgroundColor: `${theme.primary}15`, color: theme.primary }}>
+                          {f.type === 'application/pdf' ? <FileText size={18} /> : <BookOpen size={18} />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-0.5">Oferta educativa</p>
+                          <p className="font-extrabold text-sm text-gray-800 truncate group-hover/file:text-gray-900 transition-colors">{f.name}</p>
+                        </div>
+                        <ArrowRight size={16} className="text-gray-400 group-hover/file:text-gray-700 group-hover/file:translate-x-1 transition-all shrink-0" />
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <Magnetic intensity={0.4} className="w-full">
                   <a
                     href="/preregistro"
@@ -685,6 +712,16 @@ export const Programs = ({ theme, config }: { theme: any, config: any }) => {
         </motion.div>
       </div>
     </section>
+
+    {/* Modal de visualización de archivos */}
+    <FileViewerModal
+      isOpen={!!viewerFile}
+      onClose={() => setViewerFile(null)}
+      fileUrl={viewerFile?.url || ''}
+      fileName={viewerFile?.name || ''}
+      fileType={viewerFile?.type || ''}
+    />
+    </>
   );
 };
 

@@ -297,3 +297,87 @@ export async function deleteStorageFile(fileUrl: string): Promise<{ success: boo
 
   return { success: true };
 }
+
+// ─── UPLOAD: Subir archivo de programa al bucket programas-archivos ───────────
+
+const ALLOWED_PROGRAM_TYPES = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+
+export async function uploadProgramFile(formData: FormData): Promise<{ success: boolean; url?: string; fileType?: string; error?: string }> {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "No autenticado" };
+
+  const { data: profile } = await supabase.from("profiles").select("rol").eq("id", user.id).single();
+  if (!profile || !["admin", "superuser"].includes(profile.rol)) {
+    return { success: false, error: "No autorizado" };
+  }
+
+  const file = formData.get("file") as File;
+  const oldUrl = formData.get("old_url") as string | null;
+
+  if (!file) return { success: false, error: "Archivo no proporcionado" };
+
+  // Validar tipo
+  if (!ALLOWED_PROGRAM_TYPES.includes(file.type)) {
+    return { success: false, error: `Tipo de archivo no permitido (${file.type}). Solo se aceptan JPG, PNG y PDF.` };
+  }
+
+  // Validar tamaño
+  if (file.size > MAX_FILE_SIZE) {
+    return { success: false, error: `El archivo excede el límite de 10 MB (${(file.size / 1024 / 1024).toFixed(1)} MB).` };
+  }
+
+  // Borrar archivo anterior si existe
+  if (oldUrl) {
+    const parts = oldUrl.split('/programas-archivos/');
+    if (parts.length === 2) {
+      const oldFilename = parts[1].split('?')[0];
+      if (oldFilename) {
+        await supabase.storage.from("programas-archivos").remove([oldFilename]);
+      }
+    }
+  }
+
+  // Subir nuevo archivo
+  const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
+  const filename = `prog_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+  const { data: uploadData, error: uploadError } = await supabase.storage
+    .from("programas-archivos")
+    .upload(filename, file, { cacheControl: "3600", upsert: true });
+
+  if (uploadError) return { success: false, error: uploadError.message };
+
+  const { data: urlData } = supabase.storage
+    .from("programas-archivos")
+    .getPublicUrl(uploadData.path);
+
+  return { success: true, url: urlData.publicUrl, fileType: file.type };
+}
+
+// ─── DELETE: Borrar archivo de programa del bucket programas-archivos ─────────
+
+export async function deleteProgramFile(fileUrl: string): Promise<{ success: boolean; error?: string }> {
+  if (!fileUrl || !fileUrl.includes('supabase')) return { success: true };
+
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { success: false, error: "No autenticado" };
+
+  const { data: profile } = await supabase.from("profiles").select("rol").eq("id", user.id).single();
+  if (!profile || !["admin", "superuser"].includes(profile.rol)) {
+    return { success: false, error: "No autorizado" };
+  }
+
+  const parts = fileUrl.split('/programas-archivos/');
+  if (parts.length !== 2) return { success: false, error: "URL de archivo no válida para este bucket" };
+
+  const filename = parts[1].split('?')[0];
+  if (!filename) return { success: false, error: "No se pudo extraer el nombre del archivo" };
+
+  const { error } = await supabase.storage.from("programas-archivos").remove([filename]);
+  if (error) return { success: false, error: error.message };
+
+  return { success: true };
+}

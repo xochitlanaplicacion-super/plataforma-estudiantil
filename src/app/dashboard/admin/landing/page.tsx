@@ -2,13 +2,13 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useInstitucion } from "@/hooks/use-institucion";
-import { updateInstitucionConfig, uploadLogo, deleteStorageFile } from "@/lib/actions/institucion";
+import { updateInstitucionConfig, uploadLogo, deleteStorageFile, uploadProgramFile, deleteProgramFile } from "@/lib/actions/institucion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, MonitorPlay, Save, ImageIcon, ImagePlus, Plus, Trash2, X } from "lucide-react";
+import { Loader2, MonitorPlay, Save, ImageIcon, ImagePlus, Plus, Trash2, X, FileText, Upload, Pencil, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import { Hero, MissionStatement, About, Programs, Banner } from "@/app/acerca-de-nosotros/page";
@@ -19,9 +19,15 @@ export default function EditorLandingPage() {
   const [saving, setSaving] = useState(false);
   const [landingConfig, setLandingConfig] = useState<any>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const programFileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingImage, setUploadingImage] = useState<string | {type: string, index: number} | null>(null);
   const [editingTheme, setEditingTheme] = useState<string | null>(null);
   const [newThemeName, setNewThemeName] = useState("");
+  // Estado para la subida de archivos de programa
+  const [uploadingProgramFile, setUploadingProgramFile] = useState<{progIdx: number, fileIdx?: number} | null>(null);
+  const [programFileName, setProgramFileName] = useState("");
+  const [editingFileName, setEditingFileName] = useState<{progIdx: number, fileIdx: number} | null>(null);
+  const [editNameValue, setEditNameValue] = useState("");
 
   useEffect(() => {
     if (config?.landing_config) {
@@ -311,6 +317,49 @@ export default function EditorLandingPage() {
         {/* PANEL IZQUIERDO: FORMULARIO DE EDICIÓN */}
         <div className="w-1/2 lg:w-5/12 overflow-y-auto p-6 space-y-8 bg-gray-50/50 pb-32">
           <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleUploadImage} />
+          <input ref={programFileInputRef} type="file" accept="image/jpeg,image/png,.pdf" className="hidden" onChange={async (e) => {
+            const file = e.target.files?.[0];
+            if (!file || !uploadingProgramFile) return;
+            if (file.size > 10 * 1024 * 1024) {
+              toast({ title: "❌ Error", description: "El archivo excede el límite de 10 MB.", variant: "destructive" });
+              if (programFileInputRef.current) programFileInputRef.current.value = "";
+              setUploadingProgramFile(null);
+              return;
+            }
+            toast({ title: "⏳ Subiendo...", description: `Subiendo ${file.name}...` });
+            const formData = new FormData();
+            formData.append("file", file);
+            // Si estamos reemplazando un archivo existente
+            if (uploadingProgramFile.fileIdx !== undefined) {
+              const existingFile = landingConfig.programs?.[uploadingProgramFile.progIdx]?.files?.[uploadingProgramFile.fileIdx];
+              if (existingFile?.url) formData.append("old_url", existingFile.url);
+            }
+            const res = await uploadProgramFile(formData);
+            if (res.success && res.url) {
+              setLandingConfig((prev: any) => {
+                const newPrograms = [...prev.programs];
+                const prog = { ...newPrograms[uploadingProgramFile.progIdx] };
+                const files = [...(prog.files || [])];
+                if (uploadingProgramFile.fileIdx !== undefined) {
+                  // Reemplazar archivo existente
+                  files[uploadingProgramFile.fileIdx] = { ...files[uploadingProgramFile.fileIdx], url: res.url, type: res.fileType };
+                } else {
+                  // Nuevo archivo
+                  const name = programFileName.trim() || file.name.replace(/\.[^.]+$/, '');
+                  files.push({ id: `file_${Date.now()}`, name, url: res.url, type: res.fileType });
+                }
+                prog.files = files;
+                newPrograms[uploadingProgramFile.progIdx] = prog;
+                return { ...prev, programs: newPrograms };
+              });
+              toast({ title: "✅ Listo", description: "Archivo subido correctamente" });
+            } else {
+              toast({ title: "❌ Error", description: res.error || "Error al subir", variant: "destructive" });
+            }
+            if (programFileInputRef.current) programFileInputRef.current.value = "";
+            setUploadingProgramFile(null);
+            setProgramFileName("");
+          }} />
 
       {/* TEMA Y COLORES */}
       <Card>
@@ -874,6 +923,124 @@ export default function EditorLandingPage() {
                     }} className="h-20" />
                   </div>
                 </div>
+              </div>
+
+              {/* ── GESTOR DE ARCHIVOS ADJUNTOS ── */}
+              <div className="mt-4 pt-4 border-t border-dashed border-gray-300">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <FileText size={16} className="text-blue-600" />
+                    <Label className="text-sm font-bold text-gray-700">Archivos Adjuntos ({(prog.files || []).length}/10)</Label>
+                  </div>
+                  {(prog.files || []).length < 10 && (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        value={programFileName}
+                        onChange={(e) => setProgramFileName(e.target.value)}
+                        placeholder="Nombre del archivo (ej. Plan 2 meses)"
+                        className="h-8 text-xs w-56"
+                        onFocus={() => setProgramFileName('')}
+                      />
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-8 gap-1 text-xs shrink-0"
+                        onClick={() => {
+                          setUploadingProgramFile({ progIdx: idx });
+                          programFileInputRef.current?.click();
+                        }}
+                      >
+                        <Upload size={14} /> Subir
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Lista de archivos subidos */}
+                {(prog.files || []).length > 0 ? (
+                  <div className="space-y-2">
+                    {(prog.files || []).map((f: any, fIdx: number) => (
+                      <div key={f.id || fIdx} className="flex items-center gap-2 p-2 rounded-lg bg-white border text-sm group">
+                        <div className="w-8 h-8 rounded flex items-center justify-center shrink-0 bg-blue-50 text-blue-600">
+                          {f.type === 'application/pdf' ? <FileText size={16} /> : <ImageIcon size={16} />}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          {editingFileName?.progIdx === idx && editingFileName?.fileIdx === fIdx ? (
+                            <div className="flex items-center gap-1">
+                              <Input
+                                value={editNameValue}
+                                onChange={(e) => setEditNameValue(e.target.value)}
+                                className="h-7 text-xs"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    const newP = [...landingConfig.programs];
+                                    const files = [...(newP[idx].files || [])];
+                                    files[fIdx] = { ...files[fIdx], name: editNameValue.trim() || files[fIdx].name };
+                                    newP[idx] = { ...newP[idx], files };
+                                    handleChange('programs', newP);
+                                    setEditingFileName(null);
+                                  }
+                                  if (e.key === 'Escape') setEditingFileName(null);
+                                }}
+                              />
+                              <Button size="sm" variant="ghost" className="h-7 text-xs px-2" onClick={() => {
+                                const newP = [...landingConfig.programs];
+                                const files = [...(newP[idx].files || [])];
+                                files[fIdx] = { ...files[fIdx], name: editNameValue.trim() || files[fIdx].name };
+                                newP[idx] = { ...newP[idx], files };
+                                handleChange('programs', newP);
+                                setEditingFileName(null);
+                              }}>✓</Button>
+                            </div>
+                          ) : (
+                            <p className="font-medium truncate text-xs">{f.name}</p>
+                          )}
+                          <p className="text-[10px] text-muted-foreground">{f.type === 'application/pdf' ? 'PDF' : 'Imagen'}</p>
+                        </div>
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          {/* Preview */}
+                          {f.url && (
+                            <Button size="icon" variant="ghost" className="h-7 w-7" title="Ver" onClick={() => window.open(f.url, '_blank')}>
+                              <Eye size={14} />
+                            </Button>
+                          )}
+                          {/* Renombrar */}
+                          <Button size="icon" variant="ghost" className="h-7 w-7" title="Renombrar" onClick={() => {
+                            setEditingFileName({ progIdx: idx, fileIdx: fIdx });
+                            setEditNameValue(f.name);
+                          }}>
+                            <Pencil size={14} />
+                          </Button>
+                          {/* Resubir archivo */}
+                          <Button size="icon" variant="ghost" className="h-7 w-7" title="Reemplazar archivo" onClick={() => {
+                            setUploadingProgramFile({ progIdx: idx, fileIdx: fIdx });
+                            programFileInputRef.current?.click();
+                          }}>
+                            <Upload size={14} />
+                          </Button>
+                          {/* Borrar */}
+                          <Button size="icon" variant="destructive" className="h-7 w-7" title="Eliminar" onClick={async () => {
+                            if (!confirm(`¿Eliminar "${f.name}"? El archivo se borrará permanentemente.`)) return;
+                            if (f.url) await deleteProgramFile(f.url);
+                            const newP = [...landingConfig.programs];
+                            const files = [...(newP[idx].files || [])];
+                            files.splice(fIdx, 1);
+                            newP[idx] = { ...newP[idx], files };
+                            handleChange('programs', newP);
+                            toast({ title: "🗑️ Eliminado", description: `"${f.name}" fue eliminado.` });
+                          }}>
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-4 text-muted-foreground text-xs border rounded-lg border-dashed">
+                    No hay archivos adjuntos. Usa el botón "Subir" para agregar PDFs o imágenes.
+                  </div>
+                )}
               </div>
             </div>
           ))}
