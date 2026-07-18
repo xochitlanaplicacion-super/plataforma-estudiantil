@@ -36,6 +36,9 @@ export default function VideoCarousel({ unidades, videoProgress }: VideoCarousel
   const { config: inst } = useInstitucion();
   const [activeVideo, setActiveVideo] = useState<Video | null>(null);
   const [activeProgress, setActiveProgress] = useState<number>(0);
+  const [filtroMateria, setFiltroMateria] = useState<string>('Todas');
+  const [filtroUnidad, setFiltroUnidad] = useState<string>('Todas');
+  const [filtroTema, setFiltroTema] = useState<string>('Todos');
   const videoContainerRef = useRef<HTMLDivElement>(null);
 
   const getYouTubeId = (url: string) => {
@@ -79,20 +82,53 @@ export default function VideoCarousel({ unidades, videoProgress }: VideoCarousel
     progressMap.set(vp.video_url, vp);
   });
 
-  // Group videos
+  // Handle cascading filter resets
+  const handleFiltroMateriaChange = (materia: string) => {
+    setFiltroMateria(materia);
+    setFiltroUnidad('Todas');
+    setFiltroTema('Todos');
+  };
+
+  const handleFiltroUnidadChange = (unidad: string) => {
+    setFiltroUnidad(unidad);
+    setFiltroTema('Todos');
+  };
+
+  const uniqueMaterias = Array.from(new Set(allVideos.map(v => v.materia_nombre)));
+  
+  const uniqueUnidades = Array.from(new Set(
+    allVideos
+      .filter(v => filtroMateria === 'Todas' || v.materia_nombre === filtroMateria)
+      .map(v => v.unidad_nombre)
+  ));
+
+  const uniqueTemas = Array.from(new Set(
+    allVideos
+      .filter(v => filtroMateria === 'Todas' || v.materia_nombre === filtroMateria)
+      .filter(v => filtroUnidad === 'Todas' || v.unidad_nombre === filtroUnidad)
+      .map(v => v.tema_titulo)
+  ));
+
+  // Group videos based on filters
   const continueWatching: Video[] = [];
   const byMateria: Record<string, Video[]> = {};
 
   allVideos.forEach(v => {
-    const prog = progressMap.get(v.url);
-    if (prog && !prog.completado && prog.progreso_segundos > 0) {
-      continueWatching.push(v);
+    const passMateria = filtroMateria === 'Todas' || v.materia_nombre === filtroMateria;
+    const passUnidad = filtroUnidad === 'Todas' || v.unidad_nombre === filtroUnidad;
+    const passTema = filtroTema === 'Todos' || v.tema_titulo === filtroTema;
+
+    if (passMateria && passUnidad && passTema) {
+      const prog = progressMap.get(v.url);
+      if (prog && !prog.completado && prog.progreso_segundos > 0) {
+        continueWatching.push(v);
+      }
+      
+      if (!byMateria[v.materia_nombre]) {
+        byMateria[v.materia_nombre] = [];
+      }
+      byMateria[v.materia_nombre].push(v);
     }
-    
-    if (!byMateria[v.materia_nombre]) {
-      byMateria[v.materia_nombre] = [];
-    }
-    byMateria[v.materia_nombre].push(v);
   });
 
   const handlePlayVideo = (video: Video) => {
@@ -207,9 +243,42 @@ export default function VideoCarousel({ unidades, videoProgress }: VideoCarousel
 
   return (
     <div className="w-full space-y-2 mt-8">
-      <div className="flex items-center gap-2 mb-6">
-        <MonitorPlay className="w-6 h-6 text-red-600" />
-        <h3 className="text-xl md:text-2xl font-black font-headline text-slate-800">Videoteca</h3>
+      <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
+        <div className="flex items-center gap-2">
+          <MonitorPlay className="w-6 h-6 text-red-600" />
+          <h3 className="text-xl md:text-2xl font-black font-headline text-slate-800">Videoteca</h3>
+        </div>
+        
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+          <select 
+            value={filtroMateria} 
+            onChange={(e) => handleFiltroMateriaChange(e.target.value)}
+            className="bg-white border border-slate-200 text-slate-700 text-xs md:text-sm rounded-lg focus:ring-red-500 focus:border-red-500 block p-2 md:p-2.5 shadow-sm font-medium flex-1 md:flex-none cursor-pointer"
+          >
+            <option value="Todas">Todas las materias</option>
+            {uniqueMaterias.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+          
+          <select 
+            value={filtroUnidad} 
+            onChange={(e) => handleFiltroUnidadChange(e.target.value)}
+            className="bg-white border border-slate-200 text-slate-700 text-xs md:text-sm rounded-lg focus:ring-red-500 focus:border-red-500 block p-2 md:p-2.5 shadow-sm font-medium flex-1 md:flex-none cursor-pointer"
+            disabled={uniqueUnidades.length === 0}
+          >
+            <option value="Todas">Todas las unidades</option>
+            {uniqueUnidades.map(u => <option key={u} value={u}>{u}</option>)}
+          </select>
+
+          <select 
+            value={filtroTema} 
+            onChange={(e) => setFiltroTema(e.target.value)}
+            className="bg-white border border-slate-200 text-slate-700 text-xs md:text-sm rounded-lg focus:ring-red-500 focus:border-red-500 block p-2 md:p-2.5 shadow-sm font-medium flex-1 md:flex-none cursor-pointer"
+            disabled={uniqueTemas.length === 0}
+          >
+            <option value="Todos">Todos los temas</option>
+            {uniqueTemas.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
       </div>
       
       {renderRow('Continuar Viendo', continueWatching, true)}
