@@ -137,111 +137,135 @@ export default function VideoCarousel({ unidades, videoProgress }: VideoCarousel
     setActiveVideo(video);
   };
 
-  const renderRow = (title: string, videos: Video[], isContinueWatching = false) => {
-    if (videos.length === 0) return null;
-    const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const handlePlayVideo = (video: Video) => {
+    const prog = progressMap.get(video.url);
+    setActiveProgress(prog?.progreso_segundos || 0);
+    setActiveVideo(video);
+  };
+    </div>
+  );
+}
 
-    const scroll = (direction: 'left' | 'right') => {
-      if (scrollContainerRef.current) {
-        const amount = scrollContainerRef.current.clientWidth * 0.75;
-        scrollContainerRef.current.scrollBy({ left: direction === 'left' ? -amount : amount, behavior: 'smooth' });
-      }
-    };
+function VideoRow({ 
+  title, 
+  videos, 
+  isContinueWatching = false, 
+  progressMap, 
+  handlePlayVideo, 
+  getYouTubeId 
+}: { 
+  title: string; 
+  videos: Video[]; 
+  isContinueWatching?: boolean; 
+  progressMap: Map<string, VideoProgress>; 
+  handlePlayVideo: (v: Video) => void;
+  getYouTubeId: (url: string) => string | null;
+}) {
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
-    return (
-      <div className="mb-8 relative group" key={title}>
-        <h4 className="text-lg md:text-xl font-bold text-slate-800 mb-3 px-1">{title}</h4>
-        
-        <div className="relative">
-          <button 
-            onClick={() => scroll('left')}
-            className="absolute left-0 top-0 bottom-0 z-10 w-12 bg-gradient-to-r from-white via-white/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-start hover:w-16"
-          >
-            <div className="bg-white rounded-full p-2 shadow-lg -ml-4 border border-slate-100">
-              <ChevronLeft size={24} className="text-slate-700" />
-            </div>
-          </button>
-          
-          <div 
-            ref={scrollContainerRef}
-            className="flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-hide pb-4 pt-2 px-2"
-            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-          >
-            {videos.map((vid, idx) => {
-              const ytId = getYouTubeId(vid.url);
-              const prog = progressMap.get(vid.url);
-              const isCompleted = prog?.completado;
-              const percent = prog ? Math.min(100, (prog.progreso_segundos / (prog.duracion_total || 1)) * 100) : 0;
+  if (videos.length === 0) return null;
 
-              return (
-                <div 
-                  key={`${vid.tema_id}-${idx}`}
-                  className="shrink-0 snap-start relative group/card cursor-pointer w-[280px] md:w-[320px] transition-all duration-300 hover:-translate-y-2"
-                  onClick={() => handlePlayVideo(vid)}
-                >
-                  <div className="aspect-video rounded-xl overflow-hidden bg-slate-900 relative shadow-md group-hover/card:shadow-xl transition-shadow border border-slate-200 group-hover/card:border-red-200">
-                    {ytId ? (
-                      <img 
-                        src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`}
-                        alt={vid.titulo}
-                        className="w-full h-full object-cover opacity-80 group-hover/card:opacity-100 transition-opacity"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-slate-500">
-                        <MonitorPlay size={32} />
-                      </div>
-                    )}
-
-                    <div className="absolute inset-0 bg-black/40 group-hover/card:bg-black/10 transition-colors flex items-center justify-center">
-                      <div className="w-12 h-12 rounded-full bg-red-600/90 text-white flex items-center justify-center opacity-0 group-hover/card:opacity-100 transition-all scale-75 group-hover/card:scale-100 shadow-xl">
-                        <Play size={20} className="ml-1" fill="currentColor" />
-                      </div>
-                    </div>
-
-                    {/* Progress Bar */}
-                    {prog && !isCompleted && percent > 0 && (
-                      <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-800/50 backdrop-blur-sm">
-                        <div className="h-full bg-red-600 shadow-[0_0_10px_rgba(220,38,38,0.8)]" style={{ width: `${percent}%` }} />
-                      </div>
-                    )}
-                    
-                    {/* Completion Checkmark */}
-                    {isCompleted && (
-                      <div className="absolute top-2 right-2 bg-green-500 text-white rounded-full p-1 shadow-lg">
-                        <CheckCircle2 size={16} />
-                      </div>
-                    )}
-                  </div>
-                  
-                  <div className="mt-3 px-1">
-                    <h5 className="font-bold text-slate-800 text-sm line-clamp-1 group-hover/card:text-red-600 transition-colors">{vid.titulo}</h5>
-                    <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">{vid.unidad_nombre} • {vid.tema_titulo}</p>
-                    {isContinueWatching && prog && (
-                      <p className="text-[10px] text-red-500 font-bold uppercase mt-1">
-                        Restan {Math.max(0, Math.floor(((prog.duracion_total || 0) - prog.progreso_segundos) / 60))} min
-                      </p>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          <button 
-            onClick={() => scroll('right')}
-            className="absolute right-0 top-0 bottom-0 z-10 w-12 bg-gradient-to-l from-white via-white/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-end hover:w-16"
-          >
-            <div className="bg-white rounded-full p-2 shadow-lg -mr-4 border border-slate-100">
-              <ChevronRight size={24} className="text-slate-700" />
-            </div>
-          </button>
-        </div>
-      </div>
-    );
+  const scroll = (direction: 'left' | 'right') => {
+    if (scrollContainerRef.current) {
+      const amount = scrollContainerRef.current.clientWidth * 0.75;
+      scrollContainerRef.current.scrollBy({ left: direction === 'left' ? -amount : amount, behavior: 'smooth' });
+    }
   };
 
   return (
+    <div className="mb-8 relative group" key={title}>
+      <h4 className="text-lg md:text-xl font-bold text-slate-800 mb-3 px-1">{title}</h4>
+      
+      <div className="relative">
+        <button 
+          onClick={() => scroll('left')}
+          className="absolute left-0 top-0 bottom-0 z-10 w-12 bg-gradient-to-r from-white via-white/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-start hover:w-16"
+        >
+          <div className="bg-white rounded-full p-2 shadow-lg -ml-4 border border-slate-100">
+            <ChevronLeft size={24} className="text-slate-700" />
+          </div>
+        </button>
+        
+        <div 
+          ref={scrollContainerRef}
+          className="flex gap-4 overflow-x-auto snap-x snap-mandatory scrollbar-hide pb-4 pt-2 px-2"
+          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        >
+          {videos.map((vid, idx) => {
+            const ytId = getYouTubeId(vid.url);
+            const prog = progressMap.get(vid.url);
+            const isCompleted = prog?.completado;
+            const percent = prog ? Math.min(100, (prog.progreso_segundos / (prog.duracion_total || 1)) * 100) : 0;
+
+            return (
+              <div 
+                key={`${vid.tema_id}-${idx}`}
+                className="shrink-0 snap-start relative group/card cursor-pointer w-[280px] md:w-[320px] transition-all duration-300 hover:-translate-y-2"
+                onClick={() => handlePlayVideo(vid)}
+              >
+                <div className="aspect-video rounded-xl overflow-hidden bg-slate-900 relative shadow-md group-hover/card:shadow-xl transition-shadow border border-slate-200 group-hover/card:border-red-200">
+                  {ytId ? (
+                    <img 
+                      src={`https://img.youtube.com/vi/${ytId}/mqdefault.jpg`}
+                      alt={vid.titulo}
+                      className="w-full h-full object-cover opacity-80 group-hover/card:opacity-100 transition-opacity"
+                      loading="lazy"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-slate-500">
+                      <MonitorPlay size={32} />
+                    </div>
+                  )}
+
+                  <div className="absolute inset-0 bg-black/40 group-hover/card:bg-black/10 transition-colors flex items-center justify-center">
+                    <div className="w-12 h-12 rounded-full bg-red-600/90 text-white flex items-center justify-center opacity-0 group-hover/card:opacity-100 transition-all scale-75 group-hover/card:scale-100 shadow-xl">
+                      <Play size={20} className="ml-1" fill="currentColor" />
+                    </div>
+                  </div>
+
+                  {/* Progress Bar */}
+                  {prog && !isCompleted && percent > 0 && (
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-slate-800/50 backdrop-blur-sm">
+                      <div className="h-full bg-red-600 shadow-[0_0_10px_rgba(220,38,38,0.8)]" style={{ width: `${percent}%` }} />
+                    </div>
+                  )}
+                  
+                  {/* Completion Checkmark */}
+                  {isCompleted && (
+                    <div className="absolute top-2 right-2 bg-green-500 text-white rounded-full p-1 shadow-lg">
+                      <CheckCircle2 size={16} />
+                    </div>
+                  )}
+                </div>
+                
+                <div className="mt-3 px-1">
+                  <h5 className="font-bold text-slate-800 text-sm line-clamp-1 group-hover/card:text-red-600 transition-colors">{vid.titulo}</h5>
+                  <p className="text-xs text-slate-500 line-clamp-1 mt-0.5">{vid.unidad_nombre} • {vid.tema_titulo}</p>
+                  {isContinueWatching && prog && (
+                    <p className="text-[10px] text-red-500 font-bold uppercase mt-1">
+                      Restan {Math.max(0, Math.floor(((prog.duracion_total || 0) - prog.progreso_segundos) / 60))} min
+                    </p>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <button 
+          onClick={() => scroll('right')}
+          className="absolute right-0 top-0 bottom-0 z-10 w-12 bg-gradient-to-l from-white via-white/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-end hover:w-16"
+        >
+          <div className="bg-white rounded-full p-2 shadow-lg -mr-4 border border-slate-100">
+            <ChevronRight size={24} className="text-slate-700" />
+          </div>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export default function VideoCarousel({ unidades, videoProgress }: VideoCarouselProps) {
     <div className="w-full space-y-2 mt-8">
       <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 mb-6">
         <div className="flex items-center gap-2">
@@ -281,11 +305,27 @@ export default function VideoCarousel({ unidades, videoProgress }: VideoCarousel
         </div>
       </div>
       
-      {renderRow('Continuar Viendo', continueWatching, true)}
-      
-      {Object.entries(byMateria).map(([materia, videos]) => 
-        renderRow(materia, videos)
+      {continueWatching.length > 0 && (
+        <VideoRow 
+          title="Continuar Viendo" 
+          videos={continueWatching} 
+          isContinueWatching={true} 
+          progressMap={progressMap}
+          handlePlayVideo={handlePlayVideo}
+          getYouTubeId={getYouTubeId}
+        />
       )}
+      
+      {Object.entries(byMateria).map(([materia, videos]) => (
+        <VideoRow 
+          key={materia}
+          title={materia} 
+          videos={videos} 
+          progressMap={progressMap}
+          handlePlayVideo={handlePlayVideo}
+          getYouTubeId={getYouTubeId}
+        />
+      ))}
 
       <Dialog open={!!activeVideo} onOpenChange={(open) => !open && setActiveVideo(null)}>
         <DialogContent className="max-w-5xl w-full sm:w-[95vw] p-0 overflow-hidden bg-black border-none gap-0 rounded-none sm:rounded-[32px] !translate-x-[-50%]">
