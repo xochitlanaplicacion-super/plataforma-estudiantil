@@ -372,11 +372,11 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
 
   // ── Aviso/Comunicado popup (sin caja de respuesta) ──────────────────────────
   const AvisoPopup = isAvisoOpen && activeAviso && !isAdmin ? (
-    <div className="fixed top-4 right-4 md:top-auto md:bottom-6 md:right-6 z-[100] animate-in slide-in-from-top-5 md:slide-in-from-bottom-5 fade-in duration-300 pointer-events-auto">
-      <div className="w-[calc(100vw-32px)] md:w-96 drop-shadow-2xl">
-        <div className="bg-white rounded-2xl overflow-hidden border border-border shadow-xl">
+    <div className="fixed inset-x-4 top-4 md:inset-x-auto md:top-auto md:bottom-6 md:right-6 z-[100] animate-in slide-in-from-top-5 md:slide-in-from-bottom-5 fade-in duration-300 pointer-events-auto flex justify-center md:block">
+      <div className="w-full max-w-sm md:w-96 drop-shadow-2xl">
+        <div className="bg-white rounded-2xl overflow-hidden border border-border shadow-xl flex flex-col max-h-[85vh]">
           {/* Header tipo WhatsApp */}
-          <div className="bg-green-500 text-white px-4 py-3 flex items-center justify-between">
+          <div className="bg-green-500 text-white px-4 py-3 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center shrink-0">
                 <MessageSquare size={16} className="text-white" />
@@ -390,15 +390,15 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
               <X size={18} />
             </button>
           </div>
-          {/* Cuerpo */}
-          <div className="p-5 bg-[url('/images/whatsapp-bg.png')] bg-cover bg-center">
+          {/* Cuerpo con scroll elevador para avisos largos */}
+          <div className="p-4 md:p-5 bg-[url('/images/whatsapp-bg.png')] bg-cover bg-center overflow-y-auto flex-1 max-h-[55vh] md:max-h-[60vh]">
             <div className="bg-white p-4 rounded-xl rounded-tl-none shadow-sm border border-slate-100">
               <FormattedContent content={activeAviso.contenido} className="text-slate-700" />
-              <span className="text-[10px] text-slate-400 mt-2 block text-right">{activeAviso.remitente}</span>
+              <span className="text-[10px] text-slate-400 mt-2 block text-right font-medium">{activeAviso.remitente}</span>
             </div>
           </div>
-          {/* Botón Marcar Visto / Ir al chat */}
-          <div className="p-3 bg-slate-50 border-t border-slate-100">
+          {/* Botón Marcar Visto / Ir al chat (Fijo abajo) */}
+          <div className="p-3 bg-slate-50 border-t border-slate-100 shrink-0">
             {activeAviso.tipo === 'CHAT_GRUPAL' ? (
               <button
                 onClick={async () => {
