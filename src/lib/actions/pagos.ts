@@ -17,6 +17,93 @@ const supabaseAdmin = createClient(
 
 // ─── PLAN DE PAGOS (Gestión de Conceptos) ───────────────────────────────────
 
+export async function sincronizarConceptosFaltantes(alumnoId?: string, programaFiltro?: string) {
+  try {
+    let queryPlan = supabaseAdmin
+      .from('plan_pagos')
+      .select('id, programa')
+      .eq('activo', true);
+
+    if (programaFiltro) {
+      queryPlan = queryPlan.eq('programa', programaFiltro);
+    }
+
+    const { data: todosConceptos, error: errPlan } = await queryPlan;
+    if (errPlan || !todosConceptos || todosConceptos.length === 0) return { success: true };
+
+    const conceptosPorPrograma = new Map<string, string[]>();
+    for (const c of todosConceptos) {
+      if (!conceptosPorPrograma.has(c.programa)) {
+        conceptosPorPrograma.set(c.programa, []);
+      }
+      conceptosPorPrograma.get(c.programa)!.push(c.id);
+    }
+
+    let queryPagos = supabaseAdmin
+      .from('pagos_alumno')
+      .select('alumno_id, plan_pago_id, plan_pagos(programa)');
+
+    if (alumnoId) {
+      queryPagos = queryPagos.eq('alumno_id', alumnoId);
+    }
+
+    const { data: pagosExistentes, error: errPagos } = await queryPagos;
+    if (errPagos || !pagosExistentes) return { success: true };
+
+    const alumnoProgramas = new Map<string, Set<string>>();
+    const alumnoConceptos = new Map<string, Set<string>>();
+
+    for (const p of (pagosExistentes as any[])) {
+      const aId = p.alumno_id;
+      const prog = p.plan_pagos?.programa;
+      const planId = p.plan_pago_id;
+
+      if (!alumnoConceptos.has(aId)) {
+        alumnoConceptos.set(aId, new Set());
+      }
+      if (planId) alumnoConceptos.get(aId)!.add(planId);
+
+      if (prog) {
+        if (!alumnoProgramas.has(aId)) {
+          alumnoProgramas.set(aId, new Set());
+        }
+        alumnoProgramas.get(aId)!.add(prog);
+      }
+    }
+
+    const registrosInsertar: { alumno_id: string; plan_pago_id: string; estatus: string }[] = [];
+
+    for (const [aId, progs] of alumnoProgramas.entries()) {
+      const asignados = alumnoConceptos.get(aId) || new Set();
+
+      for (const prog of progs) {
+        const conceptosRequeridos = conceptosPorPrograma.get(prog) || [];
+        for (const planId of conceptosRequeridos) {
+          if (!asignados.has(planId)) {
+            registrosInsertar.push({
+              alumno_id: aId,
+              plan_pago_id: planId,
+              estatus: 'pendiente',
+            });
+            asignados.add(planId);
+          }
+        }
+      }
+    }
+
+    if (registrosInsertar.length > 0) {
+      await supabaseAdmin
+        .from('pagos_alumno')
+        .upsert(registrosInsertar, { onConflict: 'alumno_id,plan_pago_id' });
+    }
+
+    return { success: true, insertados: registrosInsertar.length };
+  } catch (err: any) {
+    console.error('Error en sincronizarConceptosFaltantes:', err);
+    return { success: false, error: err.message };
+  }
+}
+
 export async function getPlanPagos() {
   const { data, error } = await supabaseAdmin
     .from('plan_pagos')
@@ -58,6 +145,10 @@ export async function createConceptoPago(data: {
     monto: data.monto || null,
   });
   if (error) return { success: false, error: error.message };
+
+  // Auto-sincronizar este nuevo concepto con los alumnos existentes de ese programa
+  await sincronizarConceptosFaltantes(undefined, programa);
+
   revalidatePath('/dashboard/admin/vigencias');
   return { success: true };
 }
@@ -94,6 +185,9 @@ export async function deleteConceptoPago(id: string) {
     return { success: false, error: 'No se puede eliminar: este concepto tiene pagos registrados.' };
   }
 
+  // Eliminar cualquier registro 'pendiente' o no pagado asociado a este plan_pago_id en pagos_alumno
+  await supabaseAdmin.from('pagos_alumno').delete().eq('plan_pago_id', id).neq('estatus', 'pagado');
+
   const { error } = await supabaseAdmin.from('plan_pagos').delete().eq('id', id);
   if (error) return { success: false, error: error.message };
   revalidatePath('/dashboard/admin/vigencias');
@@ -103,6 +197,8 @@ export async function deleteConceptoPago(id: string) {
 // ─── PAGOS DE ALUMNOS ────────────────────────────────────────────────────────
 
 export async function getPagosAlumno(alumnoId: string) {
+  await sincronizarConceptosFaltantes(alumnoId);
+
   const { data, error } = await supabaseAdmin
     .from('pagos_alumno')
     .select('*, plan_pagos(programa, nombre_concepto, orden, monto)')
@@ -113,6 +209,8 @@ export async function getPagosAlumno(alumnoId: string) {
 }
 
 export async function getPagosAlumnoPropio(alumnoId: string) {
+  await sincronizarConceptosFaltantes(alumnoId);
+
   const { data, error } = await supabaseAdmin
     .from('pagos_alumno')
     .select('*, plan_pagos(programa, nombre_concepto, orden, monto)')
@@ -123,6 +221,8 @@ export async function getPagosAlumnoPropio(alumnoId: string) {
 }
 
 export async function getTodosLosAlumnosConPagos() {
+  await sincronizarConceptosFaltantes();
+
   const { data: alumnos, error } = await supabaseAdmin
     .from('profiles')
     .select(`id, nombre, apellidos, matricula, email, carrera_id, grupo_id, carreras(nombre, niveles(nombre)), grupos(id, nombre, turno)`)
