@@ -19,6 +19,7 @@ import {
   enviarMensaje, obtenerComunicados, obtenerListaChats, obtenerConversacion,
   obtenerEstructuraAcademica, eliminarMensaje, marcarComoLeido, marcarChatComoLeido, type TipoDestino,
 } from '@/lib/actions/mensajes';
+import FormattedContent from '@/components/shared/FormattedContent';
 
 export default function MensajeriaInterna() {
   const { toast } = useToast();
@@ -42,6 +43,23 @@ export default function MensajeriaInterna() {
   const [busquedaChat, setBusquedaChat] = useState('');
   const [showNuevoChat, setShowNuevoChat] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const comunicadoTextareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const applyFormat = (prefix: string, suffix: string = '') => {
+    if (!comunicadoTextareaRef.current) return;
+    const el = comunicadoTextareaRef.current;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const text = el.value;
+    const selected = text.substring(start, end);
+    const replacement = `${prefix}${selected || 'texto'}${suffix}`;
+    const newText = text.substring(0, start) + replacement + text.substring(end);
+    setNuevoContenido(newText);
+    setTimeout(() => {
+      el.focus();
+      el.setSelectionRange(start + prefix.length, start + prefix.length + (selected ? selected.length : 5));
+    }, 50);
+  };
 
   useEffect(() => { supabase.auth.getUser().then(({ data }) => { if (data.user) setAdminId(data.user.id); }); }, []);
 
@@ -178,7 +196,7 @@ export default function MensajeriaInterna() {
                         <span className="text-xs font-bold text-primary">{c.destinoNombre}</span>
                         <span className="text-[10px] text-muted-foreground ml-auto">{fmt(c.created_at)}</span>
                       </div>
-                      <p className="text-sm leading-relaxed">{c.contenido}</p>
+                      <FormattedContent content={c.contenido} className="mt-1" />
                       <div className="flex items-center gap-3 mt-2">
                         <span className={cn('text-xs font-black', pctColor)}>{c.vistos}/{c.totalDestinatarios} vistos ({c.pctVistos}%)</span>
                         <div className="flex-1 max-w-[200px] h-1.5 bg-gray-200 rounded-full overflow-hidden">
@@ -335,8 +353,24 @@ export default function MensajeriaInterna() {
               );
             })()}
             <div>
-              <label className="text-xs font-black uppercase text-muted-foreground mb-1 block">Mensaje</label>
-              <Textarea value={nuevoContenido} onChange={e => setNuevoContenido(e.target.value)} placeholder="Escribe el comunicado..." className="min-h-[120px]" />
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-black uppercase text-muted-foreground block">Mensaje</label>
+                <div className="flex items-center gap-1 p-0.5 bg-muted/40 rounded-lg border border-border">
+                  <button type="button" onClick={() => applyFormat('<b>', '</b>')} className="px-2 py-0.5 text-xs font-black rounded hover:bg-white transition-colors" title="Negrita"><b>B</b></button>
+                  <button type="button" onClick={() => applyFormat('<i>', '</i>')} className="px-2 py-0.5 text-xs italic rounded hover:bg-white transition-colors" title="Cursiva"><i>I</i></button>
+                  <button type="button" onClick={() => applyFormat('<u>', '</u>')} className="px-2 py-0.5 text-xs underline rounded hover:bg-white transition-colors" title="Subrayado"><u>U</u></button>
+                  <div className="h-3 w-px bg-border mx-0.5" />
+                  <button type="button" onClick={() => applyFormat('### ')} className="px-2 py-0.5 text-xs font-bold rounded hover:bg-white transition-colors" title="Título">H3</button>
+                  <button type="button" onClick={() => applyFormat('• ')} className="px-2 py-0.5 text-xs rounded hover:bg-white transition-colors" title="Lista">• Lista</button>
+                </div>
+              </div>
+              <Textarea 
+                ref={comunicadoTextareaRef}
+                value={nuevoContenido} 
+                onChange={e => setNuevoContenido(e.target.value)} 
+                placeholder="Escribe o pega el comunicado..." 
+                className="min-h-[140px] font-sans" 
+              />
             </div>
           </div>
           <DialogFooter>

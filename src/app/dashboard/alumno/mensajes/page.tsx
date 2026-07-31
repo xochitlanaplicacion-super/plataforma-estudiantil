@@ -16,6 +16,8 @@ import {
   marcarComoLeido, marcarComunicadoVisto, obtenerAdminId,
 } from '@/lib/actions/mensajes';
 
+import FormattedContent from '@/components/shared/FormattedContent';
+
 export default function MensajesAlumno() {
   const { toast } = useToast();
   const supabase = createClient();
@@ -128,7 +130,7 @@ export default function MensajesAlumno() {
                         <Badge variant="secondary" className="text-[8px] font-black uppercase">{g.tipo_destino}</Badge>
                         <span className="text-[10px] text-muted-foreground ml-auto">{fmt(g.created_at)}</span>
                       </div>
-                      <p className="text-sm leading-relaxed">{g.contenido}</p>
+                      <FormattedContent content={g.contenido} className="mt-1" />
                     </div>
                     {!g.yaVisto ? <Button variant="outline" size="sm" className="shrink-0 rounded-xl text-xs gap-1" onClick={() => marcarVisto(g.id)}><Eye size={12} /> Marcar visto</Button>
                       : <span className="text-[10px] text-emerald-500 font-bold flex items-center gap-1"><CheckCheck size={14} /> Visto</span>}

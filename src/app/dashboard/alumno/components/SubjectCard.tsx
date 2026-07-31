@@ -323,8 +323,6 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
             </div>
             <div className="flex flex-col xl:flex-row xl:items-center gap-2 xl:gap-4 text-xs md:text-sm font-medium text-muted-foreground uppercase tracking-widest">
               <span className="flex items-center gap-1.5"><GraduationCap className="w-3.5 h-3.5 md:w-4 md:h-4 opacity-70 shrink-0" /><span className="text-balance">{materia.profesor}</span></span>
-              <span className="hidden xl:block opacity-30 px-1 shrink-0">•</span>
-              <span className="flex items-center gap-1.5 shrink-0"><Clock className="w-3.5 h-3.5 md:w-4 md:h-4 opacity-70 shrink-0" />Lunes, Miér, Vier</span>
             </div>
           </div>
         </div>

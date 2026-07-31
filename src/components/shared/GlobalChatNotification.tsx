@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Card } from '@/components/ui/card';
 import { enviarMensaje, marcarChatComoLeido, marcarComunicadoVisto } from '@/lib/actions/mensajes';
 import { obtenerMensajesGrupalesPendientes, marcarAvisoClaseVisto, marcarGrupalVisto } from '@/lib/actions/mensajes_clases';
+import FormattedContent from '@/components/shared/FormattedContent';
 
 const playNotificationSound = () => {
   try {
@@ -392,7 +393,7 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
           {/* Cuerpo */}
           <div className="p-5 bg-[url('/images/whatsapp-bg.png')] bg-cover bg-center">
             <div className="bg-white p-4 rounded-xl rounded-tl-none shadow-sm border border-slate-100">
-              <p className="text-sm text-slate-700 leading-relaxed">{activeAviso.contenido}</p>
+              <FormattedContent content={activeAviso.contenido} className="text-slate-700" />
               <span className="text-[10px] text-slate-400 mt-2 block text-right">{activeAviso.remitente}</span>
             </div>
           </div>
