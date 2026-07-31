@@ -61,6 +61,74 @@ export default function MensajeriaInterna() {
     }, 50);
   };
 
+  const handlePasteComunicado = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const html = e.clipboardData.getData('text/html');
+    if (!html) return;
+
+    e.preventDefault();
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+
+    const convertNode = (node: Node): string => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        return node.textContent || '';
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) return '';
+
+      const el = node as HTMLElement;
+      const tagName = el.tagName.toLowerCase();
+      const style = el.getAttribute('style') || '';
+      const isBold = tagName === 'b' || tagName === 'strong' || style.includes('font-weight: 700') || style.includes('font-weight:bold') || style.includes('font-weight: bold');
+      const isItalic = tagName === 'i' || tagName === 'em' || style.includes('font-style: italic') || style.includes('font-style:italic');
+      const isUnderline = tagName === 'u' || style.includes('text-decoration: underline') || style.includes('text-decoration:underline');
+
+      let inner = '';
+      node.childNodes.forEach(child => {
+        inner += convertNode(child);
+      });
+
+      if (!inner && tagName !== 'br') return '';
+
+      if (isBold) inner = `<b>${inner}</b>`;
+      if (isItalic) inner = `<i>${inner}</i>`;
+      if (isUnderline) inner = `<u>${inner}</u>`;
+
+      if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tagName)) {
+        return `\n### ${inner}\n`;
+      }
+      if (tagName === 'li') {
+        return `\n• ${inner}`;
+      }
+      if (['p', 'div'].includes(tagName)) {
+        return `\n${inner}`;
+      }
+      if (tagName === 'br') {
+        return '\n';
+      }
+
+      return inner;
+    };
+
+    let converted = convertNode(doc.body).trim();
+    converted = converted.replace(/\n{3,}/g, '\n\n');
+
+    if (!converted) return;
+
+    if (!comunicadoTextareaRef.current) return;
+    const el = comunicadoTextareaRef.current;
+    const start = el.selectionStart;
+    const end = el.selectionEnd;
+    const currentVal = el.value;
+
+    const newVal = currentVal.substring(0, start) + converted + currentVal.substring(end);
+    setNuevoContenido(newVal);
+
+    setTimeout(() => {
+      el.focus();
+      el.setSelectionRange(start + converted.length, start + converted.length);
+    }, 50);
+  };
+
   useEffect(() => { supabase.auth.getUser().then(({ data }) => { if (data.user) setAdminId(data.user.id); }); }, []);
 
   const cargarDatos = useCallback(async () => {
@@ -368,7 +436,8 @@ export default function MensajeriaInterna() {
                 ref={comunicadoTextareaRef}
                 value={nuevoContenido} 
                 onChange={e => setNuevoContenido(e.target.value)} 
-                placeholder="Escribe o pega el comunicado..." 
+                onPaste={handlePasteComunicado}
+                placeholder="Escribe o pega el comunicado (se conservará el formato copiado)..." 
                 className="min-h-[140px] font-sans" 
               />
             </div>
