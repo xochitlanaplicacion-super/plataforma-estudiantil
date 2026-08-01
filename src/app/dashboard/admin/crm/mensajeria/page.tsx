@@ -6,7 +6,7 @@ import { MessageSquare, Send, Users, Megaphone, Search, Check, CheckCheck, Trash
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import RichTextEditor from '@/components/shared/RichTextEditor';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -43,91 +43,6 @@ export default function MensajeriaInterna() {
   const [busquedaChat, setBusquedaChat] = useState('');
   const [showNuevoChat, setShowNuevoChat] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const comunicadoTextareaRef = useRef<HTMLTextAreaElement>(null);
-
-  const applyFormat = (prefix: string, suffix: string = '') => {
-    if (!comunicadoTextareaRef.current) return;
-    const el = comunicadoTextareaRef.current;
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    const text = el.value;
-    const selected = text.substring(start, end);
-    const replacement = `${prefix}${selected || 'texto'}${suffix}`;
-    const newText = text.substring(0, start) + replacement + text.substring(end);
-    setNuevoContenido(newText);
-    setTimeout(() => {
-      el.focus();
-      el.setSelectionRange(start + prefix.length, start + prefix.length + (selected ? selected.length : 5));
-    }, 50);
-  };
-
-  const handlePasteComunicado = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    const html = e.clipboardData.getData('text/html');
-    if (!html) return;
-
-    e.preventDefault();
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(html, 'text/html');
-
-    const convertNode = (node: Node): string => {
-      if (node.nodeType === Node.TEXT_NODE) {
-        return node.textContent || '';
-      }
-      if (node.nodeType !== Node.ELEMENT_NODE) return '';
-
-      const el = node as HTMLElement;
-      const tagName = el.tagName.toLowerCase();
-      const style = el.getAttribute('style') || '';
-      const isBold = tagName === 'b' || tagName === 'strong' || style.includes('font-weight: 700') || style.includes('font-weight:bold') || style.includes('font-weight: bold');
-      const isItalic = tagName === 'i' || tagName === 'em' || style.includes('font-style: italic') || style.includes('font-style:italic');
-      const isUnderline = tagName === 'u' || style.includes('text-decoration: underline') || style.includes('text-decoration:underline');
-
-      let inner = '';
-      node.childNodes.forEach(child => {
-        inner += convertNode(child);
-      });
-
-      if (!inner && tagName !== 'br') return '';
-
-      if (isBold) inner = `<b>${inner}</b>`;
-      if (isItalic) inner = `<i>${inner}</i>`;
-      if (isUnderline) inner = `<u>${inner}</u>`;
-
-      if (['h1', 'h2', 'h3', 'h4', 'h5', 'h6'].includes(tagName)) {
-        return `\n### ${inner}\n`;
-      }
-      if (tagName === 'li') {
-        return `\n• ${inner}`;
-      }
-      if (['p', 'div'].includes(tagName)) {
-        return `\n${inner}`;
-      }
-      if (tagName === 'br') {
-        return '\n';
-      }
-
-      return inner;
-    };
-
-    let converted = convertNode(doc.body).trim();
-    converted = converted.replace(/\n{3,}/g, '\n\n');
-
-    if (!converted) return;
-
-    if (!comunicadoTextareaRef.current) return;
-    const el = comunicadoTextareaRef.current;
-    const start = el.selectionStart;
-    const end = el.selectionEnd;
-    const currentVal = el.value;
-
-    const newVal = currentVal.substring(0, start) + converted + currentVal.substring(end);
-    setNuevoContenido(newVal);
-
-    setTimeout(() => {
-      el.focus();
-      el.setSelectionRange(start + converted.length, start + converted.length);
-    }, 50);
-  };
 
   useEffect(() => { supabase.auth.getUser().then(({ data }) => { if (data.user) setAdminId(data.user.id); }); }, []);
 
@@ -184,7 +99,8 @@ export default function MensajeriaInterna() {
   };
 
   const enviarComunicado = async () => {
-    if (!nuevoContenido.trim()) return;
+    const textOnly = nuevoContenido.replace(/<[^>]*>/g, '').trim();
+    if (!textOnly) return;
     const res = await enviarMensaje({ remitente_id: adminId, tipo_destino: nuevoTipo, destino_id: nuevoTipo === 'GLOBAL' ? null : nuevoDestinoId || null, contenido: nuevoContenido });
     if (res.success) { toast({ title: '📢 Comunicado enviado' }); setShowNuevo(false); setNuevoContenido(''); setNuevoDestinoId(''); setFiltroDestino(''); cargarDatos(); }
     else toast({ variant: 'destructive', title: 'Error', description: res.error });
@@ -421,30 +337,17 @@ export default function MensajeriaInterna() {
               );
             })()}
             <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-black uppercase text-muted-foreground block">Mensaje</label>
-                <div className="flex items-center gap-1 p-0.5 bg-muted/40 rounded-lg border border-border">
-                  <button type="button" onClick={() => applyFormat('<b>', '</b>')} className="px-2 py-0.5 text-xs font-black rounded hover:bg-white transition-colors" title="Negrita"><b>B</b></button>
-                  <button type="button" onClick={() => applyFormat('<i>', '</i>')} className="px-2 py-0.5 text-xs italic rounded hover:bg-white transition-colors" title="Cursiva"><i>I</i></button>
-                  <button type="button" onClick={() => applyFormat('<u>', '</u>')} className="px-2 py-0.5 text-xs underline rounded hover:bg-white transition-colors" title="Subrayado"><u>U</u></button>
-                  <div className="h-3 w-px bg-border mx-0.5" />
-                  <button type="button" onClick={() => applyFormat('### ')} className="px-2 py-0.5 text-xs font-bold rounded hover:bg-white transition-colors" title="Título">H3</button>
-                  <button type="button" onClick={() => applyFormat('• ')} className="px-2 py-0.5 text-xs rounded hover:bg-white transition-colors" title="Lista">• Lista</button>
-                </div>
-              </div>
-              <Textarea 
-                ref={comunicadoTextareaRef}
-                value={nuevoContenido} 
-                onChange={e => setNuevoContenido(e.target.value)} 
-                onPaste={handlePasteComunicado}
-                placeholder="Escribe o pega el comunicado (se conservará el formato copiado)..." 
-                className="min-h-[140px] font-sans" 
+              <label className="text-xs font-black uppercase text-muted-foreground mb-1.5 block">Mensaje</label>
+              <RichTextEditor
+                value={nuevoContenido}
+                onChange={setNuevoContenido}
+                placeholder="Escribe o pega el comunicado (el formato se conserva automáticamente)..."
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowNuevo(false)} className="rounded-xl">Cancelar</Button>
-            <Button onClick={enviarComunicado} className="rounded-xl gap-2" disabled={!nuevoContenido.trim() || (nuevoTipo !== 'GLOBAL' && !nuevoDestinoId)}><Send size={14} /> Enviar</Button>
+            <Button onClick={enviarComunicado} className="rounded-xl gap-2" disabled={!nuevoContenido.replace(/<[^>]*>/g, '').trim() || (nuevoTipo !== 'GLOBAL' && !nuevoDestinoId)}><Send size={14} /> Enviar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
