@@ -9,13 +9,13 @@ interface FormattedContentProps {
 }
 
 /**
- * Detecta si el contenido contiene cualquier etiqueta HTML y lo procesa/renderiza.
- * Si es texto plano, convierte Markdown simple a HTML.
+ * Procesa el contenido para garantizar que tanto HTML como Markdown
+ * conserven saltos de renglón, párrafos e interlineado legible.
  */
 function processContent(text: string): string {
   if (!text) return '';
 
-  // Detectar si el texto contiene cualquier etiqueta HTML (ej. <b>, <strong>, <span>, <p>, etc.)
+  // Detectar si el texto contiene etiquetas HTML
   const hasHtml = /<\/?[a-z][\s\S]*>/i.test(text);
 
   if (hasHtml) {
@@ -45,10 +45,11 @@ function processContent(text: string): string {
   // Viñetas Markdown
   html = html.replace(/^\s*[-•]\s+(.*$)/gim, '<li class="ml-4 list-disc">$1</li>');
 
-  // Saltos de línea para texto plano
+  // Convertir saltos de línea dobles en párrafos y sencillos en <br />
+  html = html.replace(/\n{2,}/g, '</p><p class="mb-3">');
   html = html.replace(/\n/g, '<br />');
 
-  return html;
+  return `<p className="mb-3">${html}</p>`;
 }
 
 export default function FormattedContent({ content, className }: FormattedContentProps) {
@@ -59,17 +60,18 @@ export default function FormattedContent({ content, className }: FormattedConten
   return (
     <div
       className={cn(
-        'formatted-content text-sm leading-relaxed break-words',
+        'formatted-content text-sm leading-relaxed break-words whitespace-pre-wrap',
         '[&_b]:font-bold [&_strong]:font-bold [&_b]:text-slate-900 [&_strong]:text-slate-900',
         '[&_i]:italic [&_em]:italic',
         '[&_u]:underline',
-        '[&_h1]:text-lg [&_h1]:font-black [&_h1]:my-2 [&_h1]:text-slate-900',
-        '[&_h2]:text-base [&_h2]:font-extrabold [&_h2]:my-1.5 [&_h2]:text-slate-900',
-        '[&_h3]:text-sm [&_h3]:font-bold [&_h3]:my-1 [&_h3]:text-slate-900',
-        '[&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-1',
-        '[&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-1',
-        '[&_li]:my-0.5 [&_li]:list-disc [&_li]:ml-4',
-        '[&_p]:my-1 [&_div]:min-h-[1em]',
+        '[&_h1]:text-lg [&_h1]:font-black [&_h1]:my-3 [&_h1]:text-slate-900',
+        '[&_h2]:text-base [&_h2]:font-extrabold [&_h2]:my-2 [&_h2]:text-slate-900',
+        '[&_h3]:text-sm [&_h3]:font-bold [&_h3]:my-2 [&_h3]:text-slate-900',
+        '[&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-2',
+        '[&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-2',
+        '[&_li]:my-1 [&_li]:list-disc [&_li]:ml-4',
+        '[&_p]:mb-3 [&_p]:leading-relaxed',
+        '[&_div]:min-h-[1.25em]',
         className
       )}
       dangerouslySetInnerHTML={{ __html: htmlContent }}

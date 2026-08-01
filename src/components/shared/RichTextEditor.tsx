@@ -14,7 +14,7 @@ export default function RichTextEditor({ value, onChange, placeholder, className
   const editorRef = useRef<HTMLDivElement>(null);
   const isInternalChange = useRef(false);
 
-  // Sincronizar valor externo solo cuando cambie por fuera (no por edición interna)
+  // Sincronizar valor externo solo cuando cambie por fuera
   useEffect(() => {
     if (!editorRef.current || isInternalChange.current) {
       isInternalChange.current = false;
@@ -41,7 +41,6 @@ export default function RichTextEditor({ value, onChange, placeholder, className
     const html = e.clipboardData.getData('text/html');
     if (html) {
       e.preventDefault();
-      // Limpiar el HTML pegado para conservar solo formato básico
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, 'text/html');
 
@@ -69,7 +68,7 @@ export default function RichTextEditor({ value, onChange, placeholder, className
         if (tag === 'li') return `<li>${inner}</li>`;
         if (tag === 'ul') return `<ul>${inner}</ul>`;
         if (tag === 'ol') return `<ol>${inner}</ol>`;
-        if (['p', 'div'].includes(tag)) return `<div>${inner}</div>`;
+        if (['p', 'div'].includes(tag)) return `<p>${inner}</p>`;
         if (tag === 'br') return '<br>';
 
         return inner;
@@ -79,10 +78,9 @@ export default function RichTextEditor({ value, onChange, placeholder, className
       document.execCommand('insertHTML', false, cleaned);
       handleInput();
     }
-    // Si no hay HTML, el navegador pegará texto plano por defecto
   }, [handleInput]);
 
-  const isEmpty = !value || value === '<br>' || value === '<div><br></div>';
+  const isEmpty = !value || value === '<br>' || value === '<div><br></div>' || value === '<p><br></p>';
 
   return (
     <div className="space-y-1.5">
@@ -124,16 +122,18 @@ export default function RichTextEditor({ value, onChange, placeholder, className
           onInput={handleInput}
           onPaste={handlePaste}
           className={cn(
-            'min-h-[140px] max-h-[300px] overflow-y-auto rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background',
+            'min-h-[140px] max-h-[300px] overflow-y-auto rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background whitespace-pre-wrap leading-relaxed',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
             'disabled:cursor-not-allowed disabled:opacity-50',
             '[&_b]:font-bold [&_strong]:font-bold',
             '[&_i]:italic [&_em]:italic',
             '[&_u]:underline',
-            '[&_h3]:text-base [&_h3]:font-bold [&_h3]:my-1',
-            '[&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-1',
-            '[&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-1',
-            '[&_li]:my-0.5',
+            '[&_h3]:text-base [&_h3]:font-bold [&_h3]:my-2',
+            '[&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-2',
+            '[&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-2',
+            '[&_li]:my-1',
+            '[&_p]:mb-3 [&_p]:leading-relaxed',
+            '[&_div]:min-h-[1.25em]',
             className
           )}
           role="textbox"
