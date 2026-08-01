@@ -9,21 +9,20 @@ interface FormattedContentProps {
 }
 
 /**
- * Detecta si el contenido ya tiene formato HTML y lo renderiza directamente.
- * Si es texto plano con marcas Markdown, las convierte a HTML.
+ * Detecta si el contenido contiene cualquier etiqueta HTML y lo procesa/renderiza.
+ * Si es texto plano, convierte Markdown simple a HTML.
  */
 function processContent(text: string): string {
   if (!text) return '';
 
-  // Si el contenido ya tiene etiquetas HTML de formato, renderizarlo directamente
-  const hasHtml = /<(b|strong|i|em|u|h[1-6]|ul|ol|li|div|p|br)[^>]*>/i.test(text);
-  
+  // Detectar si el texto contiene cualquier etiqueta HTML (ej. <b>, <strong>, <span>, <p>, etc.)
+  const hasHtml = /<\/?[a-z][\s\S]*>/i.test(text);
+
   if (hasHtml) {
-    // Ya es HTML — solo limpiar saltos de línea redundantes fuera de tags
     return text;
   }
 
-  // Es texto plano — convertir Markdown simple a HTML
+  // Es texto plano — convertir sintaxis Markdown simple a HTML
   let html = text
     .replace(/&(?!#?\w+;)/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -46,7 +45,7 @@ function processContent(text: string): string {
   // Viñetas Markdown
   html = html.replace(/^\s*[-•]\s+(.*$)/gim, '<li class="ml-4 list-disc">$1</li>');
 
-  // Saltos de línea
+  // Saltos de línea para texto plano
   html = html.replace(/\n/g, '<br />');
 
   return html;
@@ -70,7 +69,7 @@ export default function FormattedContent({ content, className }: FormattedConten
         '[&_ul]:list-disc [&_ul]:pl-5 [&_ul]:my-1',
         '[&_ol]:list-decimal [&_ol]:pl-5 [&_ol]:my-1',
         '[&_li]:my-0.5 [&_li]:list-disc [&_li]:ml-4',
-        '[&_div]:min-h-[1em]',
+        '[&_p]:my-1 [&_div]:min-h-[1em]',
         className
       )}
       dangerouslySetInnerHTML={{ __html: htmlContent }}
