@@ -1,25 +1,34 @@
 import { getInstitucionConfig } from '@/lib/actions/institucion';
-import { NextResponse } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const config = await getInstitucionConfig();
-    const targetUrl = config.favicon_url || config.logo_url;
+    const origin = new URL(request.url).origin;
+    let targetUrl = config.favicon_url || config.logo_url || '/images/logo_placeholder.svg';
 
-    if (targetUrl && (targetUrl.startsWith('http://') || targetUrl.startsWith('https://'))) {
-      const imageRes = await fetch(targetUrl, { cache: 'no-store' });
-      if (imageRes.ok) {
-        const imageBuffer = await imageRes.arrayBuffer();
-        const contentType = imageRes.headers.get('content-type') || 'image/png';
-        return new Response(imageBuffer, {
-          status: 200,
-          headers: {
-            'Content-Type': contentType,
-            'Cache-Control': 'public, max-age=3600, s-maxage=86400',
-          },
-        });
+    if (targetUrl.startsWith('/')) {
+      targetUrl = `${origin}${targetUrl}`;
+    }
+
+    if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
+      try {
+        const imageRes = await fetch(targetUrl, { cache: 'no-store' });
+        if (imageRes.ok) {
+          const imageBuffer = await imageRes.arrayBuffer();
+          const contentType = imageRes.headers.get('content-type') || 'image/png';
+          return new Response(imageBuffer, {
+            status: 200,
+            headers: {
+              'Content-Type': contentType,
+              'Cache-Control': 'public, max-age=3600, s-maxage=86400',
+            },
+          });
+        }
+      } catch {
+        // Fallback al redirect si falla el fetch directo
       }
       return NextResponse.redirect(targetUrl, 307);
     }
@@ -27,5 +36,6 @@ export async function GET() {
     console.error('Error sirviendo icon.png dinámico:', error);
   }
 
-  return NextResponse.redirect(new URL('/images/logo_placeholder.svg', process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://localhost:3000'), 307);
+  const origin = new URL(request.url).origin;
+  return NextResponse.redirect(new URL('/images/logo_placeholder.svg', origin), 307);
 }
