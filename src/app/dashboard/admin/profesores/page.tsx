@@ -348,9 +348,9 @@ export default function AsignacionProfesores() {
                             </div>
                             
                             {asig.grupos ? (
-                              <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-lg border border-slate-100">
-                                <span className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-primary font-black text-[10px] shrink-0">G</span>
-                                <p className="text-[10px] font-bold text-primary/80 uppercase leading-tight truncate">
+                              <div className="flex items-start gap-2 bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                                <span className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-primary font-black text-[10px] shrink-0 mt-0.5">G</span>
+                                <p className="text-[10px] font-bold text-primary/80 uppercase leading-snug break-words">
                                   {asig.grupos.grados?.nombre ? `${asig.grupos.grados.nombre} - ` : ''}{asig.grupos.nombre}
                                 </p>
                               </div>
