@@ -57,6 +57,7 @@ import {
   BrainCircuit
 } from 'lucide-react';
 
+import TrackedVideoPlayer from '@/components/shared/TrackedVideoPlayer';
 import { 
   getMyAsignaciones, 
   getMisAgrupaciones,
@@ -947,6 +948,14 @@ export default function ProfesorDashboard() {
   const [temas, setTemas] = useState<any[]>([]);
   const [selectedTema, setSelectedTema] = useState<any>(null);
   const [ejercicios, setEjercicios] = useState<any[]>([]);
+  const [activeVideo, setActiveVideo] = useState<any>(null);
+
+  const getYouTubeId = (url: string) => {
+    if (!url) return null;
+    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
+    const match = url.match(regExp);
+    return (match && match[2].length === 11) ? match[2] : null;
+  };
   
   const [slides, setSlides] = useState<any[]>([]);
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
@@ -1843,19 +1852,74 @@ export default function ProfesorDashboard() {
                </CardHeader>
                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                   {temas.map((t) => (
-                     <div key={t.id} onClick={() => { setSelectedTema(t); fetchEjercicios(t.id); setCurrentTab('ejercicios'); }} className="p-6 border-2 border-slate-50 rounded-[24px] flex flex-col gap-4 cursor-pointer hover:shadow-xl transition-all">
-                       <div className="flex items-center justify-between">
-                         <span className="font-black text-slate-700 uppercase tracking-tight">{t.titulo}</span>
-                         <div className="flex items-center gap-1">
-                           <Button variant="ghost" size="icon" className="text-blue-500" onClick={(e) => { e.stopPropagation(); handleOpenSlideEditor(t); }}><Presentation size={18}/></Button>
-                           <Button variant="ghost" size="icon" className="text-emerald-500" onClick={(e) => { e.stopPropagation(); handleOpenResourceDialog(t); }}><Paperclip size={18}/></Button>
-                           <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDialog({ open: true, type: 'tema', data: t }); }}><Edit size={16}/></Button>
-                           <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); handleDelete('tema', t.id, t.titulo); }}><Trash2 size={16}/></Button>
-                         </div>
-                       </div>
-                     </div>
-                   ))}
+                   {temas.map((t) => {
+                      const hasVideos = Array.isArray(t.videos) && t.videos.some((v: any) => v.url && getYouTubeId(v.url));
+                      return (
+                        <div key={t.id} onClick={() => { setSelectedTema(t); fetchEjercicios(t.id); setCurrentTab('ejercicios'); }} className="p-6 border-2 border-slate-50 rounded-[24px] flex flex-col gap-4 cursor-pointer hover:shadow-xl transition-all bg-white group/card">
+                          <div className="flex items-center justify-between">
+                            <span className="font-black text-slate-700 uppercase tracking-tight">{t.titulo}</span>
+                            <div className="flex items-center gap-1">
+                              <Button variant="ghost" size="icon" className="text-blue-500" onClick={(e) => { e.stopPropagation(); handleOpenSlideEditor(t); }} title="Diapositivas"><Presentation size={18}/></Button>
+                              <Button variant="ghost" size="icon" className="text-emerald-500" onClick={(e) => { e.stopPropagation(); handleOpenResourceDialog(t); }} title="Archivos adjuntos"><Paperclip size={18}/></Button>
+                              <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); setDialog({ open: true, type: 'tema', data: t }); }} title="Editar tema"><Edit size={16}/></Button>
+                              <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={(e) => { e.stopPropagation(); handleDelete('tema', t.id, t.titulo); }} title="Eliminar tema"><Trash2 size={16}/></Button>
+                            </div>
+                          </div>
+
+                          {/* SECCIÓN DE MINIATURAS DE VIDEO DE YOUTUBE */}
+                          {hasVideos && (
+                            <div className="mt-1 pt-3 border-t border-slate-100">
+                              <p className="text-[9px] font-black uppercase text-red-500 tracking-wider flex items-center gap-1.5 mb-2.5">
+                                <Youtube size={14} className="text-red-600 shrink-0" />
+                                Videos interactivos ({t.videos.filter((v: any) => v.url && getYouTubeId(v.url)).length})
+                              </p>
+                              <div className="flex gap-3 overflow-x-auto pb-1 custom-scrollbar">
+                                {t.videos.map((vid: any, vIdx: number) => {
+                                  const ytId = vid.url ? getYouTubeId(vid.url) : null;
+                                  if (!ytId) return null;
+                                  return (
+                                    <div
+                                      key={`prof-video-${t.id}-${vIdx}`}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setActiveVideo({
+                                          url: vid.url,
+                                          titulo: vid.titulo || t.titulo,
+                                          tema_id: t.id
+                                        });
+                                      }}
+                                      className="group/vid shrink-0 relative overflow-hidden rounded-xl shadow-md hover:shadow-xl transition-all cursor-pointer border border-slate-200 hover:border-red-400 w-[130px] aspect-video bg-slate-900"
+                                      title={vid.titulo || 'Reproducir video'}
+                                    >
+                                      <img
+                                        src={`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`}
+                                        alt={vid.titulo || 'Miniatura de Video'}
+                                        className="w-full h-full object-cover group-hover/vid:scale-105 transition-transform duration-300 opacity-90 group-hover/vid:opacity-100"
+                                      />
+                                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex flex-col justify-between p-2">
+                                        <div className="self-end">
+                                          <span className="bg-red-600/90 text-white text-[8px] font-black px-1.5 py-0.5 rounded shadow uppercase">
+                                            HD
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                          <div className="h-6 w-6 rounded-full bg-red-600 text-white flex items-center justify-center shadow-lg group-hover/vid:scale-110 transition-transform shrink-0">
+                                            <Play size={11} className="ml-0.5 fill-white" />
+                                          </div>
+                                          <span className="text-[9px] font-bold text-white leading-tight line-clamp-1 drop-shadow">
+                                            {vid.titulo || 'Ver video'}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                   })}
                  </div>
                </div>
              </Card>
@@ -2724,6 +2788,61 @@ export default function ProfesorDashboard() {
               {isSyncing ? <Loader2 size={18} className="animate-spin" /> : <CheckCircle2 size={18} />} Comenzar Clonación
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL DE REPRODUCTOR DE VIDEO PARA PROFESORES */}
+      <Dialog open={!!activeVideo} onOpenChange={(open) => { if (!open) setActiveVideo(null); }}>
+        <DialogContent className="max-w-4xl p-0 overflow-hidden bg-slate-950 border-slate-800 rounded-3xl">
+          <DialogHeader className="p-4 sm:p-6 bg-slate-900 border-b border-slate-800 flex flex-row items-center justify-between text-white space-y-0">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-2xl bg-red-600/20 text-red-500 border border-red-500/30 flex items-center justify-center shrink-0">
+                <Youtube size={20} />
+              </div>
+              <div>
+                <DialogTitle className="text-base sm:text-lg font-black uppercase tracking-tight text-white leading-tight">
+                  {activeVideo?.titulo || 'Reproductor de Video'}
+                </DialogTitle>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">
+                  Vista Previa del Profesor
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-slate-400 hover:text-white hover:bg-slate-800 rounded-full"
+              onClick={() => setActiveVideo(null)}
+            >
+              <X size={20} />
+            </Button>
+          </DialogHeader>
+
+          <div className="aspect-video w-full bg-black relative flex items-center justify-center">
+            {activeVideo && getYouTubeId(activeVideo.url) ? (
+              <TrackedVideoPlayer
+                videoId={getYouTubeId(activeVideo.url)!}
+                videoUrl={activeVideo.url}
+                temaId={activeVideo.tema_id || ''}
+                onClose={() => setActiveVideo(null)}
+              />
+            ) : (
+              <div className="flex flex-col items-center gap-3 text-white p-6 text-center">
+                <AlertCircle size={40} className="text-red-500" />
+                <p className="font-black uppercase tracking-widest text-sm">No se pudo cargar el video</p>
+                <p className="text-xs text-slate-400">Verifica la URL del video en la edición del tema.</p>
+                {activeVideo?.url && (
+                  <Button
+                    variant="link"
+                    className="text-red-400 hover:text-red-300 font-bold uppercase text-xs mt-2"
+                    onClick={() => window.open(activeVideo.url, '_blank')}
+                  >
+                    Abrir en YouTube <ExternalLink size={12} className="ml-1.5" />
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>
