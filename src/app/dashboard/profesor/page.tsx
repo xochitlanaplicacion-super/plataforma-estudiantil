@@ -948,7 +948,7 @@ export default function ProfesorDashboard() {
   const [temas, setTemas] = useState<any[]>([]);
   const [selectedTema, setSelectedTema] = useState<any>(null);
   const [ejercicios, setEjercicios] = useState<any[]>([]);
-  const [activeVideo, setActiveVideo] = useState<{url: string, titulo: string, tema_id?: string} | null>(null);
+  const [activeVideo, setActiveVideo] = useState<any>(null);
 
   const getYouTubeId = (url: string) => {
     if (!url) return null;

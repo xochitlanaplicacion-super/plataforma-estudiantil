@@ -610,7 +610,7 @@ export async function getProfesores() {
 export async function getAsignacionesProfesor() {
   const { data, error } = await supabaseAdmin
     .from('asignaciones_profesor')
-    .select('*, profiles:profesor_id(nombre, apellidos), niveles(nombre), carreras(nombre), materias(nombre)')
+    .select('*, profiles:profesor_id(nombre, apellidos), niveles(nombre), carreras(nombre), materias(nombre), grupos(nombre, grados(nombre))')
     .order('created_at', { ascending: false });
   return { data, error };
 }

@@ -347,15 +347,21 @@ export default function AsignacionProfesores() {
                               <span className="font-medium text-slate-800">{asig.carreras?.nombre}</span>
                             </div>
                             
-                            <div className="flex flex-wrap gap-1">
-                              {asig.grado_id ? (
-                                <Badge variant="outline" className="text-[9px] bg-amber-50 border-amber-200 text-amber-700">Gdo</Badge>
-                              ) : <Badge variant="outline" className="text-[9px] bg-slate-50">Gral.</Badge>}
-                              
-                              {asig.grupo_id ? (
-                                <Badge variant="secondary" className="text-[9px] bg-blue-50 text-blue-700 border-blue-100">Gp</Badge>
-                              ) : <Badge variant="secondary" className="text-[9px]">Todos</Badge>}
-                            </div>
+                            {asig.grupos ? (
+                              <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                <span className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-primary font-black text-[10px] shrink-0">G</span>
+                                <p className="text-[10px] font-bold text-primary/80 uppercase leading-tight truncate">
+                                  {asig.grupos.grados?.nombre ? `${asig.grupos.grados.nombre} - ` : ''}{asig.grupos.nombre}
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="flex flex-wrap gap-1">
+                                {asig.grado_id ? (
+                                  <Badge variant="outline" className="text-[9px] bg-amber-50 border-amber-200 text-amber-700">Grado General</Badge>
+                                ) : <Badge variant="outline" className="text-[9px] bg-slate-50">Gral.</Badge>}
+                                <Badge variant="secondary" className="text-[9px]">Todos los grupos</Badge>
+                              </div>
+                            )}
                           </CardContent>
                         </Card>
                       ))}
