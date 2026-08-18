@@ -74,7 +74,7 @@ const Navbar = ({ theme }: { theme: any }) => {
           <div className="relative h-16 w-16 md:h-20 md:w-20 transition-transform duration-300 group-hover:scale-105">
             <img
               src={inst.logo_url || LOGO_FALLBACK}
-              alt="Logo IEEZ"
+              alt={inst.nombre_corto || "Logo Institucional"}
               className="w-full h-full object-contain drop-shadow-md"
             />
           </div>
@@ -501,7 +501,7 @@ export const Programs = ({ theme, config }: { theme: any, config: any }) => {
       badge: "Excelencia Académica",
       description: "Para continuar tus estudios e ingresar a cualquier Universidad pública o privada",
       validez: "Con validez oficial SEP",
-      image: "/images/universidad.jpeg",
+      image: null,
       iconType: "users",
       crop: "object-top"
     },
@@ -513,7 +513,7 @@ export const Programs = ({ theme, config }: { theme: any, config: any }) => {
       badge: "Meta Cumplida",
       description: "Para trabajar o ingresar a la universidad",
       validez: "Con validez oficial SEP",
-      image: "/images/imagen2.jpeg",
+      image: null,
       iconType: "award",
       crop: "object-top"
     },
@@ -525,7 +525,7 @@ export const Programs = ({ theme, config }: { theme: any, config: any }) => {
       badge: "Grado Superior",
       description: "LICENCIATURAS\nINGENIERÍAS\n\nTITULACIÓN POR EXPERIENCIA PROFESIONAL EN 2 MESES",
       validez: "Titulo y Cédula con validez oficial SEP",
-      image: "/images/grad-2.jpeg",
+      image: null,
       iconType: "book",
       crop: "object-center"
     },
@@ -537,7 +537,7 @@ export const Programs = ({ theme, config }: { theme: any, config: any }) => {
       badge: "Formación Real",
       description: "Profesionalizate en áreas laborales",
       validez: "Con validez oficial SEP",
-      image: "/images/adultos.jpeg",
+      image: null,
       iconType: "briefcase",
       crop: "object-center"
     }

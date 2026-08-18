@@ -30,8 +30,8 @@ const DEFAULTS: InstitucionConfig = {
     { clave: "universidad", nombre: "Universidad" },
     { clave: "capacitaciones", nombre: "Capacitaciones" },
   ],
-  telefono_contacto: '123 456 7890',
-  correo_contacto: 'contacto@miinstitucion.edu',
+  telefono_contacto: '',
+  correo_contacto: '',
   horarios_atencion: [],
 };
 

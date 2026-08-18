@@ -46,22 +46,19 @@ export default function EditorLandingPage() {
         hero_highlight: "éxito",
         hero_subtitle: "Formación integral para jóvenes y adultos. Concluye tus estudios con validez oficial SEP en un ambiente de excelencia.",
         hero_badges: "Universidad | Bachillerato | Capacitaciones",
-        hero_image: "/images/hero-about.jpeg",
+        hero_image: null,
         mission_title: "",
         mission_text: "",
         about_title: "Nuestra Pasión por la Educación en México",
         about_text: "En nuestra institución educativa nos apasiona proporcionar programas de alta calidad que se adapten a las necesidades reales de los estudiantes, garantizando que cada egresado tenga las herramientas necesarias para triunfar en el mercado laboral actual.",
-        about_image: "/images/about-team.jpeg",
+        about_image: null,
         about_badge_title: "Validez Oficial",
         about_badge_subtitle: "Acuerdo 286 SEP",
         about_card1_title: "Acreditaciones",
         about_card1_text: "Respaldo total de la SEP, garantizando la validez oficial de tus estudios.",
         about_card2_title: "Docentes",
         about_card2_text: "Equipo altamente calificado y comprometido con tu éxito académico.",
-        banner_images: [
-          "/images/grad-1.jpeg",
-          "/images/grad-2.jpeg"
-        ],
+        banner_images: [],
         programs: [
           {
             id: "prepa-joven",
@@ -71,7 +68,7 @@ export default function EditorLandingPage() {
             badge: "Excelencia Académica",
             description: "Para continuar tus estudios e ingresar a cualquier Universidad pública o privada",
             validez: "Con validez oficial SEP",
-            image: "/images/universidad.jpeg",
+            image: null,
             iconType: "users",
             crop: "object-top"
           },
@@ -83,7 +80,7 @@ export default function EditorLandingPage() {
             badge: "Meta Cumplida",
             description: "Para trabajar o ingresar a la universidad",
             validez: "Con validez oficial SEP",
-            image: "/images/imagen2.jpeg",
+            image: null,
             iconType: "award",
             crop: "object-top"
           },
@@ -95,7 +92,7 @@ export default function EditorLandingPage() {
             badge: "Grado Superior",
             description: "LICENCIATURAS\nINGENIERÍAS\n\nTITULACIÓN POR EXPERIENCIA PROFESIONAL EN 2 MESES",
             validez: "Titulo y Cédula con validez oficial SEP",
-            image: "/images/grad-2.jpeg",
+            image: null,
             iconType: "book",
             crop: "object-center"
           },
@@ -107,7 +104,7 @@ export default function EditorLandingPage() {
             badge: "Formación Real",
             description: "Profesionalizate en áreas laborales",
             validez: "Con validez oficial SEP",
-            image: "/images/adultos.jpeg",
+            image: null,
             iconType: "briefcase",
             crop: "object-center"
           }
