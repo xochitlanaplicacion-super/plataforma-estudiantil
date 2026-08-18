@@ -216,6 +216,12 @@ const Magnetic = ({ children, intensity = 0.5, className }: { children: React.Re
   return <div ref={ref} className={cn("inline-block transition-transform duration-100", className)}>{children}</div>;
 };
 
+export const isCustomUploadedImage = (url?: string | null): boolean => {
+  if (!url || typeof url !== 'string') return false;
+  if (url.startsWith('/images/')) return false;
+  return true;
+};
+
 export const Hero = ({ theme, config }: { theme: any, config: any }) => {
   return (
     <section id="inicio" className="relative min-h-screen flex items-center pt-20 overflow-hidden" style={{ backgroundColor: theme.primary }}>
@@ -224,7 +230,7 @@ export const Hero = ({ theme, config }: { theme: any, config: any }) => {
           className="absolute inset-0 z-10 opacity-80"
           style={{ background: `linear-gradient(to right, ${theme.primary}, ${theme.primary}CC, transparent)` }}
         />
-        {config.hero_image && (
+        {config.hero_image && isCustomUploadedImage(config.hero_image) && (
           <img
             src={config.hero_image}
             alt="Hero"
@@ -416,8 +422,8 @@ export const About = ({ theme, config }: { theme: any, config: any }) => {
             transition={{ duration: 0.8 }}
             className="lg:w-[55%] relative"
           >
-            <div className="relative rounded-3xl overflow-hidden shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] aspect-square md:aspect-[4/3]" style={!config.about_image ? { backgroundColor: theme.primary } : {}}>
-              {config.about_image ? (
+            <div className="relative rounded-3xl overflow-hidden shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] aspect-square md:aspect-[4/3]" style={!isCustomUploadedImage(config.about_image) ? { backgroundColor: theme.primary } : {}}>
+              {config.about_image && isCustomUploadedImage(config.about_image) ? (
                 <>
                   <img
                     src={config.about_image}
@@ -594,7 +600,7 @@ export const Programs = ({ theme, config }: { theme: any, config: any }) => {
             >
               <div className="relative min-h-[320px] lg:min-h-[380px] overflow-hidden group">
                 {/* Image Background con Nanobanana style cropping */}
-                {program.image ? (
+                {program.image && isCustomUploadedImage(program.image) ? (
                   <img
                     src={program.image}
                     alt={program.title}
@@ -727,7 +733,8 @@ export const Programs = ({ theme, config }: { theme: any, config: any }) => {
 
 export const Banner = ({ theme, config }: { theme: any, config: any }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
-  const images = config.banner_images || [];
+  const rawImages = config.banner_images || [];
+  const images = rawImages.filter(isCustomUploadedImage);
 
   useEffect(() => {
     if (images.length === 0) return;
