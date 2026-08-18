@@ -273,7 +273,7 @@ export default function MaterialDeApoyoPage() {
       formData.append('file', file);
       formData.append('cacheControl', '3600');
       
-      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
       xhr.open('POST', `${supabaseUrl}/storage/v1/object/material-apoyo/${path}`);
       
       // Authorization

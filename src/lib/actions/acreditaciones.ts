@@ -178,8 +178,8 @@ export async function procesarDocumentoOCR(formData: FormData) {
           headers: {
             "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`,
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://plataformazapata.com",
-            "X-Title": "Plataforma Zapata"
+            "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "https://plataforma.edu",
+            "X-Title": process.env.NEXT_PUBLIC_APP_NAME || "Plataforma Estudiantil"
           },
           body: JSON.stringify({
             model: modelToTry,

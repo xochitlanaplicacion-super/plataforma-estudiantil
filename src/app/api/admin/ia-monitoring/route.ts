@@ -162,7 +162,7 @@ ${JSON.stringify(condensed)}`;
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${apiKey}`,
-        "HTTP-Referer": "https://institutoemilianozapata.edu.mx", // Required by OpenRouter
+        "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "https://plataforma.edu", // Required by OpenRouter
         "X-Title": "Monitoreo IA"
       },
       body: JSON.stringify({

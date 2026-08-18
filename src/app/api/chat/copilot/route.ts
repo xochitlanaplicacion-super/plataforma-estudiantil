@@ -359,8 +359,8 @@ Ejemplo de cómo debe empezar tu respuesta:
         headers: {
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
-          "HTTP-Referer": "https://iez.edu.mx",
-          "X-Title": "IEZ Platform - Copiloto Profesor",
+          "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "https://plataforma.edu",
+          "X-Title": process.env.NEXT_PUBLIC_APP_NAME || "Plataforma Estudiantil",
         },
         body: JSON.stringify({
           model: model.id,
@@ -488,8 +488,8 @@ Ejemplo de cómo debe empezar tu respuesta:
                 headers: {
                   Authorization: `Bearer ${apiKey}`,
                   "Content-Type": "application/json",
-                  "HTTP-Referer": "https://iez.edu.mx",
-                  "X-Title": "IEZ Platform - Copiloto Profesor",
+                  "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "https://plataforma.edu",
+                  "X-Title": process.env.NEXT_PUBLIC_APP_NAME || "Plataforma Estudiantil",
                 },
                 body: JSON.stringify({
                   model: model.id,

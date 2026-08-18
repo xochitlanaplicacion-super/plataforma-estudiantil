@@ -29,7 +29,7 @@ const apiKey = process.env.OPENROUTER_SLIDES_API_KEY || process.env.OPENROUTER_A
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${apiKey}`,
-        "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "https://institutoemilianozapata.edu.mx",
+        "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_APP_URL || "https://plataforma.edu",
         "X-Title": "IEZ Copilot Alumno"
       },
       body: JSON.stringify({

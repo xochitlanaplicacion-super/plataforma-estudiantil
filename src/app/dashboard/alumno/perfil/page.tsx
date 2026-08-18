@@ -9,7 +9,7 @@ import { redirect } from 'next/navigation';
 import { getConfigCredenciales, getInstitutionConfig } from '@/lib/actions/credenciales';
 
 export const metadata = {
-  title: 'Mis Datos | Instituto Emiliano Zapata',
+  title: 'Mis Datos | Plataforma Estudiantil',
 };
 
 export default async function PerfilPage() {

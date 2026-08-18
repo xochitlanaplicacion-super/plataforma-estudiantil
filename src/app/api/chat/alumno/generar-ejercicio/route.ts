@@ -156,7 +156,7 @@ REGLAS ESTRICTAS:
           headers: {
             "Authorization": `Bearer ${apiKey}`,
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://iez.edu.mx",
+            "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "https://plataforma.edu",
             "X-Title": "IEZ Alumno AI Exercises",
           },
           body: JSON.stringify({

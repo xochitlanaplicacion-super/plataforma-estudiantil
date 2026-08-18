@@ -374,8 +374,8 @@ Ejemplo de cómo debe empezar tu respuesta:
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${apiKey}`,
-            "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || "https://institutoemilianozapata.edu.mx",
-            "X-Title": "IEZ Platform - Copiloto Alumno",
+            "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_APP_URL || "https://plataforma.edu",
+            "X-Title": process.env.NEXT_PUBLIC_APP_NAME || "Plataforma Estudiantil",
           },
           body: JSON.stringify({ 
             model: model.id, 
