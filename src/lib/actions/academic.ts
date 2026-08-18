@@ -6,7 +6,7 @@ import { revalidatePath, unstable_noStore as noStore } from 'next/cache';
 import { parseFechaLocal } from '@/lib/utils';
 
 const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cuuohbztrxxneozagecr.supabase.co',
+  process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://ukozogwobyucfaizkvlt.supabase.co',
   process.env.SUPABASE_SERVICE_ROLE_KEY || '',
   {
     auth: {
