@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
+export const dynamic = 'force-dynamic';
+
 const BUCKET = "logos-institucion";
 
 // Helper centralizado para escanear y calcular los huérfanos globalmente
@@ -17,8 +19,8 @@ async function getOrphans() {
 
   // Usar service role para invocar el RPC y borrar archivos
   const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://cuuohbztrxxneozagecr.supabase.co',
+    process.env.SUPABASE_SERVICE_ROLE_KEY || ''
   );
 
   // ── 1. Obtener todas las URLs activas desde las tablas correspondientes ──
