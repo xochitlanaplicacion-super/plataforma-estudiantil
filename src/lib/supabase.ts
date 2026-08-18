@@ -1,8 +1,10 @@
-
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://ukozogwobyucfaizkvlt.supabase.co'
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+
+const projectRef = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').split('.')[0].replace('https://', '');
+const storageKey = projectRef ? `sb-${projectRef}-auth-token` : 'sb-auth-token';
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
@@ -10,6 +12,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     detectSessionInUrl: true,
     flowType: 'pkce',
-    storageKey: 'sb-ukozogwobyucfaizkvlt-auth-token'
+    storageKey: storageKey
   }
 })

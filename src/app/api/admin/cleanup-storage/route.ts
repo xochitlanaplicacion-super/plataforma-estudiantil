@@ -19,8 +19,8 @@ async function getOrphans() {
 
   // Usar service role para invocar el RPC y borrar archivos
   const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://ukozogwobyucfaizkvlt.supabase.co',
-    process.env.SUPABASE_SERVICE_ROLE_KEY || ''
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
   // ── 1. Obtener todas las URLs activas desde las tablas correspondientes ──

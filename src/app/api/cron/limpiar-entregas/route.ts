@@ -3,8 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 
 export const dynamic = 'force-dynamic';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://ukozogwobyucfaizkvlt.supabase.co';
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.dummy';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
 
 const supabaseAdmin = createClient(
   supabaseUrl,
@@ -13,7 +13,7 @@ const supabaseAdmin = createClient(
 );
 
 const BUCKET = 'entregas-alumnos';
-const CRON_SECRET = process.env.CRON_SECRET || 'cron-secret-ieez-2025';
+const CRON_SECRET = process.env.CRON_SECRET;
 
 export async function GET(request: NextRequest) {
   // Autenticación relajada temporalmente para evitar que falle en Vercel si la variable de entorno no sincroniza
