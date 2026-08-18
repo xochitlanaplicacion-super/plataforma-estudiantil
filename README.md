@@ -1,7 +1,7 @@
 
-# Instituto Educativo Emiliano Zapata - Plataforma Académica
+# Plataforma Estudiantil - Plataforma Académica
 
-Este es el repositorio oficial de la plataforma educativa del Instituto Educativo Emiliano Zapata.
+Este es el repositorio oficial de la Plataforma Estudiantil.
 
 ## Sincronización con GitHub
 
