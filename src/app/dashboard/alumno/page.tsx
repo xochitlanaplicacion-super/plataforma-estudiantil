@@ -168,16 +168,22 @@ export default async function AlumnoDashboard() {
       </header>
 
       {/* BANNER PRINCIPAL */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-[#6B1A2E] to-[#370D18] rounded-2xl md:rounded-3xl p-6 md:p-12 text-white shadow-2xl">
+      <section 
+        className="relative overflow-hidden rounded-2xl md:rounded-3xl p-6 md:p-12 text-white shadow-2xl border border-white/10"
+        style={{
+          background: `linear-gradient(135deg, ${inst.color_primario || '#1A4A3F'}, ${inst.color_secundario || '#064e3b'})`,
+          boxShadow: `0 20px 40px -15px ${inst.color_primario || '#1A4A3F'}40, 0 0 50px -10px rgba(0,0,0,0.2)`
+        }}
+      >
         <div className="relative z-10 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
           <div className="space-y-4 md:space-y-5">
-            <span className="inline-block px-3 py-1 bg-[#cea62c] text-[#4f3d00] rounded-full text-xs font-bold uppercase tracking-widest shadow-sm">
+            <span className="inline-block px-4 py-1.5 bg-white/20 backdrop-blur-md border border-white/30 text-white rounded-full text-xs font-bold uppercase tracking-widest shadow-sm">
               Estado Académico
             </span>
-            <h3 className="text-3xl md:text-4xl lg:text-5xl font-black font-headline leading-tight tracking-tight">
+            <h3 className="text-3xl md:text-4xl lg:text-5xl font-black font-headline leading-tight tracking-tight drop-shadow-sm">
               {nombreCompleto}
             </h3>
-            <div className="flex flex-wrap gap-x-6 gap-y-3 text-white/85 font-medium text-sm md:text-base">
+            <div className="flex flex-wrap gap-x-6 gap-y-3 text-white/90 font-medium text-sm md:text-base">
               <p className="flex items-center gap-2">
                 <GraduationCap className="w-4 h-4 md:w-5 md:h-5 opacity-80" />
                 {carrera}
@@ -199,26 +205,26 @@ export default async function AlumnoDashboard() {
 
           {/* KPI Metrics */}
           <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-2 gap-4 md:gap-6 w-full lg:w-auto mt-6 lg:mt-0">
-            <div className="text-center bg-white/5 rounded-2xl p-4 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-colors">
-              <p className="text-4xl md:text-5xl font-black text-[#CEA62C] font-headline tracking-tighter">{totalMaterias}</p>
-              <p className="text-[10px] md:text-xs font-bold uppercase text-white/60 tracking-widest mt-1">Materias</p>
+            <div className="text-center bg-white/10 rounded-2xl p-4 backdrop-blur-md border border-white/20 hover:bg-white/15 transition-all shadow-inner">
+              <p className="text-4xl md:text-5xl font-black text-white font-headline tracking-tighter drop-shadow">{totalMaterias}</p>
+              <p className="text-[10px] md:text-xs font-bold uppercase text-white/75 tracking-widest mt-1">Materias</p>
             </div>
-            <div className="text-center bg-white/5 rounded-2xl p-4 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-colors">
-              <p className="text-4xl md:text-5xl font-black text-[#CEA62C] font-headline tracking-tighter">{promedio}</p>
-              <p className="text-[10px] md:text-xs font-bold uppercase text-white/60 tracking-widest mt-1">Promedio</p>
+            <div className="text-center bg-white/10 rounded-2xl p-4 backdrop-blur-md border border-white/20 hover:bg-white/15 transition-all shadow-inner">
+              <p className="text-4xl md:text-5xl font-black text-white font-headline tracking-tighter drop-shadow">{promedio}</p>
+              <p className="text-[10px] md:text-xs font-bold uppercase text-white/75 tracking-widest mt-1">Promedio</p>
             </div>
-            <div className="text-center bg-white/5 rounded-2xl p-4 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-colors hidden md:block">
-              <p className="text-4xl md:text-5xl font-black text-[#CEA62C] font-headline tracking-tighter">{totalTareas}</p>
-              <p className="text-[10px] md:text-xs font-bold uppercase text-white/60 tracking-widest mt-1">Tareas</p>
+            <div className="text-center bg-white/10 rounded-2xl p-4 backdrop-blur-md border border-white/20 hover:bg-white/15 transition-all shadow-inner hidden md:block">
+              <p className="text-4xl md:text-5xl font-black text-white font-headline tracking-tighter drop-shadow">{totalTareas}</p>
+              <p className="text-[10px] md:text-xs font-bold uppercase text-white/75 tracking-widest mt-1">Tareas</p>
             </div>
-            <div className="text-center bg-white/5 rounded-2xl p-4 backdrop-blur-sm border border-white/10 hover:bg-white/10 transition-colors hidden md:block">
-              <p className="text-4xl md:text-5xl font-black text-[#CEA62C] font-headline tracking-tighter">{numeroCompletados}</p>
-              <p className="text-[10px] md:text-xs font-bold uppercase text-white/60 tracking-widest mt-1">{labelCompletados}</p>
+            <div className="text-center bg-white/10 rounded-2xl p-4 backdrop-blur-md border border-white/20 hover:bg-white/15 transition-all shadow-inner hidden md:block">
+              <p className="text-4xl md:text-5xl font-black text-white font-headline tracking-tighter drop-shadow">{numeroCompletados}</p>
+              <p className="text-[10px] md:text-xs font-bold uppercase text-white/75 tracking-widest mt-1">{labelCompletados}</p>
             </div>
           </div>
         </div>
         {/* Subtle Background Pattern */}
-        <div className="absolute top-0 right-0 w-full md:w-2/3 h-full opacity-5 pointer-events-none mix-blend-overlay">
+        <div className="absolute top-0 right-0 w-full md:w-2/3 h-full opacity-10 pointer-events-none mix-blend-overlay">
           <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="w-full h-full fill-current">
             <path d="M0,0 L100,0 L100,100 L0,100 Z" strokeWidth="2" strokeDasharray="5,5" fill="none" />
             <circle cx="80" cy="20" r="15" />
