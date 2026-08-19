@@ -26,7 +26,10 @@ export async function getAlumnoDashboardData(userId: string) {
           id, nombre, turno, 
           grados (id, nombre)
         ),
-        carreras (id, nombre, nivel_id)
+        carreras (
+          id, nombre, nivel_id,
+          niveles (id, nombre)
+        )
       `)
       .eq('id', userId)
       .single();

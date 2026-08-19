@@ -68,6 +68,7 @@ export default async function AlumnoDashboard() {
   // Data fallbacks
   const isLoading = !profile;
   const nombreCompleto = profile ? `${profile.nombre} ${profile.apellidos}` : 'Cargando...';
+  const nivel = (profile?.carreras as any)?.niveles?.nombre || '';
   const carrera = profile?.carreras?.nombre || 'Sin Carrera Asignada';
   const semestre = profile?.grupos?.grados?.nombre || 'Sin Grado';
   const grupoNombre = profile?.grupos?.nombre || 'N/A';
@@ -184,6 +185,12 @@ export default async function AlumnoDashboard() {
               {nombreCompleto}
             </h3>
             <div className="flex flex-wrap gap-x-6 gap-y-3 text-white/90 font-medium text-sm md:text-base">
+              {nivel && (
+                <p className="flex items-center gap-2">
+                  <School className="w-4 h-4 md:w-5 md:h-5 opacity-80" />
+                  {nivel}
+                </p>
+              )}
               <p className="flex items-center gap-2">
                 <GraduationCap className="w-4 h-4 md:w-5 md:h-5 opacity-80" />
                 {carrera}
