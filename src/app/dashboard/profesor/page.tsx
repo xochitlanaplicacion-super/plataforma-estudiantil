@@ -298,6 +298,7 @@ function CompletarEspaciosEditor({ content, updateContent }: { content: any, upd
 const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string, content: any, updateContent: (newContent: any) => void, pagoIA?: boolean }) => {
   const supabase = createClient();
   const { toast } = useToast();
+  const { config: inst } = useInstitucion();
   const [uploading, setUploading] = useState(false);
   
   // Estados para Generador IA Crucigrama
@@ -384,111 +385,146 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
 
   const renderAiButton = () => {
     if (!pagoIA) return null;
+    const primary = inst?.color_primario || '#1A4A3F';
+    const secondary = inst?.color_secundario || '#064e3b';
+
     return (
       <Button 
-        className="w-full bg-[#110B29] hover:bg-[#1a0f3d] text-[#A855F7] border border-[#A855F7]/30 shadow-[0_0_15px_rgba(168,85,247,0.3)] hover:shadow-[0_0_25px_rgba(168,85,247,0.5)] rounded-2xl h-14 font-black uppercase tracking-widest transition-all mb-6"
+        className="w-full text-white border border-white/20 shadow-lg rounded-2xl h-14 font-black uppercase tracking-widest transition-all mb-6 hover:opacity-95 hover:scale-[1.005] active:scale-[0.995]"
+        style={{
+          background: `linear-gradient(135deg, ${primary}, ${secondary})`,
+          boxShadow: `0 8px 25px -5px ${primary}40, 0 4px 10px -2px rgba(0,0,0,0.15)`
+        }}
         onClick={() => setAiModalOpen(true)}
       >
-        <BrainCircuit size={18} className="mr-3" /> Generar con IA
+        <BrainCircuit size={20} className="mr-3 text-white drop-shadow-md" /> Generar con IA
       </Button>
     );
   };
 
-  const renderAiModal = () => (
-    <Dialog open={aiModalOpen} onOpenChange={setAiModalOpen}>
-      <DialogContent className="sm:max-w-[950px] p-0 border-[#3b0764] bg-[#0f041a] text-slate-200 overflow-hidden rounded-[32px]">
-        <div className="flex flex-col md:flex-row">
-          <div className="flex-1 p-8 space-y-6">
-          <div className="flex items-center gap-4 border-b border-[#3b0764] pb-6">
-            <div className="p-3 bg-[#A855F7]/20 rounded-2xl text-[#A855F7]">
-              <BrainCircuit size={28} />
+  const renderAiModal = () => {
+    const primary = inst?.color_primario || '#1A4A3F';
+    const secondary = inst?.color_secundario || '#064e3b';
+
+    return (
+      <Dialog open={aiModalOpen} onOpenChange={setAiModalOpen}>
+        <DialogContent className="sm:max-w-[950px] p-0 border-white/10 bg-slate-950 text-slate-200 overflow-hidden rounded-[32px] shadow-2xl">
+          <div className="flex flex-col md:flex-row">
+            <div className="flex-1 p-8 space-y-6">
+            <div className="flex items-center gap-4 border-b border-white/10 pb-6">
+              <div 
+                className="p-3 rounded-2xl text-white shadow-md flex items-center justify-center"
+                style={{ background: `linear-gradient(135deg, ${primary}, ${secondary})` }}
+              >
+                <BrainCircuit size={28} />
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-black text-white uppercase tracking-wider">
+                  {type === 'crucigrama' ? 'Crucigrama IA'
+                    : type === 'opcion_multiple' ? 'Opción Múltiple IA'
+                    : type === 'verdadero_falso' ? 'Verdadero/Falso IA'
+                    : type === 'emparejamiento' ? 'Emparejamiento IA'
+                    : type === 'completar_espacios' ? 'Completar Espacios IA'
+                    : type === 'sopa_letras' ? 'Sopa de Letras IA'
+                    : type === 'flashcards' ? 'Flashcards IA'
+                    : 'Ordenar Secuencia IA'}
+                </DialogTitle>
+                <DialogDescription 
+                  className="text-xs uppercase font-bold tracking-widest mt-1 text-slate-400"
+                >
+                  Generación asistida
+                </DialogDescription>
+              </div>
             </div>
-            <div>
-              <DialogTitle className="text-xl font-black text-white uppercase tracking-wider">
-                {type === 'crucigrama' ? 'Crucigrama IA'
-                  : type === 'opcion_multiple' ? 'Opción Múltiple IA'
-                  : type === 'verdadero_falso' ? 'Verdadero/Falso IA'
-                  : type === 'emparejamiento' ? 'Emparejamiento IA'
-                  : type === 'completar_espacios' ? 'Completar Espacios IA'
-                  : type === 'sopa_letras' ? 'Sopa de Letras IA'
-                  : type === 'flashcards' ? 'Flashcards IA'
-                  : 'Ordenar Secuencia IA'}
-              </DialogTitle>
-              <DialogDescription className="text-xs text-[#A855F7] uppercase font-bold tracking-widest mt-1">Generación asistida</DialogDescription>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label 
+                  className="text-[10px] font-black uppercase tracking-widest text-slate-300"
+                >
+                  {type === 'crucigrama' ? 'N° de Palabras'
+                    : type === 'opcion_multiple' ? 'N° de Preguntas'
+                    : type === 'verdadero_falso' ? 'N° de Enunciados'
+                    : type === 'emparejamiento' ? 'N° de Pares'
+                    : type === 'completar_espacios' ? 'N° de Palabras Clave'
+                    : type === 'sopa_letras' ? 'N° de Palabras'
+                    : type === 'flashcards' ? 'N° de Tarjetas'
+                    : 'N° de Pasos'}
+                </label>
+                <Input 
+                  type="number" 
+                  min={2} 
+                  max={20}
+                  value={aiNumWords}
+                  onChange={(e) => setAiNumWords(parseInt(e.target.value) || 5)}
+                  className="h-12 bg-black/40 border-white/10 focus-visible:ring-1 text-white rounded-xl"
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <label 
+                  className="text-[10px] font-black uppercase tracking-widest text-slate-300"
+                >
+                  Instrucciones / Texto Base
+                </label>
+                <textarea 
+                  rows={6}
+                  value={aiPrompt}
+                  onChange={(e) => setAiPrompt(e.target.value)}
+                  placeholder="Pega aquí un texto sobre el tema o escribe las instrucciones específicas para la IA..."
+                  className="w-full p-4 bg-black/40 border-2 border-white/10 rounded-2xl text-sm outline-none focus:border-white/30 focus:ring-4 transition-all text-white placeholder-slate-600 resize-none"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-4 pt-4">
+              <Button 
+                variant="outline" 
+                className="flex-1 rounded-2xl h-12 bg-transparent border-white/10 text-slate-300 hover:bg-white/5 hover:text-white"
+                onClick={() => setAiModalOpen(false)}
+              >
+                CANCELAR
+              </Button>
+              <Button 
+                className="flex-1 rounded-2xl h-12 text-white font-black uppercase tracking-widest border border-white/20 shadow-lg hover:opacity-90 transition-all"
+                style={{
+                  background: `linear-gradient(135deg, ${primary}, ${secondary})`,
+                  boxShadow: `0 0 20px ${primary}50`
+                }}
+                onClick={generateAI}
+                disabled={aiGenerating}
+              >
+                {aiGenerating ? <Loader2 className="animate-spin" size={18} /> : "GENERAR"}
+              </Button>
             </div>
           </div>
-
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase tracking-widest text-[#A855F7]">
-                {type === 'crucigrama' ? 'N° de Palabras'
-                  : type === 'opcion_multiple' ? 'N° de Preguntas'
-                  : type === 'verdadero_falso' ? 'N° de Enunciados'
-                  : type === 'emparejamiento' ? 'N° de Pares'
-                  : type === 'completar_espacios' ? 'N° de Palabras Clave'
-                  : type === 'sopa_letras' ? 'N° de Palabras'
-                  : type === 'flashcards' ? 'N° de Tarjetas'
-                  : 'N° de Pasos'}
-              </label>
-              <Input 
-                type="number" 
-                min={2} 
-                max={20}
-                value={aiNumWords}
-                onChange={(e) => setAiNumWords(parseInt(e.target.value) || 5)}
-                className="h-12 bg-black/40 border-[#3b0764] focus-visible:ring-[#A855F7] text-white rounded-xl"
+          
+          {/* RIGHT PANEL: AI BOT */}
+          <div className="hidden md:flex flex-col items-center justify-center w-80 bg-slate-900/60 border-l border-white/10 p-8 relative">
+            <div className={`relative w-full aspect-square ${aiGenerating ? 'animate-bot-thinking' : 'animate-bot-hover'}`}>
+              <Image 
+                src={aiGenerating ? "/images/THINKINGBOT.png" : "/images/NORMALBOT.png"} 
+                alt="AI Bot" 
+                fill
+                className="object-contain drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]"
               />
             </div>
             
-            <div className="space-y-2">
-              <label className="text-[10px] font-black uppercase tracking-widest text-[#A855F7]">Instrucciones / Texto Base</label>
-              <textarea 
-                rows={6}
-                value={aiPrompt}
-                onChange={(e) => setAiPrompt(e.target.value)}
-                placeholder="Pega aquí un texto sobre el tema o escribe las instrucciones específicas para la IA..."
-                className="w-full p-4 bg-black/40 border-2 border-[#3b0764] rounded-2xl text-sm outline-none focus:border-[#A855F7] focus:ring-4 focus:ring-[#A855F7]/20 transition-all text-white placeholder-slate-600 resize-none"
-              />
-            </div>
-          </div>
-
-          <div className="flex gap-4 pt-4">
-            <Button 
-              variant="outline" 
-              className="flex-1 rounded-2xl h-12 bg-transparent border-[#3b0764] text-slate-300 hover:bg-[#3b0764]/30 hover:text-white"
-              onClick={() => setAiModalOpen(false)}
-            >
-              CANCELAR
-            </Button>
-            <Button 
-              className="flex-1 rounded-2xl h-12 bg-gradient-to-r from-[#7e22ce] to-[#9333ea] hover:from-[#6b21a8] hover:to-[#7e22ce] text-white font-black uppercase tracking-widest border border-[#c084fc]/50 shadow-[0_0_20px_rgba(168,85,247,0.4)]"
-              onClick={generateAI}
-              disabled={aiGenerating}
-            >
-              {aiGenerating ? <Loader2 className="animate-spin" size={18} /> : "GENERAR"}
-            </Button>
-          </div>
-        </div>
-        
-        {/* RIGHT PANEL: AI BOT */}
-        <div className="hidden md:flex flex-col items-center justify-center w-80 bg-[#1a0b2e]/50 border-l border-[#3b0764] p-8 relative">
-          <div className={`relative w-full aspect-square ${aiGenerating ? 'animate-bot-thinking' : 'animate-bot-hover'}`}>
-            <Image 
-              src={aiGenerating ? "/images/THINKINGBOT.png" : "/images/NORMALBOT.png"} 
-              alt="AI Bot" 
-              fill
-              className="object-contain drop-shadow-[0_0_30px_rgba(168,85,247,0.4)]"
+            {/* ONDAS NEON ADAPTATIVAS */}
+            <div 
+              className={`absolute bottom-12 w-48 h-8 rounded-[100%] blur-[20px] ${aiGenerating ? 'animate-pulse-fast' : 'animate-pulse-slow'}`}
+              style={{ backgroundColor: `${primary}60` }}
+            />
+            <div 
+              className={`absolute bottom-12 w-24 h-4 rounded-[100%] blur-[10px] ${aiGenerating ? 'animate-pulse-fast' : 'animate-pulse-slow'}`}
+              style={{ backgroundColor: `${secondary}80` }}
             />
           </div>
-          
-          {/* ONDAS NEON AZULES (GRAVITACIONALES) */}
-          <div className={`absolute bottom-12 w-48 h-8 rounded-[100%] bg-blue-500/40 blur-[20px] shadow-[0_0_50px_20px_rgba(59,130,246,0.6)] ${aiGenerating ? 'animate-pulse-fast' : 'animate-pulse-slow'}`} />
-          <div className={`absolute bottom-12 w-24 h-4 rounded-[100%] bg-cyan-400/70 blur-[10px] shadow-[0_0_30px_10px_rgba(34,211,238,0.8)] ${aiGenerating ? 'animate-pulse-fast' : 'animate-pulse-slow'}`} />
         </div>
-      </div>
-      </DialogContent>
-    </Dialog>
-  );
+        </DialogContent>
+      </Dialog>
+    );
+  };
 
   if (!type) return <div className="p-8 text-center opacity-30 italic">Selecciona una plantilla para comenzar.</div>;
 
