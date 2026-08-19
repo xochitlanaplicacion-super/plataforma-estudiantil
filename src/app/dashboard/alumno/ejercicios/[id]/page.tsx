@@ -1,17 +1,7 @@
 import React from 'react';
-import { createClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import ClientStudentPlayer from './ClientStudentPlayer';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-const supabaseAdmin = createClient(
-  supabaseUrl,
-  supabaseServiceKey,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
 
 export default async function RealizarEjercicioPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params;
@@ -36,7 +26,7 @@ export default async function RealizarEjercicioPage({ params }: { params: Promis
   // Si es actividad descriptiva, obtener la entrega existente del alumno
   let entregaExistente = null;
   if (ejercicio.tipo === 'actividad_descriptiva') {
-    const { data: entrega } = await supabaseAdmin
+    const { data: entrega } = await supabase
       .from('resultados_ejercicios')
       .select('archivo_url, archivo_nombre, archivo_path, primer_envio_en, caduca_el, calificacion_manual')
       .eq('alumno_id', user.id)
@@ -47,4 +37,3 @@ export default async function RealizarEjercicioPage({ params }: { params: Promis
 
   return <ClientStudentPlayer exercise={ejercicio} entregaExistente={entregaExistente} />;
 }
-

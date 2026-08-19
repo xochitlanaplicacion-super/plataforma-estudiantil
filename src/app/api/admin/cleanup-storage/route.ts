@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { requireTenantSession } from '@/lib/tenant/context';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,20 +7,7 @@ const BUCKET = "logos-institucion";
 
 // Helper centralizado para escanear y calcular los huérfanos globalmente
 async function getOrphans() {
-  const supabaseAuth = await createServerSupabaseClient();
-  const { data: { user } } = await supabaseAuth.auth.getUser();
-  if (!user) throw new Error("No autenticado");
-
-  const { data: profile } = await supabaseAuth.from("profiles").select("rol").eq("id", user.id).single();
-  if (!profile || !["admin", "superuser"].includes(profile.rol)) {
-    throw new Error("No autorizado");
-  }
-
-  // Usar service role para invocar el RPC y borrar archivos
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-  );
+  const { supabase, tenantId } = await requireTenantSession(['superuser', 'admin']);
 
   // ── 1. Obtener todas las URLs activas desde las tablas correspondientes ──
   // Ya no usamos el RPC porque fallaba al detectar URLs dentro de JSONs o tablas nuevas.
@@ -40,14 +26,15 @@ async function getOrphans() {
   }
 
   // ── 2. Listar todos los archivos en el bucket ──────────────────────────
-  const { data: files, error: listError } = await supabase.storage.from(BUCKET).list("", { limit: 1000 });
+  const folder = `${tenantId}/branding`;
+  const { data: files, error: listError } = await supabase.storage.from(BUCKET).list(folder, { limit: 1000 });
   if (listError) throw new Error(`Error al listar archivos: ${listError.message}`);
 
   // ── 3. Identificar huérfanos ───────────────────────────────────────────
   // Filtramos .emptyFolderPlaceholder por precaución de Supabase
   const orphans = (files || [])
-    .filter(f => f.name && !activeUrls.has(f.name) && f.name !== '.emptyFolderPlaceholder')
-    .map(f => f.name);
+    .map((file) => `${folder}/${file.name}`)
+    .filter((path) => path && !activeUrls.has(path) && !path.endsWith('.emptyFolderPlaceholder'));
 
   return { supabase, orphans };
 }

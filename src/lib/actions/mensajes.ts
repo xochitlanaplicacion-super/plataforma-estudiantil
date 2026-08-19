@@ -1,18 +1,13 @@
 
 'use server';
 
+import { requireTenantSession } from '@/lib/tenant/context';
+
 import dns from 'node:dns';
 dns.setDefaultResultOrder('ipv4first');
 
 import { unstable_noStore as noStore } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
-
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
 
 // ─── TIPOS ──────────────────────────────────────────────────────────────────
 
@@ -21,6 +16,7 @@ export type TipoDestino = 'INDIVIDUAL' | 'NIVEL' | 'CARRERA' | 'GRUPO' | 'GLOBAL
 // ─── OBTENER ID DEL ADMIN/SUPERUSUARIO ──────────────────────────────────────
 
 export async function obtenerAdminId() {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     const { data } = await supabaseAdmin
       .from('profiles')
@@ -49,6 +45,7 @@ export async function enviarMensaje({
   destino_id?: string | null;
   contenido: string;
 }) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     const { data, error } = await supabaseAdmin
       .from('mensajes_internos')
@@ -73,6 +70,7 @@ export async function enviarMensaje({
 // ─── OBTENER CONVERSACIÓN INDIVIDUAL (chat entre 2 personas) ────────────────
 
 export async function obtenerConversacion(userId1: string, userId2: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     const { data, error } = await supabaseAdmin
       .from('mensajes_internos')
@@ -92,6 +90,7 @@ export async function obtenerConversacion(userId1: string, userId2: string) {
 // ─── OBTENER LISTA DE CHATS PARA EL ADMIN ──────────────────────────────────
 
 export async function obtenerListaChats(adminId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     // Obtener todos los mensajes individuales donde el admin es parte
     const { data, error } = await supabaseAdmin
@@ -159,6 +158,7 @@ export async function obtenerListaChats(adminId: string) {
 // ─── OBTENER COMUNICADOS GLOBALES (para el admin) ───────────────────────────
 
 export async function obtenerComunicados() {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   noStore();
   try {
     const { data, error } = await supabaseAdmin
@@ -218,6 +218,7 @@ export async function obtenerComunicados() {
 // ─── RESOLVER NOMBRE DEL DESTINO ────────────────────────────────────────────
 
 async function resolverNombreDestino(tipo: string, id: string | null): Promise<string> {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   if (!id) return tipo === 'GLOBAL' ? 'Todos los usuarios' : 'Desconocido';
   try {
     if (tipo === 'NIVEL') {
@@ -241,6 +242,7 @@ async function resolverNombreDestino(tipo: string, id: string | null): Promise<s
 // ─── OBTENER MENSAJES PARA UN USUARIO (globales + individuales) ─────────────
 
 export async function obtenerMensajesUsuario(userId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     // Obtener el perfil del usuario para saber su carrera, grupo, nivel
     const { data: perfil } = await supabaseAdmin
@@ -301,6 +303,7 @@ export async function obtenerMensajesUsuario(userId: string) {
 // ─── MARCAR MENSAJE INDIVIDUAL COMO LEÍDO ───────────────────────────────────
 
 export async function marcarComoLeido(mensajeId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     const { error } = await supabaseAdmin
       .from('mensajes_internos')
@@ -317,6 +320,7 @@ export async function marcarComoLeido(mensajeId: string) {
 // ─── MARCAR COMUNICADO GLOBAL COMO VISTO ────────────────────────────────────
 
 export async function marcarComunicadoVisto(mensajeId: string, usuarioId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     const { error } = await supabaseAdmin
       .from('mensajes_vistos')
@@ -332,6 +336,7 @@ export async function marcarComunicadoVisto(mensajeId: string, usuarioId: string
 // ─── ELIMINAR MENSAJE (solo admin/superusuario) ─────────────────────────────
 
 export async function eliminarMensaje(mensajeId: string, hardDelete: boolean = false) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     if (hardDelete) {
       const { error } = await supabaseAdmin
@@ -355,6 +360,7 @@ export async function eliminarMensaje(mensajeId: string, hardDelete: boolean = f
 // ─── OBTENER CONTEO DE NO LEÍDOS ───────────────────────────────────────────
 
 export async function obtenerNoLeidos(userId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     // Mensajes individuales no leídos dirigidos a este usuario
     const { count: directos } = await supabaseAdmin
@@ -406,6 +412,7 @@ export async function obtenerNoLeidos(userId: string) {
 // ─── OBTENER ESTRUCTURA ACADÉMICA (para seleccionar destinatarios) ──────────
 
 export async function obtenerEstructuraAcademica() {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     const { data: niveles } = await supabaseAdmin.from('niveles').select('id, nombre').eq('activo', true).order('nombre');
     const { data: carreras } = await supabaseAdmin.from('carreras').select('id, nombre, nivel_id').eq('activo', true).order('nombre');
@@ -438,6 +445,7 @@ export async function obtenerEstructuraAcademica() {
 // ─── MARCAR CHAT ENTERO COMO LEÍDO (Para el Admin) ──────────────────────────
 
 export async function marcarChatComoLeido(adminId: string, remitenteId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     const { error } = await supabaseAdmin
       .from('mensajes_internos')

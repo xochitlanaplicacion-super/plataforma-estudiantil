@@ -1,5 +1,7 @@
 'use server';
 
+import { requireTenantSession } from '@/lib/tenant/context';
+
 import { createClient } from '@supabase/supabase-js';
 
 // Modelo primario: Gemini 3 Flash Preview (pago, ~$0.002/doc, ultra confiable y rápido)
@@ -13,12 +15,6 @@ const FREE_MODELS = [
   "openrouter/auto"                         // Fallback 5: OpenRouter elige automáticamente
 ];
 let currentModelIndex = 0;
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
 
 // Regex para validar CURP mexicano (18 caracteres exactos)
 const CURP_REGEX = /^[A-Z]{4}\d{6}[HM][A-Z]{5}[0-9A-Z]{2}$/;
@@ -120,6 +116,7 @@ async function fetchConTimeout(url: string, options: RequestInit, ms: number) {
 }
 
 export async function procesarDocumentoOCR(formData: FormData) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const file = formData.get('file') as File;
   const expectedStatus = formData.get('expectedStatus') as string;
   const fileName = formData.get('fileName') as string || file?.name || 'Desconocido';
@@ -323,6 +320,7 @@ export async function procesarDocumentoOCR(formData: FormData) {
 }
 
 export async function getHistoricoAcreditaciones() {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     const { data, error } = await supabaseAdmin
       .from('acreditaciones_alumnos')
@@ -338,6 +336,7 @@ export async function getHistoricoAcreditaciones() {
 }
 
 export async function updateAcreditacion(id: string, updates: any) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     const { data, error } = await supabaseAdmin
       .from('acreditaciones_alumnos')

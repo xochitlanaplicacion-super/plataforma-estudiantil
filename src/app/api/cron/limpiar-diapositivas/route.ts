@@ -1,21 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-const supabaseAdmin = createClient(
-  supabaseUrl,
-  supabaseServiceKey,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
 
 const BUCKET = 'diapositivas-assets';
 
 export async function GET(request: NextRequest) {
+  if (!process.env.CRON_SECRET || request.headers.get('authorization') !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+  }
   try {
+    const supabaseAdmin = createSupabaseAdminClient();
     const ahora = new Date().toISOString();
 
     // 1. Obtener todas las URL/Paths activos de la base de datos (recursos)
@@ -39,14 +34,13 @@ export async function GET(request: NextRequest) {
     // Convertimos a array para compatibilidad con la lógica de filtrado de abajo
     const activeUrlsArray = Array.from(activeUrls);
     
-    // 2. Obtener todos los archivos del bucket en la raíz
-    const { data: filesInBucket, error: storageError } = await supabaseAdmin.storage
-      .from(BUCKET)
-      .list('', { limit: 1000, sortBy: { column: 'name', order: 'asc' } });
-
-    if (storageError) {
-      console.error('[CRON DIAPOSITIVAS] Error fetching storage list:', storageError);
-      return NextResponse.json({ error: storageError.message }, { status: 500 });
+    const { data: tenants } = await supabaseAdmin.from('tenants').select('id');
+    const filesInBucket: Array<any & { fullPath: string }> = [];
+    for (const tenant of tenants || []) {
+      const { data: files, error: storageError } = await supabaseAdmin.storage.from(BUCKET)
+        .list(tenant.id, { limit: 1000, sortBy: { column: 'name', order: 'asc' } });
+      if (storageError) throw storageError;
+      for (const file of files || []) filesInBucket.push({ ...file, fullPath: `${tenant.id}/${file.name}` });
     }
 
     if (!filesInBucket || filesInBucket.length === 0) {
@@ -76,7 +70,7 @@ export async function GET(request: NextRequest) {
     // 4. Eliminar del storage los huérfanos
     let storageEliminados = 0;
     if (orphanedFiles.length > 0) {
-      const pathsToRemove = orphanedFiles.map(f => f.name);
+      const pathsToRemove = orphanedFiles.map(f => f.fullPath);
       const { data: removedFiles, error: removeError } = await supabaseAdmin.storage
         .from(BUCKET)
         .remove(pathsToRemove);

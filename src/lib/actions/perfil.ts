@@ -2,15 +2,11 @@
 
 import { createServerSupabaseClient } from '../supabase/server';
 import { revalidatePath } from 'next/cache';
+import { requireTenantSession } from '@/lib/tenant/context';
 
 export async function uploadProfilePicture(formData: FormData) {
   try {
-    const supabase = await createServerSupabaseClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return { success: false, error: 'No autorizado' };
-    }
+    const { supabase, tenantId, user } = await requireTenantSession();
 
     const file = formData.get('file') as File;
     if (!file) {
@@ -19,7 +15,7 @@ export async function uploadProfilePicture(formData: FormData) {
 
     const fileExt = file.name.split('.').pop() || 'jpg';
     const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-    const filePath = `${user.id}/${fileName}`;
+    const filePath = `${tenantId}/avatars/${user.id}/${fileName}`;
 
     // 1. Obtener perfil actual para borrar la imagen anterior
     const { data: profile } = await supabase
@@ -62,7 +58,7 @@ export async function uploadProfilePicture(formData: FormData) {
         const pathParts = urlObj.pathname.split('/avatars/');
         if (pathParts.length > 1) {
           const oldFilePath = pathParts[1];
-          await supabase.storage.from('avatars').remove([oldFilePath]);
+          if (oldFilePath.startsWith(`${tenantId}/`)) await supabase.storage.from('avatars').remove([oldFilePath]);
         }
       } catch (e) {
         console.error('Failed to parse old avatar URL to delete:', e);
@@ -82,12 +78,7 @@ export async function uploadProfilePicture(formData: FormData) {
 
 export async function deleteProfilePicture() {
   try {
-    const supabase = await createServerSupabaseClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return { success: false, error: 'No autorizado' };
-    }
+    const { supabase, tenantId, user } = await requireTenantSession();
 
     const { data: profile } = await supabase
       .from('profiles')
@@ -101,7 +92,7 @@ export async function deleteProfilePicture() {
         const pathParts = urlObj.pathname.split('/avatars/');
         if (pathParts.length > 1) {
           const oldFilePath = pathParts[1];
-          await supabase.storage.from('avatars').remove([oldFilePath]);
+          if (oldFilePath.startsWith(`${tenantId}/`)) await supabase.storage.from('avatars').remove([oldFilePath]);
         }
       } catch (e) {
         console.error('Failed to parse old avatar URL to delete:', e);

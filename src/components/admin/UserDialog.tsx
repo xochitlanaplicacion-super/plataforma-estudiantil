@@ -221,7 +221,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
           fecha_nacimiento: user.fecha_nacimiento || '',
           nivel_estudios: detectLevel,
           carrera_id: user.carrera_id || '',
-          password: user.password_plain || '',
+          password: '',
           genero: user.genero || '',
           doc_acta_nacimiento: !!user.doc_acta_nacimiento,
           doc_certificado_estudios: !!user.doc_certificado_estudios,

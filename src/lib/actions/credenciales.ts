@@ -2,6 +2,7 @@
 
 import { createServerSupabaseClient } from '../supabase/server';
 import { revalidatePath } from 'next/cache';
+import { requireTenantSession } from '@/lib/tenant/context';
 
 export async function getConfigCredenciales() {
   const supabase = await createServerSupabaseClient();
@@ -29,7 +30,7 @@ export async function getConfigCredenciales() {
 }
 
 export async function updateConfigCredenciales(config: any) {
-  const supabase = await createServerSupabaseClient();
+  const { supabase } = await requireTenantSession(['superuser', 'admin']);
   const { data: existing } = await supabase.from('config_credenciales').select('id').limit(1).maybeSingle();
 
   if (existing) {
@@ -161,19 +162,20 @@ export async function getInstitutionConfig() {
 }
 
 export async function uploadWatermarkImage(formData: FormData) {
-  const supabase = await createServerSupabaseClient();
+  const { supabase, tenantId } = await requireTenantSession(['superuser', 'admin']);
   const file = formData.get('file') as File;
   if (!file) return { success: false, error: 'No file provided' };
 
   // Delete previous watermark images in the bucket
-  const { data: existingFiles } = await supabase.storage.from('credenciales-watermark').list();
+  const folder = `${tenantId}/credenciales`;
+  const { data: existingFiles } = await supabase.storage.from('credenciales-watermark').list(folder);
   if (existingFiles && existingFiles.length > 0) {
-    const filePaths = existingFiles.map((f: any) => f.name);
+    const filePaths = existingFiles.map((f: any) => `${folder}/${f.name}`);
     await supabase.storage.from('credenciales-watermark').remove(filePaths);
   }
 
   const ext = file.name.split('.').pop();
-  const fileName = `watermark_${Date.now()}.${ext}`;
+  const fileName = `${folder}/watermark_${Date.now()}.${ext}`;
 
   const { error: uploadError } = await supabase.storage
     .from('credenciales-watermark')
@@ -193,12 +195,13 @@ export async function uploadWatermarkImage(formData: FormData) {
 }
 
 export async function deleteWatermarkImage() {
-  const supabase = await createServerSupabaseClient();
+  const { supabase, tenantId } = await requireTenantSession(['superuser', 'admin']);
 
   // Delete all files in the watermark bucket
-  const { data: existingFiles } = await supabase.storage.from('credenciales-watermark').list();
+  const folder = `${tenantId}/credenciales`;
+  const { data: existingFiles } = await supabase.storage.from('credenciales-watermark').list(folder);
   if (existingFiles && existingFiles.length > 0) {
-    const filePaths = existingFiles.map((f: any) => f.name);
+    const filePaths = existingFiles.map((f: any) => `${folder}/${f.name}`);
     await supabase.storage.from('credenciales-watermark').remove(filePaths);
   }
 
@@ -213,29 +216,30 @@ export async function deleteWatermarkImage() {
 // REVERSO: Imagen de fondo completo
 // ────────────────────────────────────────────────────────────
 
-async function cleanBucketFiles(supabase: any, bucket: string, prefix: string) {
-  const { data: existingFiles } = await supabase.storage.from(bucket).list('', {
+async function cleanBucketFiles(supabase: any, bucket: string, folder: string, prefix: string) {
+  const { data: existingFiles } = await supabase.storage.from(bucket).list(folder, {
     search: prefix,
   });
   // Fallback: list all and filter by prefix
-  const { data: allFiles } = await supabase.storage.from(bucket).list();
+  const { data: allFiles } = await supabase.storage.from(bucket).list(folder);
   const toDelete = (allFiles || []).filter((f: any) => f.name.startsWith(prefix));
   if (toDelete.length > 0) {
-    await supabase.storage.from(bucket).remove(toDelete.map((f: any) => f.name));
+    await supabase.storage.from(bucket).remove(toDelete.map((f: any) => `${folder}/${f.name}`));
   }
 }
 
 export async function uploadReversoImage(formData: FormData) {
-  const supabase = await createServerSupabaseClient();
+  const { supabase, tenantId } = await requireTenantSession(['superuser', 'admin']);
   const file = formData.get('file') as File;
   if (!file) return { success: false, error: 'No se proporcionó archivo' };
   if (file.size > 10 * 1024 * 1024) return { success: false, error: 'El archivo excede 10MB' };
 
   // Clean previous reverso images
-  await cleanBucketFiles(supabase, 'credenciales-reverso', 'reverso_');
+  const folder = `${tenantId}/credenciales`;
+  await cleanBucketFiles(supabase, 'credenciales-reverso', folder, 'reverso_');
 
   const ext = file.name.split('.').pop();
-  const fileName = `reverso_${Date.now()}.${ext}`;
+  const fileName = `${folder}/reverso_${Date.now()}.${ext}`;
 
   const { error: uploadError } = await supabase.storage
     .from('credenciales-reverso')
@@ -254,9 +258,9 @@ export async function uploadReversoImage(formData: FormData) {
 }
 
 export async function deleteReversoImage() {
-  const supabase = await createServerSupabaseClient();
+  const { supabase, tenantId } = await requireTenantSession(['superuser', 'admin']);
 
-  await cleanBucketFiles(supabase, 'credenciales-reverso', 'reverso_');
+  await cleanBucketFiles(supabase, 'credenciales-reverso', `${tenantId}/credenciales`, 'reverso_');
   await updateConfigCredenciales({ reverso_imagen_url: null });
 
   revalidatePath('/dashboard/admin/credenciales');
@@ -268,14 +272,15 @@ export async function deleteReversoImage() {
 // ────────────────────────────────────────────────────────────
 
 export async function uploadFirmaDirector(formData: FormData) {
-  const supabase = await createServerSupabaseClient();
+  const { supabase, tenantId } = await requireTenantSession(['superuser', 'admin']);
   const file = formData.get('file') as File;
   if (!file) return { success: false, error: 'No se proporcionó archivo' };
 
-  await cleanBucketFiles(supabase, 'credenciales-reverso', 'firma_');
+  const folder = `${tenantId}/credenciales`;
+  await cleanBucketFiles(supabase, 'credenciales-reverso', folder, 'firma_');
 
   const ext = file.name.split('.').pop();
-  const fileName = `firma_${Date.now()}.${ext}`;
+  const fileName = `${folder}/firma_${Date.now()}.${ext}`;
 
   const { error: uploadError } = await supabase.storage
     .from('credenciales-reverso')
@@ -294,9 +299,9 @@ export async function uploadFirmaDirector(formData: FormData) {
 }
 
 export async function deleteFirmaDirector() {
-  const supabase = await createServerSupabaseClient();
+  const { supabase, tenantId } = await requireTenantSession(['superuser', 'admin']);
 
-  await cleanBucketFiles(supabase, 'credenciales-reverso', 'firma_');
+  await cleanBucketFiles(supabase, 'credenciales-reverso', `${tenantId}/credenciales`, 'firma_');
   await updateConfigCredenciales({ firma_director_url: null });
 
   revalidatePath('/dashboard/admin/credenciales');
@@ -308,14 +313,15 @@ export async function deleteFirmaDirector() {
 // ────────────────────────────────────────────────────────────
 
 export async function uploadSelloInstitucion(formData: FormData) {
-  const supabase = await createServerSupabaseClient();
+  const { supabase, tenantId } = await requireTenantSession(['superuser', 'admin']);
   const file = formData.get('file') as File;
   if (!file) return { success: false, error: 'No se proporcionó archivo' };
 
-  await cleanBucketFiles(supabase, 'credenciales-reverso', 'sello_');
+  const folder = `${tenantId}/credenciales`;
+  await cleanBucketFiles(supabase, 'credenciales-reverso', folder, 'sello_');
 
   const ext = file.name.split('.').pop();
-  const fileName = `sello_${Date.now()}.${ext}`;
+  const fileName = `${folder}/sello_${Date.now()}.${ext}`;
 
   const { error: uploadError } = await supabase.storage
     .from('credenciales-reverso')
@@ -334,9 +340,9 @@ export async function uploadSelloInstitucion(formData: FormData) {
 }
 
 export async function deleteSelloInstitucion() {
-  const supabase = await createServerSupabaseClient();
+  const { supabase, tenantId } = await requireTenantSession(['superuser', 'admin']);
 
-  await cleanBucketFiles(supabase, 'credenciales-reverso', 'sello_');
+  await cleanBucketFiles(supabase, 'credenciales-reverso', `${tenantId}/credenciales`, 'sello_');
   await updateConfigCredenciales({ sello_institucion_url: null });
 
   revalidatePath('/dashboard/admin/credenciales');

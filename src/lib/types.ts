@@ -4,6 +4,7 @@ export type UserEstatus = 'activo' | 'inactivo' | 'suspendido';
 
 export interface User {
   id: string;
+  tenant_id?: string;
   nombre: string;
   apellidos: string;
   curp: string;
@@ -16,7 +17,6 @@ export interface User {
   fecha_nacimiento?: string;
   matricula?: string;
   numero_empleado?: string;
-  password_plain?: string;
   carrera_id?: string;
   grupo_id?: string; 
   genero?: string;
@@ -47,6 +47,7 @@ export interface Ejercicio {
 
 export interface Aspirante {
   id: string;
+  tenant_id?: string;
   nombre: string;
   apellidos: string;
   email: string;
@@ -219,6 +220,7 @@ export interface LandingConfig {
 
 export interface InstitucionConfig {
   id: number;
+  tenant_id?: string;
   nombre_completo: string;
   nombre_corto: string;
   siglas: string;

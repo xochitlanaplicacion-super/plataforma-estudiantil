@@ -1,19 +1,16 @@
 'use server';
 
+import { requireTenantSession } from '@/lib/tenant/context';
+
 import { createClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
 import { parseFechaLocal } from '@/lib/utils';
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
 
 // ────────────────────────────────────────────────────────────────────
 // 1. GRUPOS ACTIVOS (con al menos 1 alumno activo vigente)
 // ────────────────────────────────────────────────────────────────────
 export async function getGruposActivos() {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const hoy = new Date().toISOString().split('T')[0];
 
   // Obtener todos los grupos
@@ -52,6 +49,7 @@ export async function getGruposActivos() {
 // 2. RENDIMIENTO DE ALUMNOS POR GRUPO
 // ────────────────────────────────────────────────────────────────────
 export async function getRendimientoAlumnos(grupoId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const hoy = new Date().toISOString().split('T')[0];
 
   // 1. Alumnos activos del grupo
@@ -259,6 +257,7 @@ export async function getRendimientoAlumnos(grupoId: string) {
 // 3. ACTIVIDAD DE PROFESORES
 // ────────────────────────────────────────────────────────────────────
 export async function getActividadProfesores() {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const hace30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
   // Profesores activos
@@ -411,6 +410,7 @@ export async function getActividadProfesores() {
 // 4. FECHAS DE EVALUACIÓN
 // ────────────────────────────────────────────────────────────────────
 export async function getFechasEvaluacion(grupoId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data, error } = await supabaseAdmin
     .from('fechas_evaluacion')
     .select('id, grupo_id, materia_id, fecha_evaluacion, descripcion, materias(nombre)')
@@ -429,6 +429,7 @@ export async function upsertFechaEvaluacion(input: {
   descripcion?: string;
   created_by?: string;
 }) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const payload: any = {
     grupo_id: input.grupo_id,
     materia_id: input.materia_id,
@@ -453,6 +454,7 @@ export async function upsertFechaEvaluacion(input: {
 }
 
 export async function deleteFechaEvaluacion(id: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { error } = await supabaseAdmin
     .from('fechas_evaluacion')
     .delete()
@@ -468,6 +470,7 @@ export async function deleteFechaEvaluacion(id: string) {
 // 5. OBTENER MATERIAS DE UN GRUPO
 // ────────────────────────────────────────────────────────────────────
 export async function getMateriasDeGrupo(grupoId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data } = await supabaseAdmin
     .from('asignaciones_profesor')
     .select('materia_id, materias(id, nombre), profiles!asignaciones_profesor_profesor_id_fkey(nombre, apellidos)')

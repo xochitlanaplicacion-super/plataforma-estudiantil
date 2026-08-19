@@ -127,12 +127,34 @@ export default function LoginPage() {
       if (data?.user) {
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
-          .select('rol, estatus, fecha_expiracion')
+          .select('tenant_id, rol, estatus, fecha_expiracion')
           .eq('id', data.user.id)
           .single();
 
         if (profileError || !profile) {
+          await supabase.auth.signOut();
           setError("No se encontró tu perfil académico.");
+          setLoading(false);
+          return;
+        }
+
+        const currentHost = window.location.hostname.toLowerCase();
+        const { data: platformAdmin } = await supabase
+          .from('platform_admins')
+          .select('user_id')
+          .eq('user_id', data.user.id)
+          .maybeSingle();
+        const { data: tenantDomains } = await supabase
+          .from('tenant_domains')
+          .select('hostname')
+          .eq('tenant_id', profile.tenant_id)
+          .eq('estado', 'verificado');
+        const domainMatches = (tenantDomains || []).some((domain) => domain.hostname === currentHost);
+        const isLocal = ['localhost', '127.0.0.1'].includes(currentHost);
+        const isPlatformHost = currentHost === (process.env.NEXT_PUBLIC_PLATFORM_HOSTNAME || 'plataforma-estudiantil.vercel.app');
+        if (!domainMatches && !isLocal && !(platformAdmin && isPlatformHost)) {
+          await supabase.auth.signOut();
+          setError('Esta cuenta pertenece a otra institución. Ingresa desde el dominio de tu escuela.');
           setLoading(false);
           return;
         }
@@ -142,6 +164,13 @@ export default function LoginPage() {
 
         if (profile.estatus !== 'activo' || isExpired) {
           router.push('/expired');
+          return;
+        }
+
+
+        if (platformAdmin && (isLocal || isPlatformHost)) {
+          router.push('/platform');
+          router.refresh();
           return;
         }
 

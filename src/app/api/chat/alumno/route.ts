@@ -1,3 +1,4 @@
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 import { checkAIServiceStatus, aiServiceDisabledResponse } from "@/utils/aiServiceValidation";
@@ -249,8 +250,8 @@ const apiKey = process.env.OPENROUTER_SLIDES_API_KEY || process.env.OPENROUTER_A
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
+  const supabaseAdmin = await createServerSupabaseClient();
 
   try {
     const { messages, userId, sessionId, institucionNombre, aiName, userName } = await req.json();
@@ -262,7 +263,7 @@ const apiKey = process.env.OPENROUTER_SLIDES_API_KEY || process.env.OPENROUTER_A
     console.log("[ALUMNO API] institucionNombre:", institucionNombre);
     console.log("[ALUMNO API] messages.length:", messages?.length);
     console.log("[ALUMNO API] SUPABASE_URL exists:", !!process.env.NEXT_PUBLIC_SUPABASE_URL);
-    console.log("[ALUMNO API] SERVICE_ROLE_KEY exists:", !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+    console.log("[ALUMNO API] SERVICE_ROLE_KEY exists:", !!process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
     // ──────────────────────────────────────────────────────────────────────
 
     if (!messages || !Array.isArray(messages) || !userId) {

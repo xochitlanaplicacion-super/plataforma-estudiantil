@@ -35,10 +35,10 @@ function AnimatedNumber({ value, label, color }: { value: string | number; label
 }
 
 export function VigenciaPlataformaCard({ servicioPlataforma }: {
-  servicioPlataforma: { estado: string | null; fecha_inicio: string | null }
+  servicioPlataforma: { estado: string | null; fecha_inicio: string | null; duracion_dias?: number | null }
 }) {
   const { config: inst } = useInstitucion();
-  const DURACION_SERVICIO_DIAS = 30;
+  const DURACION_SERVICIO_DIAS = servicioPlataforma.duracion_dias || 30;
 
   const [timeLeft, setTimeLeft] = useState({
     dias: 0,
@@ -55,7 +55,7 @@ export function VigenciaPlataformaCard({ servicioPlataforma }: {
     const fin = new Date(inicio);
     fin.setDate(fin.getDate() + DURACION_SERVICIO_DIAS);
     return fin;
-  }, [servicioPlataforma.fecha_inicio]);
+  }, [servicioPlataforma.fecha_inicio, DURACION_SERVICIO_DIAS]);
 
   useEffect(() => {
     if (servicioPlataforma.estado !== 'SI' || !fechaFin) return;

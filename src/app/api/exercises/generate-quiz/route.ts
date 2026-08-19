@@ -1,3 +1,4 @@
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { checkAIServiceStatus, aiServiceDisabledResponse } from "@/utils/aiServiceValidation";
@@ -92,9 +93,9 @@ REGLAS ESTRICTAS:
 
     // Registro en Supabase
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
     if (supabaseUrl && supabaseKey) {
-      const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+      const supabaseAdmin = await createServerSupabaseClient();
       supabaseAdmin.from('ai_token_usage').insert({
         user_id: userId || null,
         tipo_peticion: 'generar_opcion_multiple',

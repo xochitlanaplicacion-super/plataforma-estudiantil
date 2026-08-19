@@ -1,20 +1,11 @@
 
 'use server';
 
+import { requireTenantSession } from '@/lib/tenant/context';
+
 import { createClient } from '@supabase/supabase-js';
 import { revalidatePath, unstable_noStore as noStore } from 'next/cache';
 import { parseFechaLocal } from '@/lib/utils';
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  }
-);
 
 const prepareForUpsert = (data: any) => {
   const cleanData = { ...data };
@@ -61,6 +52,7 @@ const prepareForUpsert = (data: any) => {
 
 // --- AGRUPACIONES PROFESOR ---
 export async function getMisAgrupaciones(profesorId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data, error } = await supabaseAdmin
     .from('agrupaciones_profesor')
     .select('*')
@@ -70,6 +62,7 @@ export async function getMisAgrupaciones(profesorId: string) {
 }
 
 export async function upsertAgrupacion(agrupacion: any) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const cleanData = prepareForUpsert(agrupacion);
   const { data, error } = await supabaseAdmin.from('agrupaciones_profesor').upsert(cleanData).select().single();
   revalidatePath('/dashboard/profesor');
@@ -77,6 +70,7 @@ export async function upsertAgrupacion(agrupacion: any) {
 }
 
 export async function deleteAgrupacion(id: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { error } = await supabaseAdmin.from('agrupaciones_profesor').delete().eq('id', id);
   revalidatePath('/dashboard/profesor');
   return { error };
@@ -84,12 +78,14 @@ export async function deleteAgrupacion(id: string) {
 
 // --- NIVELES ---
 export async function getNiveles() {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   noStore();
   const { data, error } = await supabaseAdmin.from('niveles').select('*').order('nombre');
   return { data, error };
 }
 
 export async function upsertNivel(nivel: any) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const cleanData = prepareForUpsert(nivel);
   const { data, error } = await supabaseAdmin.from('niveles').upsert(cleanData).select().single();
   revalidatePath('/dashboard/admin/estructura');
@@ -97,6 +93,7 @@ export async function upsertNivel(nivel: any) {
 }
 
 export async function deleteNivel(id: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { error } = await supabaseAdmin.from('niveles').delete().eq('id', id);
   revalidatePath('/dashboard/admin/estructura');
   return { error };
@@ -104,6 +101,7 @@ export async function deleteNivel(id: string) {
 
 // --- CARRERAS ---
 export async function getCarreras(nivelId?: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   let query = supabaseAdmin.from('carreras').select('*, niveles(nombre)');
   if (nivelId) query = query.eq('nivel_id', nivelId);
   const { data, error } = await query.order('nombre');
@@ -111,6 +109,7 @@ export async function getCarreras(nivelId?: string) {
 }
 
 export async function upsertCarrera(carrera: any) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const cleanData = prepareForUpsert(carrera);
   const { data, error } = await supabaseAdmin.from('carreras').upsert(cleanData).select().single();
   revalidatePath('/dashboard/admin/estructura');
@@ -118,6 +117,7 @@ export async function upsertCarrera(carrera: any) {
 }
 
 export async function deleteCarrera(id: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { error } = await supabaseAdmin.from('carreras').delete().eq('id', id);
   revalidatePath('/dashboard/admin/estructura');
   return { error };
@@ -125,11 +125,13 @@ export async function deleteCarrera(id: string) {
 
 // --- GRADOS ---
 export async function getGrados(carreraId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data, error } = await supabaseAdmin.from('grados').select('*').eq('carrera_id', carreraId).order('orden');
   return { data, error };
 }
 
 export async function upsertGrado(grado: any) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const cleanData = prepareForUpsert(grado);
   const { data, error } = await supabaseAdmin.from('grados').upsert(cleanData).select().single();
   revalidatePath('/dashboard/admin/grupos');
@@ -137,6 +139,7 @@ export async function upsertGrado(grado: any) {
 }
 
 export async function deleteGrado(id: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { error } = await supabaseAdmin.from('grados').delete().eq('id', id);
   revalidatePath('/dashboard/admin/grupos');
   return { error };
@@ -144,11 +147,13 @@ export async function deleteGrado(id: string) {
 
 // --- GRUPOS ---
 export async function getGrupos(carreraId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data, error } = await supabaseAdmin.from('grupos').select('*, grados(nombre)').eq('carrera_id', carreraId).order('nombre');
   return { data, error };
 }
 
 export async function getAllGrupos() {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data, error } = await supabaseAdmin
     .from('grupos')
     .select('*, carreras(nombre, nivel_id, niveles(nombre)), grados(nombre)')
@@ -157,6 +162,7 @@ export async function getAllGrupos() {
 }
 
 export async function upsertGrupo(grupo: any) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const cleanData = prepareForUpsert(grupo);
   const { data, error } = await supabaseAdmin.from('grupos').upsert(cleanData).select().single();
   revalidatePath('/dashboard/admin/grupos');
@@ -164,6 +170,7 @@ export async function upsertGrupo(grupo: any) {
 }
 
 export async function deleteGrupo(id: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { error } = await supabaseAdmin.from('grupos').delete().eq('id', id);
   revalidatePath('/dashboard/admin/grupos');
   return { error };
@@ -171,11 +178,13 @@ export async function deleteGrupo(id: string) {
 
 // --- MATERIAS ---
 export async function getMaterias(carreraId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data, error } = await supabaseAdmin.from('materias').select('*').eq('carrera_id', carreraId).order('nombre');
   return { data, error };
 }
 
 export async function upsertMateria(materia: any) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const cleanData = prepareForUpsert(materia);
   const { data, error } = await supabaseAdmin.from('materias').upsert(cleanData).select().single();
   revalidatePath('/dashboard/admin/materias');
@@ -183,6 +192,7 @@ export async function upsertMateria(materia: any) {
 }
 
 export async function deleteMateria(id: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { error } = await supabaseAdmin.from('materias').delete().eq('id', id);
   revalidatePath('/dashboard/admin/materias');
   return { error };
@@ -190,6 +200,7 @@ export async function deleteMateria(id: string) {
 
 // --- UNIDADES ---
 export async function getUnidades(materiaId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data, error } = await supabaseAdmin.from('unidades').select('*').eq('materia_id', materiaId).order('orden');
   return { data, error };
 }
@@ -197,6 +208,7 @@ export async function getUnidades(materiaId: string) {
 // Fetches unidades for ALL materia_ids in an agrupación.
 // Deduplicates by sync_id so we show one entry per synced unit.
 export async function getUnidadesAgrupacion(materiaIds: string[]) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const uniqueIds = Array.from(new Set(materiaIds));
   const { data, error } = await supabaseAdmin
     .from('unidades')
@@ -218,6 +230,7 @@ export async function getUnidadesAgrupacion(materiaIds: string[]) {
 }
 
 export async function getTemasAgrupacion(unidadSyncId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   // Get all unidad IDs that share this sync_id
   const { data: unidadesSync } = await supabaseAdmin.from('unidades').select('id').eq('sync_id', unidadSyncId);
   if (!unidadesSync || unidadesSync.length === 0) return { data: [], error: null };
@@ -242,6 +255,7 @@ export async function getTemasAgrupacion(unidadSyncId: string) {
 }
 
 export async function getEjerciciosAgrupacion(temaSyncId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data: temasSync } = await supabaseAdmin.from('temas').select('id').eq('sync_id', temaSyncId);
   if (!temasSync || temasSync.length === 0) return { data: [], error: null };
   
@@ -265,6 +279,7 @@ export async function getEjerciciosAgrupacion(temaSyncId: string) {
 }
 
 export async function getSlidesAgrupacion(temaSyncId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data: temasSync } = await supabaseAdmin.from('temas').select('id').eq('sync_id', temaSyncId);
   if (!temasSync || temasSync.length === 0) return { data: [], error: null };
   
@@ -288,6 +303,7 @@ export async function getSlidesAgrupacion(temaSyncId: string) {
 }
 
 export async function getResourcesAgrupacion(temaSyncId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data: temasSync } = await supabaseAdmin.from('temas').select('id').eq('sync_id', temaSyncId);
   if (!temasSync || temasSync.length === 0) return { data: [], error: null };
   
@@ -311,6 +327,7 @@ export async function getResourcesAgrupacion(temaSyncId: string) {
 }
 
 export async function upsertUnidad(unidad: any, syncTargetMateriaIds?: string[]) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const cleanData = prepareForUpsert(unidad);
 
   if (syncTargetMateriaIds && syncTargetMateriaIds.length > 0 && !cleanData.id) {
@@ -340,6 +357,7 @@ export async function upsertUnidad(unidad: any, syncTargetMateriaIds?: string[])
 }
 
 export async function deleteUnidad(id: string, sync_id?: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   if (sync_id) {
     const { error } = await supabaseAdmin.from('unidades').delete().eq('sync_id', sync_id);
     revalidatePath('/dashboard/profesor');
@@ -352,11 +370,13 @@ export async function deleteUnidad(id: string, sync_id?: string) {
 
 // --- TEMAS ---
 export async function getTemas(unidadId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data, error } = await supabaseAdmin.from('temas').select('*').eq('unidad_id', unidadId).order('orden');
   return { data, error };
 }
 
 export async function upsertTema(tema: any, isSyncCreation: boolean = false) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const cleanData = prepareForUpsert(tema);
 
   if (isSyncCreation && !cleanData.id && cleanData.unidad_id) {
@@ -392,6 +412,7 @@ export async function upsertTema(tema: any, isSyncCreation: boolean = false) {
 }
 
 export async function deleteTema(id: string, sync_id?: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   if (sync_id) {
     const { error } = await supabaseAdmin.from('temas').delete().eq('sync_id', sync_id);
     revalidatePath('/dashboard/profesor');
@@ -404,11 +425,13 @@ export async function deleteTema(id: string, sync_id?: string) {
 
 // --- EJERCICIOS ---
 export async function getEjercicios(temaId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data, error } = await supabaseAdmin.from('ejercicios').select('*').eq('tema_id', temaId).order('orden');
   return { data, error };
 }
 
 export async function upsertEjercicio(ejercicio: any, isSyncCreation: boolean = false) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const cleanData = prepareForUpsert(ejercicio);
 
   if (isSyncCreation && !cleanData.id && cleanData.tema_id) {
@@ -444,6 +467,7 @@ export async function upsertEjercicio(ejercicio: any, isSyncCreation: boolean = 
 }
 
 export async function deleteEjercicio(id: string, sync_id?: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   if (sync_id) {
     const { error } = await supabaseAdmin.from('ejercicios').delete().eq('sync_id', sync_id);
     revalidatePath('/dashboard/profesor');
@@ -456,6 +480,7 @@ export async function deleteEjercicio(id: string, sync_id?: string) {
 
 // --- SLIDES (PRESENTACIONES) ---
 export async function getSlides(temaId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data, error } = await supabaseAdmin
     .from('slides')
     .select('*')
@@ -465,6 +490,7 @@ export async function getSlides(temaId: string) {
 }
 
 export async function upsertSlide(slide: any, isSyncCreation: boolean = false) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     const cleanData = prepareForUpsert(slide);
 
@@ -507,6 +533,7 @@ export async function upsertSlide(slide: any, isSyncCreation: boolean = false) {
 }
 
 export async function updateSlidesOrder(updates: { id: string, orden: number }[]) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     // Supabase permite upsert por lotes si mandamos un array.
     // Como solo queremos actualizar el 'orden', necesitamos proveer también el ID.
@@ -531,6 +558,7 @@ export async function updateSlidesOrder(updates: { id: string, orden: number }[]
 }
 
 export async function deleteSlide(id: string, sync_id?: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   if (sync_id) {
     const { error } = await supabaseAdmin.from('slides').delete().eq('sync_id', sync_id);
     revalidatePath('/dashboard/profesor');
@@ -543,6 +571,7 @@ export async function deleteSlide(id: string, sync_id?: string) {
 
 // --- RECURSOS (FILES) ---
 export async function getResources(temaId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data, error } = await supabaseAdmin
     .from('resources')
     .select('*')
@@ -552,6 +581,7 @@ export async function getResources(temaId: string) {
 }
 
 export async function upsertResource(resource: any, isSyncCreation: boolean = false) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const cleanData = prepareForUpsert(resource);
 
   if (isSyncCreation && !cleanData.id && cleanData.tema_id) {
@@ -587,6 +617,7 @@ export async function upsertResource(resource: any, isSyncCreation: boolean = fa
 }
 
 export async function deleteResourceRecord(id: string, sync_id?: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   if (sync_id) {
     const { error } = await supabaseAdmin.from('resources').delete().eq('sync_id', sync_id);
     revalidatePath('/dashboard/profesor');
@@ -599,6 +630,7 @@ export async function deleteResourceRecord(id: string, sync_id?: string) {
 
 // --- PROFESORES ---
 export async function getProfesores() {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data, error } = await supabaseAdmin
     .from('profiles')
     .select('id, nombre, apellidos, email')
@@ -608,6 +640,7 @@ export async function getProfesores() {
 }
 
 export async function getAsignacionesProfesor() {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data, error } = await supabaseAdmin
     .from('asignaciones_profesor')
     .select('*, profiles:profesor_id(nombre, apellidos), niveles(nombre), carreras(nombre), materias(nombre), grupos(nombre, grados(nombre))')
@@ -616,6 +649,7 @@ export async function getAsignacionesProfesor() {
 }
 
 export async function getMyAsignaciones(profesorId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data, error } = await supabaseAdmin
     .from('asignaciones_profesor')
     .select('*, niveles(nombre), carreras(nombre), materias(nombre), grupos(nombre, grados(nombre))')
@@ -626,6 +660,7 @@ export async function getMyAsignaciones(profesorId: string) {
 }
 
 export async function upsertAsignacionProfesor(asignacion: any) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const cleanData = prepareForUpsert(asignacion);
   const { data, error } = await supabaseAdmin.from('asignaciones_profesor').upsert(cleanData).select().single();
   revalidatePath('/dashboard/admin/profesores');
@@ -634,6 +669,7 @@ export async function upsertAsignacionProfesor(asignacion: any) {
 }
 
 export async function deleteAsignacionProfesor(id: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { error } = await supabaseAdmin.from('asignaciones_profesor').delete().eq('id', id);
   revalidatePath('/dashboard/admin/profesores');
   revalidatePath('/dashboard/profesor');
@@ -641,6 +677,7 @@ export async function deleteAsignacionProfesor(id: string) {
 }
 
 export async function replaceProfesorInAssignments(oldProfesorId: string, newProfesorId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     // 1. Transferir asignaciones de grupos y materias
     const { error: errorAsig } = await supabaseAdmin
@@ -673,6 +710,7 @@ export async function replaceProfesorInAssignments(oldProfesorId: string, newPro
 
 // --- INSCRIPCIONES MASIVAS ---
 export async function getAlumnosVigentes() {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     const hoy = new Date().toISOString().split('T')[0];
 
@@ -703,6 +741,7 @@ export async function getAlumnosVigentes() {
 }
 
 export async function bulkAssignGroup(userIds: string[], groupId: string | null) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     const { error } = await supabaseAdmin
       .from('profiles')
@@ -718,6 +757,7 @@ export async function bulkAssignGroup(userIds: string[], groupId: string | null)
 }
 
 export async function getAlumnosPorGrupo(groupId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data, error } = await supabaseAdmin
     .from('profiles')
     .select('id, nombre, apellidos, curp, email, matricula, fecha_expiracion, estatus, rol, carrera_id, grupo_id')
@@ -732,6 +772,7 @@ export async function getAlumnosPorGrupo(groupId: string) {
 // RENDIMIENTO DETALLADO DE ALUMNOS (VISTA PROFESOR)
 // ────────────────────────────────────────────────────────────────────
 export async function getRendimientoGrupoParaProfesor(grupoId: string, profesorId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const hoy = new Date().toISOString().split('T')[0];
   const ahora = new Date();
 
@@ -926,6 +967,7 @@ export async function getRendimientoGrupoParaProfesor(grupoId: string, profesorI
 // ────────────────────────────────────────────────────────────────────
 
 export async function analyzeGroupSync(materiaIds: string[]) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   if (!materiaIds || materiaIds.length === 0) return { data: [], error: null };
   
   try {
@@ -976,6 +1018,7 @@ export async function analyzeGroupSync(materiaIds: string[]) {
 }
 
 export async function syncGroupFromBaseGroup(sourceMateriaId: string, targetMateriaIds: string[]) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   if (!targetMateriaIds || targetMateriaIds.length === 0) return { success: true };
   
   try {

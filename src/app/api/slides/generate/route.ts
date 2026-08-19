@@ -1,3 +1,4 @@
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { checkAIServiceStatus, aiServiceDisabledResponse } from "@/utils/aiServiceValidation";
@@ -197,10 +198,10 @@ Instrucciones adicionales del profesor: ${instrucciones || "Ninguna"}
 
     // Registrar en Supabase de forma asíncrona silenciosa
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
     
     if (supabaseUrl && supabaseKey) {
-      const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+      const supabaseAdmin = await createServerSupabaseClient();
       
       // No usamos await aquí para no bloquear la respuesta al usuario
       supabaseAdmin.from('ai_token_usage').insert({

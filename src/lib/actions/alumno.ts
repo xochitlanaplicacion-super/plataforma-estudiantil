@@ -1,21 +1,13 @@
 'use server';
 
+import { requireTenantSession } from '@/lib/tenant/context';
+
 import { createClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { parseFechaLocal } from '@/lib/utils';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  }
-);
-
 export async function getAlumnoDashboardData(userId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     // 1. Perfil del alumno completo
     const { data: profile, error: profileErr } = await supabaseAdmin
@@ -330,12 +322,7 @@ export async function saveExerciseResult(
 }
 
 export async function getMateriasYTemasParaAlumno(userId: string) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!supabaseUrl || !supabaseKey) return [];
-  
-  const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
-  
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data: profile } = await supabaseAdmin.from("profiles").select("grupo_id").eq("id", userId).single();
   if (!profile?.grupo_id) return [];
 

@@ -1,16 +1,12 @@
 'use server';
 
+import { requireTenantSession } from '@/lib/tenant/context';
+
 import dns from 'node:dns';
 dns.setDefaultResultOrder('ipv4first');
 
 import { unstable_noStore as noStore } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
 
 export type TipoMensajeClase = 'INDIVIDUAL' | 'AVISO' | 'CHAT_GRUPAL';
 
@@ -29,6 +25,7 @@ export async function enviarMensajeClase({
   tipo_mensaje: TipoMensajeClase;
   contenido: string;
 }) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     const { data, error } = await supabaseAdmin
       .from('mensajes_clases')
@@ -52,6 +49,7 @@ export async function enviarMensajeClase({
 }
 
 export async function obtenerAvisosClase(userId: string, rol: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   noStore();
   try {
     let orConditions: string[] = [];
@@ -135,6 +133,7 @@ export async function obtenerAvisosClase(userId: string, rol: string) {
 }
 
 export async function obtenerDetalleVistosAviso(avisoId: string, grupoId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   noStore();
   try {
     // Obtener todos los alumnos del grupo
@@ -168,6 +167,7 @@ export async function obtenerDetalleVistosAviso(avisoId: string, grupoId: string
 }
 
 export async function eliminarMensajeClase(mensajeId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   noStore();
   try {
     const { error } = await supabaseAdmin.from('mensajes_clases').delete().eq('id', mensajeId);
@@ -179,6 +179,7 @@ export async function eliminarMensajeClase(mensajeId: string) {
 }
 
 export async function obtenerChatGrupal(materia_id: string, grupo_id: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   noStore();
   try {
     const { data, error } = await supabaseAdmin
@@ -208,6 +209,7 @@ export async function obtenerChatGrupal(materia_id: string, grupo_id: string) {
 }
 
 export async function obtenerChatIndividual(userId1: string, userId2: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   noStore();
   try {
     const { data, error } = await supabaseAdmin
@@ -226,6 +228,7 @@ export async function obtenerChatIndividual(userId1: string, userId2: string) {
 }
 
 export async function obtenerContactosProfesor(profesorId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   noStore();
   try {
     // Obtener las asignaciones activas del profesor (grupos y materias)
@@ -287,6 +290,7 @@ export async function obtenerContactosProfesor(profesorId: string) {
 }
 
 export async function obtenerGruposProfesor(profesorId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   noStore();
   try {
     const { data: asig } = await supabaseAdmin
@@ -317,6 +321,7 @@ export async function obtenerGruposProfesor(profesorId: string) {
 }
 
 export async function obtenerContactosAlumno(alumnoId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   noStore();
   try {
     // Alumno: obtener grupo_id directamente de su perfil, igual que en Mis Materias
@@ -376,6 +381,7 @@ export async function obtenerContactosAlumno(alumnoId: string) {
 }
 
 export async function obtenerGruposAlumno(alumnoId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   noStore();
   try {
     const { data: profile } = await supabaseAdmin
@@ -416,6 +422,7 @@ export async function obtenerGruposAlumno(alumnoId: string) {
 }
 
 export async function marcarMensajeClaseLeido(mensajeId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     const { error } = await supabaseAdmin
       .from('mensajes_clases')
@@ -429,6 +436,7 @@ export async function marcarMensajeClaseLeido(mensajeId: string) {
 }
 
 export async function marcarAvisoClaseVisto(mensajeId: string, usuarioId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     const { error } = await supabaseAdmin
       .from('mensajes_clases_vistos')
@@ -442,6 +450,7 @@ export async function marcarAvisoClaseVisto(mensajeId: string, usuarioId: string
 
 // Obtiene el conteo de mensajes grupales no vistos, agrupados por materia_id+grupo_id
 export async function obtenerUnreadGrupales(userId: string, grupoIds: { materia_id: string; grupo_id: string }[]) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   noStore();
   try {
     if (grupoIds.length === 0) return { success: true, data: {} };
@@ -486,6 +495,7 @@ export async function obtenerUnreadGrupales(userId: string, grupoIds: { materia_
 
 // Marca todos los mensajes grupales de un grupo como vistos por el usuario
 export async function marcarGrupalVisto(userId: string, materia_id: string, grupo_id: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     // Obtener mensajes no vistos de este grupo
     const { data: mensajes } = await supabaseAdmin
@@ -520,6 +530,7 @@ export async function marcarGrupalVisto(userId: string, materia_id: string, grup
 }
 
 export async function verificarMensajesClasePendientes(userId: string, rol: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   noStore();
   try {
     // 1. Revisar mensajes directos sin leer
@@ -574,6 +585,7 @@ export async function verificarMensajesClasePendientes(userId: string, rol: stri
 }
 
 export async function obtenerMensajesGrupalesPendientes(userId: string, rol: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   noStore();
   try {
     let orConditions: string[] = [];
@@ -620,6 +632,7 @@ export async function obtenerMensajesGrupalesPendientes(userId: string, rol: str
 }
 
 export async function obtenerUnreadDirectos(userId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   noStore();
   try {
     const { data, error } = await supabaseAdmin

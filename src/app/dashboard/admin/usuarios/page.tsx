@@ -271,13 +271,13 @@ export default function UsuariosManagement() {
                               <TooltipTrigger asChild>
                                 <div className="flex items-center gap-1 cursor-help">
                                   <Key size={12} className="text-primary/50" />
-                                  <span className="text-[11px] font-mono blur-[3px] hover:blur-none transition-all duration-300">
-                                    {user.password_plain || '********'}
+                                  <span className="text-[11px] font-mono text-muted-foreground">
+                                    No almacenada
                                   </span>
                                 </div>
                               </TooltipTrigger>
                               <TooltipContent>
-                                <p className="text-xs">Pasa el mouse para ver clave</p>
+                                <p className="text-xs">Usa “Reenviar acceso” para generar un enlace seguro.</p>
                               </TooltipContent>
                             </Tooltip>
                           </TooltipProvider>

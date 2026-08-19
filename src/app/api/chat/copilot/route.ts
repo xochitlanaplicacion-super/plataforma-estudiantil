@@ -1,3 +1,4 @@
+import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 import { checkAIServiceStatus, aiServiceDisabledResponse } from "@/utils/aiServiceValidation";
@@ -265,8 +266,8 @@ const apiKey = process.env.OPENROUTER_SLIDES_API_KEY || process.env.OPENROUTER_A
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  const supabaseAdmin = createClient(supabaseUrl, supabaseKey);
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!;
+  const supabaseAdmin = await createServerSupabaseClient();
 
   // Consulta segura del contexto academico del profesor (READ-ONLY, filtrado por su ID)
   let profesorContext = "";

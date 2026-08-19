@@ -1,34 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 
 export const dynamic = 'force-dynamic';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-const supabaseAdmin = createClient(
-  supabaseUrl,
-  supabaseServiceKey,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
 
 const BUCKET = 'entregas-alumnos';
 const CRON_SECRET = process.env.CRON_SECRET;
 
 export async function GET(request: NextRequest) {
-  // Autenticación relajada temporalmente para evitar que falle en Vercel si la variable de entorno no sincroniza
-  // const authHeader = request.headers.get('authorization');
-  // if (authHeader !== `Bearer ${CRON_SECRET}`) {
-  //   return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  // }
+  if (!CRON_SECRET || request.headers.get('authorization') !== `Bearer ${CRON_SECRET}`) {
+    return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
+  }
 
   try {
+    const supabaseAdmin = createSupabaseAdminClient();
     const ahora = new Date().toISOString();
 
     // Buscar todos los registros cuya fecha de caducidad ya pasó y tienen archivo
     const { data: expirados, error: fetchError } = await supabaseAdmin
       .from('resultados_ejercicios')
-      .select('alumno_id, ejercicio_id, archivo_path, archivo_nombre')
+      .select('tenant_id, alumno_id, ejercicio_id, archivo_path, archivo_nombre')
       .lt('caduca_el', ahora)
       .not('archivo_path', 'is', null);
 
@@ -43,7 +33,7 @@ export async function GET(request: NextRequest) {
 
     // Recopilar paths para eliminar del storage
     const paths = expirados
-      .filter(e => e.archivo_path)
+      .filter(e => e.archivo_path && (e.archivo_path as string).startsWith(`${e.tenant_id}/`))
       .map(e => e.archivo_path as string);
 
     let storageEliminados = 0;
@@ -63,7 +53,8 @@ export async function GET(request: NextRequest) {
     // Limpiar las columnas de archivo en la BD (pero mantener el record de que los resultados existen)
     const pares = expirados.map(e => ({
       alumno_id: e.alumno_id,
-      ejercicio_id: e.ejercicio_id
+      ejercicio_id: e.ejercicio_id,
+      tenant_id: e.tenant_id,
     }));
 
     // Actualizar cada registro para limpiar datos del archivo
@@ -77,7 +68,8 @@ export async function GET(request: NextRequest) {
           archivo_path: null,
         })
         .eq('alumno_id', par.alumno_id)
-        .eq('ejercicio_id', par.ejercicio_id);
+        .eq('ejercicio_id', par.ejercicio_id)
+        .eq('tenant_id', par.tenant_id);
       
       if (!updateError) dbLimpiados++;
     }

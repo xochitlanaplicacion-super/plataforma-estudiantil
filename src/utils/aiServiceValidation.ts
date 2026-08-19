@@ -1,21 +1,20 @@
-import { createClient } from "@supabase/supabase-js";
+import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { isServiceExpired } from '@/lib/tenant/context';
 
-export async function checkAIServiceStatus(supabaseAdmin?: ReturnType<typeof createClient>): Promise<boolean> {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-  const client = supabaseAdmin || createClient(url, key);
-
+export async function checkAIServiceStatus(_legacyClient?: unknown): Promise<boolean> {
   try {
-    const { data, error } = await client
-      .from("pago_de_servicios")
-      .select("estado")
-      .eq("id", 1)
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return false;
+    const { data: profile } = await supabase.from('profiles').select('tenant_id, estatus').eq('id', user.id).single();
+    if (!profile?.tenant_id || profile.estatus !== 'activo') return false;
+    const { data, error } = await createSupabaseAdminClient()
+      .from('pago_de_servicios')
+      .select('estado, fecha_inicio, duracion_dias, ia_habilitada, bloquear_acceso_usuarios, mensaje_bloqueo')
+      .eq('tenant_id', profile.tenant_id)
       .single();
-
-    if (error || !data || data.estado !== "SI") {
-      return false; // Not active
-    }
-    return true; // Active
+    return !error && !!data && data.ia_habilitada && !isServiceExpired(data);
   } catch (error) {
     console.error("Error checking AI service status:", error);
     return false; // Fail safe: block AI if db is down
@@ -23,5 +22,5 @@ export async function checkAIServiceStatus(supabaseAdmin?: ReturnType<typeof cre
 }
 
 export function aiServiceDisabledResponse() {
-  return new Response("El servicio IA está fuera de servicio por cuota", { status: 402 });
+  return new Response("El servicio de IA no está habilitado para esta institución", { status: 402 });
 }

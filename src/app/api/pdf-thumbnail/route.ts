@@ -1,15 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { requireTenantSession } from '@/lib/tenant/context';
 
 export const dynamic = 'force-dynamic';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-const supabaseAdmin = createClient(
-  supabaseUrl,
-  supabaseServiceKey
-);
 
 /**
  * API Route: /api/pdf-thumbnail?path=carpeta/archivo.pdf
@@ -26,6 +18,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const { supabase: supabaseAdmin, tenantId } = await requireTenantSession();
+    if (!path.startsWith(`${tenantId}/`)) {
+      return NextResponse.json({ error: 'File outside institution' }, { status: 403 });
+    }
     // 1. Generate a short-lived signed URL server-side (bypasses CORS from browser)
     const { data: signedData, error: signedError } = await supabaseAdmin.storage
       .from('material-apoyo')

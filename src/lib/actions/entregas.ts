@@ -1,17 +1,10 @@
 'use server';
 
+import { requireTenantSession } from '@/lib/tenant/context';
+
 import { createClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
-
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-const supabaseAdmin = createClient(
-  supabaseUrl,
-  supabaseServiceKey,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
 
 const BUCKET = 'entregas-alumnos';
 const EXPIRY_DAYS = 10;
@@ -37,9 +30,7 @@ const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
 //    - Guarda registro en BD (primer_envio_en NO se actualiza si ya existe)
 // -------------------------------------------------------------------
 export async function subirEntregaAlumno(formData: FormData) {
-  const supabase = await createServerSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: 'No autenticado' };
+  const { supabase: supabaseAdmin, tenantId, user } = await requireTenantSession(['alumno']);
 
   const file = formData.get('archivo') as File;
   const ejercicioId = formData.get('ejercicioId') as string;
@@ -64,7 +55,7 @@ export async function subirEntregaAlumno(formData: FormData) {
   // Construir ruta única: {alumno_id}/{ejercicio_id}/{timestamp}-{nombre}
   const ext = file.name.split('.').pop();
   const timestamp = Date.now();
-  const filePath = `${user.id}/${ejercicioId}/${timestamp}.${ext}`;
+  const filePath = `${tenantId}/entregas/${user.id}/${ejercicioId}/${timestamp}.${ext}`;
 
   // Subir archivo al bucket
   const bytes = await file.arrayBuffer();
@@ -117,6 +108,7 @@ export async function subirEntregaAlumno(formData: FormData) {
 // 2. OBTENER ENTREGA DE UN ALUMNO PARA UN EJERCICIO
 // -------------------------------------------------------------------
 export async function getEntregaAlumno(ejercicioId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return null;
@@ -141,6 +133,7 @@ export async function calificarEntregaDescriptiva(
   ejercicioId: string,
   calificacion: number
 ) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: 'No autenticado' };
@@ -171,6 +164,7 @@ export async function calificarEntregaDescriptiva(
 //    Retorna todos los alumnos que entregaron un ejercicio dado
 // -------------------------------------------------------------------
 export async function getEntregasDeEjercicio(ejercicioId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   // Obtener las entregas
   const { data: entregasData, error } = await supabaseAdmin
     .from('resultados_ejercicios')
@@ -221,6 +215,7 @@ export async function getEntregasDeEjercicio(ejercicioId: string) {
 }
 
 export async function getEntregasAgrupadasPorSyncId(syncId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   // 1. Obtener todos los ejercicios con este sync_id y sus nombres de grupo
   const { data: ejercicios } = await supabaseAdmin
     .from('ejercicios')
@@ -306,6 +301,7 @@ export async function getEntregasAgrupadasPorSyncId(syncId: string) {
 // 5. OBTENER EJERCICIOS DESCRIPTIVOS DE UN TEMA (PARA PROFESOR)
 // -------------------------------------------------------------------
 export async function getEjerciciosDescriptivosDeTema(temaId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data, error } = await supabaseAdmin
     .from('ejercicios')
     .select('id, titulo, fecha_entrega')
@@ -321,6 +317,8 @@ export async function getEjerciciosDescriptivosDeTema(temaId: string) {
 // 6. RENOVAR URLs FIRMADAS (para el cron o cuando expiran)
 // -------------------------------------------------------------------
 export async function renovarUrlFirmada(filePath: string) {
+  const { supabase: supabaseAdmin, tenantId } = await requireTenantSession();
+  if (!filePath.startsWith(`${tenantId}/`)) return null;
   const { data } = await supabaseAdmin.storage
     .from(BUCKET)
     .createSignedUrl(filePath, 60 * 60 * 24 * 7);
@@ -332,6 +330,7 @@ export async function renovarUrlFirmada(filePath: string) {
 //    PARA UN PROFESOR (vista global, agrupadas por materia)
 // -------------------------------------------------------------------
 export async function getEntregasGlobalesProfesor(profesorId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     // 1. Obtener asignaciones activas del profesor
     const { data: asignaciones, error: asigError } = await supabaseAdmin

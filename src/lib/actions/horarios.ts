@@ -3,6 +3,8 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createClient as createSupabaseClient } from "@supabase/supabase-js"; // fallback
 import { revalidatePath } from "next/cache";
+import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { requireTenantSession, resolveTenantFromHostname } from "@/lib/tenant/context";
 
 const DAYS_ORDER = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
@@ -19,18 +21,12 @@ export interface ConfiguracionGlobal {
 }
 
 export async function updateConfiguracion(bloques: HorarioBloque[], telefono: string, correo: string) {
-  const supabase = await createServerSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { success: false, error: "No autenticado" };
-
-  const { data: profile } = await supabase.from("profiles").select("rol").eq("id", user.id).single();
-  if (!profile || !["admin", "superuser"].includes(profile.rol)) {
-    return { success: false, error: "No autorizado" };
-  }
+  const { supabase, tenantId } = await requireTenantSession(["admin", "superuser"]);
 
   const { error } = await supabase
     .from("configuracion_sistema")
-    .upsert({ id: 1, horarios_atencion: bloques, telefono_contacto: telefono, correo_contacto: correo, updated_at: new Date().toISOString() });
+    .update({ horarios_atencion: bloques, telefono_contacto: telefono, correo_contacto: correo, updated_at: new Date().toISOString() })
+    .eq('tenant_id', tenantId);
 
   if (error) {
     return { success: false, error: error.message };
@@ -44,8 +40,10 @@ export async function updateConfiguracion(bloques: HorarioBloque[], telefono: st
 }
 
 export async function getConfiguracionBruta(): Promise<ConfiguracionGlobal> {
-  const supabase = await createServerSupabaseClient();
-  const { data, error } = await supabase.from("configuracion_sistema").select("horarios_atencion, telefono_contacto, correo_contacto").eq("id", 1).single();
+  const tenant = await resolveTenantFromHostname();
+  if (!tenant) return { horarios_atencion: [], telefono_contacto: "", correo_contacto: "" };
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase.from("configuracion_sistema").select("horarios_atencion, telefono_contacto, correo_contacto").eq("tenant_id", tenant.id).single();
   if (error || !data) return { horarios_atencion: [], telefono_contacto: "", correo_contacto: "" };
   return {
     horarios_atencion: data.horarios_atencion as HorarioBloque[],
@@ -55,11 +53,9 @@ export async function getConfiguracionBruta(): Promise<ConfiguracionGlobal> {
 }
 
 export async function getDatosContactoFormateados(): Promise<{telefono: string, correo: string, direccion: string}> {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  const supabase = createSupabaseClient(supabaseUrl, supabaseKey);
-
-  const { data, error } = await supabase.from("configuracion_sistema").select("telefono_contacto, correo_contacto, direccion").eq("id", 1).single();
+  const tenant = await resolveTenantFromHostname();
+  const supabase = createSupabaseAdminClient();
+  const { data } = tenant ? await supabase.from("configuracion_sistema").select("telefono_contacto, correo_contacto, direccion").eq("tenant_id", tenant.id).single() : { data: null };
   
   return {
     telefono: data?.telefono_contacto || "7352826206",
@@ -105,13 +101,11 @@ function formatDaysList(dias: string[]) {
 }
 
 // Función libre de contexto de cookies para que pueda usarla el trigger de email o Server Components
-export async function getHorariosFormateados(): Promise<string> {
+export async function getHorariosFormateados(tenantId?: string): Promise<string> {
   // Usar createClient directo (rol admin o público) para no depender de auth/cookies en background jobs
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  const supabase = createSupabaseClient(supabaseUrl, supabaseKey);
-
-  const { data, error } = await supabase.from("configuracion_sistema").select("horarios_atencion").eq("id", 1).single();
+  const resolvedTenant = tenantId ? { id: tenantId } : await resolveTenantFromHostname();
+  const supabase = createSupabaseAdminClient();
+  const { data } = resolvedTenant ? await supabase.from("configuracion_sistema").select("horarios_atencion").eq("tenant_id", resolvedTenant.id).single() : { data: null };
   let bloques: HorarioBloque[] = [];
   
   if (data && data.horarios_atencion) {

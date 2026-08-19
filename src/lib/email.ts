@@ -1,25 +1,33 @@
 import nodemailer from 'nodemailer';
 import { getHorariosFormateados } from '@/lib/actions/horarios';
-import { getInstitucionConfig } from '@/lib/actions/institucion';
-import { InstitucionConfig } from '@/lib/types';
+import { getInstitucionConfig, getTenantSmtpConfig } from '@/lib/actions/institucion';
+import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 
 // ─── Factory: Crear transporter dinámico desde la BD ──────────────────────────
 // NO hay transporter global. Se crea por cada envío usando los datos SMTP
 // de la tabla configuracion_sistema. Si no hay datos, retorna null.
 
-function createSmtpTransporter(inst: InstitucionConfig) {
-  if (!inst.smtp_user || !inst.smtp_password) return null;
+interface TenantSmtpConfig {
+  smtp_host?: string | null;
+  smtp_port?: number | null;
+  smtp_user?: string | null;
+  smtp_password?: string | null;
+  smtp_from_name?: string | null;
+}
 
-  const host = inst.smtp_host || 'smtp.gmail.com';
-  const port = inst.smtp_port || 465;
+function createSmtpTransporter(smtp: TenantSmtpConfig) {
+  if (!smtp.smtp_user || !smtp.smtp_password) return null;
+
+  const host = smtp.smtp_host || 'smtp.gmail.com';
+  const port = smtp.smtp_port || 465;
 
   return nodemailer.createTransport({
     host,
     port,
     secure: port === 465,
     auth: {
-      user: inst.smtp_user,
-      pass: inst.smtp_password,
+      user: smtp.smtp_user,
+      pass: smtp.smtp_password,
     },
   });
 }
@@ -27,13 +35,15 @@ function createSmtpTransporter(inst: InstitucionConfig) {
 const SMTP_NOT_CONFIGURED_ERROR = 'El correo no pudo enviarse porque no se ha configurado el servidor de correo electrónico. Para activarlo, ve a Configuración → Correo Saliente y completa los datos de tu servidor SMTP (correo, contraseña y servidor).';
 
 interface WelcomeEmailData {
+  tenantId: string;
   to: string;
   nombre: string;
   apellidos: string;
   rol: string;
   matricula?: string | null;
   numero_empleado?: string | null;
-  password: string;
+  password?: string | null;
+  accessUrl?: string | null;
   isReactivation?: boolean;
   isExpiration?: boolean;
   genero?: string | null;
@@ -42,6 +52,7 @@ interface WelcomeEmailData {
 }
 
 interface ReminderEmailData {
+  tenantId: string;
   to: string;
   nombre: string;
   faltantes: string[];
@@ -49,15 +60,18 @@ interface ReminderEmailData {
 
 export async function sendWelcomeEmail(data: WelcomeEmailData) {
   try {
-    const inst = await getInstitucionConfig();
-    const transporter = createSmtpTransporter(inst);
+    const [inst, smtp] = await Promise.all([
+      getInstitucionConfig(data.tenantId),
+      getTenantSmtpConfig(data.tenantId),
+    ]);
+    const transporter = createSmtpTransporter(smtp || {});
 
     if (!transporter) {
       console.warn('⚠️ SMTP no configurado en la BD.');
       return { success: false, error: SMTP_NOT_CONFIGURED_ERROR };
     }
 
-    const fromName = inst.smtp_from_name || inst.nombre_completo;
+    const fromName = smtp?.smtp_from_name || inst.nombre_completo;
 
     const rolTexto: Record<string, string> = {
       alumno: '🎓 Alumno',
@@ -124,22 +138,14 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
     
     if (nivelNombre) {
       try {
-        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-        const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-        if (supabaseUrl && supabaseKey) {
-          const { createClient } = await import('@supabase/supabase-js');
-          const supaAdmin = createClient(supabaseUrl, supabaseKey, {
-            auth: { autoRefreshToken: false, persistSession: false }
-          });
-          const { data: nivelRow } = await supaAdmin
+        const supaAdmin = createSupabaseAdminClient();
+        const { data: nivelRow } = await supaAdmin
             .from('niveles')
             .select('imagen_bienvenida_url')
+            .eq('tenant_id', data.tenantId)
             .ilike('nombre', nivelNombre)
             .maybeSingle();
-          if (nivelRow?.imagen_bienvenida_url) {
-            imagenBienvenida = nivelRow.imagen_bienvenida_url;
-          }
-        }
+        if (nivelRow?.imagen_bienvenida_url) imagenBienvenida = nivelRow.imagen_bienvenida_url;
       } catch (e) {
         console.warn('No se pudo consultar imagen de nivel:', e);
       }
@@ -187,10 +193,10 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
                       <td style="padding:10px 20px;border-bottom:1px solid #eee;font-weight:bold;color:#555;">👤 Usuario</td>
                       <td style="padding:10px 20px;border-bottom:1px solid #eee;color:#333;">${data.to}</td>
                     </tr>
-                    <tr>
+                    ${data.password ? `<tr>
                       <td style="padding:10px 20px;border-bottom:1px solid #eee;font-weight:bold;color:#555;">🔑 Contraseña</td>
                       <td style="padding:10px 20px;border-bottom:1px solid #eee;color:#333;font-weight:bold;background:#fff3cd;">${data.password}</td>
-                    </tr>
+                    </tr>` : ''}
                     <tr>
                       <td style="padding:10px 20px;border-bottom:1px solid #eee;font-weight:bold;color:#555;">🎭 Rol</td>
                       <td style="padding:10px 20px;border-bottom:1px solid #eee;color:#333;">${rolLabel}</td>
@@ -202,7 +208,7 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
             </td></tr>
 
             <tr><td style="text-align:center;padding:15px 20px;">
-              <a href="${appUrl}" style="display:inline-block;background:${colorPrincipal};color:#ffffff;padding:14px 50px;border-radius:6px;text-decoration:none;font-weight:bold;">Iniciar Sesión →</a>
+              <a href="${data.accessUrl || appUrl}" style="display:inline-block;background:${colorPrincipal};color:#ffffff;padding:14px 50px;border-radius:6px;text-decoration:none;font-weight:bold;">${data.accessUrl ? 'Establecer contraseña' : 'Iniciar Sesión'} →</a>
             </td></tr>
             ` : `
             <tr><td style="padding:30px;">
@@ -263,7 +269,7 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
     </html>`;
 
     const info = await transporter.sendMail({
-      from: `"${fromName}" <${inst.smtp_user}>`,
+      from: `"${fromName}" <${smtp.smtp_user}>`,
       to: data.to,
       subject: data.isExpiration 
         ? `⚠️ Aviso de Acceso - ${inst.nombre_corto}`
@@ -282,19 +288,22 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
 
 export async function sendDocumentReminderEmail(data: ReminderEmailData) {
   try {
-    const inst = await getInstitucionConfig();
-    const transporter = createSmtpTransporter(inst);
+    const [inst, smtp] = await Promise.all([
+      getInstitucionConfig(data.tenantId),
+      getTenantSmtpConfig(data.tenantId),
+    ]);
+    const transporter = createSmtpTransporter(smtp || {});
 
     if (!transporter) {
       return { success: false, error: SMTP_NOT_CONFIGURED_ERROR };
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://plataforma.ejemplo.edu';
-    const horarioString = await getHorariosFormateados();
+    const appUrl = inst.url_plataforma || process.env.NEXT_PUBLIC_APP_URL || 'https://plataforma.ejemplo.edu';
+    const horarioString = await getHorariosFormateados(data.tenantId);
     const logoUrl = inst.logo_url || `${appUrl}/images/logo_placeholder.svg`;
     const colorPrincipal = inst.color_primario || '#333333';
     const colorSecundario = inst.color_secundario || '#1A4A3F';
-    const fromName = inst.smtp_from_name || `Servicios Escolares - ${inst.siglas}`;
+    const fromName = smtp?.smtp_from_name || `Servicios Escolares - ${inst.siglas}`;
 
     const listaFaltantes = data.faltantes.map(doc => `<li style="margin-bottom: 8px; color: ${colorPrincipal}; font-weight: bold;">• ${doc}</li>`).join('');
 
@@ -325,7 +334,7 @@ export async function sendDocumentReminderEmail(data: ReminderEmailData) {
     </html>`;
 
     await transporter.sendMail({
-      from: `"${fromName}" <${inst.smtp_user}>`,
+      from: `"${fromName}" <${smtp.smtp_user}>`,
       to: data.to,
       subject: `⚠️ Aviso: Documentación Pendiente - ${inst.siglas}`,
       html: htmlContent,

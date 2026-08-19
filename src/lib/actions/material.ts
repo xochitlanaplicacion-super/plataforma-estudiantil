@@ -1,27 +1,20 @@
 'use server';
 
+import { requireTenantSession } from '@/lib/tenant/context';
+
 import { createClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  }
-);
-
 // --- OBTENER NIVELES ---
 export async function getNiveles() {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data, error } = await supabaseAdmin.from('niveles').select('*').order('nombre');
   return { data, error };
 }
 
 // --- OBTENER MATERIALES ---
 export async function getTodosLosMateriales() {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data, error } = await supabaseAdmin
     .from('material_apoyo')
     .select('*, niveles(nombre), profiles(nombre, apellidos)')
@@ -30,6 +23,7 @@ export async function getTodosLosMateriales() {
 }
 
 export async function getMaterialPorNivel(nivelId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data, error } = await supabaseAdmin
     .from('material_apoyo')
     .select('*, perfiles:created_by(nombre, apellidos)')
@@ -40,6 +34,7 @@ export async function getMaterialPorNivel(nivelId: string) {
 
 // --- MATERIAL PÚBLICO PARA ALUMNOS (solo publicado=true) ---
 export async function getMaterialPublicoPorNivel(nivelId: string, carreraId?: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     let query = supabaseAdmin
       .from('material_apoyo')
@@ -66,7 +61,9 @@ export async function getMaterialPublicoPorNivel(nivelId: string, carreraId?: st
 
 // --- GENERAR URL FIRMADA PARA PREVIEW (más corta, sin forzar descarga) ---
 export async function generateSignedUrlPreview(path: string) {
+  const { supabase: supabaseAdmin, tenantId } = await requireTenantSession();
   try {
+    if (!path.startsWith(`${tenantId}/`)) throw new Error('Archivo fuera de la institución');
     const { data, error } = await supabaseAdmin.storage
       .from('material-apoyo')
       .createSignedUrl(path, 3600); // Sin opción download, para abrir inline
@@ -80,6 +77,7 @@ export async function generateSignedUrlPreview(path: string) {
 
 // --- SUBIR MATERIAL (CARGA MASIVA) ---
 export async function uploadMaterial(formData: FormData, userId: string) {
+  const { supabase: supabaseAdmin, tenantId, user } = await requireTenantSession(['superuser', 'admin', 'profesor']);
   try {
     const files = formData.getAll('files') as File[];
     const categoria = formData.get('categoria') as string;
@@ -126,7 +124,7 @@ export async function uploadMaterial(formData: FormData, userId: string) {
 
       const timestamp = Date.now();
       const cleanFileName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '');
-      const filePath = `${nivelId}/${timestamp}_${cleanFileName}`;
+      const filePath = `${tenantId}/material/${nivelId}/${timestamp}_${cleanFileName}`;
 
       const { data: storageData, error: storageError } = await supabaseAdmin.storage
         .from('material-apoyo')
@@ -151,7 +149,8 @@ export async function uploadMaterial(formData: FormData, userId: string) {
         tamano_bytes: file.size,
         publicado: true,
         carreras_ids: carreras_ids.length > 0 ? carreras_ids : null,
-        created_by: userId
+        created_by: user.id,
+        tenant_id: tenantId,
       });
     }
 
@@ -173,8 +172,11 @@ export async function uploadMaterial(formData: FormData, userId: string) {
 
 // --- GUARDAR REGISTROS (CUANDO LA CARGA STORAGE SE HIZO EN CLIENTE) ---
 export async function guardarRegistrosMaterialMasivo(insertDataArray: any[]) {
+  const { supabase: supabaseAdmin, tenantId, user } = await requireTenantSession(['superuser', 'admin', 'profesor']);
   try {
-    const { error } = await supabaseAdmin.from('material_apoyo').insert(insertDataArray);
+    if (insertDataArray.some((row) => !String(row.archivo_url || '').startsWith(`${tenantId}/`))) throw new Error('Ruta de archivo fuera de la institución');
+    const rows = insertDataArray.map((row) => ({ ...row, tenant_id: tenantId, created_by: user.id }));
+    const { error } = await supabaseAdmin.from('material_apoyo').insert(rows);
     if (error) throw error;
     
     revalidatePath('/dashboard/admin/material');
@@ -187,7 +189,9 @@ export async function guardarRegistrosMaterialMasivo(insertDataArray: any[]) {
 
 // --- ELIMINAR MATERIAL ---
 export async function deleteMaterial(id: string, archivoUrl: string) {
+  const { supabase: supabaseAdmin, tenantId } = await requireTenantSession(['superuser', 'admin', 'profesor']);
   try {
+    if (!archivoUrl.startsWith(`${tenantId}/`)) throw new Error('Archivo fuera de la institución');
     const { error: dbError } = await supabaseAdmin.from('material_apoyo').delete().eq('id', id);
     if (dbError) throw dbError;
 
@@ -210,6 +214,7 @@ export async function updateCategoriaCompleta(
   newDescripcion: string | null,
   newCarrerasIds?: string[] | null
 ) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     const { error } = await supabaseAdmin
       .from('material_apoyo')
@@ -231,6 +236,7 @@ export async function updateCategoriaCompleta(
 
 // --- ELIMINAR CATEGORÍA COMPLETA (CASCADA) ---
 export async function deleteCategoria(nivel_id: string, categoria: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     // 1. Obtener todos los archivos para borrar de storage
     const { data: archivos, error: fetchError } = await supabaseAdmin
@@ -263,6 +269,7 @@ export async function deleteCategoria(nivel_id: string, categoria: string) {
 
 // --- TOGGLE PUBLICADO ---
 export async function togglePublicado(id: string, isPublicado: boolean) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     const { error } = await supabaseAdmin
       .from('material_apoyo')
@@ -279,7 +286,9 @@ export async function togglePublicado(id: string, isPublicado: boolean) {
 
 // --- URL FIRMADA PARA DESCARGA (URL válida por 1 hora) ---
 export async function generateSignedUrl(path: string, downloadName?: string) {
+  const { supabase: supabaseAdmin, tenantId } = await requireTenantSession();
   try {
+    if (!path.startsWith(`${tenantId}/`)) throw new Error('Archivo fuera de la institución');
     const { data, error } = await supabaseAdmin.storage
       .from('material-apoyo')
       .createSignedUrl(path, 3600, {
@@ -295,10 +304,11 @@ export async function generateSignedUrl(path: string, downloadName?: string) {
 
 // --- CONSULTAR ESPACIO USADO ---
 export async function getStorageUsed() {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     const { data, error } = await supabaseAdmin.storage
       .from('material-apoyo')
-      .list('', {
+      .list(`${(await requireTenantSession()).tenantId}/material`, {
         limit: 1000,
         offset: 0,
         sortBy: { column: 'name', order: 'asc' },

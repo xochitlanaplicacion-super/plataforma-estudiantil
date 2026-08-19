@@ -3,6 +3,8 @@
 
 Este es el repositorio oficial de la Plataforma Estudiantil.
 
+La arquitectura actual sirve múltiples escuelas desde una sola base Supabase y un solo despliegue. La operación, seguridad, alta de escuelas, dominios, SMTP y recuperación están documentadas en [docs/MULTITENANCY.md](docs/MULTITENANCY.md).
+
 ## Sincronización con GitHub
 
 Para subir tus cambios y sobrescribir cualquier archivo en GitHub con la versión actual de esta terminal (hacer que prevalezcan estos archivos), ejecuta el siguiente comando en la terminal de Firebase Studio:

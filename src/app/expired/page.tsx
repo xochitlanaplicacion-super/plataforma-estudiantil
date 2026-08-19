@@ -6,10 +6,15 @@ import { AlertCircle, Clock, Mail, Phone } from 'lucide-react';
 import Link from 'next/link';
 import { getDatosContactoFormateados } from '@/lib/actions/horarios';
 import { getInstitucionConfig } from '@/lib/actions/institucion';
+import { getTenantServiceState, resolveTenantFromHostname } from '@/lib/tenant/context';
 
-export default async function ExpiredPage() {
+export default async function ExpiredPage({ searchParams }: { searchParams: Promise<{ reason?: string }> }) {
+  const params = await searchParams;
   const { telefono: supportPhone, correo: supportEmail } = await getDatosContactoFormateados();
   const inst = await getInstitucionConfig();
+  const tenant = await resolveTenantFromHostname();
+  const service = tenant ? await getTenantServiceState(tenant.id) : null;
+  const isServiceBlock = params.reason === 'service';
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
@@ -22,16 +27,20 @@ export default async function ExpiredPage() {
           />
         </div>
         <CardHeader className="p-0 space-y-2">
-          <CardTitle className="text-2xl font-bold font-headline">Acceso Expirado</CardTitle>
+          <CardTitle className="text-2xl font-bold font-headline">{isServiceBlock ? 'Servicio temporalmente suspendido' : 'Acceso Expirado'}</CardTitle>
           <CardDescription className="text-base font-medium text-destructive">
-            Tu periodo de acceso a la plataforma del {inst.nombre_completo} ha terminado.
+            {isServiceBlock
+              ? (service?.mensaje_bloqueo || `El periodo de servicio de ${inst.nombre_completo} requiere renovación.`)
+              : `Tu periodo de acceso a la plataforma del ${inst.nombre_completo} ha terminado.`}
           </CardDescription>
         </CardHeader>
         <CardContent className="mt-8 p-0 space-y-6">
           <div className="bg-muted p-4 rounded-lg flex items-start gap-3 text-left">
             <AlertCircle className="text-amber-600 shrink-0 mt-0.5" size={18} />
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Para recuperar el acceso a tus materias y contenidos, es necesario contactar con el departamento de administración o servicios escolares.
+              {isServiceBlock
+                ? 'Los administradores de la institución conservan acceso para revisar la vigencia y realizar la renovación. Tu información permanece intacta.'
+                : 'Para recuperar el acceso a tus materias y contenidos, es necesario contactar con el departamento de administración o servicios escolares.'}
             </p>
           </div>
           

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { checkAIServiceStatus, aiServiceDisabledResponse } from "@/utils/aiServiceValidation";
+import { requireTenantSession } from '@/lib/tenant/context';
 
 // ── Tipos ──────────────────────────────────────────────────────────────
 interface ChatSession {
@@ -28,10 +29,7 @@ export async function POST(req: Request) {
     const { days = 15 } = await req.json();
     const numDays = Number(days);
 
-    const supabaseAdmin = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!
-    );
+    const { supabase: supabaseAdmin } = await requireTenantSession(['superuser', 'admin']);
 
     // ── VALIDACIÓN DE PAGO: si no hay cuota activa, no se contacta a la IA ──
     const isActive = await checkAIServiceStatus(supabaseAdmin);

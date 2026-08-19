@@ -1,23 +1,26 @@
 'use server';
 
-import { createClient } from '@supabase/supabase-js';
+import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { resolveTenantFromHostname } from '@/lib/tenant/context';
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false
-    }
-  }
-);
+async function publicTenantContext() {
+  const tenant = await resolveTenantFromHostname();
+  if (!tenant || tenant.estado !== 'activo') throw new Error('Institución no disponible para preregistro');
+  return { tenant, admin: createSupabaseAdminClient() };
+}
 
 export async function createAspiranteRecord(aspiranteData: any) {
   try {
-    const { error } = await supabaseAdmin
+    const { tenant, admin } = await publicTenantContext();
+    if (aspiranteData.carrera_id) {
+      const { data: career } = await admin.from('carreras').select('id')
+        .eq('tenant_id', tenant.id).eq('id', aspiranteData.carrera_id).eq('activo', true).maybeSingle();
+      if (!career) throw new Error('La carrera seleccionada no pertenece a esta institución');
+    }
+    const { error } = await admin
       .from('aspirantes')
       .insert({
+        tenant_id: tenant.id,
         nombre: aspiranteData.nombre.toUpperCase().trim(),
         apellidos: aspiranteData.apellidos.toUpperCase().trim(),
         email: aspiranteData.email.toLowerCase().trim(),
@@ -45,9 +48,11 @@ export async function createAspiranteRecord(aspiranteData: any) {
 
 export async function getPublicCareers() {
   try {
-    const { data, error } = await supabaseAdmin
+    const { tenant, admin } = await publicTenantContext();
+    const { data, error } = await admin
       .from('carreras')
       .select('id, nombre, niveles(id, nombre)')
+      .eq('tenant_id', tenant.id)
       .eq('activo', true);
     
     if (error) throw error;
@@ -59,9 +64,11 @@ export async function getPublicCareers() {
 
 export async function getPublicLevels() {
   try {
-    const { data, error } = await supabaseAdmin
+    const { tenant, admin } = await publicTenantContext();
+    const { data, error } = await admin
       .from('niveles')
       .select('id, nombre')
+      .eq('tenant_id', tenant.id)
       .eq('activo', true)
       .order('nombre');
     

@@ -42,7 +42,8 @@ export default function AdminDashboard() {
   const [servicioPlataforma, setServicioPlataforma] = useState<{
     estado: string | null;
     fecha_inicio: string | null;
-  }>({ estado: null, fecha_inicio: null });
+    duracion_dias: number;
+  }>({ estado: null, fecha_inicio: null, duracion_dias: 30 });
 
   const fetchData = async () => {
     setLoading(true);
@@ -132,6 +133,7 @@ export default function AdminDashboard() {
         setServicioPlataforma({
           estado: resServicio.data.estado,
           fecha_inicio: resServicio.data.fecha_inicio,
+          duracion_dias: resServicio.data.duracion_dias,
         });
       }
 
@@ -170,7 +172,7 @@ export default function AdminDashboard() {
   ];
 
   // ─── Lógica del indicador circular de vigencia ───
-  const DURACION_SERVICIO_DIAS = 30;
+  const DURACION_SERVICIO_DIAS = servicioPlataforma.duracion_dias || 30;
 
   const servicioInfo = useMemo(() => {
     if (!servicioPlataforma.fecha_inicio || servicioPlataforma.estado !== 'SI') {

@@ -8,16 +8,12 @@ import { createClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
 import nodemailer from 'nodemailer';
 import { getInstitucionConfig } from '@/lib/actions/institucion';
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-);
+import { getTenantServiceState, isServiceExpired, requireTenantSession } from '@/lib/tenant/context';
 
 // ─── PLAN DE PAGOS (Gestión de Conceptos) ───────────────────────────────────
 
 export async function sincronizarConceptosFaltantes(alumnoId?: string, programaFiltro?: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   try {
     let queryPlan = supabaseAdmin
       .from('plan_pagos')
@@ -105,6 +101,7 @@ export async function sincronizarConceptosFaltantes(alumnoId?: string, programaF
 }
 
 export async function getPlanPagos() {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data, error } = await supabaseAdmin
     .from('plan_pagos')
     .select('*')
@@ -120,6 +117,7 @@ export async function createConceptoPago(data: {
   orden: number;
   monto?: number | null;
 }) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const programa = data.programa.toUpperCase().trim();
   const nombreConcepto = data.nombre_concepto.toUpperCase().trim();
   
@@ -159,6 +157,7 @@ export async function updateConceptoPago(id: string, data: {
   orden?: number;
   activo?: boolean;
 }) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { error } = await supabaseAdmin
     .from('plan_pagos')
     .update({
@@ -174,6 +173,7 @@ export async function updateConceptoPago(id: string, data: {
 }
 
 export async function deleteConceptoPago(id: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   // Verificar si tiene pagos asociados
   const { count } = await supabaseAdmin
     .from('pagos_alumno')
@@ -197,6 +197,7 @@ export async function deleteConceptoPago(id: string) {
 // ─── PAGOS DE ALUMNOS ────────────────────────────────────────────────────────
 
 export async function getPagosAlumno(alumnoId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   await sincronizarConceptosFaltantes(alumnoId);
 
   const { data, error } = await supabaseAdmin
@@ -209,6 +210,7 @@ export async function getPagosAlumno(alumnoId: string) {
 }
 
 export async function getPagosAlumnoPropio(alumnoId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   await sincronizarConceptosFaltantes(alumnoId);
 
   const { data, error } = await supabaseAdmin
@@ -221,6 +223,7 @@ export async function getPagosAlumnoPropio(alumnoId: string) {
 }
 
 export async function getTodosLosAlumnosConPagos() {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   await sincronizarConceptosFaltantes();
 
   const { data: alumnos, error } = await supabaseAdmin
@@ -275,6 +278,7 @@ export async function registrarPago(data: {
   montoPagado?: number;
   notas?: string;
 }) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   // 0. Validar monto si es un pago total
   if (data.estatus === 'pagado' && data.montoPagado) {
     const { data: plan } = await supabaseAdmin
@@ -385,6 +389,7 @@ export async function registrarPago(data: {
 // ─── INICIALIZAR PAGOS DE UN ALUMNO NUEVO ────────────────────────────────────
 
 export async function inicializarPagosAlumno(alumnoId: string, programa: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data: conceptos } = await supabaseAdmin
     .from('plan_pagos')
     .select('id')
@@ -412,6 +417,7 @@ export async function inicializarPagosAlumno(alumnoId: string, programa: string)
 // ─── REASIGNAR PROGRAMA (solo cuando no hay pagos registrados aún) ────────────
 
 export async function reasignarProgramaAlumno(alumnoId: string, nuevoPrograma: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   // Solo eliminar pagos que estén en 'pendiente' (sin movimiento financiero)
   // Si hubiera alguno pagado o abonado, NO se toca para proteger el historial
   const { error: delError } = await supabaseAdmin
@@ -429,6 +435,7 @@ export async function reasignarProgramaAlumno(alumnoId: string, nuevoPrograma: s
 // ─── RECORDATORIO DE PAGO ──────────────────────────────────────────────────
 
 export async function enviarRecordatorioPago(alumnoId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   // Obtener datos del alumno y sus pagos pendientes
   const { data: alumno } = await supabaseAdmin
     .from('profiles')
@@ -529,6 +536,7 @@ export async function enviarRecordatorioPago(alumnoId: string) {
 // ─── NOTIFICACIONES DEL ALUMNO ───────────────────────────────────────────────
 
 export async function getNotificacionesAlumno(alumnoId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data, error } = await supabaseAdmin
     .from('notificaciones')
     .select('*')
@@ -540,6 +548,7 @@ export async function getNotificacionesAlumno(alumnoId: string) {
 }
 
 export async function marcarNotificacionLeida(notificacionId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { error } = await supabaseAdmin
     .from('notificaciones')
     .update({ leida: true })
@@ -550,6 +559,7 @@ export async function marcarNotificacionLeida(notificacionId: string) {
 }
 
 export async function marcarTodasLeidas(alumnoId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { error } = await supabaseAdmin
     .from('notificaciones')
     .update({ leida: true })
@@ -563,6 +573,7 @@ export async function marcarTodasLeidas(alumnoId: string) {
 // ─── PROGRAMAS DINÁMICOS ─────────────────────────────────────────────────────
 
 export async function getPrograms() {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data, error } = await supabaseAdmin
     .from('plan_pagos')
     .select('programa')
@@ -574,6 +585,7 @@ export async function getPrograms() {
 }
 
 export async function deletePrograma(programa: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   // Al estar configurado con ON DELETE CASCADE en supabase (desde la creación de pagos_alumno y abonos_pago),
   // simplemente borrar los conceptos del plan de este programa purgará todos los registros hijos correspondientes en cascada.
   const { error } = await supabaseAdmin
@@ -597,6 +609,7 @@ export async function registrarAbono(data: {
   fecha?: string;
   notas?: string;
 }) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const year = new Date().getFullYear().toString().slice(2);
   let letraNivel = 'V';
   const { data: al } = await supabaseAdmin.from('profiles').select('carreras(niveles(nombre))').eq('id', data.alumnoId).single();
@@ -700,6 +713,7 @@ export async function registrarAbono(data: {
 }
 
 export async function getAbonosConcepto(pagoAlumnoId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const { data, error } = await supabaseAdmin
     .from('abonos_pago')
     .select('*')
@@ -710,6 +724,7 @@ export async function getAbonosConcepto(pagoAlumnoId: string) {
 }
 
 export async function deleteAbono(id: string, pagoAlumnoId: string, alumnoId: string, planPagoId: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   // Eliminar el abono
   const { error } = await supabaseAdmin.from('abonos_pago').delete().eq('id', id);
   if (error) return { success: false, error: error.message };
@@ -748,6 +763,7 @@ export async function deleteAbono(id: string, pagoAlumnoId: string, alumnoId: st
 }
 
 export async function updateNombrePrograma(nombreAnterior: string, nombreNuevo: string) {
+  const { supabase: supabaseAdmin } = await requireTenantSession();
   const nuevo = nombreNuevo.toUpperCase().trim();
   if (!nuevo) return { success: false, error: 'El nombre del programa no puede estar vacío.' };
 
@@ -766,18 +782,9 @@ export async function updateNombrePrograma(nombreAnterior: string, nombreNuevo: 
 
 export async function getEstadoPagoIA(): Promise<boolean> {
   try {
-    const { data, error } = await supabaseAdmin
-      .from('pago_de_servicios')
-      .select('estado')
-      .limit(1)
-      .single();
-
-    if (error) {
-      console.error('Error obteniendo estado de pago IA:', error);
-      return false;
-    }
-
-    return data?.estado === 'SI';
+    const context = await requireTenantSession();
+    const service = await getTenantServiceState(context.tenantId);
+    return !!service?.ia_habilitada && !isServiceExpired(service);
   } catch (err) {
     console.error('Excepción en getEstadoPagoIA:', err);
     return false;
@@ -786,18 +793,9 @@ export async function getEstadoPagoIA(): Promise<boolean> {
 
 export async function getServicioPlataformaInfo() {
   try {
-    const { data, error } = await supabaseAdmin
-      .from('pago_de_servicios')
-      .select('estado, fecha_inicio')
-      .eq('id', 1)
-      .single();
-
-    if (error) {
-      console.error('Error fetching servicio plataforma info:', error);
-      return { success: false, data: null };
-    }
-
-    return { success: true, data };
+    const context = await requireTenantSession(['superuser', 'admin']);
+    const data = await getTenantServiceState(context.tenantId);
+    return { success: !!data, data };
   } catch (err) {
     console.error('Exception fetching servicio plataforma info:', err);
     return { success: false, data: null };
