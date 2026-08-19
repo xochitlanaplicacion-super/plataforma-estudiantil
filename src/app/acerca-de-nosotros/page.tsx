@@ -1124,18 +1124,21 @@ export default function AcercaDeNosotrosPage() {
     }
   }, [loading, landingConfig.random_theme, landingConfig.themes]);
 
-  const activeTheme = randomTheme || landingConfig.themes.find((t: any) => t.id === landingConfig.active_theme_id) || defaultLandingThemes[0];
+  const activeTheme = randomTheme || 
+    landingConfig?.themes?.find((t: any) => t.id === landingConfig.active_theme_id) || 
+    (landingConfig?.themes && landingConfig.themes[0]) ||
+    { id: 'custom', primary: inst.color_primario || '#0A2647', secondary: inst.color_secundario || '#1e3a8a', accent: '#3b82f6' };
 
   const currentTheme = {
-    id: activeTheme.id,
-    primary: activeTheme.primary,
-    secondary: activeTheme.secondary,
-    accent: activeTheme.accent,
-    gradient: `from-[${activeTheme.primary}] to-[${activeTheme.secondary}]`,
-    textPrimary: `text-[${activeTheme.primary}]`,
+    id: activeTheme.id || 'default',
+    primary: activeTheme.primary || inst.color_primario || '#0A2647',
+    secondary: activeTheme.secondary || inst.color_secundario || '#1e3a8a',
+    accent: activeTheme.accent || '#3b82f6',
+    gradient: `from-[${activeTheme.primary || '#0A2647'}] to-[${activeTheme.secondary || '#1e3a8a'}]`,
+    textPrimary: `text-[${activeTheme.primary || '#0A2647'}]`,
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-primary" size={32} /></div>;
+  if (loading) return <div className="min-h-screen flex items-center justify-center bg-white"><Loader2 className="animate-spin text-slate-700" size={32} /></div>;
 
 
 
