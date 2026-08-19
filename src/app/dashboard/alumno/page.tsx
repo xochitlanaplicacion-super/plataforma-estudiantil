@@ -10,6 +10,7 @@ import {
   Users,
   Sun,
   GraduationCap,
+  School,
   Calculator,
   Languages,
   Atom,
