@@ -45,7 +45,7 @@ export default function EditorLandingPage() {
         hero_title: "LA EDUCACIÓN ES EL PRIMER PASO HACIA EL",
         hero_highlight: "éxito",
         hero_subtitle: "Formación integral para jóvenes y adultos. Concluye tus estudios con validez oficial SEP en un ambiente de excelencia.",
-        hero_badges: "Universidad | Bachillerato | Capacitaciones",
+        hero_badges: "",
         hero_image: null,
         mission_title: "",
         mission_text: "",

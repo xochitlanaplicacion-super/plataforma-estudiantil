@@ -247,10 +247,10 @@ export const Hero = ({ theme, config }: { theme: any, config: any }) => {
           variants={staggerContainer}
           className="max-w-3xl text-white"
         >
-            {config.hero_badges !== null && (
+            {Boolean(config.hero_badges) && (
               <motion.div variants={fadeUp} className="inline-block bg-white/20 backdrop-blur-md border border-white/30 px-6 py-2 rounded-full mb-8">
                 <span className="text-sm font-bold tracking-[0.2em] uppercase">
-                  {config.hero_badges || "Universidad | Bachillerato | Capacitaciones"}
+                  {config.hero_badges}
                 </span>
               </motion.div>
             )}
