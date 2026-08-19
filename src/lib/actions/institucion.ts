@@ -174,7 +174,12 @@ export async function updateInstitucionConfig(config: Partial<InstitucionConfig>
   if (config.horarios_atencion !== undefined) updateData.horarios_atencion = config.horarios_atencion;
   if (config.landing_config !== undefined) updateData.landing_config = config.landing_config;
 
-  const { error } = await supabase
+  const adminClient = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+
+  const { error } = await adminClient
     .from("configuracion_sistema")
     .update(updateData)
     .eq("id", 1);
@@ -184,23 +189,20 @@ export async function updateInstitucionConfig(config: Partial<InstitucionConfig>
   // ─── Actualización Retroactiva de Matrículas ─────────────────────────────
   if (config.codigo_matricula !== undefined) {
     const newPrefix = config.codigo_matricula.trim() || 'XXXXXX';
-    const { data: profiles } = await supabase
+    const { data: profiles } = await adminClient
       .from('profiles')
       .select('id, matricula')
       .not('matricula', 'is', null)
       .neq('matricula', '');
       
     if (profiles && profiles.length > 0) {
-      // Usamos Promise.all con un limite de concurrencia o simplemente loop para no saturar si son muchos
-      // Como Next.js permite await en array map usando Promise.all, lo haremos por chunks o secuencial.
-      // Secuencial es seguro para no tirar la base.
       for (const p of profiles) {
         if (p.matricula && p.matricula.length >= 13) {
           const suffix13 = p.matricula.slice(-13);
           const newMatricula = `${newPrefix}${suffix13}`;
           
           if (newMatricula !== p.matricula) {
-            await supabase.from('profiles').update({ matricula: newMatricula }).eq('id', p.id);
+            await adminClient.from('profiles').update({ matricula: newMatricula }).eq('id', p.id);
           }
         }
       }
@@ -239,16 +241,18 @@ export async function uploadLogo(formData: FormData): Promise<{ success: boolean
 
   if (!file || !tipo) return { success: false, error: "Archivo o tipo no proporcionado" };
 
+  const adminClient = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+
   // ── 1. Borrar el archivo previo del bucket si existe ──────────────────────
   if (oldUrl) {
-    // Extraer el nombre del archivo desde la URL pública de Supabase Storage
-    // Formato: .../storage/v1/object/public/logos-institucion/FILENAME
     const parts = oldUrl.split('/logos-institucion/');
     if (parts.length === 2) {
-      const oldFilename = parts[1].split('?')[0]; // quitar query params si los hubiera
+      const oldFilename = parts[1].split('?')[0];
       if (oldFilename) {
-        await supabase.storage.from("logos-institucion").remove([oldFilename]);
-        // No bloqueamos el proceso si falla el borrado del anterior
+        await adminClient.storage.from("logos-institucion").remove([oldFilename]);
       }
     }
   }
@@ -257,13 +261,13 @@ export async function uploadLogo(formData: FormData): Promise<{ success: boolean
   const ext = file.name.split('.').pop()?.toLowerCase() || 'png';
   const filename = `${tipo}_${Date.now()}.${ext}`;
 
-  const { data: uploadData, error: uploadError } = await supabase.storage
+  const { data: uploadData, error: uploadError } = await adminClient.storage
     .from("logos-institucion")
     .upload(filename, file, { cacheControl: "3600", upsert: true });
 
   if (uploadError) return { success: false, error: uploadError.message };
 
-  const { data: urlData } = supabase.storage
+  const { data: urlData } = adminClient.storage
     .from("logos-institucion")
     .getPublicUrl(uploadData.path);
 
@@ -292,7 +296,12 @@ export async function deleteStorageFile(fileUrl: string): Promise<{ success: boo
   const filename = parts[1].split('?')[0];
   if (!filename) return { success: false, error: "No se pudo extraer el nombre del archivo" };
 
-  const { error } = await supabase.storage.from("logos-institucion").remove([filename]);
+  const adminClient = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+
+  const { error } = await adminClient.storage.from("logos-institucion").remove([filename]);
   if (error) return { success: false, error: error.message };
 
   return { success: true };
@@ -328,13 +337,18 @@ export async function uploadProgramFile(formData: FormData): Promise<{ success: 
     return { success: false, error: `El archivo excede el límite de 10 MB (${(file.size / 1024 / 1024).toFixed(1)} MB).` };
   }
 
+  const adminClient = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+
   // Borrar archivo anterior si existe
   if (oldUrl) {
     const parts = oldUrl.split('/programas-archivos/');
     if (parts.length === 2) {
       const oldFilename = parts[1].split('?')[0];
       if (oldFilename) {
-        await supabase.storage.from("programas-archivos").remove([oldFilename]);
+        await adminClient.storage.from("programas-archivos").remove([oldFilename]);
       }
     }
   }
@@ -343,13 +357,13 @@ export async function uploadProgramFile(formData: FormData): Promise<{ success: 
   const ext = file.name.split('.').pop()?.toLowerCase() || 'bin';
   const filename = `prog_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
-  const { data: uploadData, error: uploadError } = await supabase.storage
+  const { data: uploadData, error: uploadError } = await adminClient.storage
     .from("programas-archivos")
     .upload(filename, file, { cacheControl: "3600", upsert: true });
 
   if (uploadError) return { success: false, error: uploadError.message };
 
-  const { data: urlData } = supabase.storage
+  const { data: urlData } = adminClient.storage
     .from("programas-archivos")
     .getPublicUrl(uploadData.path);
 
@@ -376,7 +390,12 @@ export async function deleteProgramFile(fileUrl: string): Promise<{ success: boo
   const filename = parts[1].split('?')[0];
   if (!filename) return { success: false, error: "No se pudo extraer el nombre del archivo" };
 
-  const { error } = await supabase.storage.from("programas-archivos").remove([filename]);
+  const adminClient = createSupabaseClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+
+  const { error } = await adminClient.storage.from("programas-archivos").remove([filename]);
   if (error) return { success: false, error: error.message };
 
   return { success: true };
