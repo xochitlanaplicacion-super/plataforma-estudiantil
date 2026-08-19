@@ -49,7 +49,12 @@ function getLuminance(hex: string): number {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const { config } = useInstitucion();
+  const { config, loading } = useInstitucion();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (config.color_primario) {
@@ -87,6 +92,28 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
       document.documentElement.style.setProperty('--secondary-foreground', secondaryLuminance > 0.6 ? '0 0% 10%' : '0 0% 100%');
     }
   }, [config.color_primario, config.color_secundario]);
+
+  // Si está montando o cargando datos iniciales sin caché previo, mostramos un loader neutral elegante
+  if (!mounted || (loading && !config.logo_url && config.color_primario === '#0f172a')) {
+    return (
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-950 text-white select-none animate-in fade-in duration-200">
+        <div className="flex flex-col items-center gap-5 p-8 rounded-3xl bg-slate-900/80 backdrop-blur-2xl border border-slate-800 shadow-2xl">
+          <div className="relative flex items-center justify-center">
+            <div className="w-12 h-12 rounded-full border-2 border-slate-800 border-t-emerald-400 animate-spin" />
+            <div className="absolute inset-0 rounded-full blur-md bg-emerald-400/20" />
+          </div>
+          <div className="flex flex-col items-center text-center gap-1">
+            <span className="text-sm font-semibold tracking-tight text-slate-200">
+              Cargando Plataforma
+            </span>
+            <span className="text-[11px] text-slate-500 font-medium">
+              Sincronizando identidad institucional...
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return <>{children}</>;
 }

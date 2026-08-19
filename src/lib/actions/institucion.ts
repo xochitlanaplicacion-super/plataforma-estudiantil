@@ -9,13 +9,13 @@ import { InstitucionConfig } from "@/lib/types";
 
 const DEFAULTS: InstitucionConfig = {
   id: 1,
-  nombre_completo: 'Instituto Educativo de Ejemplo',
+  nombre_completo: 'Mi Institución',
   nombre_corto: 'Mi Institución',
-  siglas: 'IE',
+  siglas: 'MI',
   codigo_matricula: '',
   slogan: 'Plataforma Académica',
-  color_primario: '#8B2332',
-  color_secundario: '#1A4A3F',
+  color_primario: '#0f172a',
+  color_secundario: '#334155',
   temas_login: [
     { id: "vino", bgImage: "/images/FONDO_ROJO.png", buttonColor: "#8B2332", textColor: "text-white", glassStyle: "bg-black/20 border-white/30 text-white" },
     { id: "verde", bgImage: "/images/FONDOS_VERDE.png", buttonColor: "#1A4A3F", textColor: "text-white", glassStyle: "bg-black/20 border-white/30 text-white" },
@@ -28,8 +28,8 @@ const DEFAULTS: InstitucionConfig = {
     { clave: "universidad", nombre: "Universidad" },
     { clave: "capacitaciones", nombre: "Capacitaciones" },
   ],
-  telefono_contacto: '123 456 7890',
-  correo_contacto: 'contacto@miinstitucion.edu',
+  telefono_contacto: '',
+  correo_contacto: '',
   horarios_atencion: [],
   logo_url: '/images/logo_placeholder.svg',
   logo_dark_url: '/images/logo_placeholder.svg',

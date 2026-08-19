@@ -9,15 +9,15 @@ const CACHE_TTL = 5 * 60 * 1000; // 5 minutos
 
 const DEFAULTS: InstitucionConfig = {
   id: 1,
-  nombre_completo: 'Instituto Educativo de Ejemplo',
+  nombre_completo: 'Mi Institución',
   nombre_corto: 'Mi Institución',
-  siglas: 'IE',
+  siglas: 'MI',
   codigo_matricula: '',
   slogan: 'Plataforma Académica',
-  url_plataforma: 'https://plataforma.ejemplo.edu/',
+  url_plataforma: '',
   nombre_ia: '',
-  color_primario: '#8B2332',
-  color_secundario: '#1A4A3F',
+  color_primario: '#0f172a', // Neutral Slate por defecto
+  color_secundario: '#334155',
   temas_login: [
     { id: "vino", bgImage: "/images/FONDO_ROJO.png", buttonColor: "#8B2332", textColor: "text-white", glassStyle: "bg-black/20 border-white/30 text-white" },
     { id: "verde", bgImage: "/images/FONDOS_VERDE.png", buttonColor: "#1A4A3F", textColor: "text-white", glassStyle: "bg-black/20 border-white/30 text-white" },
@@ -41,6 +41,7 @@ interface CacheEntry {
 }
 
 function getCached(): InstitucionConfig | null {
+  if (typeof window === 'undefined') return null;
   try {
     const raw = localStorage.getItem(CACHE_KEY);
     if (!raw) return null;
@@ -56,6 +57,7 @@ function getCached(): InstitucionConfig | null {
 }
 
 function setCache(data: InstitucionConfig) {
+  if (typeof window === 'undefined') return;
   try {
     const entry: CacheEntry = { data, timestamp: Date.now() };
     localStorage.setItem(CACHE_KEY, JSON.stringify(entry));
@@ -65,8 +67,20 @@ function setCache(data: InstitucionConfig) {
 }
 
 export function useInstitucion(options?: { bypassCache?: boolean }) {
-  const [config, setConfig] = useState<InstitucionConfig>(DEFAULTS);
-  const [loading, setLoading] = useState(true);
+  const [config, setConfig] = useState<InstitucionConfig>(() => {
+    if (typeof window !== 'undefined' && !options?.bypassCache) {
+      const cached = getCached();
+      if (cached) return cached;
+    }
+    return DEFAULTS;
+  });
+
+  const [loading, setLoading] = useState<boolean>(() => {
+    if (typeof window !== 'undefined' && !options?.bypassCache) {
+      return !getCached();
+    }
+    return true;
+  });
 
   const fetchConfig = useCallback(async () => {
     // 1. Intentar cache primero (si no está desactivado)
