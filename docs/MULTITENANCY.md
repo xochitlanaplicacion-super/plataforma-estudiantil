@@ -24,6 +24,11 @@ La plataforma funciona como un SaaS multitenant sobre un solo proyecto de Supaba
 
 El aprovisionamiento crea tenant, configuración, dominio, periodo de servicio, usuario Auth, perfil y auditoría. El usuario recibe `tenant_id` y rol mediante `app_metadata` protegido. Si SMTP fue proporcionado, recibe el correo de bienvenida con la marca de su institución.
 
+El Superduperuser es una identidad global independiente: existe en `auth.users` y
+`platform_admins`, pero no tiene fila en `profiles`, no pertenece a ningún tenant y
+no hereda acceso académico. El primer `superuser` de cada escuela sí pertenece a su
+tenant y funciona como director/administrador institucional, sin acceso a `/platform`.
+
 ## Correo por tenant
 
 Cada escuela puede conservar el flujo actual de Gmail:

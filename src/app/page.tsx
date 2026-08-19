@@ -125,6 +125,23 @@ export default function LoginPage() {
       }
 
       if (data?.user) {
+        const currentHost = window.location.hostname.toLowerCase();
+        const isLocal = ['localhost', '127.0.0.1'].includes(currentHost);
+        const isPlatformHost = currentHost === (process.env.NEXT_PUBLIC_PLATFORM_HOSTNAME || 'plataforma-estudiantil.vercel.app');
+        const { data: platformAdmin } = await supabase
+          .from('platform_admins')
+          .select('user_id')
+          .eq('user_id', data.user.id)
+          .maybeSingle();
+
+        // El Superduperuser es una identidad global independiente y no necesita
+        // pertenecer al perfil académico de ninguna escuela.
+        if (platformAdmin && (isLocal || isPlatformHost)) {
+          router.push('/platform');
+          router.refresh();
+          return;
+        }
+
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('tenant_id, rol, estatus, fecha_expiracion')
@@ -138,21 +155,13 @@ export default function LoginPage() {
           return;
         }
 
-        const currentHost = window.location.hostname.toLowerCase();
-        const { data: platformAdmin } = await supabase
-          .from('platform_admins')
-          .select('user_id')
-          .eq('user_id', data.user.id)
-          .maybeSingle();
         const { data: tenantDomains } = await supabase
           .from('tenant_domains')
           .select('hostname')
           .eq('tenant_id', profile.tenant_id)
           .eq('estado', 'verificado');
         const domainMatches = (tenantDomains || []).some((domain) => domain.hostname === currentHost);
-        const isLocal = ['localhost', '127.0.0.1'].includes(currentHost);
-        const isPlatformHost = currentHost === (process.env.NEXT_PUBLIC_PLATFORM_HOSTNAME || 'plataforma-estudiantil.vercel.app');
-        if (!domainMatches && !isLocal && !(platformAdmin && isPlatformHost)) {
+        if (!domainMatches && !isLocal) {
           await supabase.auth.signOut();
           setError('Esta cuenta pertenece a otra institución. Ingresa desde el dominio de tu escuela.');
           setLoading(false);
@@ -166,14 +175,6 @@ export default function LoginPage() {
           router.push('/expired');
           return;
         }
-
-
-        if (platformAdmin && (isLocal || isPlatformHost)) {
-          router.push('/platform');
-          router.refresh();
-          return;
-        }
-
         toast({
           title: "Acceso Concedido",
           description: "Bienvenido al sistema.",

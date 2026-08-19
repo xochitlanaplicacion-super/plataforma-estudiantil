@@ -56,19 +56,6 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('tenant_id, rol, estatus, fecha_expiracion')
-    .eq('id', user.id)
-    .single();
-
-  // SI EL ESTATUS NO ES ACTIVO -> Redirigir a página de aviso institucional
-  if (!profile || profile.estatus !== 'activo') {
-    const url = request.nextUrl.clone();
-    url.pathname = '/expired';
-    return NextResponse.redirect(url);
-  }
-
   const { data: platformAdmin } = await supabase
     .from('platform_admins')
     .select('user_id')
@@ -82,6 +69,26 @@ export async function updateSession(request: NextRequest) {
       return NextResponse.redirect(url);
     }
     return supabaseResponse;
+  }
+
+  // Una identidad global no hereda acceso a los datos de ninguna escuela.
+  if (platformAdmin && isPlatformHost) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/platform';
+    return NextResponse.redirect(url);
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('tenant_id, rol, estatus, fecha_expiracion')
+    .eq('id', user.id)
+    .single();
+
+  // SI EL ESTATUS NO ES ACTIVO -> Redirigir a página de aviso institucional
+  if (!profile || profile.estatus !== 'activo') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/expired';
+    return NextResponse.redirect(url);
   }
 
   const { data: tenant } = await supabase.from('tenants')
