@@ -1,7 +1,7 @@
 "use client";
 
 import { useInstitucion } from "@/hooks/use-institucion";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 // Convierte un color HEX (ej. #8B2332 o #06b895) a HSL string 'H S% L%'
 function hexToHsl(hex: string, lightnessModifier?: number): string {
