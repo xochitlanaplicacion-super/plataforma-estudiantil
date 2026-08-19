@@ -3,8 +3,7 @@
 import { useInstitucion } from "@/hooks/use-institucion";
 import { useEffect } from "react";
 
-// Convierte un color HEX (ej. #8B2332) a un string con formato 'H S L' (ej. '342 61 29' o '342 61% 29%')
-// Opcionalmente podemos modificar la luminosidad para crear variantes (ej. para el sidebar)
+// Convierte un color HEX (ej. #8B2332 o #06b895) a HSL string 'H S% L%'
 function hexToHsl(hex: string, lightnessModifier?: number): string {
   if (!hex) return "0 0% 0%";
   
@@ -32,32 +31,60 @@ function hexToHsl(hex: string, lightnessModifier?: number): string {
   }
 
   if (lightnessModifier !== undefined) {
-    l = Math.max(0, Math.min(1, l + lightnessModifier));
+    l = Math.max(0.05, Math.min(0.95, l + lightnessModifier));
   }
 
   return `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
 }
 
+// Calcula la luminosidad percibida (WCAG estándar)
+function getLuminance(hex: string): number {
+  if (!hex) return 0;
+  const cleanHex = hex.replace(/^#/, '');
+  const fullHex = cleanHex.length === 3 ? cleanHex.split('').map(x => x + x).join('') : cleanHex;
+  const r = parseInt(fullHex.substring(0, 2), 16) / 255;
+  const g = parseInt(fullHex.substring(2, 4), 16) / 255;
+  const b = parseInt(fullHex.substring(4, 6), 16) / 255;
+  return 0.299 * r + 0.587 * g + 0.114 * b;
+}
+
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const { config, loading } = useInstitucion();
+  const { config } = useInstitucion();
 
   useEffect(() => {
-    // Aplicamos los colores globalmente cuando carga la configuración
     if (config.color_primario) {
-      const primaryHsl = hexToHsl(config.color_primario);
-      const sidebarBgHsl = hexToHsl(config.color_primario, -0.15); // Sidebar 15% más oscuro
-      const sidebarAccentHsl = hexToHsl(config.color_primario, -0.05);
+      const primaryHex = config.color_primario;
+      const primaryLuminance = getLuminance(primaryHex);
+      const isLightBg = primaryLuminance > 0.65;
 
-      document.documentElement.style.setProperty('--primary', primaryHsl);
-      document.documentElement.style.setProperty('--ring', primaryHsl);
-      document.documentElement.style.setProperty('--sidebar-background', sidebarBgHsl);
-      document.documentElement.style.setProperty('--sidebar-accent', sidebarAccentHsl);
-      document.documentElement.style.setProperty('--sidebar-primary', primaryHsl);
+      const primaryHsl = hexToHsl(primaryHex);
+      // Para la barra lateral, oscurecemos proporcionalmente para profundidad premium
+      const sidebarBgHsl = hexToHsl(primaryHex, isLightBg ? -0.05 : -0.15);
+      const sidebarAccentHsl = hexToHsl(primaryHex, isLightBg ? -0.12 : 0.08);
+
+      const root = document.documentElement;
+
+      // Color primario y sus contrastes
+      root.style.setProperty('--primary', primaryHsl);
+      root.style.setProperty('--primary-foreground', isLightBg ? '0 0% 10%' : '0 0% 100%');
+      root.style.setProperty('--ring', primaryHsl);
+
+      // Barra Lateral inteligente (se adapta automáticamente con máximo contraste)
+      root.style.setProperty('--sidebar-background', sidebarBgHsl);
+      root.style.setProperty('--sidebar-foreground', isLightBg ? '222 47% 11%' : '0 0% 100%');
+      root.style.setProperty('--sidebar-primary', primaryHsl);
+      root.style.setProperty('--sidebar-primary-foreground', isLightBg ? '0 0% 10%' : '0 0% 100%');
+      root.style.setProperty('--sidebar-accent', sidebarAccentHsl);
+      root.style.setProperty('--sidebar-accent-foreground', isLightBg ? '222 47% 11%' : '0 0% 100%');
+      root.style.setProperty('--sidebar-border', isLightBg ? '0 0% 0% / 0.1' : '0 0% 100% / 0.15');
+      root.style.setProperty('--sidebar-ring', primaryHsl);
     }
     
     if (config.color_secundario) {
       const secondaryHsl = hexToHsl(config.color_secundario);
+      const secondaryLuminance = getLuminance(config.color_secundario);
       document.documentElement.style.setProperty('--secondary', secondaryHsl);
+      document.documentElement.style.setProperty('--secondary-foreground', secondaryLuminance > 0.6 ? '0 0% 10%' : '0 0% 100%');
     }
   }, [config.color_primario, config.color_secundario]);
 

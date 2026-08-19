@@ -76,21 +76,34 @@ function SidebarNav({ activeMenus, pathname, hasUnreadClases }: { activeMenus: a
     <>
       {activeMenus.map((group, idx) => (
         <SidebarGroup key={idx} className="mb-4">
-          <SidebarGroupLabel className="text-[9px] uppercase tracking-[0.15em] font-bold text-primary/60 px-4 mb-2">{group.group}</SidebarGroupLabel>
-          <SidebarMenu>
-            {group.items.map((item: any) => (
-              <SidebarMenuItem key={item.label}>
-                <SidebarMenuButton asChild tooltip={item.label} isActive={pathname === item.href} className={pathname === item.href ? "bg-primary/10 text-primary font-bold" : "hover:bg-primary/5"}>
-                  <Link href={item.href} onClick={handleLinkClick} className="flex items-center gap-3 py-6 relative">
-                    <item.icon className={`h-5 w-5 ${pathname === item.href ? "text-primary" : "text-muted-foreground"}`} />
-                    <span className="text-sm flex-1">{item.label}</span>
-                    {item.href.includes('mensajes-clases') && hasUnreadClases && (
-                      <span className="absolute right-4 w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+          <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.18em] font-extrabold text-sidebar-foreground/65 px-3 mb-2">{group.group}</SidebarGroupLabel>
+          <SidebarMenu className="gap-1">
+            {group.items.map((item: any) => {
+              const isActive = pathname === item.href;
+              return (
+                <SidebarMenuItem key={item.label}>
+                  <SidebarMenuButton
+                    asChild
+                    tooltip={item.label}
+                    isActive={isActive}
+                    className={cn(
+                      "transition-all duration-200 rounded-xl px-3 py-5.5",
+                      isActive
+                        ? "bg-white/20 text-sidebar-foreground font-bold shadow-sm backdrop-blur-md border border-white/25"
+                        : "text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-white/10"
                     )}
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            ))}
+                  >
+                    <Link href={item.href} onClick={handleLinkClick} className="flex items-center gap-3 relative w-full">
+                      <item.icon className={cn("h-5 w-5 shrink-0 transition-transform duration-200", isActive ? "text-sidebar-foreground scale-110 drop-shadow-sm" : "text-sidebar-foreground/75")} />
+                      <span className="text-sm flex-1 font-medium tracking-tight">{item.label}</span>
+                      {item.href.includes('mensajes-clases') && hasUnreadClases && (
+                        <span className="absolute right-2 w-2.5 h-2.5 rounded-full bg-red-500 ring-2 ring-white animate-pulse"></span>
+                      )}
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              );
+            })}
           </SidebarMenu>
         </SidebarGroup>
       ))}
@@ -204,22 +217,22 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
 
   return (
     <SidebarProvider>
-      <Sidebar collapsible="icon" className="border-r shadow-lg">
-        <SidebarHeader className="p-6 flex flex-col items-center text-center gap-4">
-          <div className="h-36 w-36 flex-shrink-0 flex items-center justify-center">
+      <Sidebar collapsible="icon" className="border-r border-white/10 shadow-xl bg-sidebar text-sidebar-foreground">
+        <SidebarHeader className="p-6 flex flex-col items-center text-center gap-3">
+          <div className="h-32 w-32 flex-shrink-0 flex items-center justify-center p-2 rounded-2xl bg-white/10 backdrop-blur-md border border-white/20 shadow-inner">
             <img src={inst.logo_url || '/images/logo_placeholder.svg'} alt="Logo" className="h-full w-full object-contain drop-shadow-md" />
           </div>
-          <div className="flex flex-col group-data-[collapsible=icon]:hidden">
-            <span className="font-bold text-lg text-sidebar-foreground">{inst.nombre_corto}</span>
-            <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">{inst.slogan}</span>
+          <div className="flex flex-col group-data-[collapsible=icon]:hidden gap-0.5">
+            <span className="font-extrabold text-lg text-sidebar-foreground tracking-tight drop-shadow-sm">{inst.nombre_corto}</span>
+            <span className="text-[10px] text-sidebar-foreground/75 font-semibold uppercase tracking-widest">{inst.slogan}</span>
           </div>
         </SidebarHeader>
-        <SidebarContent className="px-2">
+        <SidebarContent className="px-3">
           <SidebarNav activeMenus={activeMenus} pathname={pathname} hasUnreadClases={hasUnreadClases} />
         </SidebarContent>
-        <SidebarFooter className="p-4 bg-muted/30">
+        <SidebarFooter className="p-4 bg-black/10 border-t border-white/10">
           <div className="flex justify-center group-data-[collapsible=icon]:hidden">
-             <span className="text-[9px] text-muted-foreground font-bold uppercase opacity-50">{inst.siglas} Plataforma v1.0</span>
+             <span className="text-[9px] text-sidebar-foreground/60 font-bold uppercase tracking-wider">{inst.siglas} Plataforma v1.0</span>
           </div>
         </SidebarFooter>
       </Sidebar>
