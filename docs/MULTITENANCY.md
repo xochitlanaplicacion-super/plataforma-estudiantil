@@ -29,6 +29,12 @@ El Superduperuser es una identidad global independiente: existe en `auth.users` 
 no hereda acceso académico. El primer `superuser` de cada escuela sí pertenece a su
 tenant y funciona como director/administrador institucional, sin acceso a `/platform`.
 
+El panel global persiste sus operaciones en tablas dedicadas: `platform_admins` para
+autorización, `tenant_provisioning` para aprovisionamiento, `platform_audit` para
+auditoría, `pago_de_servicios` para vigencia/IA/bloqueo y `tenant_domains` para los
+dominios. Los formularios no muestran éxito hasta que Supabase devuelve la fila
+guardada. El panel incluye cierre explícito de sesión.
+
 ## Correo por tenant
 
 Cada escuela puede conservar el flujo actual de Gmail:
@@ -52,6 +58,12 @@ Cambiar el dominio principal desde `/platform` ejecuta una función atómica que
 4. registra auditoría.
 
 No modifica alumnos, materias, ejercicios, pagos ni rutas de archivos. El dominio anterior puede conservarse como alias.
+
+También puede editarse directamente el hostname de una fila existente; si es el
+principal, `configuracion_sistema.url_plataforma` se actualiza en la misma transacción.
+El registro en Supabase no configura DNS ni acredita propiedad ante Vercel: antes de
+usar un dominio nuevo, debe agregarse al mismo proyecto Vercel y apuntarse a los
+registros DNS que Vercel indique.
 
 En Vercel deben añadirse el wildcard/subdominio y los dominios personalizados al mismo proyecto. No se necesita otro GitHub, despliegue o Supabase por escuela.
 

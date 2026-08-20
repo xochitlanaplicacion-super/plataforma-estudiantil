@@ -1,16 +1,18 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Building2, CircleDollarSign, Globe2, Plus, RefreshCw, ShieldCheck, Users, Bot, ScrollText } from 'lucide-react';
+import { Building2, CircleDollarSign, Globe2, Plus, RefreshCw, ShieldCheck, Users, Bot, ScrollText, LogOut, Save } from 'lucide-react';
 import {
   addTenantDomain,
   createTenantSchool,
   recordSupportAccess,
   setPrimaryTenantDomain,
+  updateTenantDomain,
   updateTenantService,
   updateTenantStatus,
 } from '@/lib/actions/platform';
+import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -26,14 +28,22 @@ export function PlatformDashboard({ initialData }: Props) {
   const [pending, startTransition] = useTransition();
   const [showCreate, setShowCreate] = useState(false);
 
-  const run = (task: () => Promise<any>, successTitle: string) => startTransition(async () => {
+  const run = (task: () => Promise<any>, successTitle: string, onSuccess?: (result: any) => void) => startTransition(async () => {
     const result = await task();
     if (!result?.success) toast({ variant: 'destructive', title: 'No se pudo completar', description: result?.error || 'Error desconocido' });
     else {
+      onSuccess?.(result);
       toast({ title: successTitle });
       router.refresh();
     }
   });
+
+  const signOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.replace('/');
+    router.refresh();
+  };
 
   const active = initialData.tenants.filter((tenant) => tenant.estado === 'activo').length;
   const totalUsers = initialData.tenants.reduce((sum, tenant) => sum + tenant.counts.users, 0);
@@ -50,6 +60,7 @@ export function PlatformDashboard({ initialData }: Props) {
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => router.refresh()} disabled={pending}><RefreshCw className="mr-2 h-4 w-4" />Actualizar</Button>
             <Button onClick={() => setShowCreate((value) => !value)}><Plus className="mr-2 h-4 w-4" />Nueva escuela</Button>
+            <Button variant="destructive" onClick={signOut}><LogOut className="mr-2 h-4 w-4" />Cerrar sesión</Button>
           </div>
         </div>
       </header>
@@ -128,9 +139,29 @@ function Field({ label, name, ...props }: any) {
 }
 
 function TenantCard({ tenant, pending, run }: any) {
-  const service = tenant.pago_de_servicios?.[0] || {};
+  const service = Array.isArray(tenant.pago_de_servicios)
+    ? (tenant.pago_de_servicios[0] || {})
+    : (tenant.pago_de_servicios || {});
   const [ai, setAi] = useState(service.ia_habilitada ?? true);
   const [block, setBlock] = useState(service.bloquear_acceso_usuarios ?? false);
+  const [serviceForm, setServiceForm] = useState({
+    estado: service.estado || 'SI',
+    fechaInicio: service.fecha_inicio || '',
+    duracionDias: Number(service.duracion_dias || 30),
+    mensajeBloqueo: service.mensaje_bloqueo || '',
+  });
+
+  useEffect(() => {
+    setAi(service.ia_habilitada ?? true);
+    setBlock(service.bloquear_acceso_usuarios ?? false);
+    setServiceForm({
+      estado: service.estado || 'SI',
+      fechaInicio: service.fecha_inicio || '',
+      duracionDias: Number(service.duracion_dias || 30),
+      mensajeBloqueo: service.mensaje_bloqueo || '',
+    });
+  }, [service.estado, service.fecha_inicio, service.duracion_dias, service.ia_habilitada, service.bloquear_acceso_usuarios, service.mensaje_bloqueo]);
+
   return <article className="rounded-2xl border border-white/10 bg-white/5 p-6">
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div><div className="flex items-center gap-3"><h3 className="text-xl font-bold">{tenant.nombre}</h3><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${tenant.estado === 'activo' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'}`}>{tenant.estado}</span></div><p className="mt-1 font-mono text-xs text-slate-500">{tenant.slug} · {tenant.id}</p></div>
@@ -142,23 +173,53 @@ function TenantCard({ tenant, pending, run }: any) {
     <div className="mt-5 grid gap-3 sm:grid-cols-4"><SmallStat label="Usuarios" value={tenant.counts.users} /><SmallStat label="Profesores" value={tenant.counts.professors} /><SmallStat label="Alumnos" value={tenant.counts.students} /><SmallStat label="Tokens IA" value={tenant.aiTokens.toLocaleString('es-MX')} /></div>
     <div className="mt-6 grid gap-6 lg:grid-cols-2">
       <form className="space-y-4 rounded-xl border border-white/10 bg-black/10 p-4" onSubmit={(event) => {
-        event.preventDefault(); const form = new FormData(event.currentTarget);
-        run(() => updateTenantService(tenant.id, { estado: form.get('estado') as 'SI' | 'NO', fechaInicio: String(form.get('fechaInicio')), duracionDias: Number(form.get('duracionDias')), iaHabilitada: ai, bloquearAccesoUsuarios: block, mensajeBloqueo: String(form.get('mensajeBloqueo') || '') }), 'Periodo y accesos actualizados');
+        event.preventDefault();
+        run(() => updateTenantService(tenant.id, {
+          estado: serviceForm.estado as 'SI' | 'NO',
+          fechaInicio: serviceForm.fechaInicio,
+          duracionDias: serviceForm.duracionDias,
+          iaHabilitada: ai,
+          bloquearAccesoUsuarios: block,
+          mensajeBloqueo: serviceForm.mensajeBloqueo,
+        }), 'Periodo y accesos guardados permanentemente');
       }}>
         <h4 className="flex items-center gap-2 font-semibold"><CircleDollarSign className="h-4 w-4 text-emerald-400" />Servicio, pago y accesos</h4>
-        <div className="grid grid-cols-3 gap-3"><div className="space-y-2"><Label>Estado</Label><select name="estado" defaultValue={service.estado || 'SI'} className="flex h-10 w-full rounded-md border border-white/10 bg-slate-900 px-3 text-sm"><option value="SI">Activo</option><option value="NO">Suspendido</option></select></div><Field label="Inicio" name="fechaInicio" type="date" defaultValue={service.fecha_inicio || ''} /><Field label="Días" name="duracionDias" type="number" min="1" max="3660" defaultValue={service.duracion_dias || 30} /></div>
+        <div className="grid grid-cols-3 gap-3"><div className="space-y-2"><Label>Estado</Label><select name="estado" value={serviceForm.estado} onChange={(event) => setServiceForm((current) => ({ ...current, estado: event.target.value }))} className="flex h-10 w-full rounded-md border border-white/10 bg-slate-900 px-3 text-sm"><option value="SI">Activo</option><option value="NO">Suspendido</option></select></div><Field label="Inicio" name="fechaInicio" type="date" value={serviceForm.fechaInicio} onChange={(event: any) => setServiceForm((current) => ({ ...current, fechaInicio: event.target.value }))} /><Field label="Días" name="duracionDias" type="number" min="1" max="3660" value={serviceForm.duracionDias} onChange={(event: any) => setServiceForm((current) => ({ ...current, duracionDias: Number(event.target.value) }))} /></div>
         <Toggle label="Interfaz y consumo de IA" checked={ai} onCheckedChange={setAi} />
         <Toggle label="Bloquear login de profesores y alumnos al vencer/apagar" checked={block} onCheckedChange={setBlock} />
-        <div className="space-y-2"><Label>Mensaje de bloqueo</Label><Textarea name="mensajeBloqueo" defaultValue={service.mensaje_bloqueo || ''} className="border-white/10 bg-slate-900" /></div>
-        <Button size="sm" type="submit" disabled={pending}>Guardar periodo y switches</Button>
+        <div className="space-y-2"><Label>Mensaje de bloqueo</Label><Textarea name="mensajeBloqueo" value={serviceForm.mensajeBloqueo} onChange={(event) => setServiceForm((current) => ({ ...current, mensajeBloqueo: event.target.value }))} className="border-white/10 bg-slate-900" /></div>
+        <Button size="sm" type="submit" disabled={pending}><Save className="mr-2 h-4 w-4" />{pending ? 'Guardando…' : 'Guardar permanentemente'}</Button>
       </form>
       <div className="rounded-xl border border-white/10 bg-black/10 p-4">
         <h4 className="mb-4 flex items-center gap-2 font-semibold"><Globe2 className="h-4 w-4 text-emerald-400" />Dominios</h4>
-        <div className="space-y-2">{tenant.tenant_domains?.map((domain: any) => <div key={domain.id} className="flex items-center justify-between rounded-lg bg-white/5 px-3 py-2"><div><p className="font-mono text-sm">{domain.hostname}</p><p className="text-xs text-slate-500">{domain.estado}{domain.es_principal ? ' · principal' : ''}</p></div>{!domain.es_principal && <Button size="sm" variant="ghost" disabled={pending} onClick={() => run(() => setPrimaryTenantDomain(tenant.id, domain.id), 'Dominio principal actualizado')}>Hacer principal</Button>}</div>)}</div>
-        <form className="mt-4 flex gap-2" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); run(() => addTenantDomain(tenant.id, String(form.get('hostname'))), 'Dominio agregado'); event.currentTarget.reset(); }}><Input name="hostname" placeholder="nuevo.dominio.com" className="border-white/10 bg-slate-900" required /><Button type="submit" size="sm" disabled={pending}>Agregar</Button></form>
+        <div className="space-y-3">{tenant.tenant_domains?.map((domain: any) => <DomainEditor key={domain.id} tenantId={tenant.id} domain={domain} pending={pending} run={run} />)}</div>
+        <p className="mt-4 text-xs leading-relaxed text-amber-300/80">El dominio queda guardado aquí de inmediato. Para que una dirección nueva abra la plataforma, también debe estar agregada al mismo proyecto en Vercel y apuntar por DNS a Vercel.</p>
+        <form className="mt-4 flex gap-2" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); run(() => addTenantDomain(tenant.id, String(form.get('hostname'))), 'Dominio alterno agregado'); event.currentTarget.reset(); }}><Input name="hostname" placeholder="dominio-alterno.com" className="border-white/10 bg-slate-900" required /><Button type="submit" size="sm" variant="outline" disabled={pending}>Agregar alterno</Button></form>
       </div>
     </div>
   </article>;
+}
+
+function DomainEditor({ tenantId, domain, pending, run }: any) {
+  const [hostname, setHostname] = useState(domain.hostname);
+  useEffect(() => setHostname(domain.hostname), [domain.hostname]);
+  const unchanged = hostname.trim().toLowerCase() === domain.hostname;
+
+  return <div className="rounded-lg bg-white/5 p-3">
+    <div className="mb-2 flex items-center justify-between gap-3">
+      <p className="text-xs font-semibold text-slate-300">{domain.es_principal ? 'Dominio principal actual' : 'Dominio alterno'}</p>
+      <p className="text-xs text-slate-500">{domain.estado}{domain.es_principal ? ' · principal' : ''}</p>
+    </div>
+    <div className="flex gap-2">
+      <Input value={hostname} onChange={(event) => setHostname(event.target.value)} className="border-white/10 bg-slate-900 font-mono" aria-label="Dominio de la institución" />
+      <Button type="button" size="sm" disabled={pending || unchanged || !hostname.trim()} onClick={() => run(
+        () => updateTenantDomain(tenantId, domain.id, hostname),
+        'Dominio actualizado permanentemente',
+        (result: any) => setHostname(result.hostname)
+      )}><Save className="mr-2 h-4 w-4" />Guardar</Button>
+      {!domain.es_principal && <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={() => run(() => setPrimaryTenantDomain(tenantId, domain.id), 'Dominio principal actualizado')}>Hacer principal</Button>}
+    </div>
+  </div>;
 }
 
 function Toggle({ label, checked, onCheckedChange }: any) { return <div className="flex items-center justify-between rounded-lg bg-white/5 p-3"><Label>{label}</Label><Switch checked={checked} onCheckedChange={onCheckedChange} /></div>; }

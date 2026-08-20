@@ -226,11 +226,16 @@ export async function updateTenantService(tenantId: string, input: {
       updated_by: context.user.id,
       updated_at: new Date().toISOString(),
     };
-    const { error } = await context.admin.from('pago_de_servicios').upsert({ tenant_id: tenantId, ...update }, { onConflict: 'tenant_id' });
+    const { data: savedService, error } = await context.admin
+      .from('pago_de_servicios')
+      .upsert({ tenant_id: tenantId, ...update }, { onConflict: 'tenant_id' })
+      .select('estado, fecha_inicio, duracion_dias, ia_habilitada, bloquear_acceso_usuarios, mensaje_bloqueo, updated_at')
+      .single();
     if (error) throw error;
-    await audit(context.admin, context.user.id, tenantId, 'service.updated', update);
+    if (!savedService) throw new Error('Supabase no confirmó la persistencia del periodo de servicio');
+    await audit(context.admin, context.user.id, tenantId, 'service.updated', savedService);
     revalidatePath('/platform');
-    return { success: true };
+    return { success: true, service: savedService };
   } catch (error: any) { return { success: false, error: error.message }; }
 }
 
@@ -265,6 +270,42 @@ export async function setPrimaryTenantDomain(tenantId: string, domainId: string)
     await audit(context.admin, context.user.id, tenantId, 'domain.primary_changed', { hostname });
     revalidatePath('/platform');
     return { success: true };
+  } catch (error: any) { return { success: false, error: error.message }; }
+}
+
+export async function updateTenantDomain(tenantId: string, domainId: string, rawHostname: string) {
+  try {
+    const context = await requirePlatformAdmin();
+    const hostname = normalizeHostname(rawHostname);
+    if (!hostname) throw new Error('Dominio inválido');
+
+    const { data: currentDomain, error: currentError } = await context.admin
+      .from('tenant_domains')
+      .select('hostname, es_principal')
+      .eq('id', domainId)
+      .eq('tenant_id', tenantId)
+      .single();
+    if (currentError || !currentDomain) throw currentError || new Error('Dominio no encontrado');
+
+    const { data: savedHostname, error } = await context.admin.rpc('replace_tenant_domain_for_service', {
+      p_tenant_id: tenantId,
+      p_domain_id: domainId,
+      p_hostname: hostname,
+    });
+    if (error) {
+      if (error.code === '23505') throw new Error('Ese dominio ya está registrado para otra institución');
+      throw error;
+    }
+    if (!savedHostname) throw new Error('Supabase no confirmó la persistencia del dominio');
+
+    await audit(context.admin, context.user.id, tenantId, 'domain.updated', {
+      domain_id: domainId,
+      previous_hostname: currentDomain.hostname,
+      hostname: savedHostname,
+      es_principal: currentDomain.es_principal,
+    });
+    revalidatePath('/platform');
+    return { success: true, hostname: savedHostname };
   } catch (error: any) { return { success: false, error: error.message }; }
 }
 
