@@ -5,9 +5,29 @@ import { requireTenantSession, type TenantRole } from '@/lib/tenant/context';
 
 export type AudienciaEncuesta = 'alumno' | 'profesor';
 
+export interface NivelEncuesta {
+  id: string;
+  nombre: string;
+}
+
+export interface CarreraEncuesta {
+  id: string;
+  nombre: string;
+  nivelId: string;
+}
+
+export interface GradoEncuesta {
+  id: string;
+  nombre: string;
+  carreraId: string;
+}
+
 export interface GrupoEncuesta {
   id: string;
   nombre: string;
+  turno: string | null;
+  carreraId: string;
+  gradoId: string;
 }
 
 export interface OpcionEncuesta {
@@ -23,8 +43,12 @@ export interface EncuestaVista {
   titulo: string;
   descripcion: string | null;
   audiencia: AudienciaEncuesta;
+  nivelId: string | null;
+  carreraId: string | null;
+  gradoId: string | null;
   grupoId: string | null;
-  grupoNombre: string | null;
+  destinoNombre: string;
+  restringirAAsignaciones: boolean;
   activa: boolean;
   cierraEn: string | null;
   createdAt: string;
@@ -45,6 +69,9 @@ export interface EncuestaInput {
   titulo: string;
   descripcion?: string | null;
   audiencia: AudienciaEncuesta;
+  nivelId?: string | null;
+  carreraId?: string | null;
+  gradoId?: string | null;
   grupoId?: string | null;
   opciones: string[];
   cierraEn?: string | null;
@@ -79,8 +106,7 @@ export async function obtenerContextoEncuestas() {
     const { admin, profile, tenantId, user } = await requireTenantSession();
     const rol = profile.rol as TenantRole;
     const puedeCrear = ['superuser', 'admin', 'profesor'].includes(rol);
-    let grupos: GrupoEncuesta[] = [];
-
+    let gruposPermitidos: Set<string> | null = null;
     if (rol === 'profesor') {
       const { data: asignaciones, error } = await admin
         .from('asignaciones_profesor')
@@ -90,35 +116,51 @@ export async function obtenerContextoEncuestas() {
         .eq('activo', true)
         .not('grupo_id', 'is', null);
       if (error) throw error;
-
-      const ids = [...new Set((asignaciones || []).map((item) => item.grupo_id).filter(Boolean))] as string[];
-      if (ids.length) {
-        const { data, error: gruposError } = await admin
-          .from('grupos')
-          .select('id, nombre')
-          .eq('tenant_id', tenantId)
-          .eq('activo', true)
-          .in('id', ids)
-          .order('nombre');
-        if (gruposError) throw gruposError;
-        grupos = (data || []) as GrupoEncuesta[];
-      }
-    } else if (rol === 'superuser' || rol === 'admin') {
-      const { data, error } = await admin
-        .from('grupos')
-        .select('id, nombre')
-        .eq('tenant_id', tenantId)
-        .eq('activo', true)
-        .order('nombre');
-      if (error) throw error;
-      grupos = (data || []) as GrupoEncuesta[];
+      gruposPermitidos = new Set(
+        (asignaciones || []).map((item) => item.grupo_id).filter(Boolean) as string[]
+      );
     }
+
+    const [nivelesRes, carrerasRes, gradosRes, gruposRes] = await Promise.all([
+      admin.from('niveles').select('id, nombre').eq('tenant_id', tenantId).eq('activo', true).order('nombre'),
+      admin.from('carreras').select('id, nombre, nivel_id').eq('tenant_id', tenantId).eq('activo', true).order('nombre'),
+      admin.from('grados').select('id, nombre, carrera_id').eq('tenant_id', tenantId).eq('activo', true).order('orden'),
+      admin.from('grupos').select('id, nombre, turno, carrera_id, grado_id').eq('tenant_id', tenantId).eq('activo', true).order('nombre'),
+    ]);
+    for (const result of [nivelesRes, carrerasRes, gradosRes, gruposRes]) {
+      if (result.error) throw result.error;
+    }
+
+    const gruposBase = (gruposRes.data || []).filter(
+      (grupo) => !gruposPermitidos || gruposPermitidos.has(grupo.id)
+    );
+    const gradoIds = new Set(gruposBase.map((grupo) => grupo.grado_id).filter(Boolean));
+    const gradosBase = (gradosRes.data || []).filter(
+      (grado) => !gruposPermitidos || gradoIds.has(grado.id)
+    );
+    const carreraIds = new Set(gruposBase.map((grupo) => grupo.carrera_id).filter(Boolean));
+    const carrerasBase = (carrerasRes.data || []).filter(
+      (carrera) => !gruposPermitidos || carreraIds.has(carrera.id)
+    );
+    const nivelIds = new Set(carrerasBase.map((carrera) => carrera.nivel_id).filter(Boolean));
+    const nivelesBase = (nivelesRes.data || []).filter(
+      (nivel) => !gruposPermitidos || nivelIds.has(nivel.id)
+    );
 
     return {
       success: true as const,
       data: {
         rol,
-        grupos,
+        niveles: nivelesBase as NivelEncuesta[],
+        carreras: carrerasBase.map((item) => ({ id: item.id, nombre: item.nombre, nivelId: item.nivel_id })) as CarreraEncuesta[],
+        grados: gradosBase.map((item) => ({ id: item.id, nombre: item.nombre, carreraId: item.carrera_id })) as GradoEncuesta[],
+        grupos: gruposBase.map((item) => ({
+          id: item.id,
+          nombre: item.nombre,
+          turno: item.turno,
+          carreraId: item.carrera_id,
+          gradoId: item.grado_id,
+        })) as GrupoEncuesta[],
         puedeCrear,
         puedeEncuestarProfesores: rol === 'superuser' || rol === 'admin',
       },
@@ -136,7 +178,7 @@ export async function obtenerEncuestas() {
 
     let query = admin
       .from('encuestas')
-      .select('id, creador_id, titulo, descripcion, audiencia, grupo_id, activa, cierra_en, created_at, updated_at')
+      .select('id, creador_id, titulo, descripcion, audiencia, nivel_id, carrera_id, grado_id, grupo_id, restringir_a_asignaciones, activa, cierra_en, created_at, updated_at')
       .eq('tenant_id', tenantId);
 
     if (rol === 'superuser' || rol === 'admin') {
@@ -145,20 +187,96 @@ export async function obtenerEncuestas() {
       query = query.or(`creador_id.eq.${user.id},audiencia.eq.profesor`);
     } else {
       query = query.eq('audiencia', 'alumno');
-      query = profile.grupo_id
-        ? query.or(`grupo_id.is.null,grupo_id.eq.${profile.grupo_id}`)
-        : query.is('grupo_id', null);
     }
 
-    const { data: encuestas, error } = await query.order('created_at', { ascending: false });
+    const { data: encuestasBase, error } = await query.order('created_at', { ascending: false });
     if (error) throw error;
-    if (!encuestas?.length) return { success: true as const, data: [] as EncuestaVista[] };
+    if (!encuestasBase?.length) return { success: true as const, data: [] as EncuestaVista[] };
+
+    const [perfilesRes, gruposRes, carrerasRes, gradosRes, nivelesRes, asignacionesRes] = await Promise.all([
+      admin
+        .from('profiles')
+        .select('id, rol, carrera_id, grupo_id')
+        .eq('tenant_id', tenantId)
+        .eq('estatus', 'activo')
+        .in('rol', ['alumno', 'profesor']),
+      admin
+        .from('grupos')
+        .select('id, nombre, turno, carrera_id, grado_id')
+        .eq('tenant_id', tenantId)
+        .order('nombre'),
+      admin
+        .from('carreras')
+        .select('id, nombre, nivel_id')
+        .eq('tenant_id', tenantId)
+        .order('nombre'),
+      admin
+        .from('grados')
+        .select('id, nombre, carrera_id')
+        .eq('tenant_id', tenantId)
+        .order('orden'),
+      admin.from('niveles').select('id, nombre').eq('tenant_id', tenantId).order('nombre'),
+      admin
+        .from('asignaciones_profesor')
+        .select('profesor_id, nivel_id, carrera_id, grupo_id')
+        .eq('tenant_id', tenantId)
+        .eq('activo', true),
+    ]);
+    for (const result of [perfilesRes, gruposRes, carrerasRes, gradosRes, nivelesRes, asignacionesRes]) {
+      if (result.error) throw result.error;
+    }
+
+    const perfiles = perfilesRes.data || [];
+    const gruposPorId = new Map((gruposRes.data || []).map((item) => [item.id, item]));
+    const carrerasPorId = new Map((carrerasRes.data || []).map((item) => [item.id, item]));
+    const gradosPorId = new Map((gradosRes.data || []).map((item) => [item.id, item]));
+    const nivelesPorId = new Map((nivelesRes.data || []).map((item) => [item.id, item]));
+    const asignaciones = asignacionesRes.data || [];
+
+    const coincideDestino = (encuesta: any, perfilDestino: any) => {
+      if (perfilDestino.rol !== encuesta.audiencia) return false;
+
+      if (encuesta.audiencia === 'alumno') {
+        const grupo = perfilDestino.grupo_id ? gruposPorId.get(perfilDestino.grupo_id) : null;
+        const carreraId = perfilDestino.carrera_id || grupo?.carrera_id || null;
+        const carrera = carreraId ? carrerasPorId.get(carreraId) : null;
+        if (encuesta.nivel_id && carrera?.nivel_id !== encuesta.nivel_id) return false;
+        if (encuesta.carrera_id && carreraId !== encuesta.carrera_id) return false;
+        if (encuesta.grado_id && grupo?.grado_id !== encuesta.grado_id) return false;
+        if (encuesta.grupo_id && perfilDestino.grupo_id !== encuesta.grupo_id) return false;
+        if (encuesta.restringir_a_asignaciones) {
+          return Boolean(perfilDestino.grupo_id && asignaciones.some(
+            (item) => item.profesor_id === encuesta.creador_id && item.grupo_id === perfilDestino.grupo_id
+          ));
+        }
+        return true;
+      }
+
+      const tieneFiltro = Boolean(encuesta.nivel_id || encuesta.carrera_id || encuesta.grado_id || encuesta.grupo_id);
+      if (!tieneFiltro) return true;
+      return asignaciones.some((item) => {
+        if (item.profesor_id !== perfilDestino.id) return false;
+        const grupo = item.grupo_id ? gruposPorId.get(item.grupo_id) : null;
+        const carreraId = item.carrera_id || grupo?.carrera_id || null;
+        const carrera = carreraId ? carrerasPorId.get(carreraId) : null;
+        if (encuesta.nivel_id && (item.nivel_id || carrera?.nivel_id) !== encuesta.nivel_id) return false;
+        if (encuesta.carrera_id && carreraId !== encuesta.carrera_id) return false;
+        if (encuesta.grado_id && grupo?.grado_id !== encuesta.grado_id) return false;
+        if (encuesta.grupo_id && item.grupo_id !== encuesta.grupo_id) return false;
+        return true;
+      });
+    };
+
+    const perfilActual = perfiles.find((item) => item.id === user.id);
+    const encuestas = encuestasBase.filter((encuesta) => (
+      encuesta.creador_id === user.id
+      || Boolean(perfilActual && coincideDestino(encuesta, perfilActual))
+    ));
+    if (!encuestas.length) return { success: true as const, data: [] as EncuestaVista[] };
 
     const encuestaIds = encuestas.map((item) => item.id);
     const creadorIds = [...new Set(encuestas.map((item) => item.creador_id))];
-    const grupoIds = [...new Set(encuestas.map((item) => item.grupo_id).filter(Boolean))] as string[];
-
-    const [opcionesRes, votosRes, perfilesRes, creadoresRes, gruposRes] = await Promise.all([
+    const [opcionesRes, votosRes, creadoresRes] = await Promise.all([
       admin
         .from('encuesta_opciones')
         .select('id, encuesta_id, texto, posicion')
@@ -172,34 +290,22 @@ export async function obtenerEncuestas() {
         .in('encuesta_id', encuestaIds),
       admin
         .from('profiles')
-        .select('id, rol, grupo_id')
-        .eq('tenant_id', tenantId)
-        .eq('estatus', 'activo')
-        .in('rol', ['alumno', 'profesor']),
-      admin
-        .from('profiles')
         .select('id, nombre, apellidos')
         .eq('tenant_id', tenantId)
         .in('id', creadorIds),
-      grupoIds.length
-        ? admin.from('grupos').select('id, nombre').eq('tenant_id', tenantId).in('id', grupoIds)
-        : Promise.resolve({ data: [], error: null }),
     ]);
-
-    for (const result of [opcionesRes, votosRes, perfilesRes, creadoresRes, gruposRes]) {
+    for (const result of [opcionesRes, votosRes, creadoresRes]) {
       if (result.error) throw result.error;
     }
 
     const opciones = opcionesRes.data || [];
     const votos = votosRes.data || [];
-    const perfiles = perfilesRes.data || [];
     const creadorPorId = new Map(
       (creadoresRes.data || []).map((item) => [
         item.id,
         `${item.nombre || ''} ${item.apellidos || ''}`.trim() || 'Usuario',
       ])
     );
-    const grupoPorId = new Map((gruposRes.data || []).map((item) => [item.id, item.nombre]));
     const now = Date.now();
 
     const data: EncuestaVista[] = encuestas.map((encuesta) => {
@@ -208,22 +314,36 @@ export async function obtenerEncuestas() {
       const votoUsuario = votosEncuesta.find((voto) => voto.votante_id === user.id)?.opcion_id || null;
       const puedeGestionar = encuesta.creador_id === user.id;
       const cerrada = !encuesta.activa || Boolean(encuesta.cierra_en && new Date(encuesta.cierra_en).getTime() <= now);
-      const destinatarios = perfiles.filter((item) => {
-        if (item.rol !== encuesta.audiencia) return false;
-        return !encuesta.grupo_id || item.grupo_id === encuesta.grupo_id;
-      });
+      const destinatarios = perfiles.filter((item) => coincideDestino(encuesta, item));
       const puedeVotar = !puedeGestionar
         && !cerrada
-        && rol === encuesta.audiencia
-        && (!encuesta.grupo_id || profile.grupo_id === encuesta.grupo_id);
+        && Boolean(perfilActual && coincideDestino(encuesta, perfilActual));
+
+      const destinoPartes: string[] = [];
+      if (encuesta.nivel_id) destinoPartes.push(nivelesPorId.get(encuesta.nivel_id)?.nombre || 'Nivel');
+      if (encuesta.carrera_id) destinoPartes.push(carrerasPorId.get(encuesta.carrera_id)?.nombre || 'Carrera');
+      if (encuesta.grado_id) destinoPartes.push(gradosPorId.get(encuesta.grado_id)?.nombre || 'Grado');
+      if (encuesta.grupo_id) {
+        const grupo = gruposPorId.get(encuesta.grupo_id);
+        destinoPartes.push(`${grupo?.nombre || 'Grupo'}${grupo?.turno ? ` · ${grupo.turno}` : ''}`);
+      }
+      const destinoNombre = destinoPartes.length
+        ? destinoPartes.join(' › ')
+        : encuesta.restringir_a_asignaciones
+          ? 'Todos mis alumnos asignados'
+          : `Todos los ${encuesta.audiencia === 'alumno' ? 'alumnos' : 'profesores'}`;
 
       return {
         id: encuesta.id,
         titulo: encuesta.titulo,
         descripcion: encuesta.descripcion,
         audiencia: encuesta.audiencia as AudienciaEncuesta,
+        nivelId: encuesta.nivel_id,
+        carreraId: encuesta.carrera_id,
+        gradoId: encuesta.grado_id,
         grupoId: encuesta.grupo_id,
-        grupoNombre: encuesta.grupo_id ? grupoPorId.get(encuesta.grupo_id) || 'Grupo' : null,
+        destinoNombre,
+        restringirAAsignaciones: encuesta.restringir_a_asignaciones,
         activa: encuesta.activa,
         cierraEn: encuesta.cierra_en,
         createdAt: encuesta.created_at,
@@ -265,6 +385,9 @@ export async function crearEncuesta(input: EncuestaInput) {
       p_titulo: input.titulo,
       p_descripcion: input.descripcion || null,
       p_audiencia: input.audiencia,
+      p_nivel_id: input.nivelId || null,
+      p_carrera_id: input.carreraId || null,
+      p_grado_id: input.gradoId || null,
       p_grupo_id: input.grupoId || null,
       p_opciones: input.opciones,
       p_cierra_en: fechaRpc(input.cierraEn),
@@ -285,6 +408,9 @@ export async function editarEncuesta(encuestaId: string, input: EncuestaInput) {
       p_titulo: input.titulo,
       p_descripcion: input.descripcion || null,
       p_audiencia: input.audiencia,
+      p_nivel_id: input.nivelId || null,
+      p_carrera_id: input.carreraId || null,
+      p_grado_id: input.gradoId || null,
       p_grupo_id: input.grupoId || null,
       p_opciones: input.opciones,
       p_cierra_en: fechaRpc(input.cierraEn),

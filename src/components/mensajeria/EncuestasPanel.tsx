@@ -23,12 +23,18 @@ import {
   obtenerEncuestas,
   votarEncuesta,
   type AudienciaEncuesta,
+  type CarreraEncuesta,
   type EncuestaVista,
+  type GradoEncuesta,
   type GrupoEncuesta,
+  type NivelEncuesta,
 } from '@/lib/actions/encuestas';
 
 interface ContextoEncuestas {
   rol: 'superuser' | 'admin' | 'profesor' | 'alumno';
+  niveles: NivelEncuesta[];
+  carreras: CarreraEncuesta[];
+  grados: GradoEncuesta[];
   grupos: GrupoEncuesta[];
   puedeCrear: boolean;
   puedeEncuestarProfesores: boolean;
@@ -38,6 +44,9 @@ interface FormularioEncuesta {
   titulo: string;
   descripcion: string;
   audiencia: AudienciaEncuesta;
+  nivelId: string;
+  carreraId: string;
+  gradoId: string;
   grupoId: string;
   opciones: string[];
   cierraEn: string;
@@ -48,6 +57,9 @@ const FORMULARIO_INICIAL: FormularioEncuesta = {
   titulo: '',
   descripcion: '',
   audiencia: 'alumno',
+  nivelId: '',
+  carreraId: '',
+  gradoId: '',
   grupoId: '',
   opciones: ['', ''],
   cierraEn: '',
@@ -105,12 +117,8 @@ export default function EncuestasPanel() {
   useEffect(() => { cargar(); }, [cargar]);
 
   const abrirNueva = () => {
-    const profesor = contexto?.rol === 'profesor';
     setEncuestaEditando(null);
-    setFormulario({
-      ...FORMULARIO_INICIAL,
-      grupoId: profesor ? contexto?.grupos[0]?.id || '' : '',
-    });
+    setFormulario(FORMULARIO_INICIAL);
     setDialogoAbierto(true);
   };
 
@@ -120,6 +128,9 @@ export default function EncuestasPanel() {
       titulo: encuesta.titulo,
       descripcion: encuesta.descripcion || '',
       audiencia: encuesta.audiencia,
+      nivelId: encuesta.nivelId || '',
+      carreraId: encuesta.carreraId || '',
+      gradoId: encuesta.gradoId || '',
       grupoId: encuesta.grupoId || '',
       opciones: encuesta.opciones.map((opcion) => opcion.texto),
       cierraEn: aFechaLocal(encuesta.cierraEn),
@@ -143,6 +154,20 @@ export default function EncuestasPanel() {
     () => formulario.opciones.map((opcion) => opcion.trim()).filter(Boolean),
     [formulario.opciones]
   );
+  const carrerasDisponibles = useMemo(
+    () => contexto?.carreras.filter((carrera) => carrera.nivelId === formulario.nivelId) || [],
+    [contexto?.carreras, formulario.nivelId]
+  );
+  const gradosDisponibles = useMemo(
+    () => contexto?.grados.filter((grado) => grado.carreraId === formulario.carreraId) || [],
+    [contexto?.grados, formulario.carreraId]
+  );
+  const gruposDisponibles = useMemo(
+    () => contexto?.grupos.filter(
+      (grupo) => grupo.carreraId === formulario.carreraId && grupo.gradoId === formulario.gradoId
+    ) || [],
+    [contexto?.grupos, formulario.carreraId, formulario.gradoId]
+  );
 
   const guardar = async () => {
     if (formulario.titulo.trim().length < 3) {
@@ -153,17 +178,15 @@ export default function EncuestasPanel() {
       toast({ variant: 'destructive', title: 'Incluye al menos dos opciones' });
       return;
     }
-    if (formulario.audiencia === 'alumno' && contexto?.rol === 'profesor' && !formulario.grupoId) {
-      toast({ variant: 'destructive', title: 'Selecciona uno de tus grupos' });
-      return;
-    }
-
     setGuardando(true);
     const input = {
       titulo: formulario.titulo.trim(),
       descripcion: formulario.descripcion.trim() || null,
       audiencia: formulario.audiencia,
-      grupoId: formulario.audiencia === 'profesor' ? null : formulario.grupoId || null,
+      nivelId: formulario.nivelId || null,
+      carreraId: formulario.carreraId || null,
+      gradoId: formulario.gradoId || null,
+      grupoId: formulario.grupoId || null,
       opciones: opcionesValidas,
       cierraEn: formulario.cierraEn || null,
       activa: formulario.activa,
@@ -181,13 +204,16 @@ export default function EncuestasPanel() {
     const cambioDestinatarios = Boolean(
       encuestaEditando
       && (encuestaEditando.audiencia !== input.audiencia
+        || encuestaEditando.nivelId !== input.nivelId
+        || encuestaEditando.carreraId !== input.carreraId
+        || encuestaEditando.gradoId !== input.gradoId
         || encuestaEditando.grupoId !== input.grupoId)
       && encuestaEditando.totalVotos > 0
     );
     const votosReiniciados = ('votosReiniciados' in resultado && resultado.votosReiniciados) || cambioDestinatarios;
     toast({
       title: encuestaEditando ? 'Encuesta actualizada' : 'Encuesta publicada',
-      description: votosReiniciados ? 'Las opciones cambiaron, por lo que los votos anteriores se reiniciaron.' : undefined,
+      description: votosReiniciados ? 'Cambiaron las opciones o los destinatarios; los votos anteriores se reiniciaron.' : undefined,
     });
     setDialogoAbierto(false);
     await cargar();
@@ -270,7 +296,7 @@ export default function EncuestasPanel() {
               </div>
               {encuesta.descripcion && <p className="whitespace-pre-wrap text-sm text-muted-foreground">{encuesta.descripcion}</p>}
               <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {encuesta.grupoNombre || `Todos los ${encuesta.audiencia === 'alumno' ? 'alumnos' : 'profesores'}`}</span>
+                <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {encuesta.destinoNombre}</span>
                 {encuesta.cierraEn && <span className="flex items-center gap-1"><CalendarClock className="h-3.5 w-3.5" /> Cierra {fechaLegible(encuesta.cierraEn)}</span>}
               </div>
             </CardHeader>
@@ -365,34 +391,112 @@ export default function EncuestasPanel() {
               <Textarea id="encuesta-descripcion" maxLength={2000} rows={3} value={formulario.descripcion} onChange={(event) => setFormulario((actual) => ({ ...actual, descripcion: event.target.value }))} placeholder="Agrega contexto o instrucciones para responder." />
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label>Dirigida a</Label>
+              <Select
+                value={formulario.audiencia}
+                disabled={contexto?.rol === 'profesor'}
+                onValueChange={(value: AudienciaEncuesta) => setFormulario((actual) => ({ ...actual, audiencia: value }))}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="alumno">Alumnos</SelectItem>
+                  {contexto?.puedeEncuestarProfesores && <SelectItem value="profesor">Profesores</SelectItem>}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-4 rounded-xl border border-border bg-muted/20 p-4">
               <div className="space-y-2">
-                <Label>Dirigida a</Label>
-                <Select
-                  value={formulario.audiencia}
-                  disabled={contexto?.rol === 'profesor'}
-                  onValueChange={(value: AudienciaEncuesta) => setFormulario((actual) => ({ ...actual, audiencia: value, grupoId: value === 'profesor' ? '' : actual.grupoId }))}
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="alumno">Alumnos</SelectItem>
-                    {contexto?.puedeEncuestarProfesores && <SelectItem value="profesor">Profesores</SelectItem>}
-                  </SelectContent>
-                </Select>
+                <div>
+                  <Label>Segmentación académica</Label>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Cada filtro hace la audiencia más específica. Puedes detenerte en nivel, carrera, grado o grupo.
+                  </p>
+                </div>
               </div>
 
-              {formulario.audiencia === 'alumno' && (
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label>Grupo</Label>
-                  <Select value={formulario.grupoId || 'todos'} onValueChange={(value) => setFormulario((actual) => ({ ...actual, grupoId: value === 'todos' ? '' : value }))}>
-                    <SelectTrigger><SelectValue placeholder="Selecciona un grupo" /></SelectTrigger>
+                  <Label>Nivel</Label>
+                  <Select
+                    value={formulario.nivelId || 'todos'}
+                    onValueChange={(value) => setFormulario((actual) => ({
+                      ...actual,
+                      nivelId: value === 'todos' ? '' : value,
+                      carreraId: '',
+                      gradoId: '',
+                      grupoId: '',
+                    }))}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Selecciona un nivel" /></SelectTrigger>
                     <SelectContent>
-                      {contexto?.rol !== 'profesor' && <SelectItem value="todos">Todos los alumnos</SelectItem>}
-                      {contexto?.grupos.map((grupo) => <SelectItem key={grupo.id} value={grupo.id}>{grupo.nombre}</SelectItem>)}
+                      <SelectItem value="todos">
+                        {contexto?.rol === 'profesor' ? 'Todos mis alumnos asignados' : `Todos los ${formulario.audiencia === 'alumno' ? 'alumnos' : 'profesores'}`}
+                      </SelectItem>
+                      {contexto?.niveles.map((nivel) => <SelectItem key={nivel.id} value={nivel.id}>{nivel.nombre}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
-              )}
+
+                <div className="space-y-2">
+                  <Label>Carrera</Label>
+                  <Select
+                    value={formulario.carreraId || 'todos'}
+                    disabled={!formulario.nivelId}
+                    onValueChange={(value) => setFormulario((actual) => ({
+                      ...actual,
+                      carreraId: value === 'todos' ? '' : value,
+                      gradoId: '',
+                      grupoId: '',
+                    }))}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Primero selecciona un nivel" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todas las carreras del nivel</SelectItem>
+                      {carrerasDisponibles.map((carrera) => <SelectItem key={carrera.id} value={carrera.id}>{carrera.nombre}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Grado</Label>
+                  <Select
+                    value={formulario.gradoId || 'todos'}
+                    disabled={!formulario.carreraId}
+                    onValueChange={(value) => setFormulario((actual) => ({
+                      ...actual,
+                      gradoId: value === 'todos' ? '' : value,
+                      grupoId: '',
+                    }))}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Primero selecciona una carrera" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos los grados de la carrera</SelectItem>
+                      {gradosDisponibles.map((grado) => <SelectItem key={grado.id} value={grado.id}>{grado.nombre}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Grupo</Label>
+                  <Select
+                    value={formulario.grupoId || 'todos'}
+                    disabled={!formulario.gradoId}
+                    onValueChange={(value) => setFormulario((actual) => ({ ...actual, grupoId: value === 'todos' ? '' : value }))}
+                  >
+                    <SelectTrigger><SelectValue placeholder="Primero selecciona un grado" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos los grupos del grado</SelectItem>
+                      {gruposDisponibles.map((grupo) => (
+                        <SelectItem key={grupo.id} value={grupo.id}>
+                          {`${gradosDisponibles.find((grado) => grado.id === grupo.gradoId)?.nombre || 'Grado'} › ${grupo.nombre}${grupo.turno ? ` · ${grupo.turno}` : ''}`}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
             </div>
 
             <div className="space-y-3">
@@ -426,7 +530,7 @@ export default function EncuestasPanel() {
             </div>
 
             {encuestaEditando && encuestaEditando.totalVotos > 0 && (
-              <p className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">Si modificas el texto, orden o cantidad de opciones, los votos anteriores se reiniciarán para conservar resultados coherentes.</p>
+              <p className="rounded-lg bg-muted p-3 text-xs text-muted-foreground">Si modificas las opciones o la segmentación de destinatarios, los votos anteriores se reiniciarán para conservar resultados coherentes.</p>
             )}
           </div>
 
