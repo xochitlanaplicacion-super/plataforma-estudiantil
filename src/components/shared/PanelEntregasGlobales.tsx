@@ -2,7 +2,7 @@
 
 import React, { useState, useTransition, useCallback, useEffect } from 'react';
 import {
-  Download, Clock, CheckCircle2, AlertTriangle, Loader2,
+  Clock, CheckCircle2, AlertTriangle, Loader2,
   Users, FileText, Star, BookOpen, ChevronDown, ChevronUp,
   MessageCircle, Send, X
 } from 'lucide-react';
@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { AccionesArchivoEntrega } from '@/components/shared/AccionesArchivoEntrega';
 
 // ── Tipos ──────────────────────────────────────────────────────────
 
@@ -176,19 +177,15 @@ function EntregaRowGlobal({
         </div>
 
         {/* Archivo */}
-        {!vencido && entrega.archivo_url ? (
+        {!vencido && entrega.archivo_path ? (
           <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
             <FileText className="w-5 h-5 text-blue-500 shrink-0" />
             <span className="text-sm font-bold text-slate-700 truncate flex-1">{entrega.archivo_nombre}</span>
-            <a
-              href={entrega.archivo_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="shrink-0 flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white text-[10px] font-black uppercase rounded-lg hover:bg-blue-700 transition-all"
-            >
-              <Download className="w-3 h-3" />
-              Descargar
-            </a>
+            <AccionesArchivoEntrega
+              archivoPath={entrega.archivo_path}
+              archivoNombre={entrega.archivo_nombre}
+              compact
+            />
           </div>
         ) : null}
 

@@ -2,9 +2,8 @@
 
 import { requireTenantSession } from '@/lib/tenant/context';
 
-import { createClient } from '@supabase/supabase-js';
-import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { revalidatePath } from 'next/cache';
+import { randomUUID } from 'node:crypto';
 
 const BUCKET = 'entregas-alumnos';
 const EXPIRY_DAYS = 10;
@@ -18,9 +17,105 @@ const ALLOWED_MIME = [
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
   'application/vnd.ms-powerpoint',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/heic',
+  'image/heif',
 ];
 
-const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
+const MIME_BY_EXTENSION: Record<string, string> = {
+  pdf: 'application/pdf',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  csv: 'text/csv',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ppt: 'application/vnd.ms-powerpoint',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  png: 'image/png',
+  webp: 'image/webp',
+  heic: 'image/heic',
+  heif: 'image/heif',
+};
+
+const EXTENSION_BY_MIME: Record<string, string> = {
+  ...Object.fromEntries(Object.entries(MIME_BY_EXTENSION).map(([extension, mime]) => [mime, extension])),
+  'image/jpg': 'jpg',
+};
+
+const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
+const SIGNED_URL_SECONDS = 5 * 60;
+
+function normalizarArchivo(file: File) {
+  const extensionNombre = file.name.split('.').pop()?.toLowerCase() || '';
+  const mimeDeclarado = file.type.toLowerCase() === 'image/jpg' ? 'image/jpeg' : file.type.toLowerCase();
+  const mimeGenerico = !mimeDeclarado || mimeDeclarado === 'application/octet-stream';
+  if (!mimeGenerico && !ALLOWED_MIME.includes(mimeDeclarado)) return null;
+
+  const mime = mimeGenerico ? MIME_BY_EXTENSION[extensionNombre] : mimeDeclarado;
+  const extension = EXTENSION_BY_MIME[mime] || extensionNombre;
+
+  if (!mime || !ALLOWED_MIME.includes(mime) || !extension) return null;
+  return { mime, extension };
+}
+
+async function profesorPuedeAccederEjercicio(
+  admin: any,
+  tenantId: string,
+  profesorId: string,
+  ejercicioId: string,
+  alumnoId?: string
+) {
+  const { data: ejercicio } = await admin
+    .from('ejercicios')
+    .select('tema_id')
+    .eq('id', ejercicioId)
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+  if (!ejercicio?.tema_id) return false;
+
+  const { data: tema } = await admin
+    .from('temas')
+    .select('unidad_id')
+    .eq('id', ejercicio.tema_id)
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+  if (!tema?.unidad_id) return false;
+
+  const { data: unidad } = await admin
+    .from('unidades')
+    .select('materia_id')
+    .eq('id', tema.unidad_id)
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+  if (!unidad?.materia_id) return false;
+
+  let grupoId: string | null = null;
+  if (alumnoId) {
+    const { data: alumno } = await admin
+      .from('profiles')
+      .select('grupo_id')
+      .eq('id', alumnoId)
+      .eq('tenant_id', tenantId)
+      .maybeSingle();
+    grupoId = alumno?.grupo_id || null;
+  }
+
+  let query = admin
+    .from('asignaciones_profesor')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('profesor_id', profesorId)
+    .eq('materia_id', unidad.materia_id)
+    .eq('activo', true);
+  if (grupoId) query = query.eq('grupo_id', grupoId);
+
+  const { data: asignacion } = await query.limit(1).maybeSingle();
+  return Boolean(asignacion);
+}
 
 // -------------------------------------------------------------------
 // 1. SUBIR ENTREGA DE ALUMNO
@@ -30,48 +125,49 @@ const MAX_SIZE = 5 * 1024 * 1024; // 5 MB
 //    - Guarda registro en BD (primer_envio_en NO se actualiza si ya existe)
 // -------------------------------------------------------------------
 export async function subirEntregaAlumno(formData: FormData) {
-  const { supabase: supabaseAdmin, tenantId, user } = await requireTenantSession(['alumno']);
+  const { admin, tenantId, user } = await requireTenantSession(['alumno']);
 
   const file = formData.get('archivo') as File;
   const ejercicioId = formData.get('ejercicioId') as string;
 
   if (!file || !ejercicioId) return { error: 'Datos incompletos' };
-  if (file.size > MAX_SIZE) return { error: 'El archivo supera el límite de 5 MB' };
-  if (!ALLOWED_MIME.includes(file.type)) return { error: 'Tipo de archivo no permitido' };
+  if (file.size <= 0) return { error: 'El archivo está vacío' };
+  if (file.size > MAX_SIZE) return { error: 'El archivo supera el límite de 10 MB' };
+  const archivoNormalizado = normalizarArchivo(file);
+  if (!archivoNormalizado) return { error: 'Tipo de archivo no permitido' };
+
+  const { data: ejercicio } = await admin
+    .from('ejercicios')
+    .select('id, tipo')
+    .eq('id', ejercicioId)
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+  if (!ejercicio || ejercicio.tipo !== 'actividad_descriptiva') {
+    return { error: 'La actividad descriptiva no existe en tu institución' };
+  }
 
   // Verificar si ya existe un registro (para preservar primer_envio_en)
-  const { data: existing } = await supabaseAdmin
+  const { data: existing } = await admin
     .from('resultados_ejercicios')
     .select('archivo_path, primer_envio_en, caduca_el')
+    .eq('tenant_id', tenantId)
     .eq('alumno_id', user.id)
     .eq('ejercicio_id', ejercicioId)
     .maybeSingle();
 
-  // Si ya tenía archivo previo, borrarlo del storage
-  if (existing?.archivo_path) {
-    await supabaseAdmin.storage.from(BUCKET).remove([existing.archivo_path]);
-  }
+  // Construir ruta única: {tenant}/entregas/{alumno}/{ejercicio}/{uuid}.{ext}
+  const filePath = `${tenantId}/entregas/${user.id}/${ejercicioId}/${randomUUID()}.${archivoNormalizado.extension}`;
 
-  // Construir ruta única: {alumno_id}/{ejercicio_id}/{timestamp}-{nombre}
-  const ext = file.name.split('.').pop();
-  const timestamp = Date.now();
-  const filePath = `${tenantId}/entregas/${user.id}/${ejercicioId}/${timestamp}.${ext}`;
-
-  // Subir archivo al bucket
+  // Subir primero el archivo nuevo; el anterior se elimina sólo cuando la BD confirma el cambio.
   const bytes = await file.arrayBuffer();
-  const { error: uploadError } = await supabaseAdmin.storage
+  const { error: uploadError } = await admin.storage
     .from(BUCKET)
     .upload(filePath, bytes, {
-      contentType: file.type,
+      contentType: archivoNormalizado.mime,
       upsert: false,
     });
 
   if (uploadError) return { error: `Error al subir: ${uploadError.message}` };
-
-  // Obtener URL firmada (válida 7 días para darle margen al profesor)
-  const { data: signedData } = await supabaseAdmin.storage
-    .from(BUCKET)
-    .createSignedUrl(filePath, 60 * 60 * 24 * 7); // 7 días
 
   // Calcular fechas: primer_envio_en solo se pone la PRIMERA vez
   const ahora = new Date();
@@ -79,13 +175,14 @@ export async function subirEntregaAlumno(formData: FormData) {
   const caduca = new Date(primerEnvio.getTime() + EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
   // Guardar en base de datos
-  const { error: dbError } = await supabaseAdmin
+  const { error: dbError } = await admin
     .from('resultados_ejercicios')
     .upsert({
+      tenant_id: tenantId,
       alumno_id: user.id,
       ejercicio_id: ejercicioId,
       estado: 'completado',
-      archivo_url: signedData?.signedUrl || '',
+      archivo_url: null,
       archivo_nombre: file.name,
       archivo_path: filePath,
       primer_envio_en: primerEnvio.toISOString(),
@@ -96,26 +193,29 @@ export async function subirEntregaAlumno(formData: FormData) {
 
   if (dbError) {
     // Intentar limpiar archivo subido si falló el DB
-    await supabaseAdmin.storage.from(BUCKET).remove([filePath]);
+    await admin.storage.from(BUCKET).remove([filePath]);
     return { error: `Error al registrar: ${dbError.message}` };
   }
 
+  if (existing?.archivo_path && existing.archivo_path !== filePath) {
+    await admin.storage.from(BUCKET).remove([existing.archivo_path]);
+  }
+
   revalidatePath('/dashboard/alumno/materias');
-  return { success: true, caduca_el: caduca.toISOString() };
+  revalidatePath(`/dashboard/alumno/ejercicios/${ejercicioId}`);
+  return { success: true, caduca_el: caduca.toISOString(), archivo_path: filePath };
 }
 
 // -------------------------------------------------------------------
 // 2. OBTENER ENTREGA DE UN ALUMNO PARA UN EJERCICIO
 // -------------------------------------------------------------------
 export async function getEntregaAlumno(ejercicioId: string) {
-  const { supabase: supabaseAdmin } = await requireTenantSession();
-  const supabase = await createServerSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
+  const { admin, tenantId, user } = await requireTenantSession(['alumno']);
 
-  const { data } = await supabaseAdmin
+  const { data } = await admin
     .from('resultados_ejercicios')
     .select('archivo_url, archivo_nombre, archivo_path, primer_envio_en, caduca_el, calificacion_manual')
+    .eq('tenant_id', tenantId)
     .eq('alumno_id', user.id)
     .eq('ejercicio_id', ejercicioId)
     .maybeSingle();
@@ -124,7 +224,70 @@ export async function getEntregaAlumno(ejercicioId: string) {
 }
 
 // -------------------------------------------------------------------
-// 3. CALIFICAR ENTREGA (USO DEL PROFESOR)
+// 3. GENERAR ACCESO EFÍMERO PARA VER O DESCARGAR
+//    Nunca reutiliza la URL persistida: se firma al momento durante 5 minutos.
+// -------------------------------------------------------------------
+export async function obtenerAccesoArchivoEntrega(
+  filePath: string,
+  modo: 'ver' | 'descargar'
+) {
+  try {
+    const { admin, tenantId, user, profile } = await requireTenantSession([
+      'alumno',
+      'profesor',
+      'admin',
+      'superuser',
+    ]);
+    if (!filePath || !filePath.startsWith(`${tenantId}/entregas/`)) {
+      return { error: 'Ruta de archivo inválida' };
+    }
+
+    const { data: entrega } = await admin
+      .from('resultados_ejercicios')
+      .select('alumno_id, ejercicio_id, archivo_path, archivo_nombre, caduca_el')
+      .eq('tenant_id', tenantId)
+      .eq('archivo_path', filePath)
+      .maybeSingle();
+    if (!entrega?.archivo_path) return { error: 'El archivo ya no está disponible' };
+    if (entrega.caduca_el && new Date(entrega.caduca_el).getTime() <= Date.now()) {
+      return { error: 'El archivo cumplió su periodo de conservación' };
+    }
+
+    if (profile.rol === 'alumno' && entrega.alumno_id !== user.id) {
+      return { error: 'No tienes permiso para abrir esta entrega' };
+    }
+    if (profile.rol === 'profesor') {
+      const permitido = await profesorPuedeAccederEjercicio(
+        admin,
+        tenantId,
+        user.id,
+        entrega.ejercicio_id,
+        entrega.alumno_id
+      );
+      if (!permitido) return { error: 'La entrega no pertenece a uno de tus grupos' };
+    }
+
+    const options = modo === 'descargar'
+      ? { download: entrega.archivo_nombre || true }
+      : undefined;
+    const { data, error } = await admin.storage
+      .from(BUCKET)
+      .createSignedUrl(entrega.archivo_path, SIGNED_URL_SECONDS, options);
+    if (error || !data?.signedUrl) {
+      return { error: error?.message || 'No se pudo generar el acceso al archivo' };
+    }
+    return {
+      success: true,
+      url: data.signedUrl,
+      nombre: entrega.archivo_nombre || 'entrega',
+    };
+  } catch (error: any) {
+    return { error: error.message || 'No se pudo abrir el archivo' };
+  }
+}
+
+// -------------------------------------------------------------------
+// 4. CALIFICAR ENTREGA (USO DEL PROFESOR)
 //    - Guarda calificacion_manual en resultados_ejercicios
 //    - Bloquea el registro (no se aceptan más subidas)
 // -------------------------------------------------------------------
@@ -133,16 +296,24 @@ export async function calificarEntregaDescriptiva(
   ejercicioId: string,
   calificacion: number
 ) {
-  const { supabase: supabaseAdmin } = await requireTenantSession();
-  const supabase = await createServerSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { error: 'No autenticado' };
+  const { admin, tenantId, user, profile } = await requireTenantSession(['profesor', 'admin', 'superuser']);
 
   if (calificacion < 0 || calificacion > 10) {
     return { error: 'Calificación debe ser entre 0 y 10' };
   }
 
-  const { error } = await supabaseAdmin
+  if (profile.rol === 'profesor') {
+    const permitido = await profesorPuedeAccederEjercicio(
+      admin,
+      tenantId,
+      user.id,
+      ejercicioId,
+      alumnoId
+    );
+    if (!permitido) return { error: 'La entrega no pertenece a uno de tus grupos' };
+  }
+
+  const { error } = await admin
     .from('resultados_ejercicios')
     .update({
       calificacion_manual: calificacion,
@@ -150,6 +321,7 @@ export async function calificarEntregaDescriptiva(
       bloqueado: true,
       estado: 'calificado',
     })
+    .eq('tenant_id', tenantId)
     .eq('alumno_id', alumnoId)
     .eq('ejercicio_id', ejercicioId);
 
@@ -314,28 +486,18 @@ export async function getEjerciciosDescriptivosDeTema(temaId: string) {
 }
 
 // -------------------------------------------------------------------
-// 6. RENOVAR URLs FIRMADAS (para el cron o cuando expiran)
-// -------------------------------------------------------------------
-export async function renovarUrlFirmada(filePath: string) {
-  const { supabase: supabaseAdmin, tenantId } = await requireTenantSession();
-  if (!filePath.startsWith(`${tenantId}/`)) return null;
-  const { data } = await supabaseAdmin.storage
-    .from(BUCKET)
-    .createSignedUrl(filePath, 60 * 60 * 24 * 7);
-  return data?.signedUrl || null;
-}
-
-// -------------------------------------------------------------------
 // 7. OBTENER TODAS LAS ENTREGAS ACTIVAS DE ACTIVIDADES DESCRIPTIVAS
 //    PARA UN PROFESOR (vista global, agrupadas por materia)
 // -------------------------------------------------------------------
-export async function getEntregasGlobalesProfesor(profesorId: string) {
-  const { supabase: supabaseAdmin } = await requireTenantSession();
+export async function getEntregasGlobalesProfesor(_profesorId?: string) {
+  const { admin: supabaseAdmin, tenantId, user } = await requireTenantSession(['profesor']);
+  const profesorId = user.id;
   try {
     // 1. Obtener asignaciones activas del profesor
     const { data: asignaciones, error: asigError } = await supabaseAdmin
       .from('asignaciones_profesor')
       .select('materia_id, grupo_id, materias(id, nombre), grupos(id, nombre)')
+      .eq('tenant_id', tenantId)
       .eq('profesor_id', profesorId)
       .eq('activo', true);
 
@@ -352,6 +514,7 @@ export async function getEntregasGlobalesProfesor(profesorId: string) {
     const { data: unidades } = await supabaseAdmin
       .from('unidades')
       .select('id, materia_id')
+      .eq('tenant_id', tenantId)
       .in('materia_id', materiaIds);
 
     if (!unidades || unidades.length === 0) return { data: [] };
@@ -361,6 +524,7 @@ export async function getEntregasGlobalesProfesor(profesorId: string) {
     const { data: temas } = await supabaseAdmin
       .from('temas')
       .select('id, unidad_id')
+      .eq('tenant_id', tenantId)
       .in('unidad_id', unidadIds);
 
     if (!temas || temas.length === 0) return { data: [] };
@@ -370,6 +534,7 @@ export async function getEntregasGlobalesProfesor(profesorId: string) {
     const { data: ejercicios } = await supabaseAdmin
       .from('ejercicios')
       .select('id, tema_id, titulo, fecha_entrega, tipo, sync_id')
+      .eq('tenant_id', tenantId)
       .in('tema_id', temaIds)
       .eq('tipo', 'actividad_descriptiva');
 
@@ -391,6 +556,7 @@ export async function getEntregasGlobalesProfesor(profesorId: string) {
         calificacion_manual,
         estado
       `)
+      .eq('tenant_id', tenantId)
       .in('ejercicio_id', ejercicioIds)
       .not('archivo_path', 'is', null)
       .gte('caduca_el', ahora)
@@ -403,6 +569,7 @@ export async function getEntregasGlobalesProfesor(profesorId: string) {
     const { data: profiles } = await supabaseAdmin
       .from('profiles')
       .select('id, nombre, apellidos, email, grupo_id')
+      .eq('tenant_id', tenantId)
       .in('id', alumnoIds);
 
     const profilesMap = new Map<string, any>();
@@ -415,6 +582,7 @@ export async function getEntregasGlobalesProfesor(profesorId: string) {
       const { data: gruposData } = await supabaseAdmin
         .from('grupos')
         .select('id, nombre')
+        .eq('tenant_id', tenantId)
         .in('id', grupoIdsAlumnos);
       gruposData?.forEach(g => gruposMap.set(g.id, g.nombre));
     }

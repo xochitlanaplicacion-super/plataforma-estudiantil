@@ -1,14 +1,16 @@
 'use client';
 
 import React, { useState, useRef, useTransition } from 'react';
-import { Upload, FileText, FileSpreadsheet, File, CheckCircle2, Clock, AlertTriangle, Loader2, X } from 'lucide-react';
+import { Upload, FileText, FileSpreadsheet, File, CheckCircle2, Clock, AlertTriangle, Loader2, X, Camera, Image as ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { subirEntregaAlumno } from '@/lib/actions/entregas';
+import { AccionesArchivoEntrega } from '@/components/shared/AccionesArchivoEntrega';
 
 interface EntregaAlumnoProps {
   ejercicioId: string;
   entregaExistente?: {
     archivo_nombre?: string | null;
+    archivo_path?: string | null;
     caduca_el?: string | null;
     primer_envio_en?: string | null;
     calificacion_manual?: number | null;
@@ -25,16 +27,27 @@ const MIME_LABELS: Record<string, string> = {
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word (.docx)',
   'application/vnd.ms-powerpoint': 'PowerPoint (.ppt)',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'PowerPoint (.pptx)',
+  'image/jpeg': 'Foto JPEG',
+  'image/png': 'Imagen PNG',
+  'image/webp': 'Imagen WebP',
+  'image/heic': 'Foto HEIC',
+  'image/heif': 'Foto HEIF',
 };
 
 const ALLOWED_MIME = Object.keys(MIME_LABELS);
-const MAX_SIZE_MB = 5;
+const ALLOWED_EXTENSIONS = ['pdf', 'xls', 'xlsx', 'csv', 'doc', 'docx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'];
+const ACCEPTED_FILES = [
+  ...ALLOWED_MIME,
+  ...ALLOWED_EXTENSIONS.map((extension) => `.${extension}`),
+].join(',');
+const MAX_SIZE_MB = 10;
 const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
 
 function getIconForName(nombre: string) {
   const lower = nombre.toLowerCase();
   if (lower.endsWith('.pdf')) return <FileText className="w-8 h-8 text-red-500" />;
   if (lower.endsWith('.xlsx') || lower.endsWith('.xls') || lower.endsWith('.csv')) return <FileSpreadsheet className="w-8 h-8 text-emerald-500" />;
+  if (/\.(jpe?g|png|webp|heic|heif)$/.test(lower)) return <ImageIcon className="w-8 h-8 text-primary" />;
   return <File className="w-8 h-8 text-blue-500" />;
 }
 
@@ -57,8 +70,9 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
   const [isDragging, setIsDragging] = useState(false);
   const [entrega, setEntrega] = useState(entregaExistente);
   const inputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  const yaCalificado = !!entrega?.calificacion_manual;
+  const yaCalificado = entrega?.calificacion_manual !== null && entrega?.calificacion_manual !== undefined;
   const tieneArchivo = !!entrega?.archivo_nombre;
   const { dias, horas, pct } = entrega?.caduca_el 
     ? getDiasRestantes(entrega.caduca_el) 
@@ -66,7 +80,10 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
 
   const validarArchivo = (file: File): string | null => {
     if (file.size > MAX_SIZE_BYTES) return `El archivo supera ${MAX_SIZE_MB}MB (tamaño: ${(file.size / 1024 / 1024).toFixed(1)}MB)`;
-    if (!ALLOWED_MIME.includes(file.type)) return 'Tipo no permitido. Solo PDF, Excel, CSV, Word o PowerPoint.';
+    const extension = file.name.split('.').pop()?.toLowerCase() || '';
+    if (!ALLOWED_MIME.includes(file.type) && !ALLOWED_EXTENSIONS.includes(extension)) {
+      return 'Tipo no permitido. Usa una foto, PDF, Excel, CSV, Word o PowerPoint.';
+    }
     return null;
   };
 
@@ -98,6 +115,7 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
         setEntrega({
           ...entrega,
           archivo_nombre: archivoSeleccionado.name,
+          archivo_path: res.archivo_path,
           caduca_el: res.caduca_el,
           primer_envio_en: entrega?.primer_envio_en || new Date().toISOString(),
         });
@@ -115,7 +133,7 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
         <div>
           <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">Tu Entrega</h3>
           <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">
-            PDF, Excel, CSV, Word o PowerPoint · Máx {MAX_SIZE_MB}MB · 1 archivo
+            Fotos, PDF, Excel, CSV, Word o PowerPoint · Máx {MAX_SIZE_MB}MB · 1 archivo
           </p>
         </div>
       </div>
@@ -144,6 +162,12 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
               <p className="text-xs text-slate-500 font-semibold">Entregado · Pendiente de calificación</p>
             </div>
           </div>
+          {entrega?.archivo_path && (
+            <AccionesArchivoEntrega
+              archivoPath={entrega.archivo_path}
+              archivoNombre={entrega.archivo_nombre || 'entrega'}
+            />
+          )}
           
           {/* Barra de caducidad */}
           <div className="space-y-2">
@@ -220,8 +244,16 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
               ref={inputRef}
               type="file"
               className="hidden"
-              accept={ALLOWED_MIME.join(',')}
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+              accept={ACCEPTED_FILES}
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }}
+            />
+            <input
+              ref={cameraInputRef}
+              type="file"
+              className="hidden"
+              accept="image/*"
+              capture="environment"
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }}
             />
             {archivoSeleccionado ? (
               <>
@@ -245,10 +277,27 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
                 </div>
                 <div className="text-center">
                   <p className="font-black text-slate-600 text-sm">Arrastra tu archivo aquí o haz clic</p>
-                  <p className="text-[11px] text-slate-400 mt-1">PDF · Excel · CSV · Word · PowerPoint · máx 5MB</p>
+                  <p className="text-[11px] text-slate-400 mt-1">Foto · PDF · Excel · CSV · Word · PowerPoint · máx {MAX_SIZE_MB}MB</p>
                 </div>
               </>
             )}
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => cameraInputRef.current?.click()}
+              className="flex h-12 items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/5 text-sm font-bold text-primary transition-colors hover:bg-primary/10"
+            >
+              <Camera className="h-4 w-4" /> Tomar foto
+            </button>
+            <button
+              type="button"
+              onClick={() => inputRef.current?.click()}
+              className="flex h-12 items-center justify-center gap-2 rounded-xl border border-border bg-background text-sm font-bold text-foreground transition-colors hover:bg-muted"
+            >
+              <Upload className="h-4 w-4" /> Elegir archivo o foto
+            </button>
           </div>
 
           {/* Error de validación */}

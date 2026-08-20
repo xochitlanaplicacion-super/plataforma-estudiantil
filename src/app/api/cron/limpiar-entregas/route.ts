@@ -5,6 +5,7 @@ export const dynamic = 'force-dynamic';
 
 const BUCKET = 'entregas-alumnos';
 const CRON_SECRET = process.env.CRON_SECRET;
+const BATCH_SIZE = 100;
 
 export async function GET(request: NextRequest) {
   if (!CRON_SECRET || request.headers.get('authorization') !== `Bearer ${CRON_SECRET}`) {
@@ -18,9 +19,11 @@ export async function GET(request: NextRequest) {
     // Buscar todos los registros cuya fecha de caducidad ya pasó y tienen archivo
     const { data: expirados, error: fetchError } = await supabaseAdmin
       .from('resultados_ejercicios')
-      .select('tenant_id, alumno_id, ejercicio_id, archivo_path, archivo_nombre')
+      .select('tenant_id, alumno_id, ejercicio_id, archivo_path, archivo_nombre, caduca_el')
       .lt('caduca_el', ahora)
-      .not('archivo_path', 'is', null);
+      .not('archivo_path', 'is', null)
+      .order('caduca_el', { ascending: true })
+      .limit(BATCH_SIZE);
 
     if (fetchError) {
       console.error('[CRON] Error fetching expired entries:', fetchError);
@@ -31,47 +34,55 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ message: 'No hay archivos caducados', eliminados: 0 });
     }
 
-    // Recopilar paths para eliminar del storage
-    const paths = expirados
-      .filter(e => e.archivo_path && (e.archivo_path as string).startsWith(`${e.tenant_id}/`))
-      .map(e => e.archivo_path as string);
-
     let storageEliminados = 0;
-    if (paths.length > 0) {
+    let dbLimpiados = 0;
+    let omitidosPorCambio = 0;
+    let rutasInvalidas = 0;
+    const errores: Array<{ path: string; error: string }> = [];
+
+    // El borrado se hace por objeto para no perder la referencia en BD si Storage falla.
+    // La actualización exige el mismo archivo_path: si el alumno reemplazó el archivo
+    // durante la ejecución, el cron nunca borra la referencia nueva.
+    for (const entrega of expirados) {
+      const path = entrega.archivo_path as string;
+      if (!path.startsWith(`${entrega.tenant_id}/entregas/${entrega.alumno_id}/`)) {
+        rutasInvalidas++;
+        errores.push({ path, error: 'Ruta fuera del espacio esperado para la entrega' });
+        continue;
+      }
+
       const { data: removedFiles, error: removeError } = await supabaseAdmin.storage
         .from(BUCKET)
-        .remove(paths);
-      
+        .remove([path]);
+
       if (removeError) {
-        console.error('[CRON] Error removing files from storage:', removeError);
-        // Continuar de todos modos para limpiar la BD
-      } else {
-        storageEliminados = removedFiles?.length || 0;
+        console.error('[CRON] Error removing file from storage:', path, removeError);
+        errores.push({ path, error: removeError.message });
+        continue;
       }
-    }
+      storageEliminados += removedFiles?.length || 0;
 
-    // Limpiar las columnas de archivo en la BD (pero mantener el record de que los resultados existen)
-    const pares = expirados.map(e => ({
-      alumno_id: e.alumno_id,
-      ejercicio_id: e.ejercicio_id,
-      tenant_id: e.tenant_id,
-    }));
-
-    // Actualizar cada registro para limpiar datos del archivo
-    let dbLimpiados = 0;
-    for (const par of pares) {
-      const { error: updateError } = await supabaseAdmin
+      const { data: limpiados, error: updateError } = await supabaseAdmin
         .from('resultados_ejercicios')
         .update({
           archivo_url: null,
           archivo_nombre: null,
           archivo_path: null,
         })
-        .eq('alumno_id', par.alumno_id)
-        .eq('ejercicio_id', par.ejercicio_id)
-        .eq('tenant_id', par.tenant_id);
-      
-      if (!updateError) dbLimpiados++;
+        .eq('alumno_id', entrega.alumno_id)
+        .eq('ejercicio_id', entrega.ejercicio_id)
+        .eq('tenant_id', entrega.tenant_id)
+        .eq('archivo_path', path)
+        .lt('caduca_el', ahora)
+        .select('alumno_id');
+
+      if (updateError) {
+        errores.push({ path, error: updateError.message });
+      } else if (limpiados?.length) {
+        dbLimpiados += limpiados.length;
+      } else {
+        omitidosPorCambio++;
+      }
     }
 
     const resultado = {
@@ -79,6 +90,10 @@ export async function GET(request: NextRequest) {
       expiradosEncontrados: expirados.length,
       archivosEliminadosStorage: storageEliminados,
       registrosBDActualizados: dbLimpiados,
+      omitidosPorCambioConcurrente: omitidosPorCambio,
+      rutasInvalidas,
+      errores: errores.length,
+      quedanPendientes: expirados.length === BATCH_SIZE,
       timestamp: ahora,
     };
 
