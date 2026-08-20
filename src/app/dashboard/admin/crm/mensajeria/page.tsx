@@ -20,6 +20,7 @@ import {
   obtenerEstructuraAcademica, eliminarMensaje, marcarComoLeido, marcarChatComoLeido, type TipoDestino,
 } from '@/lib/actions/mensajes';
 import FormattedContent from '@/components/shared/FormattedContent';
+import EncuestasPanel from '@/components/mensajeria/EncuestasPanel';
 
 export default function MensajeriaInterna() {
   const { toast } = useToast();
@@ -159,9 +160,10 @@ export default function MensajeriaInterna() {
         <p className="text-muted-foreground">Comunicados globales y chat directo con alumnos y profesores.</p>
       </div>
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="mb-4">
+        <TabsList className="mb-4 h-auto flex-wrap">
           <TabsTrigger value="comunicados">📢 Comunicados</TabsTrigger>
           <TabsTrigger value="chats">💬 Chats Individuales</TabsTrigger>
+          <TabsTrigger value="encuestas">🗳️ Encuestas</TabsTrigger>
         </TabsList>
         <TabsContent value="comunicados">
           <div className="flex justify-between items-center mb-4">
@@ -262,6 +264,9 @@ export default function MensajeriaInterna() {
               )}
             </div>
           </div>
+        </TabsContent>
+        <TabsContent value="encuestas">
+          <EncuestasPanel />
         </TabsContent>
       </Tabs>
       <Dialog open={showNuevo} onOpenChange={setShowNuevo}>

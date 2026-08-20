@@ -17,6 +17,7 @@ import {
 } from '@/lib/actions/mensajes';
 
 import FormattedContent from '@/components/shared/FormattedContent';
+import EncuestasPanel from '@/components/mensajeria/EncuestasPanel';
 
 export default function MensajesAlumno() {
   const { toast } = useToast();
@@ -114,9 +115,10 @@ export default function MensajesAlumno() {
         <p className="text-muted-foreground">Avisos institucionales y chat directo con Administración.</p>
       </div>
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="mb-4">
+        <TabsList className="mb-4 h-auto flex-wrap">
           <TabsTrigger value="avisos" className="gap-1">📢 Avisos {noVistosCount > 0 && <Badge className="bg-red-500 text-white text-[9px] h-4 px-1.5 rounded-full">{noVistosCount}</Badge>}</TabsTrigger>
           <TabsTrigger value="chat">💬 Chat con Administración</TabsTrigger>
+          <TabsTrigger value="encuestas">🗳️ Encuestas</TabsTrigger>
         </TabsList>
         <TabsContent value="avisos">
           <div className="space-y-3">
@@ -171,6 +173,9 @@ export default function MensajesAlumno() {
               <Button onClick={enviarMsg} className="rounded-xl"><Send size={16} /></Button>
             </div>
           </Card>
+        </TabsContent>
+        <TabsContent value="encuestas">
+          <EncuestasPanel />
         </TabsContent>
       </Tabs>
     </div>

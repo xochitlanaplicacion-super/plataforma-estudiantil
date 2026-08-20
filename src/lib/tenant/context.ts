@@ -96,7 +96,7 @@ export async function requireTenantSession(allowedRoles?: TenantRole[]) {
 
   const { data: profile, error: profileError } = await supabase
     .from('profiles')
-    .select('id, tenant_id, rol, estatus, nombre, apellidos, email')
+    .select('id, tenant_id, rol, estatus, nombre, apellidos, email, grupo_id')
     .eq('id', user.id)
     .single();
 

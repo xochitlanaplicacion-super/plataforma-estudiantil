@@ -1145,6 +1145,171 @@ export type Database = {
           },
         ]
       }
+      encuesta_opciones: {
+        Row: {
+          created_at: string
+          encuesta_id: string
+          id: string
+          posicion: number
+          tenant_id: string
+          texto: string
+        }
+        Insert: {
+          created_at?: string
+          encuesta_id: string
+          id?: string
+          posicion: number
+          tenant_id: string
+          texto: string
+        }
+        Update: {
+          created_at?: string
+          encuesta_id?: string
+          id?: string
+          posicion?: number
+          tenant_id?: string
+          texto?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "encuesta_opciones_encuesta_tenant_fkey"
+            columns: ["encuesta_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "encuestas"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "encuesta_opciones_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      encuesta_votos: {
+        Row: {
+          created_at: string
+          encuesta_id: string
+          id: string
+          opcion_id: string
+          tenant_id: string
+          updated_at: string
+          votante_id: string
+        }
+        Insert: {
+          created_at?: string
+          encuesta_id: string
+          id?: string
+          opcion_id: string
+          tenant_id: string
+          updated_at?: string
+          votante_id: string
+        }
+        Update: {
+          created_at?: string
+          encuesta_id?: string
+          id?: string
+          opcion_id?: string
+          tenant_id?: string
+          updated_at?: string
+          votante_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "encuesta_votos_encuesta_tenant_fkey"
+            columns: ["encuesta_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "encuestas"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "encuesta_votos_opcion_encuesta_tenant_fkey"
+            columns: ["opcion_id", "encuesta_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "encuesta_opciones"
+            referencedColumns: ["id", "encuesta_id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "encuesta_votos_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "encuesta_votos_votante_tenant_fkey"
+            columns: ["votante_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id", "tenant_id"]
+          },
+        ]
+      }
+      encuestas: {
+        Row: {
+          activa: boolean
+          audiencia: string
+          cierra_en: string | null
+          creador_id: string
+          created_at: string
+          descripcion: string | null
+          grupo_id: string | null
+          id: string
+          tenant_id: string
+          titulo: string
+          updated_at: string
+        }
+        Insert: {
+          activa?: boolean
+          audiencia: string
+          cierra_en?: string | null
+          creador_id: string
+          created_at?: string
+          descripcion?: string | null
+          grupo_id?: string | null
+          id?: string
+          tenant_id: string
+          titulo: string
+          updated_at?: string
+        }
+        Update: {
+          activa?: boolean
+          audiencia?: string
+          cierra_en?: string | null
+          creador_id?: string
+          created_at?: string
+          descripcion?: string | null
+          grupo_id?: string | null
+          id?: string
+          tenant_id?: string
+          titulo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "encuestas_creador_tenant_fkey"
+            columns: ["creador_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "encuestas_grupo_tenant_fkey"
+            columns: ["grupo_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "grupos"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "encuestas_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       fechas_evaluacion: {
         Row: {
           created_at: string
@@ -3120,6 +3285,19 @@ export type Database = {
       }
     }
     Functions: {
+      actualizar_encuesta: {
+        Args: {
+          p_activa: boolean
+          p_audiencia: string
+          p_cierra_en: string
+          p_descripcion: string
+          p_encuesta_id: string
+          p_grupo_id: string
+          p_opciones: string[]
+          p_titulo: string
+        }
+        Returns: boolean
+      }
       consumir_cuota_servicio: {
         Args: { p_servicio: string }
         Returns: {
@@ -3128,6 +3306,18 @@ export type Database = {
           usados_nuevo: number
         }[]
       }
+      crear_encuesta: {
+        Args: {
+          p_audiencia: string
+          p_cierra_en?: string
+          p_descripcion: string
+          p_grupo_id: string
+          p_opciones: string[]
+          p_titulo: string
+        }
+        Returns: string
+      }
+      eliminar_encuesta: { Args: { p_encuesta_id: string }; Returns: boolean }
       generar_folio_recibo: { Args: { prefijo: string }; Returns: string }
       get_active_storage_urls: {
         Args: { bucket_name: string }
@@ -3148,6 +3338,10 @@ export type Database = {
         }[]
       }
       is_admin_or_super: { Args: never; Returns: boolean }
+      replace_tenant_domain_for_service: {
+        Args: { p_domain_id: string; p_hostname: string; p_tenant_id: string }
+        Returns: string
+      }
       seed_pagos_alumnos_activos: { Args: never; Returns: string }
       set_primary_tenant_domain_for_service: {
         Args: { p_domain_id: string; p_tenant_id: string }
@@ -3176,6 +3370,10 @@ export type Database = {
           p_user_id: string
         }
         Returns: boolean
+      }
+      votar_encuesta: {
+        Args: { p_encuesta_id: string; p_opcion_id: string }
+        Returns: string
       }
     }
     Enums: {
