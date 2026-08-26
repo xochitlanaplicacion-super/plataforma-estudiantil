@@ -69,7 +69,8 @@ export async function resolveTenantFromHostname(hostnameInput?: string | null): 
   // A local-only fallback keeps developer environments usable without making an
   // unknown production deployment inherit a real school's branding or data.
   if (isDevelopmentHostname(hostname)) {
-    const fallbackSlug = process.env.DEFAULT_TENANT_SLUG || 'xochitlan';
+    const fallbackSlug = process.env.DEFAULT_TENANT_SLUG?.trim();
+    if (!fallbackSlug) return null;
     const { data } = await admin
       .from('tenants')
       .select('id, slug, nombre, estado, initial_superuser_id')
