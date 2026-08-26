@@ -3,6 +3,9 @@ import 'server-only';
 import { headers } from 'next/headers';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { getHostnameCandidates, normalizeHostname } from '@/lib/tenant/hostname';
+
+export { normalizeHostname } from '@/lib/tenant/hostname';
 
 export type TenantRole = 'superuser' | 'admin' | 'profesor' | 'alumno';
 
@@ -21,15 +24,6 @@ export interface TenantServiceState {
   ia_habilitada: boolean;
   bloquear_acceso_usuarios: boolean;
   mensaje_bloqueo: string | null;
-}
-
-export function normalizeHostname(value?: string | null): string {
-  const first = (value || '').split(',')[0].trim().toLowerCase();
-  return first
-    .replace(/^https?:\/\//, '')
-    .replace(/\/.*$/, '')
-    .replace(/:\d+$/, '')
-    .replace(/\.$/, '');
 }
 
 export async function getRequestHostname(): Promise<string> {
@@ -55,18 +49,26 @@ export async function resolveTenantFromHostname(hostnameInput?: string | null): 
   const admin = createSupabaseAdminClient();
 
   if (hostname) {
-    const { data: domain } = await admin
+    const candidates = getHostnameCandidates(hostname);
+    const { data: domains } = await admin
       .from('tenant_domains')
-      .select('tenant_id, tenants(id, slug, nombre, estado, initial_superuser_id)')
-      .eq('hostname', hostname)
-      .eq('estado', 'verificado')
-      .maybeSingle();
+      .select('hostname, tenant_id, tenants(id, slug, nombre, estado, initial_superuser_id)')
+      .in('hostname', candidates)
+      .eq('estado', 'verificado');
+
+    // Exact registration wins. The apex/www counterpart is only a fallback.
+    const domain = candidates
+      .map((candidate) => (domains || []).find((row) => row.hostname === candidate))
+      .find(Boolean);
 
     const tenant = (domain as any)?.tenants;
     if (tenant) return tenant as TenantRecord;
   }
 
-  if (isDevelopmentHostname(hostname) || hostname.endsWith('.vercel.app')) {
+  // Production hostnames must always be explicitly assigned in tenant_domains.
+  // A local-only fallback keeps developer environments usable without making an
+  // unknown production deployment inherit a real school's branding or data.
+  if (isDevelopmentHostname(hostname)) {
     const fallbackSlug = process.env.DEFAULT_TENANT_SLUG || 'xochitlan';
     const { data } = await admin
       .from('tenants')

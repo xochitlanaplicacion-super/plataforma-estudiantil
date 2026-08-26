@@ -1,6 +1,7 @@
 
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { getHostnameCandidates, normalizeHostname } from '@/lib/tenant/hostname';
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -38,8 +39,7 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
-  const hostname = (request.headers.get('x-forwarded-host') || request.headers.get('host') || '')
-    .split(',')[0].trim().toLowerCase().replace(/:\d+$/, '');
+  const hostname = normalizeHostname(request.headers.get('x-forwarded-host') || request.headers.get('host'));
   const platformHosts = (process.env.PLATFORM_HOSTNAMES || process.env.PLATFORM_HOSTNAME || 'plataforma-estudiantil.vercel.app')
     .split(',').map((host) => host.trim().toLowerCase());
   const isPlatformHost = platformHosts.includes(hostname) || hostname === 'localhost' || hostname === '127.0.0.1';
@@ -102,7 +102,8 @@ export async function updateSession(request: NextRequest) {
 
   const { data: domains } = await supabase.from('tenant_domains')
     .select('hostname').eq('tenant_id', profile.tenant_id).eq('estado', 'verificado');
-  const domainMatches = (domains || []).some((domain) => domain.hostname === hostname);
+  const allowedHostnames = new Set((domains || []).map((domain) => normalizeHostname(domain.hostname)));
+  const domainMatches = getHostnameCandidates(hostname).some((candidate) => allowedHostnames.has(candidate));
   if (!domainMatches && !isPlatformHost) {
     const url = request.nextUrl.clone();
     url.pathname = '/';

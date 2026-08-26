@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { requirePlatformAdmin, normalizeHostname } from '@/lib/tenant/context';
+import { getHostnameCandidates } from '@/lib/tenant/hostname';
 import { sendWelcomeEmail } from '@/lib/email';
 
 const slugify = (value: string) => value.toLowerCase().normalize('NFD')
@@ -16,6 +17,19 @@ async function audit(admin: any, actorUserId: string, tenantId: string | null, a
     accion,
     detalles,
   });
+}
+
+async function assertHostnameFamilyAvailable(admin: any, hostname: string, tenantId?: string) {
+  const { data, error } = await admin
+    .from('tenant_domains')
+    .select('hostname, tenant_id')
+    .in('hostname', getHostnameCandidates(hostname));
+  if (error) throw error;
+
+  const conflict = (data || []).find((domain: any) => !tenantId || domain.tenant_id !== tenantId);
+  if (conflict) {
+    throw new Error('Ese dominio o su variante con/sin www ya está registrado para otra institución');
+  }
 }
 
 export async function getPlatformDashboard() {
@@ -74,6 +88,7 @@ export async function createTenantSchool(input: {
     if (!nombre || !slug || !hostname || !email || input.superuserPassword.length < 8) {
       throw new Error('Nombre, slug, dominio, correo y una contraseña de al menos 8 caracteres son obligatorios.');
     }
+    await assertHostnameFamilyAvailable(context.admin, hostname);
 
     const { data: tenant, error: tenantError } = await context.admin.from('tenants').insert({
       nombre,
@@ -83,6 +98,7 @@ export async function createTenantSchool(input: {
     }).select('id').single();
     if (tenantError) throw tenantError;
     tenantId = tenant.id;
+    const createdTenantId: string = tenant.id;
 
     const { error: provisioningError } = await context.admin.from('tenant_provisioning').insert({
       tenant_id: tenantId,
@@ -171,7 +187,7 @@ export async function createTenantSchool(input: {
     ]);
     if (input.smtpUser && input.smtpPassword) {
       const emailResult = await sendWelcomeEmail({
-        tenantId,
+        tenantId: createdTenantId,
         to: email,
         nombre: input.superuserNombre,
         apellidos: input.superuserApellidos,
@@ -244,6 +260,7 @@ export async function addTenantDomain(tenantId: string, rawHostname: string, mak
     const context = await requirePlatformAdmin();
     const hostname = normalizeHostname(rawHostname);
     if (!hostname) throw new Error('Dominio inválido');
+    await assertHostnameFamilyAvailable(context.admin, hostname, tenantId);
     if (makePrimary) await context.admin.from('tenant_domains').update({ es_principal: false }).eq('tenant_id', tenantId);
     const { error } = await context.admin.from('tenant_domains').insert({
       tenant_id: tenantId,
@@ -278,6 +295,7 @@ export async function updateTenantDomain(tenantId: string, domainId: string, raw
     const context = await requirePlatformAdmin();
     const hostname = normalizeHostname(rawHostname);
     if (!hostname) throw new Error('Dominio inválido');
+    await assertHostnameFamilyAvailable(context.admin, hostname, tenantId);
 
     const { data: currentDomain, error: currentError } = await context.admin
       .from('tenant_domains')

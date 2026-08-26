@@ -11,6 +11,7 @@ import { createClient } from '@/lib/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import Link from 'next/link';
 import { useInstitucion } from '@/hooks/use-institucion';
+import { getInstitucionConfig } from '@/lib/actions/institucion';
 
 type Theme = {
   id: string;
@@ -155,12 +156,10 @@ export default function LoginPage() {
           return;
         }
 
-        const { data: tenantDomains } = await supabase
-          .from('tenant_domains')
-          .select('hostname')
-          .eq('tenant_id', profile.tenant_id)
-          .eq('estado', 'verificado');
-        const domainMatches = (tenantDomains || []).some((domain) => domain.hostname === currentHost);
+        // Resolve on the server with exact-host precedence and an apex/www fallback.
+        // Comparing the resolved tenant prevents a hostname alias from crossing schools.
+        const resolvedInstitution = await getInstitucionConfig();
+        const domainMatches = resolvedInstitution.tenant_id === profile.tenant_id;
         if (!domainMatches && !isLocal) {
           await supabase.auth.signOut();
           setError('Esta cuenta pertenece a otra institución. Ingresa desde el dominio de tu escuela.');
