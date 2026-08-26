@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,11 +18,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { useInstitucion } from '@/hooks/use-institucion';
-import { updateInstitucionConfig, uploadLogo } from '@/lib/actions/institucion';
+import { getInstitucionConfigAuth, updateInstitucionConfig, uploadLogo } from '@/lib/actions/institucion';
 import { getNiveles, upsertNivel } from '@/lib/actions/academic';
 import { HexColorPicker } from 'react-colorful';
 import { InstitucionConfig, NivelNombre, TemaLogin } from '@/lib/types';
 import { HorarioBloque } from '@/lib/actions/horarios';
+import {
+  buildSmtpSubmission,
+  type SmtpSettingsSnapshot,
+} from '@/lib/institution/smtp-settings';
 import {
   Building2, Save, Loader2, Upload, Trash2, Plus, Palette, Image as ImageIcon,
   Phone, Mail, Clock, CalendarDays, Globe, MapPin, GraduationCap, Paintbrush,
@@ -39,7 +43,9 @@ const PRESET_COLORS = [
 
 export default function InstitucionPage() {
   const { toast } = useToast();
-  const { config: initialConfig, loading: hookLoading, refresh } = useInstitucion({ bypassCache: true });
+  const { refresh: refreshPublicConfig } = useInstitucion({ bypassCache: true });
+  const [initialConfig, setInitialConfig] = useState<InstitucionConfig | null>(null);
+  const [hookLoading, setHookLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [cleaning, setCleaning] = useState(false);
   const [showCleanupDialog, setShowCleanupDialog] = useState(false);
@@ -82,6 +88,8 @@ export default function InstitucionPage() {
   const [smtp_port, setSmtpPort] = useState<number | ''>(465);
   const [smtp_user, setSmtpUser] = useState('');
   const [smtp_password, setSmtpPassword] = useState('');
+  const [smtpPasswordConfigured, setSmtpPasswordConfigured] = useState(false);
+  const [originalSmtp, setOriginalSmtp] = useState<SmtpSettingsSnapshot | null>(null);
   const [smtp_from_name, setSmtpFromName] = useState('');
   const [showSmtpPassword, setShowSmtpPassword] = useState(false);
   const [proveedorSmtp, setProveedorSmtp] = useState('custom');
@@ -96,6 +104,19 @@ export default function InstitucionPage() {
       setSmtpPort(587);
     }
   };
+
+  const loadAuthenticatedConfig = useCallback(async () => {
+    setHookLoading(true);
+    try {
+      setInitialConfig(await getInstitucionConfigAuth());
+    } finally {
+      setHookLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadAuthenticatedConfig();
+  }, [loadAuthenticatedConfig]);
 
   // ─── Cargar datos iniciales ──────────────────────────────────────────────
   useEffect(() => {
@@ -153,8 +174,15 @@ export default function InstitucionPage() {
       setSmtpHost(initialConfig.smtp_host || '');
       setSmtpPort(initialConfig.smtp_port || 465);
       setSmtpUser(initialConfig.smtp_user || '');
-      setSmtpPassword(initialConfig.smtp_password || '');
+      setSmtpPassword('');
+      setSmtpPasswordConfigured(Boolean(initialConfig.smtp_password_configured));
       setSmtpFromName(initialConfig.smtp_from_name || '');
+      setOriginalSmtp({
+        host: initialConfig.smtp_host || 'smtp.gmail.com',
+        port: initialConfig.smtp_port || 465,
+        user: initialConfig.smtp_user || '',
+        fromName: initialConfig.smtp_from_name || '',
+      });
     }
   }, [hookLoading, initialConfig]);
 
@@ -284,6 +312,16 @@ export default function InstitucionPage() {
       }
     }
     setSaving(true);
+    const smtpSubmission = buildSmtpSubmission(
+      originalSmtp,
+      {
+        host: smtp_host,
+        port: typeof smtp_port === 'number' ? smtp_port : 465,
+        user: smtp_user,
+        fromName: smtp_from_name,
+      },
+      smtp_password
+    );
     const result = await updateInstitucionConfig({
       nombre_completo, nombre_corto, siglas, codigo_matricula: codigo_matricula, slogan, direccion: direccion || undefined,
       sitio_web: sitio_web || undefined, url_plataforma: url_plataforma || undefined, 
@@ -291,11 +329,7 @@ export default function InstitucionPage() {
       color_primario, color_secundario, temas_login, modo_tema_login, tema_fijo_index,
       niveles_nombres, telefono_contacto: telefono, correo_contacto: correo,
       horarios_atencion: bloques,
-      smtp_host: smtp_host || undefined,
-      smtp_port: typeof smtp_port === 'number' ? smtp_port : undefined,
-      smtp_user: smtp_user || undefined,
-      smtp_password: smtp_password || undefined,
-      smtp_from_name: smtp_from_name || undefined,
+      ...(smtpSubmission || {}),
     });
 
     let errorNiveles = false;
@@ -306,7 +340,10 @@ export default function InstitucionPage() {
 
     if (result.success && !errorNiveles) {
       toast({ title: "✅ Configuración Guardada", description: "Los cambios se reflejarán en toda la plataforma." });
-      refresh();
+      if (smtpSubmission?.smtp_password) setSmtpPasswordConfigured(true);
+      setSmtpPassword('');
+      refreshPublicConfig();
+      await loadAuthenticatedConfig();
     } else {
       toast({ variant: "destructive", title: "Error", description: result.error || "Error al guardar configuración de niveles." });
     }
@@ -660,17 +697,41 @@ export default function InstitucionPage() {
             </div>
             <div className="space-y-2">
               <Label className="font-bold">Usuario (Correo Electrónico)</Label>
-              <Input type="email" value={smtp_user} onChange={e => setSmtpUser(e.target.value)} placeholder="contacto@miescuela.edu.mx" />
+              <Input
+                type="email"
+                name="smtp-username"
+                autoComplete="off"
+                value={smtp_user}
+                onChange={e => setSmtpUser(e.target.value)}
+                placeholder="contacto@miescuela.edu.mx"
+              />
             </div>
             <div className="space-y-2">
-              <Label className="font-bold">Contraseña (App Password)</Label>
+              <div className="flex items-center justify-between gap-2">
+                <Label className="font-bold">Nueva contraseña (App Password)</Label>
+                <Badge variant={smtpPasswordConfigured ? "default" : "outline"}>
+                  {smtpPasswordConfigured ? 'Contraseña configurada' : 'Sin contraseña'}
+                </Badge>
+              </div>
               <div className="relative">
-                <Input type={showSmtpPassword ? "text" : "password"} value={smtp_password} onChange={e => setSmtpPassword(e.target.value)} placeholder="Contraseña de aplicación" className="pr-10" />
+                <Input
+                  type={showSmtpPassword ? "text" : "password"}
+                  name="smtp-new-app-password"
+                  autoComplete="new-password"
+                  data-1p-ignore="true"
+                  data-lpignore="true"
+                  value={smtp_password}
+                  onChange={e => setSmtpPassword(e.target.value)}
+                  placeholder={smtpPasswordConfigured ? 'Dejar vacío para conservar la actual' : 'Contraseña de aplicación'}
+                  className="pr-10"
+                />
                 <Button type="button" variant="ghost" size="icon" className="absolute right-0 top-0 h-10 w-10 text-muted-foreground hover:text-foreground" onClick={() => setShowSmtpPassword(!showSmtpPassword)}>
                   {showSmtpPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
               </div>
-              <p className="text-xs text-muted-foreground mt-1">Es altamente recomendado usar una Contraseña de Aplicación.</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                El secreto actual nunca se muestra. Déjalo vacío para conservarlo o escribe uno nuevo para reemplazarlo.
+              </p>
             </div>
             <div className="space-y-2 md:col-span-2">
               <Label className="font-bold">Nombre del Remitente</Label>

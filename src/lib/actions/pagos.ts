@@ -8,6 +8,7 @@ import { createClient } from '@supabase/supabase-js';
 import { revalidatePath } from 'next/cache';
 import nodemailer from 'nodemailer';
 import { getInstitucionConfig } from '@/lib/actions/institucion';
+import { getTenantSmtpConfigForService } from '@/lib/email/tenant-smtp';
 import { getTenantServiceState, isServiceExpired, requireTenantSession } from '@/lib/tenant/context';
 
 // ─── PLAN DE PAGOS (Gestión de Conceptos) ───────────────────────────────────
@@ -435,7 +436,7 @@ export async function reasignarProgramaAlumno(alumnoId: string, nuevoPrograma: s
 // ─── RECORDATORIO DE PAGO ──────────────────────────────────────────────────
 
 export async function enviarRecordatorioPago(alumnoId: string) {
-  const { supabase: supabaseAdmin } = await requireTenantSession();
+  const { supabase: supabaseAdmin, tenantId } = await requireTenantSession();
   // Obtener datos del alumno y sus pagos pendientes
   const { data: alumno } = await supabaseAdmin
     .from('profiles')
@@ -466,26 +467,29 @@ export async function enviarRecordatorioPago(alumnoId: string) {
   });
 
   // Enviar email
-  const html_inst = await getInstitucionConfig();
+  const [html_inst, smtp] = await Promise.all([
+    getInstitucionConfig(tenantId),
+    getTenantSmtpConfigForService(tenantId),
+  ]);
 
-  if (!html_inst.smtp_user || !html_inst.smtp_password) {
+  if (!smtp?.activo || !smtp.smtp_user || !smtp.smtp_password) {
     return { success: true, warning: 'Notificación creada en la plataforma, pero no se pudo enviar el correo porque el servidor de correo electrónico no está configurado. Ve a Configuración → Correo Saliente para activarlo.' };
   }
 
-  const smtpHost = html_inst.smtp_host || 'smtp.gmail.com';
-  const smtpPort = html_inst.smtp_port || 465;
+  const smtpHost = smtp.smtp_host || 'smtp.gmail.com';
+  const smtpPort = smtp.smtp_port || 465;
   const transporter = nodemailer.createTransport({
     host: smtpHost,
     port: smtpPort,
     secure: smtpPort === 465,
-    auth: { user: html_inst.smtp_user, pass: html_inst.smtp_password },
+    auth: { user: smtp.smtp_user, pass: smtp.smtp_password },
   });
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://plataforma.ejemplo.edu';
   const logoUrl = html_inst.logo_url || `${appUrl}/images/logo_placeholder.svg`;
   const colorPrincipal = html_inst.color_primario || '#333333';
   const colorSecundario = html_inst.color_secundario || '#1A4A3F';
-  const fromName = html_inst.smtp_from_name || `Servicios Escolares - ${html_inst.siglas}`;
+  const fromName = smtp.smtp_from_name || `Servicios Escolares - ${html_inst.siglas}`;
 
   const listaHtml = conceptosPendientes
     .map(c => `<li style="margin-bottom:8px;color:${colorPrincipal};font-weight:bold;">• ${c}</li>`)
@@ -520,7 +524,7 @@ export async function enviarRecordatorioPago(alumnoId: string) {
 
   try {
     await transporter.sendMail({
-      from: `"${fromName}" <${html_inst.smtp_user}>`,
+      from: `"${fromName}" <${smtp.smtp_user}>`,
       to: alumno.email,
       subject: `⚠️ Recordatorio de Pago Pendiente - ${html_inst.siglas}`,
       html,

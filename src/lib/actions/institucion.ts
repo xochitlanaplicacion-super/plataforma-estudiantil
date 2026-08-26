@@ -103,29 +103,24 @@ export async function getInstitucionConfigAuth(): Promise<InstitucionConfig> {
 
     if (error || !data) return DEFAULTS;
     const config = parseConfig(data);
-    const { data: smtpRows } = await context.admin.rpc('get_tenant_smtp_for_service', {
-      p_tenant_id: context.tenantId,
-    });
-    const smtp = Array.isArray(smtpRows) ? smtpRows[0] : smtpRows;
+    const { data: smtp } = await context.admin
+      .from('tenant_smtp_settings')
+      .select('smtp_host, smtp_port, smtp_user, smtp_password_secret_id, smtp_from_name, activo')
+      .eq('tenant_id', context.tenantId)
+      .maybeSingle();
 
     return {
       ...config,
       smtp_host: smtp?.smtp_host || 'smtp.gmail.com',
       smtp_port: smtp?.smtp_port || 465,
       smtp_user: smtp?.smtp_user || '',
-      smtp_password: smtp?.smtp_password ? '••••••••' : '',
+      smtp_password: '',
+      smtp_password_configured: Boolean(smtp?.smtp_password_secret_id),
       smtp_from_name: smtp?.smtp_from_name || '',
     };
   } catch {
     return DEFAULTS;
   }
-}
-
-export async function getTenantSmtpConfig(tenantId: string) {
-  const admin = createSupabaseAdminClient();
-  const { data, error } = await admin.rpc('get_tenant_smtp_for_service', { p_tenant_id: tenantId });
-  if (error) throw error;
-  return (Array.isArray(data) ? data[0] : data) || null;
 }
 
 export async function updateInstitucionConfig(config: Partial<InstitucionConfig>) {
@@ -155,17 +150,46 @@ export async function updateInstitucionConfig(config: Partial<InstitucionConfig>
     const smtpWasSubmitted = [config.smtp_host, config.smtp_port, config.smtp_user, config.smtp_password, config.smtp_from_name]
       .some((value) => value !== undefined);
     if (smtpWasSubmitted) {
-      const password = config.smtp_password === '••••••••' ? '' : (config.smtp_password || '');
-      const { error: smtpError } = await context.admin.rpc('set_tenant_smtp_for_service', {
-        p_tenant_id: context.tenantId,
-        p_smtp_host: config.smtp_host || 'smtp.gmail.com',
-        p_smtp_port: config.smtp_port || 465,
-        p_smtp_user: config.smtp_user || '',
-        p_smtp_password: password,
-        p_smtp_from_name: config.smtp_from_name || '',
-        p_updated_by: context.user.id,
-      });
-      if (smtpError) return { success: false, error: smtpError.message };
+      const { data: currentSmtp, error: currentSmtpError } = await context.admin
+        .from('tenant_smtp_settings')
+        .select('smtp_host, smtp_port, smtp_user, smtp_from_name')
+        .eq('tenant_id', context.tenantId)
+        .maybeSingle();
+      if (currentSmtpError) return { success: false, error: currentSmtpError.message };
+
+      const smtpPort = config.smtp_port ?? currentSmtp?.smtp_port ?? 465;
+      if (!Number.isInteger(smtpPort) || smtpPort < 1 || smtpPort > 65535) {
+        return { success: false, error: 'El puerto SMTP debe estar entre 1 y 65535.' };
+      }
+
+      const smtpHost = config.smtp_host !== undefined
+        ? config.smtp_host.trim()
+        : (currentSmtp?.smtp_host || 'smtp.gmail.com');
+      const smtpUser = config.smtp_user !== undefined
+        ? config.smtp_user.trim()
+        : (currentSmtp?.smtp_user || '');
+      const smtpFromName = config.smtp_from_name !== undefined
+        ? config.smtp_from_name.trim()
+        : (currentSmtp?.smtp_from_name || '');
+      const password = config.smtp_password || '';
+      const metadataChanged = !currentSmtp
+        || smtpHost !== currentSmtp.smtp_host
+        || smtpPort !== currentSmtp.smtp_port
+        || smtpUser !== currentSmtp.smtp_user
+        || smtpFromName !== currentSmtp.smtp_from_name;
+
+      if (metadataChanged || password.length > 0) {
+        const { error: smtpError } = await context.admin.rpc('set_tenant_smtp_for_service', {
+          p_tenant_id: context.tenantId,
+          p_smtp_host: smtpHost,
+          p_smtp_port: smtpPort,
+          p_smtp_user: smtpUser,
+          p_smtp_password: password,
+          p_smtp_from_name: smtpFromName,
+          p_updated_by: context.user.id,
+        });
+        if (smtpError) return { success: false, error: smtpError.message };
+      }
     }
 
     if (config.codigo_matricula !== undefined) {

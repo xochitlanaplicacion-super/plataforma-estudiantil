@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import { getHorariosFormateados } from '@/lib/actions/horarios';
-import { getInstitucionConfig, getTenantSmtpConfig } from '@/lib/actions/institucion';
+import { getInstitucionConfig } from '@/lib/actions/institucion';
+import { getTenantSmtpConfigForService } from '@/lib/email/tenant-smtp';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 
 // ─── Factory: Crear transporter dinámico desde la BD ──────────────────────────
@@ -62,16 +63,16 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
   try {
     const [inst, smtp] = await Promise.all([
       getInstitucionConfig(data.tenantId),
-      getTenantSmtpConfig(data.tenantId),
+      getTenantSmtpConfigForService(data.tenantId),
     ]);
     const transporter = createSmtpTransporter(smtp || {});
 
-    if (!transporter) {
+    if (!smtp || !transporter) {
       console.warn('⚠️ SMTP no configurado en la BD.');
       return { success: false, error: SMTP_NOT_CONFIGURED_ERROR };
     }
 
-    const fromName = smtp?.smtp_from_name || inst.nombre_completo;
+    const fromName = smtp.smtp_from_name || inst.nombre_completo;
 
     const rolTexto: Record<string, string> = {
       alumno: '🎓 Alumno',
@@ -290,11 +291,11 @@ export async function sendDocumentReminderEmail(data: ReminderEmailData) {
   try {
     const [inst, smtp] = await Promise.all([
       getInstitucionConfig(data.tenantId),
-      getTenantSmtpConfig(data.tenantId),
+      getTenantSmtpConfigForService(data.tenantId),
     ]);
     const transporter = createSmtpTransporter(smtp || {});
 
-    if (!transporter) {
+    if (!smtp || !transporter) {
       return { success: false, error: SMTP_NOT_CONFIGURED_ERROR };
     }
 
@@ -303,7 +304,7 @@ export async function sendDocumentReminderEmail(data: ReminderEmailData) {
     const logoUrl = inst.logo_url || `${appUrl}/images/logo_placeholder.svg`;
     const colorPrincipal = inst.color_primario || '#333333';
     const colorSecundario = inst.color_secundario || '#1A4A3F';
-    const fromName = smtp?.smtp_from_name || `Servicios Escolares - ${inst.siglas}`;
+    const fromName = smtp.smtp_from_name || `Servicios Escolares - ${inst.siglas}`;
 
     const listaFaltantes = data.faltantes.map(doc => `<li style="margin-bottom: 8px; color: ${colorPrincipal}; font-weight: bold;">• ${doc}</li>`).join('');
 
