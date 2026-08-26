@@ -136,7 +136,7 @@ function PdfThumbnail({ archivoUrl }: { archivoUrl: string }) {
         const ctx = canvas.getContext('2d');
         if (!ctx) { setFailed(true); return; }
 
-        await page.render({ canvasContext: ctx, viewport: scaled }).promise;
+        await page.render({ canvas, canvasContext: ctx, viewport: scaled }).promise;
         if (!cancelled) setLoaded(true);
       } catch (err) {
         console.error('PDF thumbnail render error:', err);

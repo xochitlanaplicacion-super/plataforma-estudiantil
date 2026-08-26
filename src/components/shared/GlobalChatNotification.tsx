@@ -48,6 +48,15 @@ interface GlobalChatNotificationProps {
   userRole: string;
 }
 
+interface ActiveAviso {
+  id: string;
+  contenido: string;
+  remitente: string;
+  tipo: string;
+  materia_id?: string | null;
+  grupo_id?: string | null;
+}
+
 export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificationProps) {
   const supabase = createClient();
   const { toast } = useToast();
@@ -61,7 +70,7 @@ export function GlobalChatNotification({ userId, userRole }: GlobalChatNotificat
   const [replyText, setReplyText] = useState('');
 
   // Estado para avisos/comunicados (no responden, solo marcan visto)
-  const [activeAviso, setActiveAviso] = useState<{ id: string; contenido: string; remitente: string; tipo: string } | null>(null);
+  const [activeAviso, setActiveAviso] = useState<ActiveAviso | null>(null);
   const [isAvisoOpen, setIsAvisoOpen] = useState(false);
 
   const [adminUnreadCount, setAdminUnreadCount] = useState(0);

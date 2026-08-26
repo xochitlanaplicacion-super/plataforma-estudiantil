@@ -45,8 +45,8 @@ const preprocessLatex = (text: string) => {
 };
 
 const MemoizedMarkdown = React.memo(({ content, isDark }: { content: string; isDark: boolean }) => (
+  <div className="prose-sm max-w-none dark:prose-invert">
   <ReactMarkdown
-    className="prose-sm max-w-none dark:prose-invert"
     remarkPlugins={[remarkMath, remarkGfm]}
     rehypePlugins={[rehypeKatex]}
     components={{
@@ -62,6 +62,7 @@ const MemoizedMarkdown = React.memo(({ content, isDark }: { content: string; isD
   >
     {preprocessLatex(content)}
   </ReactMarkdown>
+  </div>
 ));
 
 interface ChatSession {
@@ -227,6 +228,7 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
 
     // El título automático ahora se genera por la misma IA en el stream principal.
 
+    let accumulated = "";
     try {
       const response = await fetch("/api/chat/alumno", {
         method: "POST",
@@ -235,7 +237,7 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
           messages: apiMessages,
           userId,
           sessionId: session.id,
-          institucionNombre: config?.nombre || config?.nombre_corto,
+          institucionNombre: config?.nombre_completo || config?.nombre_corto,
           aiName: config?.nombre_ia,
           userName: userName
         }),
@@ -248,7 +250,6 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
       // Leer el stream
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let accumulated = "";
       let titleExtracted = false;
 
       while (true) {
@@ -791,7 +792,6 @@ export function AlumnoAICopilot({ userId, userName, onClose }: AlumnoAICopilotPr
               body: JSON.stringify({
                 ...config,
                 userId,
-                chatMessages: config.source === "chat" ? activeSession?.messages : undefined,
                 textoLibre: config.source === "texto" ? config.textoLibre : undefined
               })
             });

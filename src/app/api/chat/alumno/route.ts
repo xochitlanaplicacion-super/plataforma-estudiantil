@@ -1,5 +1,4 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 import { checkAIServiceStatus, aiServiceDisabledResponse } from "@/utils/aiServiceValidation";
 
@@ -7,10 +6,24 @@ import { checkAIServiceStatus, aiServiceDisabledResponse } from "@/utils/aiServi
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 export const maxDuration = 300;
 
+interface OpenRouterModel {
+  id: string;
+  label: string;
+  providerConfig: {
+    order: string[];
+    quantizations: string[];
+  };
+  costInput?: number;
+  costOutput?: number;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CONSULTA SEGURA: Solo los datos del alumno autenticado (READ-ONLY)
 // ─────────────────────────────────────────────────────────────────────────────
-async function buildAlumnoContext(alumnoId: string, supabase: ReturnType<typeof createClient>): Promise<string> {
+async function buildAlumnoContext(
+  alumnoId: string,
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>
+): Promise<string> {
   try {
     // 1. Perfil del alumno — campos según esquema real de la BD (genero, no sexo)
     const { data: profile, error: profileError } = await supabase
@@ -347,7 +360,7 @@ Ejemplo de cómo debe empezar tu respuesta:
     // ── LLAMADA CON FALLBACK AUTOMÁTICO ─────────────────────────────────
     let response: globalThis.Response | null = null;
     
-    let activeModels = [];
+    const activeModels: OpenRouterModel[] = [];
     
     if (isMathQuery) {
       // Si detectamos que es matemáticas, usamos DeepSeek-V4-Flash como modelo primario
@@ -483,8 +496,8 @@ Ejemplo de cómo debe empezar tu respuesta:
           // Notificar que terminó y enviar tokens
           if (userId) {
             const totalCost =
-              (promptTokens / 1_000_000) * usedModel.costInput +
-              (completionTokens / 1_000_000) * usedModel.costOutput;
+              (promptTokens / 1_000_000) * (usedModel.costInput ?? 0) +
+              (completionTokens / 1_000_000) * (usedModel.costOutput ?? 0);
 
             const usageLogPromise = supabaseAdmin.from("ai_usage_log").insert({
               profesor_id: userId, // Reusamos la columna para alumno_id temporalmente

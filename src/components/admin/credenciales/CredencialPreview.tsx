@@ -84,7 +84,9 @@ interface CredencialPreviewProps {
     trama_opacidad?: number;
     logo_x?: number;
     logo_y?: number;
+    logo_escala?: number;
     panel_diseno?: string;
+    color_panel_izquierdo?: string;
     reverso_imagen_url?: string | null;
     firma_director_url?: string | null;
     sello_institucion_url?: string | null;

@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 import { requireTenantSession } from '@/lib/tenant/context';
 
 export async function GET(req: Request) {
@@ -48,24 +47,28 @@ export async function GET(req: Request) {
 
     // ── Si piden el directorio de usuarios ──
     // Se extrae la lista de perfiles que tengan al menos 1 chat en la tabla correspondiente
-    const profileTable = "profiles"; // Both alumnos and profesores live in the same table
-    const chatTable = type === "alumno" ? "alumno_chat_history" : "profesor_chat_history";
-    const fkColumn = type === "alumno" ? "alumno_id" : "profesor_id";
-
     // Usaremos Supabase RPC o una consulta cruzada.
     // Como las tablas pueden ser grandes, lo ideal es obtener los IDs únicos de chats, 
     // y luego hacer un in() a la tabla de perfiles.
     
     // 1. Obtener IDs únicos con conteos
-    const { data: chatData, error: chatError } = await supabaseAdmin
-      .from(chatTable)
-      .select(fkColumn);
-
-    if (chatError) throw chatError;
+    let chatUserIds: string[];
+    if (type === "alumno") {
+      const { data, error } = await supabaseAdmin
+        .from("alumno_chat_history")
+        .select("alumno_id");
+      if (error) throw error;
+      chatUserIds = (data || []).map((row) => row.alumno_id);
+    } else {
+      const { data, error } = await supabaseAdmin
+        .from("profesor_chat_history")
+        .select("profesor_id");
+      if (error) throw error;
+      chatUserIds = (data || []).map((row) => row.profesor_id);
+    }
 
     const userCounts: Record<string, number> = {};
-    chatData?.forEach(row => {
-      const uid = row[fkColumn];
+    chatUserIds.forEach((uid) => {
       if (uid) {
         userCounts[uid] = (userCounts[uid] || 0) + 1;
       }
@@ -78,14 +81,9 @@ export async function GET(req: Request) {
     }
 
     // 2. Obtener perfiles
-    let profilesSelect = "id, nombre, apellidos, estatus";
-    if (type === "alumno") {
-      profilesSelect += ", matricula";
-    }
-
     const { data: profiles, error: profError } = await supabaseAdmin
-      .from(profileTable)
-      .select(profilesSelect)
+      .from("profiles")
+      .select("id, nombre, apellidos, estatus, matricula")
       .in("id", activeUserIds)
       .ilike("estatus", "activo");
 

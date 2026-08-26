@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Loader2, MonitorPlay, Save, ImageIcon, ImagePlus, Plus, Trash2, X, FileText, Upload, Pencil, Eye } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
-import { Hero, MissionStatement, About, Programs, Banner } from "@/app/acerca-de-nosotros/page";
+import { Hero, MissionStatement, About, Programs, Banner } from "@/components/landing/InstitutionLandingPage";
 
 export default function EditorLandingPage() {
   const { config, loading, refresh } = useInstitucion();

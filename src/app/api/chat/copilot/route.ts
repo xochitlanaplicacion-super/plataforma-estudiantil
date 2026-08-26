@@ -1,5 +1,4 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { createClient } from "@supabase/supabase-js";
 import { NextRequest } from "next/server";
 import { checkAIServiceStatus, aiServiceDisabledResponse } from "@/utils/aiServiceValidation";
 
@@ -14,7 +13,10 @@ export const maxDuration = 300;
 // La IA NUNCA toca la base de datos directamente. El servidor consulta,
 // filtra por profesor_id y entrega un resumen de texto al modelo.
 // ─────────────────────────────────────────────────────────────────────────────
-async function buildProfesorContext(profesorId: string, supabase: ReturnType<typeof createClient>): Promise<string> {
+async function buildProfesorContext(
+  profesorId: string,
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>
+): Promise<string> {
   try {
     // 1. Asignaciones del profesor (grupos y materias que imparte)
     const { data: asignaciones } = await supabase

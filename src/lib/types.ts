@@ -196,14 +196,22 @@ export interface LandingProgram {
   badge: string;
   description: string;
   validez: string;
-  image: string;
+  image: string | null;
   iconType: string;
   crop: string;
+  delay?: number;
+  files?: Array<{
+    id?: string;
+    url: string;
+    name: string;
+    type: string;
+  }>;
 }
 
 export interface LandingConfig {
   themes: LandingTheme[];
   active_theme_id: string;
+  random_theme?: boolean;
   hero_title: string;
   hero_highlight: string;
   hero_subtitle: string;
@@ -216,6 +224,7 @@ export interface LandingConfig {
   about_image: string;
   banner_images: string[];
   programs: LandingProgram[];
+  study_options?: string[];
 }
 
 export interface InstitucionConfig {

@@ -113,12 +113,12 @@ export default function MaterialDeApoyoPage() {
       getStorageUsed()
     ]);
 
-    if (resNiveles.success !== false && resNiveles.data) {
+    if (resNiveles.data) {
       setNiveles(resNiveles.data);
       if (resNiveles.data.length > 0) setActiveTab(resNiveles.data[0].id);
     }
     
-    if (resMateriales.success !== false && resMateriales.data) {
+    if (resMateriales.data) {
       setMateriales(resMateriales.data as MaterialApoyo[]);
     }
 

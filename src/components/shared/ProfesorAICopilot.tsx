@@ -44,8 +44,8 @@ const preprocessLatex = (text: string) => {
 };
 
 const MemoizedMarkdown = React.memo(({ content, isDark }: { content: string; isDark: boolean }) => (
+  <div className="prose-sm max-w-none dark:prose-invert">
   <ReactMarkdown
-    className="prose-sm max-w-none dark:prose-invert"
     remarkPlugins={[remarkMath, remarkGfm]}
     rehypePlugins={[rehypeKatex]}
     components={{
@@ -61,6 +61,7 @@ const MemoizedMarkdown = React.memo(({ content, isDark }: { content: string; isD
   >
     {preprocessLatex(content)}
   </ReactMarkdown>
+  </div>
 ));
 
 // ── Componente Principal ───────────────────────────────────────────────
@@ -242,6 +243,7 @@ export function ProfesorAICopilot({ userId, userName, onClose }: ProfesorAICopil
     }
 
     // El título ahora se genera por la misma IA en el stream principal.
+    let accumulated = "";
     try {
       const response = await fetch("/api/chat/copilot", {
         method: "POST",
@@ -250,7 +252,7 @@ export function ProfesorAICopilot({ userId, userName, onClose }: ProfesorAICopil
           messages: apiMessages,
           userId,
           sessionId: session.id,
-          institucionNombre: config?.nombre || config?.nombre_corto,
+          institucionNombre: config?.nombre_completo || config?.nombre_corto,
           aiName: config?.nombre_ia,
           userName: userName
         }),
@@ -263,7 +265,6 @@ export function ProfesorAICopilot({ userId, userName, onClose }: ProfesorAICopil
       // Leer el stream
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let accumulated = "";
       let titleExtracted = false;
 
       while (true) {

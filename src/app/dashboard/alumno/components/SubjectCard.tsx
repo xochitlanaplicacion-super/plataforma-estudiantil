@@ -705,7 +705,7 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
               variant="ghost" 
               className="h-10 w-10 sm:h-12 sm:w-12 rounded-full text-white hover:bg-white/10 shrink-0" 
               onClick={() => setActiveSlideIndex(Math.min(activeSlideIndex + 1, activeSlides.length - 1))} 
-              disabled={activeSlideIndex === activeSlideIndex.length - 1}
+              disabled={activeSlideIndex === activeSlides.length - 1}
             >
               <ChevronRight size={24} className="sm:w-8 sm:h-8" />
             </Button>
