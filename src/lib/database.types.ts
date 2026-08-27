@@ -1414,6 +1414,91 @@ export type Database = {
           },
         ]
       }
+      esquemas_evaluacion: {
+        Row: {
+          asignacion_profesor_id: string
+          calificacion_aprobatoria: number
+          ciclo_escolar_id: string
+          created_at: string
+          created_by: string
+          decimales_mostrados: number
+          escala: string | null
+          estado: string
+          id: string
+          modo_redondeo: string
+          nombre: string
+          periodo_evaluacion_id: string
+          regla_justificado: string
+          regla_no_entrego: string
+          tenant_id: string
+          updated_at: string
+          valor_no_entrego: number
+          version: number
+        }
+        Insert: {
+          asignacion_profesor_id: string
+          calificacion_aprobatoria?: number
+          ciclo_escolar_id: string
+          created_at?: string
+          created_by: string
+          decimales_mostrados?: number
+          escala?: string | null
+          estado?: string
+          id?: string
+          modo_redondeo?: string
+          nombre: string
+          periodo_evaluacion_id: string
+          regla_justificado?: string
+          regla_no_entrego?: string
+          tenant_id: string
+          updated_at?: string
+          valor_no_entrego?: number
+          version?: number
+        }
+        Update: {
+          asignacion_profesor_id?: string
+          calificacion_aprobatoria?: number
+          ciclo_escolar_id?: string
+          created_at?: string
+          created_by?: string
+          decimales_mostrados?: number
+          escala?: string | null
+          estado?: string
+          id?: string
+          modo_redondeo?: string
+          nombre?: string
+          periodo_evaluacion_id?: string
+          regla_justificado?: string
+          regla_no_entrego?: string
+          tenant_id?: string
+          updated_at?: string
+          valor_no_entrego?: number
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "esquemas_evaluacion_assignment_tenant_cycle_fkey"
+            columns: ["asignacion_profesor_id", "tenant_id", "ciclo_escolar_id"]
+            isOneToOne: false
+            referencedRelation: "asignaciones_profesor"
+            referencedColumns: ["id", "tenant_id", "ciclo_escolar_id"]
+          },
+          {
+            foreignKeyName: "esquemas_evaluacion_created_by_tenant_fkey"
+            columns: ["created_by", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "esquemas_evaluacion_period_tenant_cycle_fkey"
+            columns: ["periodo_evaluacion_id", "tenant_id", "ciclo_escolar_id"]
+            isOneToOne: false
+            referencedRelation: "periodos_evaluacion"
+            referencedColumns: ["id", "tenant_id", "ciclo_escolar_id"]
+          },
+        ]
+      }
       fechas_evaluacion: {
         Row: {
           created_at: string
@@ -2431,6 +2516,79 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      periodos_evaluacion: {
+        Row: {
+          ciclo_escolar_id: string
+          color_semantico: string
+          created_at: string
+          created_by: string | null
+          estado: string
+          fecha_fin: string
+          fecha_inicio: string
+          id: string
+          locked_at: string | null
+          locked_by: string | null
+          nombre: string
+          orden: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          ciclo_escolar_id: string
+          color_semantico?: string
+          created_at?: string
+          created_by?: string | null
+          estado?: string
+          fecha_fin: string
+          fecha_inicio: string
+          id?: string
+          locked_at?: string | null
+          locked_by?: string | null
+          nombre: string
+          orden: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          ciclo_escolar_id?: string
+          color_semantico?: string
+          created_at?: string
+          created_by?: string | null
+          estado?: string
+          fecha_fin?: string
+          fecha_inicio?: string
+          id?: string
+          locked_at?: string | null
+          locked_by?: string | null
+          nombre?: string
+          orden?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "periodos_evaluacion_created_by_tenant_fkey"
+            columns: ["created_by", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "periodos_evaluacion_cycle_tenant_fkey"
+            columns: ["ciclo_escolar_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "ciclos_escolares"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "periodos_evaluacion_locked_by_tenant_fkey"
+            columns: ["locked_by", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id", "tenant_id"]
           },
         ]
       }
