@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.15"
-  }
   public: {
     Tables: {
       abonos_pago: {
@@ -515,89 +510,111 @@ export type Database = {
       }
       asignaciones_profesor: {
         Row: {
-          activo: boolean | null
-          carrera_id: string | null
+          activo: boolean
+          carrera_id: string
+          ciclo_escolar_id: string
           created_at: string | null
-          grado_id: string | null
-          grupo_id: string | null
+          grado_id: string
+          grupo_id: string
           id: string
-          materia_id: string | null
-          nivel_id: string | null
-          profesor_id: string | null
+          materia_id: string
+          nivel_id: string
+          profesor_id: string
           tenant_id: string
+          tipo_participacion: string
+          updated_at: string
+          vigencia_desde: string
+          vigencia_hasta: string | null
         }
         Insert: {
-          activo?: boolean | null
-          carrera_id?: string | null
+          activo?: boolean
+          carrera_id: string
+          ciclo_escolar_id: string
           created_at?: string | null
-          grado_id?: string | null
-          grupo_id?: string | null
+          grado_id: string
+          grupo_id: string
           id?: string
-          materia_id?: string | null
-          nivel_id?: string | null
-          profesor_id?: string | null
+          materia_id: string
+          nivel_id: string
+          profesor_id: string
           tenant_id: string
+          tipo_participacion?: string
+          updated_at?: string
+          vigencia_desde: string
+          vigencia_hasta?: string | null
         }
         Update: {
-          activo?: boolean | null
-          carrera_id?: string | null
+          activo?: boolean
+          carrera_id?: string
+          ciclo_escolar_id?: string
           created_at?: string | null
-          grado_id?: string | null
-          grupo_id?: string | null
+          grado_id?: string
+          grupo_id?: string
           id?: string
-          materia_id?: string | null
-          nivel_id?: string | null
-          profesor_id?: string | null
+          materia_id?: string
+          nivel_id?: string
+          profesor_id?: string
           tenant_id?: string
+          tipo_participacion?: string
+          updated_at?: string
+          vigencia_desde?: string
+          vigencia_hasta?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "asignaciones_profesor_carrera_id_fkey"
-            columns: ["carrera_id"]
+            foreignKeyName: "asignaciones_profesor_carrera_tenant_fkey"
+            columns: ["carrera_id", "tenant_id"]
             isOneToOne: false
             referencedRelation: "carreras"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "tenant_id"]
           },
           {
-            foreignKeyName: "asignaciones_profesor_materia_id_fkey"
-            columns: ["materia_id"]
+            foreignKeyName: "asignaciones_profesor_ciclo_tenant_fkey"
+            columns: ["ciclo_escolar_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "ciclos_escolares"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "asignaciones_profesor_grado_tenant_fkey"
+            columns: ["grado_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "grados"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "asignaciones_profesor_grupo_tenant_fkey"
+            columns: ["grupo_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "grupos"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "asignaciones_profesor_materia_tenant_fkey"
+            columns: ["materia_id", "tenant_id"]
             isOneToOne: false
             referencedRelation: "materias"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "tenant_id"]
           },
           {
-            foreignKeyName: "asignaciones_profesor_nivel_id_fkey"
-            columns: ["nivel_id"]
+            foreignKeyName: "asignaciones_profesor_nivel_tenant_fkey"
+            columns: ["nivel_id", "tenant_id"]
             isOneToOne: false
             referencedRelation: "niveles"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "tenant_id"]
           },
           {
-            foreignKeyName: "asignaciones_profesor_profesor_id_fkey"
-            columns: ["profesor_id"]
+            foreignKeyName: "asignaciones_profesor_profesor_tenant_fkey"
+            columns: ["profesor_id", "tenant_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "asignaciones_profesor_profesor_id_fkey"
-            columns: ["profesor_id"]
-            isOneToOne: false
-            referencedRelation: "vista_alumnos_inscritos"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "tenant_id"]
           },
           {
             foreignKeyName: "asignaciones_profesor_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "fk_asignaciones_profesor_grupo"
-            columns: ["grupo_id"]
-            isOneToOne: false
-            referencedRelation: "grupos"
             referencedColumns: ["id"]
           },
         ]
@@ -764,6 +781,60 @@ export type Database = {
           },
           {
             foreignKeyName: "carreras_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ciclos_escolares: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          estado: string
+          fecha_fin: string
+          fecha_inicio: string
+          id: string
+          nombre: string
+          tenant_id: string
+          updated_at: string
+          zona_horaria: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          estado?: string
+          fecha_fin: string
+          fecha_inicio: string
+          id?: string
+          nombre: string
+          tenant_id: string
+          updated_at?: string
+          zona_horaria?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          estado?: string
+          fecha_fin?: string
+          fecha_inicio?: string
+          id?: string
+          nombre?: string
+          tenant_id?: string
+          updated_at?: string
+          zona_horaria?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ciclos_escolares_created_by_tenant_fkey"
+            columns: ["created_by", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "ciclos_escolares_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
@@ -1250,12 +1321,16 @@ export type Database = {
         Row: {
           activa: boolean
           audiencia: string
+          carrera_id: string | null
           cierra_en: string | null
           creador_id: string
           created_at: string
           descripcion: string | null
+          grado_id: string | null
           grupo_id: string | null
           id: string
+          nivel_id: string | null
+          restringir_a_asignaciones: boolean
           tenant_id: string
           titulo: string
           updated_at: string
@@ -1263,12 +1338,16 @@ export type Database = {
         Insert: {
           activa?: boolean
           audiencia: string
+          carrera_id?: string | null
           cierra_en?: string | null
           creador_id: string
           created_at?: string
           descripcion?: string | null
+          grado_id?: string | null
           grupo_id?: string | null
           id?: string
+          nivel_id?: string | null
+          restringir_a_asignaciones?: boolean
           tenant_id: string
           titulo: string
           updated_at?: string
@@ -1276,17 +1355,28 @@ export type Database = {
         Update: {
           activa?: boolean
           audiencia?: string
+          carrera_id?: string | null
           cierra_en?: string | null
           creador_id?: string
           created_at?: string
           descripcion?: string | null
+          grado_id?: string | null
           grupo_id?: string | null
           id?: string
+          nivel_id?: string | null
+          restringir_a_asignaciones?: boolean
           tenant_id?: string
           titulo?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "encuestas_carrera_tenant_fkey"
+            columns: ["carrera_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "carreras"
+            referencedColumns: ["id", "tenant_id"]
+          },
           {
             foreignKeyName: "encuestas_creador_tenant_fkey"
             columns: ["creador_id", "tenant_id"]
@@ -1295,10 +1385,24 @@ export type Database = {
             referencedColumns: ["id", "tenant_id"]
           },
           {
+            foreignKeyName: "encuestas_grado_tenant_fkey"
+            columns: ["grado_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "grados"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
             foreignKeyName: "encuestas_grupo_tenant_fkey"
             columns: ["grupo_id", "tenant_id"]
             isOneToOne: false
             referencedRelation: "grupos"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "encuestas_nivel_tenant_fkey"
+            columns: ["nivel_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "niveles"
             referencedColumns: ["id", "tenant_id"]
           },
           {
@@ -1533,86 +1637,92 @@ export type Database = {
       }
       inscripciones_alumno: {
         Row: {
-          activo: boolean | null
-          alumno_id: string | null
-          carrera_id: string | null
+          activo: boolean
+          alumno_id: string
+          carrera_id: string
+          ciclo_escolar_id: string
           created_at: string | null
           fecha_fin: string | null
-          fecha_inicio: string | null
-          grado_id: string | null
-          grupo_id: string | null
+          fecha_inicio: string
+          grado_id: string
+          grupo_id: string
           id: string
-          nivel_id: string | null
+          nivel_id: string
           tenant_id: string
+          updated_at: string
         }
         Insert: {
-          activo?: boolean | null
-          alumno_id?: string | null
-          carrera_id?: string | null
+          activo?: boolean
+          alumno_id: string
+          carrera_id: string
+          ciclo_escolar_id: string
           created_at?: string | null
           fecha_fin?: string | null
-          fecha_inicio?: string | null
-          grado_id?: string | null
-          grupo_id?: string | null
+          fecha_inicio?: string
+          grado_id: string
+          grupo_id: string
           id?: string
-          nivel_id?: string | null
+          nivel_id: string
           tenant_id: string
+          updated_at?: string
         }
         Update: {
-          activo?: boolean | null
-          alumno_id?: string | null
-          carrera_id?: string | null
+          activo?: boolean
+          alumno_id?: string
+          carrera_id?: string
+          ciclo_escolar_id?: string
           created_at?: string | null
           fecha_fin?: string | null
-          fecha_inicio?: string | null
-          grado_id?: string | null
-          grupo_id?: string | null
+          fecha_inicio?: string
+          grado_id?: string
+          grupo_id?: string
           id?: string
-          nivel_id?: string | null
+          nivel_id?: string
           tenant_id?: string
+          updated_at?: string
         }
         Relationships: [
           {
-            foreignKeyName: "inscripciones_alumno_alumno_id_fkey"
-            columns: ["alumno_id"]
+            foreignKeyName: "inscripciones_alumno_alumno_tenant_fkey"
+            columns: ["alumno_id", "tenant_id"]
             isOneToOne: false
             referencedRelation: "profiles"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "tenant_id"]
           },
           {
-            foreignKeyName: "inscripciones_alumno_alumno_id_fkey"
-            columns: ["alumno_id"]
-            isOneToOne: false
-            referencedRelation: "vista_alumnos_inscritos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "inscripciones_alumno_carrera_id_fkey"
-            columns: ["carrera_id"]
+            foreignKeyName: "inscripciones_alumno_carrera_tenant_fkey"
+            columns: ["carrera_id", "tenant_id"]
             isOneToOne: false
             referencedRelation: "carreras"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "tenant_id"]
           },
           {
-            foreignKeyName: "inscripciones_alumno_grado_id_fkey"
-            columns: ["grado_id"]
+            foreignKeyName: "inscripciones_alumno_ciclo_tenant_fkey"
+            columns: ["ciclo_escolar_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "ciclos_escolares"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "inscripciones_alumno_grado_tenant_fkey"
+            columns: ["grado_id", "tenant_id"]
             isOneToOne: false
             referencedRelation: "grados"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "tenant_id"]
           },
           {
-            foreignKeyName: "inscripciones_alumno_grupo_id_fkey"
-            columns: ["grupo_id"]
+            foreignKeyName: "inscripciones_alumno_grupo_tenant_fkey"
+            columns: ["grupo_id", "tenant_id"]
             isOneToOne: false
             referencedRelation: "grupos"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "tenant_id"]
           },
           {
-            foreignKeyName: "inscripciones_alumno_nivel_id_fkey"
-            columns: ["nivel_id"]
+            foreignKeyName: "inscripciones_alumno_nivel_tenant_fkey"
+            columns: ["nivel_id", "tenant_id"]
             isOneToOne: false
             referencedRelation: "niveles"
-            referencedColumns: ["id"]
+            referencedColumns: ["id", "tenant_id"]
           },
           {
             foreignKeyName: "inscripciones_alumno_tenant_id_fkey"
@@ -3289,10 +3399,13 @@ export type Database = {
         Args: {
           p_activa: boolean
           p_audiencia: string
+          p_carrera_id: string
           p_cierra_en: string
           p_descripcion: string
           p_encuesta_id: string
+          p_grado_id: string
           p_grupo_id: string
+          p_nivel_id: string
           p_opciones: string[]
           p_titulo: string
         }
@@ -3309,9 +3422,12 @@ export type Database = {
       crear_encuesta: {
         Args: {
           p_audiencia: string
+          p_carrera_id: string
           p_cierra_en?: string
           p_descripcion: string
+          p_grado_id: string
           p_grupo_id: string
+          p_nivel_id: string
           p_opciones: string[]
           p_titulo: string
         }

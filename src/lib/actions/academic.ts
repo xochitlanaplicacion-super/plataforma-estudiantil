@@ -640,50 +640,110 @@ export async function getProfesores() {
 }
 
 export async function getAsignacionesProfesor() {
-  const { supabase: supabaseAdmin } = await requireTenantSession();
+  const { supabase: supabaseAdmin } = await requireTenantSession(['superuser', 'admin']);
   const { data, error } = await supabaseAdmin
     .from('asignaciones_profesor')
-    .select('*, profiles:profesor_id(nombre, apellidos), niveles(nombre), carreras(nombre), materias(nombre), grupos(nombre, grados(nombre))')
+    .select('*, profiles:profesor_id(nombre, apellidos), niveles(nombre), carreras(nombre), materias(nombre), grupos(nombre, grados(nombre)), ciclos_escolares(nombre, estado)')
     .order('created_at', { ascending: false });
   return { data, error };
 }
 
 export async function getMyAsignaciones(profesorId: string) {
-  const { supabase: supabaseAdmin } = await requireTenantSession();
+  const { supabase: supabaseAdmin, profile } = await requireTenantSession(['superuser', 'admin', 'profesor']);
+  const resolvedProfesorId = profile.rol === 'profesor' ? profile.id : profesorId;
   const { data, error } = await supabaseAdmin
     .from('asignaciones_profesor')
-    .select('*, niveles(nombre), carreras(nombre), materias(nombre), grupos(nombre, grados(nombre))')
-    .eq('profesor_id', profesorId)
+    .select('*, niveles(nombre), carreras(nombre), materias(nombre), grupos(nombre, grados(nombre)), ciclos_escolares!inner(nombre, estado)')
+    .eq('profesor_id', resolvedProfesorId)
     .eq('activo', true)
+    .eq('ciclos_escolares.estado', 'activo')
     .order('created_at', { ascending: false });
   return { data, error };
 }
 
 export async function upsertAsignacionProfesor(asignacion: any) {
-  const { supabase: supabaseAdmin } = await requireTenantSession();
+  const { supabase: supabaseAdmin, tenantId } = await requireTenantSession(['superuser', 'admin']);
   const cleanData = prepareForUpsert(asignacion);
-  const { data, error } = await supabaseAdmin.from('asignaciones_profesor').upsert(cleanData).select().single();
+
+  const [groupResult, cycleResult, professorResult, subjectResult] = await Promise.all([
+    supabaseAdmin
+      .from('grupos')
+      .select('id, grado_id, carrera_id, carreras!inner(nivel_id)')
+      .eq('id', cleanData.grupo_id)
+      .eq('tenant_id', tenantId)
+      .single(),
+    supabaseAdmin
+      .from('ciclos_escolares')
+      .select('id, fecha_inicio')
+      .eq('tenant_id', tenantId)
+      .eq('estado', 'activo')
+      .single(),
+    supabaseAdmin
+      .from('profiles')
+      .select('id')
+      .eq('id', cleanData.profesor_id)
+      .eq('tenant_id', tenantId)
+      .eq('rol', 'profesor')
+      .eq('estatus', 'activo')
+      .single(),
+    supabaseAdmin
+      .from('materias')
+      .select('id')
+      .eq('id', cleanData.materia_id)
+      .eq('tenant_id', tenantId)
+      .single(),
+  ]);
+
+  const validationError = groupResult.error || cycleResult.error || professorResult.error || subjectResult.error;
+  if (validationError) return { data: null, error: validationError };
+
+  const group = groupResult.data as any;
+  const payload = {
+    ...cleanData,
+    tenant_id: tenantId,
+    ciclo_escolar_id: cycleResult.data.id,
+    nivel_id: group.carreras.nivel_id,
+    carrera_id: group.carrera_id,
+    grado_id: group.grado_id,
+    tipo_participacion: cleanData.tipo_participacion || 'titular',
+    vigencia_desde: cleanData.vigencia_desde || cycleResult.data.fecha_inicio,
+  };
+  const { data, error } = await supabaseAdmin.from('asignaciones_profesor').upsert(payload).select().single();
   revalidatePath('/dashboard/admin/profesores');
   revalidatePath('/dashboard/profesor');
   return { data, error };
 }
 
 export async function deleteAsignacionProfesor(id: string) {
-  const { supabase: supabaseAdmin } = await requireTenantSession();
-  const { error } = await supabaseAdmin.from('asignaciones_profesor').delete().eq('id', id);
+  const { supabase: supabaseAdmin, tenantId } = await requireTenantSession(['superuser', 'admin']);
+  const { data: assignment, error: assignmentError } = await supabaseAdmin
+    .from('asignaciones_profesor')
+    .select('vigencia_desde')
+    .eq('id', id)
+    .eq('tenant_id', tenantId)
+    .single();
+  if (assignmentError || !assignment) return { error: assignmentError || new Error('Asignación no encontrada') };
+  const today = new Date().toISOString().slice(0, 10);
+  const vigenciaHasta = today < assignment.vigencia_desde ? assignment.vigencia_desde : today;
+  const { error } = await supabaseAdmin
+    .from('asignaciones_profesor')
+    .update({ activo: false, vigencia_hasta: vigenciaHasta })
+    .eq('id', id)
+    .eq('tenant_id', tenantId);
   revalidatePath('/dashboard/admin/profesores');
   revalidatePath('/dashboard/profesor');
   return { error };
 }
 
 export async function replaceProfesorInAssignments(oldProfesorId: string, newProfesorId: string) {
-  const { supabase: supabaseAdmin } = await requireTenantSession();
+  const { supabase: supabaseAdmin, tenantId } = await requireTenantSession(['superuser', 'admin']);
   try {
     // 1. Transferir asignaciones de grupos y materias
     const { error: errorAsig } = await supabaseAdmin
       .from('asignaciones_profesor')
       .update({ profesor_id: newProfesorId })
-      .eq('profesor_id', oldProfesorId);
+      .eq('profesor_id', oldProfesorId)
+      .eq('tenant_id', tenantId);
 
     if (errorAsig) throw errorAsig;
 
@@ -741,14 +801,84 @@ export async function getAlumnosVigentes() {
 }
 
 export async function bulkAssignGroup(userIds: string[], groupId: string | null) {
-  const { supabase: supabaseAdmin } = await requireTenantSession();
+  const { admin, tenantId } = await requireTenantSession(['superuser', 'admin']);
   try {
-    const { error } = await supabaseAdmin
-      .from('profiles')
-      .update({ grupo_id: groupId })
-      .in('id', userIds);
+    const uniqueUserIds = Array.from(new Set(userIds));
+    if (uniqueUserIds.length === 0) return { success: true };
 
-    if (error) throw error;
+    const { data: cycle, error: cycleError } = await admin
+      .from('ciclos_escolares')
+      .select('id, fecha_inicio')
+      .eq('tenant_id', tenantId)
+      .eq('estado', 'activo')
+      .single();
+    if (cycleError || !cycle) throw cycleError || new Error('No existe un ciclo escolar activo');
+
+    const { data: students, error: studentsError } = await admin
+      .from('profiles')
+      .select('id')
+      .eq('tenant_id', tenantId)
+      .eq('rol', 'alumno')
+      .eq('estatus', 'activo')
+      .in('id', uniqueUserIds);
+    if (studentsError) throw studentsError;
+    if ((students?.length || 0) !== uniqueUserIds.length) {
+      throw new Error('Uno o más alumnos no pertenecen a la institución o no están activos');
+    }
+
+    if (groupId === null) {
+      const today = new Date().toISOString().slice(0, 10);
+      const fechaFin = today < cycle.fecha_inicio ? cycle.fecha_inicio : today;
+      const { error } = await admin
+        .from('inscripciones_alumno')
+        .update({ activo: false, fecha_fin: fechaFin })
+        .eq('tenant_id', tenantId)
+        .eq('ciclo_escolar_id', cycle.id)
+        .eq('activo', true)
+        .in('alumno_id', uniqueUserIds);
+      if (error) throw error;
+    } else {
+      const { data: group, error: groupError } = await admin
+        .from('grupos')
+        .select('id, grado_id, carrera_id, carreras!inner(nivel_id)')
+        .eq('id', groupId)
+        .eq('tenant_id', tenantId)
+        .single();
+      if (groupError || !group) throw groupError || new Error('Grupo no encontrado');
+
+      const { data: current, error: currentError } = await admin
+        .from('inscripciones_alumno')
+        .select('id, alumno_id')
+        .eq('tenant_id', tenantId)
+        .eq('ciclo_escolar_id', cycle.id)
+        .eq('activo', true)
+        .in('alumno_id', uniqueUserIds);
+      if (currentError) throw currentError;
+
+      const enrollmentByStudent = new Map((current || []).map(row => [row.alumno_id, row.id]));
+      const groupContext = group as any;
+      for (const studentId of uniqueUserIds) {
+        const enrollment = {
+          tenant_id: tenantId,
+          alumno_id: studentId,
+          ciclo_escolar_id: cycle.id,
+          nivel_id: groupContext.carreras.nivel_id,
+          carrera_id: groupContext.carrera_id,
+          grado_id: groupContext.grado_id,
+          grupo_id: groupContext.id,
+          fecha_inicio: cycle.fecha_inicio,
+          fecha_fin: null,
+          activo: true,
+        };
+        const existingId = enrollmentByStudent.get(studentId);
+        const query = existingId
+          ? admin.from('inscripciones_alumno').update(enrollment).eq('id', existingId).eq('tenant_id', tenantId)
+          : admin.from('inscripciones_alumno').insert(enrollment);
+        const { error } = await query;
+        if (error) throw error;
+      }
+    }
+
     revalidatePath('/dashboard/admin/inscripciones');
     return { success: true };
   } catch (error: any) {

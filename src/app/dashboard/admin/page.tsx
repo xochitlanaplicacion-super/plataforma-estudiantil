@@ -19,6 +19,9 @@ import { ToastAction } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import { useInstitucion } from '@/hooks/use-institucion';
 import { VigenciaPlataformaCard } from '@/components/admin/VigenciaPlataformaCard';
+import { AcademicContextCard } from '@/components/admin/AcademicContextCard';
+import { getAcademicContextIndicator } from '@/lib/actions/academic-cycle';
+import type { AcademicContextIndicator } from '@/lib/academic-grading/cycle-context';
 
 export default function AdminDashboard() {
   const { toast } = useToast();
@@ -44,6 +47,7 @@ export default function AdminDashboard() {
     fecha_inicio: string | null;
     duracion_dias: number;
   }>({ estado: null, fecha_inicio: null, duracion_dias: 30 });
+  const [academicContext, setAcademicContext] = useState<AcademicContextIndicator | null>(null);
 
   const fetchData = async () => {
     setLoading(true);
@@ -137,6 +141,9 @@ export default function AdminDashboard() {
         });
       }
 
+      const resAcademicContext = await getAcademicContextIndicator();
+      if (resAcademicContext.data) setAcademicContext(resAcademicContext.data);
+
     } catch (error) {
       console.error("Error fetching admin stats:", error);
     } finally {
@@ -224,6 +231,8 @@ export default function AdminDashboard() {
 
       {/* ─── TARJETA PAGO DE SERVICIO PLATAFORMA ─── */}
       <VigenciaPlataformaCard servicioPlataforma={servicioPlataforma} />
+
+      <AcademicContextCard context={academicContext} loading={loading} />
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         {/* NUEVA TARJETA: ASPIRANTES */}
