@@ -743,6 +743,119 @@ export type Database = {
           },
         ]
       }
+      calificaciones_directas: {
+        Row: {
+          alumno_id: string
+          asignacion_profesor_id: string
+          calificacion: number | null
+          calificado_at: string | null
+          calificado_por: string | null
+          ciclo_escolar_id: string
+          created_at: string
+          criterio_evaluacion_id: string
+          estado: string
+          id: string
+          idempotency_key: string | null
+          inscripcion_alumno_id: string
+          observacion: string | null
+          periodo_evaluacion_id: string
+          row_version: number
+          subcriterio_evaluacion_id: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          alumno_id: string
+          asignacion_profesor_id: string
+          calificacion?: number | null
+          calificado_at?: string | null
+          calificado_por?: string | null
+          ciclo_escolar_id: string
+          created_at?: string
+          criterio_evaluacion_id: string
+          estado?: string
+          id?: string
+          idempotency_key?: string | null
+          inscripcion_alumno_id: string
+          observacion?: string | null
+          periodo_evaluacion_id: string
+          row_version?: number
+          subcriterio_evaluacion_id?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          alumno_id?: string
+          asignacion_profesor_id?: string
+          calificacion?: number | null
+          calificado_at?: string | null
+          calificado_por?: string | null
+          ciclo_escolar_id?: string
+          created_at?: string
+          criterio_evaluacion_id?: string
+          estado?: string
+          id?: string
+          idempotency_key?: string | null
+          inscripcion_alumno_id?: string
+          observacion?: string | null
+          periodo_evaluacion_id?: string
+          row_version?: number
+          subcriterio_evaluacion_id?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "calificaciones_directas_assignment_tenant_cycle_fkey"
+            columns: ["asignacion_profesor_id", "tenant_id", "ciclo_escolar_id"]
+            isOneToOne: false
+            referencedRelation: "asignaciones_profesor"
+            referencedColumns: ["id", "tenant_id", "ciclo_escolar_id"]
+          },
+          {
+            foreignKeyName: "calificaciones_directas_criterion_tenant_fkey"
+            columns: ["criterio_evaluacion_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "criterios_evaluacion"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "calificaciones_directas_enrollment_tenant_cycle_fkey"
+            columns: ["inscripcion_alumno_id", "tenant_id", "ciclo_escolar_id"]
+            isOneToOne: false
+            referencedRelation: "inscripciones_alumno"
+            referencedColumns: ["id", "tenant_id", "ciclo_escolar_id"]
+          },
+          {
+            foreignKeyName: "calificaciones_directas_grader_tenant_fkey"
+            columns: ["calificado_por", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "calificaciones_directas_period_tenant_cycle_fkey"
+            columns: ["periodo_evaluacion_id", "tenant_id", "ciclo_escolar_id"]
+            isOneToOne: false
+            referencedRelation: "periodos_evaluacion"
+            referencedColumns: ["id", "tenant_id", "ciclo_escolar_id"]
+          },
+          {
+            foreignKeyName: "calificaciones_directas_student_tenant_fkey"
+            columns: ["alumno_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "calificaciones_directas_subcriterion_tenant_fkey"
+            columns: ["subcriterio_evaluacion_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "subcriterios_evaluacion"
+            referencedColumns: ["id", "tenant_id"]
+          },
+        ]
+      }
       carreras: {
         Row: {
           activo: boolean | null
@@ -1563,6 +1676,132 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "periodos_evaluacion"
             referencedColumns: ["id", "tenant_id", "ciclo_escolar_id"]
+          },
+        ]
+      }
+      eventos_participacion: {
+        Row: {
+          actor_id: string
+          alumno_id: string
+          asignacion_profesor_id: string
+          ciclo_escolar_id: string
+          created_at: string
+          criterio_evaluacion_id: string
+          id: string
+          idempotency_key: string
+          inscripcion_alumno_id: string
+          maximo_computable: number | null
+          meta_objetivo: number | null
+          modo_normalizacion: string
+          observacion: string | null
+          periodo_evaluacion_id: string
+          puntos: number
+          regla_denominador_cero: string
+          reversa_de_id: string | null
+          subcriterio_evaluacion_id: string | null
+          tenant_id: string
+          tipo_evento: string
+        }
+        Insert: {
+          actor_id: string
+          alumno_id: string
+          asignacion_profesor_id: string
+          ciclo_escolar_id: string
+          created_at?: string
+          criterio_evaluacion_id: string
+          id?: string
+          idempotency_key?: string
+          inscripcion_alumno_id: string
+          maximo_computable?: number | null
+          meta_objetivo?: number | null
+          modo_normalizacion: string
+          observacion?: string | null
+          periodo_evaluacion_id: string
+          puntos: number
+          regla_denominador_cero?: string
+          reversa_de_id?: string | null
+          subcriterio_evaluacion_id?: string | null
+          tenant_id: string
+          tipo_evento?: string
+        }
+        Update: {
+          actor_id?: string
+          alumno_id?: string
+          asignacion_profesor_id?: string
+          ciclo_escolar_id?: string
+          created_at?: string
+          criterio_evaluacion_id?: string
+          id?: string
+          idempotency_key?: string
+          inscripcion_alumno_id?: string
+          maximo_computable?: number | null
+          meta_objetivo?: number | null
+          modo_normalizacion?: string
+          observacion?: string | null
+          periodo_evaluacion_id?: string
+          puntos?: number
+          regla_denominador_cero?: string
+          reversa_de_id?: string | null
+          subcriterio_evaluacion_id?: string | null
+          tenant_id?: string
+          tipo_evento?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "eventos_participacion_actor_tenant_fkey"
+            columns: ["actor_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "eventos_participacion_assignment_tenant_cycle_fkey"
+            columns: ["asignacion_profesor_id", "tenant_id", "ciclo_escolar_id"]
+            isOneToOne: false
+            referencedRelation: "asignaciones_profesor"
+            referencedColumns: ["id", "tenant_id", "ciclo_escolar_id"]
+          },
+          {
+            foreignKeyName: "eventos_participacion_criterion_tenant_fkey"
+            columns: ["criterio_evaluacion_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "criterios_evaluacion"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "eventos_participacion_enrollment_tenant_cycle_fkey"
+            columns: ["inscripcion_alumno_id", "tenant_id", "ciclo_escolar_id"]
+            isOneToOne: false
+            referencedRelation: "inscripciones_alumno"
+            referencedColumns: ["id", "tenant_id", "ciclo_escolar_id"]
+          },
+          {
+            foreignKeyName: "eventos_participacion_period_tenant_cycle_fkey"
+            columns: ["periodo_evaluacion_id", "tenant_id", "ciclo_escolar_id"]
+            isOneToOne: false
+            referencedRelation: "periodos_evaluacion"
+            referencedColumns: ["id", "tenant_id", "ciclo_escolar_id"]
+          },
+          {
+            foreignKeyName: "eventos_participacion_reversa_tenant_fkey"
+            columns: ["reversa_de_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "eventos_participacion"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "eventos_participacion_student_tenant_fkey"
+            columns: ["alumno_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "eventos_participacion_subcriterion_tenant_fkey"
+            columns: ["subcriterio_evaluacion_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "subcriterios_evaluacion"
+            referencedColumns: ["id", "tenant_id"]
           },
         ]
       }
@@ -3053,16 +3292,27 @@ export type Database = {
           caduca_el: string | null
           calificacion: number | null
           calificacion_manual: number | null
+          calificado_at: string | null
+          calificado_por: string | null
           ejercicio_id: string
           estado: string | null
           fecha_completado: string | null
           historico_intentos: Json | null
           id: string
+          idempotency_key: string | null
+          inscripcion_alumno_id: string | null
           intentos: number | null
+          observacion: string | null
+          origen: string | null
           primer_envio_en: string | null
+          registro_legacy: boolean
+          row_version: number
           suma_calificaciones: number | null
           tenant_id: string
           total_preguntas: number | null
+          unidad_origen_id: string | null
+          updated_at: string
+          vinculo_evaluacion_id: string | null
         }
         Insert: {
           aciertos?: number | null
@@ -3074,16 +3324,27 @@ export type Database = {
           caduca_el?: string | null
           calificacion?: number | null
           calificacion_manual?: number | null
+          calificado_at?: string | null
+          calificado_por?: string | null
           ejercicio_id: string
           estado?: string | null
           fecha_completado?: string | null
           historico_intentos?: Json | null
           id?: string
+          idempotency_key?: string | null
+          inscripcion_alumno_id?: string | null
           intentos?: number | null
+          observacion?: string | null
+          origen?: string | null
           primer_envio_en?: string | null
+          registro_legacy?: boolean
+          row_version?: number
           suma_calificaciones?: number | null
           tenant_id: string
           total_preguntas?: number | null
+          unidad_origen_id?: string | null
+          updated_at?: string
+          vinculo_evaluacion_id?: string | null
         }
         Update: {
           aciertos?: number | null
@@ -3095,16 +3356,27 @@ export type Database = {
           caduca_el?: string | null
           calificacion?: number | null
           calificacion_manual?: number | null
+          calificado_at?: string | null
+          calificado_por?: string | null
           ejercicio_id?: string
           estado?: string | null
           fecha_completado?: string | null
           historico_intentos?: Json | null
           id?: string
+          idempotency_key?: string | null
+          inscripcion_alumno_id?: string | null
           intentos?: number | null
+          observacion?: string | null
+          origen?: string | null
           primer_envio_en?: string | null
+          registro_legacy?: boolean
+          row_version?: number
           suma_calificaciones?: number | null
           tenant_id?: string
           total_preguntas?: number | null
+          unidad_origen_id?: string | null
+          updated_at?: string
+          vinculo_evaluacion_id?: string | null
         }
         Relationships: [
           {
@@ -3120,6 +3392,34 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "resultados_enrollment_tenant_cycle_fkey"
+            columns: ["inscripcion_alumno_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "inscripciones_alumno"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "resultados_grader_tenant_fkey"
+            columns: ["calificado_por", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "resultados_link_tenant_fkey"
+            columns: ["vinculo_evaluacion_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vinculos_evaluacion_ejercicio"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "resultados_unit_tenant_fkey"
+            columns: ["unidad_origen_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "unidades"
+            referencedColumns: ["id", "tenant_id"]
           },
         ]
       }
@@ -3652,6 +3952,97 @@ export type Database = {
           },
         ]
       }
+      vinculos_evaluacion_ejercicio: {
+        Row: {
+          activo: boolean
+          asignacion_profesor_id: string
+          ciclo_escolar_id: string
+          created_at: string
+          created_by: string
+          criterio_evaluacion_id: string
+          ejercicio_id: string
+          id: string
+          origen: string
+          periodo_evaluacion_id: string
+          subcriterio_evaluacion_id: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          activo?: boolean
+          asignacion_profesor_id: string
+          ciclo_escolar_id: string
+          created_at?: string
+          created_by: string
+          criterio_evaluacion_id: string
+          ejercicio_id: string
+          id?: string
+          origen: string
+          periodo_evaluacion_id: string
+          subcriterio_evaluacion_id?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          activo?: boolean
+          asignacion_profesor_id?: string
+          ciclo_escolar_id?: string
+          created_at?: string
+          created_by?: string
+          criterio_evaluacion_id?: string
+          ejercicio_id?: string
+          id?: string
+          origen?: string
+          periodo_evaluacion_id?: string
+          subcriterio_evaluacion_id?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vinculos_evaluacion_assignment_tenant_cycle_fkey"
+            columns: ["asignacion_profesor_id", "tenant_id", "ciclo_escolar_id"]
+            isOneToOne: false
+            referencedRelation: "asignaciones_profesor"
+            referencedColumns: ["id", "tenant_id", "ciclo_escolar_id"]
+          },
+          {
+            foreignKeyName: "vinculos_evaluacion_created_by_tenant_fkey"
+            columns: ["created_by", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "vinculos_evaluacion_criterion_tenant_fkey"
+            columns: ["criterio_evaluacion_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "criterios_evaluacion"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "vinculos_evaluacion_exercise_tenant_fkey"
+            columns: ["ejercicio_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "ejercicios"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "vinculos_evaluacion_period_tenant_cycle_fkey"
+            columns: ["periodo_evaluacion_id", "tenant_id", "ciclo_escolar_id"]
+            isOneToOne: false
+            referencedRelation: "periodos_evaluacion"
+            referencedColumns: ["id", "tenant_id", "ciclo_escolar_id"]
+          },
+          {
+            foreignKeyName: "vinculos_evaluacion_subcriterion_tenant_fkey"
+            columns: ["subcriterio_evaluacion_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "subcriterios_evaluacion"
+            referencedColumns: ["id", "tenant_id"]
+          },
+        ]
+      }
     }
     Views: {
       ai_category_summary: {
@@ -3677,6 +4068,92 @@ export type Database = {
           nombre: string | null
         }
         Relationships: []
+      }
+      vista_fuentes_calificacion: {
+        Row: {
+          alumno_id: string | null
+          asignacion_profesor_id: string | null
+          calificacion: number | null
+          calificado_at: string | null
+          calificado_por: string | null
+          ciclo_escolar_id: string | null
+          criterio_evaluacion_id: string | null
+          ejercicio_id: string | null
+          estado: string | null
+          fuente_id: string | null
+          inscripcion_alumno_id: string | null
+          observacion: string | null
+          periodo_evaluacion_id: string | null
+          registro_legacy: boolean | null
+          row_version: number | null
+          subcriterio_evaluacion_id: string | null
+          tenant_id: string | null
+          tipo_fuente: string | null
+        }
+        Relationships: []
+      }
+      vista_participacion_normalizada: {
+        Row: {
+          alumno_id: string | null
+          asignacion_profesor_id: string | null
+          ciclo_escolar_id: string | null
+          criterio_evaluacion_id: string | null
+          denominador: number | null
+          inscripcion_alumno_id: string | null
+          maximo_computable: number | null
+          meta_objetivo: number | null
+          modo_normalizacion: string | null
+          periodo_evaluacion_id: string | null
+          puntos_netos: number | null
+          ratio_normalizado: number | null
+          regla_denominador_cero: string | null
+          subcriterio_evaluacion_id: string | null
+          tenant_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "eventos_participacion_assignment_tenant_cycle_fkey"
+            columns: ["asignacion_profesor_id", "tenant_id", "ciclo_escolar_id"]
+            isOneToOne: false
+            referencedRelation: "asignaciones_profesor"
+            referencedColumns: ["id", "tenant_id", "ciclo_escolar_id"]
+          },
+          {
+            foreignKeyName: "eventos_participacion_criterion_tenant_fkey"
+            columns: ["criterio_evaluacion_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "criterios_evaluacion"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "eventos_participacion_enrollment_tenant_cycle_fkey"
+            columns: ["inscripcion_alumno_id", "tenant_id", "ciclo_escolar_id"]
+            isOneToOne: false
+            referencedRelation: "inscripciones_alumno"
+            referencedColumns: ["id", "tenant_id", "ciclo_escolar_id"]
+          },
+          {
+            foreignKeyName: "eventos_participacion_period_tenant_cycle_fkey"
+            columns: ["periodo_evaluacion_id", "tenant_id", "ciclo_escolar_id"]
+            isOneToOne: false
+            referencedRelation: "periodos_evaluacion"
+            referencedColumns: ["id", "tenant_id", "ciclo_escolar_id"]
+          },
+          {
+            foreignKeyName: "eventos_participacion_student_tenant_fkey"
+            columns: ["alumno_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "eventos_participacion_subcriterion_tenant_fkey"
+            columns: ["subcriterio_evaluacion_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "subcriterios_evaluacion"
+            referencedColumns: ["id", "tenant_id"]
+          },
+        ]
       }
     }
     Functions: {

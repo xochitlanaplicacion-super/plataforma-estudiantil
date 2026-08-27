@@ -3,7 +3,19 @@ import type { Grade10 } from './scale';
 export type AcademicRole = 'superuser' | 'admin' | 'profesor' | 'alumno';
 export type AcademicPeriodState = 'borrador' | 'activo' | 'cerrado';
 export type EvaluationSchemeState = 'borrador' | 'activo' | 'archivado';
-export type AcademicResultState = 'sin_capturar' | 'calificado' | 'no_entrego' | 'justificado';
+export type AcademicResultState =
+  | 'sin_capturar'
+  | 'pendiente'
+  | 'entregado'
+  | 'tardio'
+  | 'no_entregado'
+  | 'justificado'
+  | 'calificado';
+export type EvaluationSourceKind =
+  | 'automaticExercise'
+  | 'descriptiveSubmission'
+  | 'directCriterion'
+  | 'participation';
 export type GradeRoundingMode = 'half_up';
 export type EvaluationCriterionType = 'directo' | 'actividades' | 'participacion' | 'hibrido';
 export type EvaluationSubcriterionType = Exclude<EvaluationCriterionType, 'hibrido'>;
@@ -118,4 +130,29 @@ export interface GradeMutationResult {
   rowVersion: number;
   auditId: string;
   updatedAt: string;
+}
+
+export interface EvaluationSourceRow {
+  sourceId: string;
+  sourceKind: EvaluationSourceKind;
+  tenantId: string;
+  cycleId: string;
+  assignmentId: string;
+  periodId: string;
+  criterionId: string;
+  subcriterionId: string | null;
+  enrollmentId: string;
+  studentId: string;
+  exerciseId: string | null;
+  state: AcademicResultState;
+  grade: Grade10 | null;
+  rowVersion: number;
+}
+
+export interface EvaluationSourceColumn {
+  criterionId: string;
+  subcriterionId: string | null;
+  sourceKind: EvaluationSourceKind;
+  label: string;
+  editable: boolean;
 }

@@ -5,6 +5,7 @@ import { requireTenantSession } from '@/lib/tenant/context';
 import { createClient } from '@supabase/supabase-js';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { parseFechaLocal } from '@/lib/utils';
+import { automaticExercise } from '@/lib/academic-grading/source-adapters';
 
 export async function getAlumnoDashboardData(userId: string) {
   const { supabase: supabaseAdmin } = await requireTenantSession();
@@ -234,26 +235,22 @@ export async function saveExerciseResult(
   calificacionIntento: number,
   detallesErrores?: any
 ) {
-  const supabase = await createServerSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
-
-  if (!user) {
-    return { error: 'No user authenticated' };
-  }
+  const { admin, tenantId, user } = await requireTenantSession(['alumno']);
 
   // 1. Obtener datos del ejercicio y registro existente para este alumno
-  const { data: exerciseData } = await supabase
+  const { data: exerciseData } = await admin
     .from('ejercicios')
-    .select('fecha_entrega')
+    .select('fecha_entrega, temas(unidad_id)')
     .eq('id', ejercicioId)
+    .eq('tenant_id', tenantId)
     .single();
 
-  const { data: existing } = await supabase
+  const { data: existing } = await admin
     .from('resultados_ejercicios')
     .select('*')
     .eq('alumno_id', user.id)
     .eq('ejercicio_id', ejercicioId)
-    .single();
+    .maybeSingle();
 
   // 2. Seguridad: Validar si el ejercicio ya venció
   if (exerciseData?.fecha_entrega) {
@@ -274,28 +271,52 @@ export async function saveExerciseResult(
   }
 
   // Cálculos de promedio acumulado
+  const notaIntento = automaticExercise(calificacionIntento).grade!;
   const nuevosIntentos = (existing?.intentos || 0) + 1;
-  const nuevaSuma = (Number(existing?.suma_calificaciones) || 0) + calificacionIntento;
-  const nuevaCalificacionPromedio = Math.min(100, nuevaSuma / nuevosIntentos);
+  const nuevaSuma = (Number(existing?.suma_calificaciones) || 0) + notaIntento;
+  const nuevaCalificacionPromedio = Math.min(10, nuevaSuma / nuevosIntentos);
 
-  // Determinar si bloqueamos (si EN ESTE INTENTO sacó 100)
-  const debeBloquear = calificacionIntento >= 100;
+  // Determinar si bloqueamos (si EN ESTE INTENTO obtuvo 10)
+  const debeBloquear = notaIntento >= 10;
 
   // Actualizar el historial de intentos
   const historicoPrevio = Array.isArray(existing?.historico_intentos) ? existing.historico_intentos : [];
   const nuevoIntento = {
     intento: nuevosIntentos,
     fecha: new Date().toISOString(),
-    calificacion: calificacionIntento,
+    calificacion: notaIntento,
     aciertos,
     total_preguntas: total,
     detalles: detallesErrores || null
   };
   const nuevoHistorico = [...historicoPrevio, nuevoIntento];
 
-  const { data, error } = await supabase
+  const { data: link } = await admin
+    .from('vinculos_evaluacion_ejercicio')
+    .select('id, ciclo_escolar_id, origen, periodos_evaluacion!inner(estado)')
+    .eq('tenant_id', tenantId)
+    .eq('ejercicio_id', ejercicioId)
+    .eq('activo', true)
+    .eq('periodos_evaluacion.estado', 'activo')
+    .limit(1)
+    .maybeSingle();
+  const { data: enrollment } = link ? await admin
+    .from('inscripciones_alumno')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('ciclo_escolar_id', link.ciclo_escolar_id)
+    .eq('alumno_id', user.id)
+    .eq('activo', true)
+    .maybeSingle() : { data: null };
+  const unitId = exerciseData?.temas?.[0]?.unidad_id;
+  if (!existing && (!link || !enrollment || !unitId)) {
+    return { error: 'El ejercicio aún no tiene una fuente de evaluación activa para tu inscripción.' };
+  }
+
+  const { data, error } = await admin
     .from('resultados_ejercicios')
     .upsert({
+      tenant_id: tenantId,
       alumno_id: user.id,
       ejercicio_id: ejercicioId,
       calificacion: nuevaCalificacionPromedio,
@@ -304,9 +325,18 @@ export async function saveExerciseResult(
       intentos: nuevosIntentos,
       suma_calificaciones: nuevaSuma,
       bloqueado: debeBloquear,
-      estado: 'completado',
+      estado: 'calificado',
+      calificado_por: user.id,
+      calificado_at: new Date().toISOString(),
       fecha_completado: new Date().toISOString(),
-      historico_intentos: nuevoHistorico
+      historico_intentos: nuevoHistorico,
+      ...(existing ? {} : {
+        inscripcion_alumno_id: enrollment!.id,
+        vinculo_evaluacion_id: link!.id,
+        unidad_origen_id: unitId,
+        origen: 'automaticExercise' as const,
+        registro_legacy: false,
+      })
     }, {
       onConflict: 'alumno_id, ejercicio_id'
     })

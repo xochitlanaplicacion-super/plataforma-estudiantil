@@ -90,6 +90,74 @@ create table public.asignaciones_profesor (
   created_at timestamptz default now(),
   tenant_id uuid not null references public.tenants(id)
 );
+create table public.unidades (
+  id uuid primary key default gen_random_uuid(),
+  materia_id uuid references public.materias(id),
+  titulo text not null,
+  descripcion text,
+  orden integer default 1,
+  activo boolean default true,
+  created_at timestamptz default now(),
+  created_by uuid,
+  sync_id uuid,
+  tenant_id uuid not null references public.tenants(id)
+);
+create table public.temas (
+  id uuid primary key default gen_random_uuid(),
+  unidad_id uuid references public.unidades(id),
+  titulo text not null,
+  contenido text,
+  orden integer default 1,
+  publicado boolean default false,
+  visible boolean default true,
+  created_by uuid,
+  updated_by uuid,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  descripcion text,
+  videos jsonb default '[]'::jsonb,
+  sync_id uuid,
+  tenant_id uuid not null references public.tenants(id)
+);
+create table public.ejercicios (
+  id uuid primary key default gen_random_uuid(),
+  tema_id uuid references public.temas(id) on delete cascade,
+  titulo text not null,
+  descripcion text,
+  tipo text default 'opcion_multiple',
+  contenido jsonb,
+  orden integer default 1,
+  publicado boolean default false,
+  visible boolean default true,
+  created_by uuid references public.profiles(id),
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  fecha_entrega timestamptz,
+  sync_id uuid,
+  tenant_id uuid not null references public.tenants(id)
+);
+create table public.resultados_ejercicios (
+  id uuid primary key default gen_random_uuid(),
+  alumno_id uuid not null references public.profiles(id) on delete cascade,
+  ejercicio_id uuid not null references public.ejercicios(id) on delete cascade,
+  calificacion numeric(5,2) default 0,
+  aciertos integer default 0,
+  total_preguntas integer default 0,
+  estado text default 'completado',
+  fecha_completado timestamptz default now(),
+  intentos integer default 0,
+  suma_calificaciones numeric(10,2) default 0,
+  bloqueado boolean default false,
+  archivo_url text,
+  archivo_nombre text,
+  archivo_path text,
+  primer_envio_en timestamptz,
+  caduca_el timestamptz,
+  calificacion_manual numeric(5,2),
+  historico_intentos jsonb default '[]'::jsonb,
+  tenant_id uuid not null references public.tenants(id),
+  constraint unique_alumno_ejercicio unique (alumno_id, ejercicio_id)
+);
 
 create or replace function private.current_tenant_id()
 returns uuid language sql stable security definer set search_path = '' as $$

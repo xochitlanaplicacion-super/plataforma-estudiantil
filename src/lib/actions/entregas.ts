@@ -4,6 +4,8 @@ import { requireTenantSession } from '@/lib/tenant/context';
 
 import { revalidatePath } from 'next/cache';
 import { randomUUID } from 'node:crypto';
+import { descriptiveSubmission } from '@/lib/academic-grading/source-adapters';
+import { assertGrade10 } from '@/lib/academic-grading/scale';
 
 const BUCKET = 'entregas-alumnos';
 const EXPIRY_DAYS = 10;
@@ -138,7 +140,7 @@ export async function subirEntregaAlumno(formData: FormData) {
 
   const { data: ejercicio } = await admin
     .from('ejercicios')
-    .select('id, tipo')
+    .select('id, tipo, fecha_entrega, temas(unidad_id)')
     .eq('id', ejercicioId)
     .eq('tenant_id', tenantId)
     .maybeSingle();
@@ -174,6 +176,34 @@ export async function subirEntregaAlumno(formData: FormData) {
   const primerEnvio = existing?.primer_envio_en ? new Date(existing.primer_envio_en) : ahora;
   const caduca = new Date(primerEnvio.getTime() + EXPIRY_DAYS * 24 * 60 * 60 * 1000);
 
+  const { data: link } = await admin
+    .from('vinculos_evaluacion_ejercicio')
+    .select('id, ciclo_escolar_id, periodos_evaluacion!inner(estado)')
+    .eq('tenant_id', tenantId)
+    .eq('ejercicio_id', ejercicioId)
+    .eq('origen', 'descriptiveSubmission')
+    .eq('activo', true)
+    .eq('periodos_evaluacion.estado', 'activo')
+    .limit(1)
+    .maybeSingle();
+  const { data: enrollment } = link ? await admin
+    .from('inscripciones_alumno')
+    .select('id')
+    .eq('tenant_id', tenantId)
+    .eq('ciclo_escolar_id', link.ciclo_escolar_id)
+    .eq('alumno_id', user.id)
+    .eq('activo', true)
+    .maybeSingle() : { data: null };
+  const unitId = ejercicio.temas?.[0]?.unidad_id;
+  if (!existing && (!link || !enrollment || !unitId)) {
+    await admin.storage.from(BUCKET).remove([filePath]);
+    return { error: 'La actividad aún no tiene una fuente de evaluación activa para tu inscripción.' };
+  }
+  const submission = descriptiveSubmission({
+    submittedAt: ahora,
+    dueAt: ejercicio.fecha_entrega ? new Date(ejercicio.fecha_entrega) : null,
+  });
+
   // Guardar en base de datos
   const { error: dbError } = await admin
     .from('resultados_ejercicios')
@@ -181,12 +211,19 @@ export async function subirEntregaAlumno(formData: FormData) {
       tenant_id: tenantId,
       alumno_id: user.id,
       ejercicio_id: ejercicioId,
-      estado: 'completado',
+      estado: submission.state,
       archivo_url: null,
       archivo_nombre: file.name,
       archivo_path: filePath,
       primer_envio_en: primerEnvio.toISOString(),
       caduca_el: caduca.toISOString(),
+      ...(existing ? {} : {
+        inscripcion_alumno_id: enrollment!.id,
+        vinculo_evaluacion_id: link!.id,
+        unidad_origen_id: unitId,
+        origen: 'descriptiveSubmission' as const,
+        registro_legacy: false,
+      }),
     }, { onConflict: 'alumno_id, ejercicio_id' })
     .select()
     .single();
@@ -288,7 +325,7 @@ export async function obtenerAccesoArchivoEntrega(
 
 // -------------------------------------------------------------------
 // 4. CALIFICAR ENTREGA (USO DEL PROFESOR)
-//    - Guarda calificacion_manual en resultados_ejercicios
+//    - Guarda la calificacion canonica 0-10 en resultados_ejercicios
 //    - Bloquea el registro (no se aceptan más subidas)
 // -------------------------------------------------------------------
 export async function calificarEntregaDescriptiva(
@@ -298,7 +335,10 @@ export async function calificarEntregaDescriptiva(
 ) {
   const { admin, tenantId, user, profile } = await requireTenantSession(['profesor', 'admin', 'superuser']);
 
-  if (calificacion < 0 || calificacion > 10) {
+  let notaCanonica: number;
+  try {
+    notaCanonica = assertGrade10(calificacion);
+  } catch {
     return { error: 'Calificación debe ser entre 0 y 10' };
   }
 
@@ -316,10 +356,11 @@ export async function calificarEntregaDescriptiva(
   const { error } = await admin
     .from('resultados_ejercicios')
     .update({
-      calificacion_manual: calificacion,
-      calificacion: calificacion * 10, // Convertir a escala de 100 para promediar
+      calificacion: notaCanonica,
       bloqueado: true,
       estado: 'calificado',
+      calificado_por: user.id,
+      calificado_at: new Date().toISOString(),
     })
     .eq('tenant_id', tenantId)
     .eq('alumno_id', alumnoId)
