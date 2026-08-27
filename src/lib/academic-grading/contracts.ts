@@ -5,6 +5,8 @@ export type AcademicPeriodState = 'borrador' | 'activo' | 'cerrado';
 export type EvaluationSchemeState = 'borrador' | 'activo' | 'archivado';
 export type AcademicResultState = 'sin_capturar' | 'calificado' | 'no_entrego' | 'justificado';
 export type GradeRoundingMode = 'half_up';
+export type EvaluationCriterionType = 'directo' | 'actividades' | 'participacion' | 'hibrido';
+export type EvaluationSubcriterionType = Exclude<EvaluationCriterionType, 'hibrido'>;
 
 export interface TenantAcademicContext {
   tenantId: string;
@@ -62,6 +64,38 @@ export interface EvaluationSchemeContract {
   justifiedTreatment: 'exclude';
   state: EvaluationSchemeState;
   version: number;
+  copiedFromId: string | null;
+}
+
+export type EvaluationSubcriterionConfiguration =
+  | Record<string, never>
+  | { agregacion: 'promedio' }
+  | { modo: 'maximo_grupo' }
+  | { modo: 'meta_fija'; meta: number };
+
+export interface EvaluationSubcriterionContract {
+  id: string;
+  tenantId: string;
+  criterionId: string;
+  name: string;
+  type: EvaluationSubcriterionType;
+  internalWeight: number;
+  effectiveWeight: number;
+  order: number;
+  configuration: EvaluationSubcriterionConfiguration;
+  active: boolean;
+}
+
+export interface EvaluationCriterionContract {
+  id: string;
+  tenantId: string;
+  schemeId: string;
+  name: string;
+  type: EvaluationCriterionType;
+  weight: number;
+  order: number;
+  active: boolean;
+  subcriteria: ReadonlyArray<EvaluationSubcriterionContract>;
 }
 
 export interface GradeMutationCommand {

@@ -1133,6 +1133,63 @@ export type Database = {
           },
         ]
       }
+      criterios_evaluacion: {
+        Row: {
+          activo: boolean
+          created_at: string
+          created_by: string
+          esquema_evaluacion_id: string
+          id: string
+          nombre: string
+          orden: number
+          peso: number
+          tenant_id: string
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          activo?: boolean
+          created_at?: string
+          created_by: string
+          esquema_evaluacion_id: string
+          id?: string
+          nombre: string
+          orden: number
+          peso: number
+          tenant_id: string
+          tipo: string
+          updated_at?: string
+        }
+        Update: {
+          activo?: boolean
+          created_at?: string
+          created_by?: string
+          esquema_evaluacion_id?: string
+          id?: string
+          nombre?: string
+          orden?: number
+          peso?: number
+          tenant_id?: string
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "criterios_evaluacion_created_by_tenant_fkey"
+            columns: ["created_by", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "criterios_evaluacion_esquema_tenant_fkey"
+            columns: ["esquema_evaluacion_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "esquemas_evaluacion"
+            referencedColumns: ["id", "tenant_id"]
+          },
+        ]
+      }
       ejercicios: {
         Row: {
           contenido: Json | null
@@ -1419,6 +1476,7 @@ export type Database = {
           asignacion_profesor_id: string
           calificacion_aprobatoria: number
           ciclo_escolar_id: string
+          copiado_desde_id: string | null
           created_at: string
           created_by: string
           decimales_mostrados: number
@@ -1439,6 +1497,7 @@ export type Database = {
           asignacion_profesor_id: string
           calificacion_aprobatoria?: number
           ciclo_escolar_id: string
+          copiado_desde_id?: string | null
           created_at?: string
           created_by: string
           decimales_mostrados?: number
@@ -1459,6 +1518,7 @@ export type Database = {
           asignacion_profesor_id?: string
           calificacion_aprobatoria?: number
           ciclo_escolar_id?: string
+          copiado_desde_id?: string | null
           created_at?: string
           created_by?: string
           decimales_mostrados?: number
@@ -1481,6 +1541,13 @@ export type Database = {
             columns: ["asignacion_profesor_id", "tenant_id", "ciclo_escolar_id"]
             isOneToOne: false
             referencedRelation: "asignaciones_profesor"
+            referencedColumns: ["id", "tenant_id", "ciclo_escolar_id"]
+          },
+          {
+            foreignKeyName: "esquemas_evaluacion_copiado_desde_tenant_cycle_fkey"
+            columns: ["copiado_desde_id", "tenant_id", "ciclo_escolar_id"]
+            isOneToOne: false
+            referencedRelation: "esquemas_evaluacion"
             referencedColumns: ["id", "tenant_id", "ciclo_escolar_id"]
           },
           {
@@ -3127,6 +3194,66 @@ export type Database = {
           },
         ]
       }
+      subcriterios_evaluacion: {
+        Row: {
+          activo: boolean
+          configuracion: Json
+          created_at: string
+          created_by: string
+          criterio_evaluacion_id: string
+          id: string
+          nombre: string
+          orden: number
+          peso_interno: number
+          tenant_id: string
+          tipo: string
+          updated_at: string
+        }
+        Insert: {
+          activo?: boolean
+          configuracion: Json
+          created_at?: string
+          created_by: string
+          criterio_evaluacion_id: string
+          id?: string
+          nombre: string
+          orden: number
+          peso_interno: number
+          tenant_id: string
+          tipo: string
+          updated_at?: string
+        }
+        Update: {
+          activo?: boolean
+          configuracion?: Json
+          created_at?: string
+          created_by?: string
+          criterio_evaluacion_id?: string
+          id?: string
+          nombre?: string
+          orden?: number
+          peso_interno?: number
+          tenant_id?: string
+          tipo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subcriterios_evaluacion_created_by_tenant_fkey"
+            columns: ["created_by", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "subcriterios_evaluacion_criterio_tenant_fkey"
+            columns: ["criterio_evaluacion_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "criterios_evaluacion"
+            referencedColumns: ["id", "tenant_id"]
+          },
+        ]
+      }
       temas: {
         Row: {
           contenido: string | null
@@ -3553,6 +3680,14 @@ export type Database = {
       }
     }
     Functions: {
+      activar_esquema_evaluacion: {
+        Args: { expected_scheme_version: number; target_scheme_id: string }
+        Returns: {
+          esquema_id: string
+          estado: string
+          version: number
+        }[]
+      }
       actualizar_encuesta: {
         Args: {
           p_activa: boolean
@@ -3575,6 +3710,18 @@ export type Database = {
           cuota_excedida: boolean
           limite: number
           usados_nuevo: number
+        }[]
+      }
+      copiar_esquema_evaluacion: {
+        Args: {
+          expected_source_version: number
+          new_scheme_name: string
+          source_scheme_id: string
+        }
+        Returns: {
+          esquema_id: string
+          estado: string
+          version: number
         }[]
       }
       crear_encuesta: {
