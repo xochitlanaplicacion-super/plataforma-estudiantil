@@ -4252,6 +4252,16 @@ export type Database = {
         }
         Returns: Json
       }
+      cerrar_calificaciones_academicas: {
+        Args: {
+          p_asignacion_id: string
+          p_correlation_id?: string | null
+          p_idempotency_key: string
+          p_motivo: string
+          p_periodo_id: string
+        }
+        Returns: Json
+      }
       actualizar_encuesta: {
         Args: {
           p_activa: boolean
@@ -4303,6 +4313,17 @@ export type Database = {
         Returns: string
       }
       eliminar_encuesta: { Args: { p_encuesta_id: string }; Returns: boolean }
+      editar_calificaciones_academicas: {
+        Args: {
+          p_asignacion_id: string
+          p_correlation_id?: string | null
+          p_idempotency_key: string
+          p_items: Json
+          p_motivo: string
+          p_periodo_id: string
+        }
+        Returns: Json
+      }
       generar_folio_recibo: { Args: { prefijo: string }; Returns: string }
       get_active_storage_urls: {
         Args: { bucket_name: string }
@@ -4323,6 +4344,20 @@ export type Database = {
         }[]
       }
       is_admin_or_super: { Args: never; Returns: boolean }
+      previsualizar_cierre_calificaciones: {
+        Args: { p_asignacion_id: string; p_periodo_id: string }
+        Returns: Json
+      }
+      reabrir_calificaciones_academicas: {
+        Args: {
+          p_asignacion_id: string
+          p_correlation_id?: string | null
+          p_idempotency_key: string
+          p_motivo: string
+          p_periodo_id: string
+        }
+        Returns: Json
+      }
       replace_tenant_domain_for_service: {
         Args: { p_domain_id: string; p_hostname: string; p_tenant_id: string }
         Returns: string
