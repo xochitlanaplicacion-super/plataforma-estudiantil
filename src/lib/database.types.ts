@@ -4240,6 +4240,18 @@ export type Database = {
           version: number
         }[]
       }
+      calcular_calificacion_academica: {
+        Args: { p_dataset: Json }
+        Returns: Json
+      }
+      calcular_resultado_academico: {
+        Args: {
+          p_asignacion_id: string
+          p_inscripcion_id: string
+          p_periodo_id: string
+        }
+        Returns: Json
+      }
       actualizar_encuesta: {
         Args: {
           p_activa: boolean

@@ -1,0 +1,102 @@
+[
+  {
+    "name": "pesos y notas cero cinco diez",
+    "input": {
+      "periodState": "activo", "displayDecimals": 1, "roundingMode": "half_up",
+      "criteria": [
+        { "id": "c0", "label": "Sin impacto", "type": "directo", "weight": "0.0000", "order": 1, "subcriteria": [], "sources": [{ "id": "s0", "state": "calificado", "scale": "0-10", "value": "0.00000000" }] },
+        { "id": "c5", "label": "Medio", "type": "directo", "weight": "50.0000", "order": 2, "subcriteria": [], "sources": [{ "id": "s5", "state": "calificado", "scale": "0-10", "value": "5.00000000" }] },
+        { "id": "c10", "label": "Completo", "type": "directo", "weight": "50.0000", "order": 3, "subcriteria": [], "sources": [{ "id": "s10", "state": "calificado", "scale": "0-10", "value": "10.00000000" }] }
+      ]
+    },
+    "expected": { "exactGrade": "7.5000", "displayGrade": "7.5", "complete": true, "contributions": ["0.0000", "2.5000", "5.0000"] }
+  },
+  {
+    "name": "porcentajes cero cincuenta cien normalizados",
+    "input": {
+      "periodState": "activo", "displayDecimals": 1, "roundingMode": "half_up",
+      "criteria": [{ "id": "activities", "label": "Actividades", "type": "actividades", "weight": "100.0000", "order": 1, "subcriteria": [], "sources": [
+        { "id": "p0", "state": "calificado", "scale": "0-1", "value": "0.00000000" },
+        { "id": "p50", "state": "calificado", "scale": "0-1", "value": "0.50000000" },
+        { "id": "p100", "state": "calificado", "scale": "0-1", "value": "1.00000000" }
+      ] }]
+    },
+    "expected": { "exactGrade": "5.0000", "displayGrade": "5.0", "complete": true, "contributions": ["5.0000"] }
+  },
+  {
+    "name": "hibrido directo actividades y participacion por meta",
+    "input": {
+      "periodState": "activo", "displayDecimals": 2, "roundingMode": "half_up",
+      "criteria": [{ "id": "hybrid", "label": "Híbrido", "type": "hibrido", "weight": "100.0000", "order": 1, "sources": [], "subcriteria": [
+        { "id": "direct", "label": "Directo", "type": "directo", "internalWeight": "40.0000", "order": 1, "sources": [{ "id": "d", "state": "calificado", "scale": "0-10", "value": "8.00000000" }] },
+        { "id": "tasks", "label": "Actividades", "type": "actividades", "internalWeight": "40.0000", "order": 2, "sources": [{ "id": "a1", "state": "calificado", "scale": "0-10", "value": "6.00000000" }, { "id": "a2", "state": "calificado", "scale": "0-10", "value": "10.00000000" }] },
+        { "id": "participation", "label": "Participación", "type": "participacion", "internalWeight": "20.0000", "order": 3, "sources": [{ "id": "target-5-of-10", "state": "calificado", "scale": "0-1", "value": "0.50000000" }] }
+      ] }]
+    },
+    "expected": { "exactGrade": "7.4000", "displayGrade": "7.40", "complete": true, "contributions": ["7.4000"] }
+  },
+  {
+    "name": "no entregado abierto no se vuelve cero",
+    "input": {
+      "periodState": "activo", "displayDecimals": 1, "roundingMode": "half_up",
+      "criteria": [{ "id": "tasks", "label": "Tareas", "type": "actividades", "weight": "100.0000", "order": 1, "subcriteria": [], "sources": [
+        { "id": "done", "state": "calificado", "scale": "0-10", "value": "8.00000000" },
+        { "id": "missing", "state": "no_entregado", "scale": "0-10", "value": null }
+      ] }]
+    },
+    "expected": { "exactGrade": "8.0000", "displayGrade": "8.0", "complete": false, "contributions": ["8.0000"] }
+  },
+  {
+    "name": "no entregado cerrado aporta cero",
+    "input": {
+      "periodState": "cerrado", "displayDecimals": 1, "roundingMode": "half_up",
+      "criteria": [{ "id": "tasks", "label": "Tareas", "type": "actividades", "weight": "100.0000", "order": 1, "subcriteria": [], "sources": [
+        { "id": "done", "state": "calificado", "scale": "0-10", "value": "8.00000000" },
+        { "id": "missing", "state": "no_entregado", "scale": "0-10", "value": null }
+      ] }]
+    },
+    "expected": { "exactGrade": "4.0000", "displayGrade": "4.0", "complete": true, "contributions": ["4.0000"] }
+  },
+  {
+    "name": "justificado se excluye del denominador",
+    "input": {
+      "periodState": "cerrado", "displayDecimals": 1, "roundingMode": "half_up",
+      "criteria": [{ "id": "direct", "label": "Directo", "type": "directo", "weight": "100.0000", "order": 1, "subcriteria": [], "sources": [
+        { "id": "grade", "state": "calificado", "scale": "0-10", "value": "6.00000000" },
+        { "id": "excused", "state": "justificado", "scale": "0-10", "value": null }
+      ] }]
+    },
+    "expected": { "exactGrade": "6.0000", "displayGrade": "6.0", "complete": true, "contributions": ["6.0000"] }
+  },
+  {
+    "name": "participacion denominador cero con regla cero",
+    "input": {
+      "periodState": "activo", "displayDecimals": 1, "roundingMode": "half_up",
+      "criteria": [{ "id": "participation", "label": "Participación", "type": "participacion", "weight": "100.0000", "order": 1, "subcriteria": [], "sources": [
+        { "id": "zero-denominator", "state": "calificado", "scale": "0-1", "value": "0.00000000" }
+      ] }]
+    },
+    "expected": { "exactGrade": "0.0000", "displayGrade": "0.0", "complete": true, "contributions": ["0.0000"] }
+  },
+  {
+    "name": "redondeo half up sólo visual",
+    "input": {
+      "periodState": "activo", "displayDecimals": 1, "roundingMode": "half_up",
+      "criteria": [{ "id": "round", "label": "Redondeo", "type": "directo", "weight": "100.0000", "order": 1, "subcriteria": [], "sources": [
+        { "id": "grade", "state": "calificado", "scale": "0-10", "value": "6.65000000" }
+      ] }]
+    },
+    "expected": { "exactGrade": "6.6500", "displayGrade": "6.7", "complete": true, "contributions": ["6.6500"] }
+  },
+  {
+    "name": "participacion denominador cero con regla excluir",
+    "input": {
+      "periodState": "activo", "displayDecimals": 1, "roundingMode": "half_up",
+      "criteria": [
+        { "id": "participation", "label": "Participación", "type": "participacion", "weight": "50.0000", "order": 1, "subcriteria": [], "sources": [{ "id": "zero-denominator", "state": "pendiente", "scale": "0-1", "value": null, "zeroDenominatorExcluded": true }] },
+        { "id": "direct", "label": "Directo", "type": "directo", "weight": "50.0000", "order": 2, "subcriteria": [], "sources": [{ "id": "grade", "state": "calificado", "scale": "0-10", "value": "8.00000000" }] }
+      ]
+    },
+    "expected": { "exactGrade": "8.0000", "displayGrade": "8.0", "complete": false, "contributions": ["0.0000", "8.0000"] }
+  }
+]
