@@ -4069,6 +4069,60 @@ export type Database = {
         }
         Relationships: []
       }
+      vista_calificaciones_alumno: {
+        Row: {
+          actualizado_at: string | null
+          alumno_id: string | null
+          asignacion_profesor_id: string | null
+          ciclo_escolar_id: string | null
+          criterio_evaluacion_id: string | null
+          criterio_nombre: string | null
+          criterio_peso: number | null
+          criterio_tipo: string | null
+          escala_fuente: string | null
+          estado: string | null
+          fuente_id: string | null
+          inscripcion_alumno_id: string | null
+          observacion: string | null
+          periodo_evaluacion_id: string | null
+          row_version: number | null
+          subcriterio_evaluacion_id: string | null
+          subcriterio_nombre: string | null
+          subcriterio_tipo: string | null
+          peso_interno: number | null
+          tenant_id: string | null
+          tipo_fuente: string | null
+          valor_fuente: number | null
+        }
+        Relationships: []
+      }
+      vista_desglose_calificacion: {
+        Row: {
+          actualizado_at: string | null
+          alumno_id: string | null
+          asignacion_profesor_id: string | null
+          ciclo_escolar_id: string | null
+          criterio_evaluacion_id: string | null
+          criterio_nombre: string | null
+          criterio_peso: number | null
+          criterio_tipo: string | null
+          escala_fuente: string | null
+          estado: string | null
+          fuente_id: string | null
+          inscripcion_alumno_id: string | null
+          observacion: string | null
+          periodo_evaluacion_id: string | null
+          row_version: number | null
+          subcriterio_evaluacion_id: string | null
+          subcriterio_nombre: string | null
+          subcriterio_tipo: string | null
+          peso_interno: number | null
+          tenant_id: string | null
+          tipo_fuente: string | null
+          valor_fuente: number | null
+        }
+        Relationships: []
+      }
       vista_fuentes_calificacion: {
         Row: {
           alumno_id: string | null
@@ -4089,6 +4143,27 @@ export type Database = {
           subcriterio_evaluacion_id: string | null
           tenant_id: string | null
           tipo_fuente: string | null
+        }
+        Relationships: []
+      }
+      vista_libreta_profesor: {
+        Row: {
+          actualizado_at: string | null
+          alumno_id: string | null
+          asignacion_profesor_id: string | null
+          ciclo_escolar_id: string | null
+          criterio_evaluacion_id: string | null
+          escala_fuente: string | null
+          estado: string | null
+          fuente_id: string | null
+          inscripcion_alumno_id: string | null
+          observacion: string | null
+          periodo_evaluacion_id: string | null
+          row_version: number | null
+          subcriterio_evaluacion_id: string | null
+          tenant_id: string | null
+          tipo_fuente: string | null
+          valor_fuente: number | null
         }
         Relationships: []
       }

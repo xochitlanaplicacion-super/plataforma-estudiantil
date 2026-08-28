@@ -25,6 +25,8 @@
     "test:paso4": "npm run test:paso4:db && npm run test:unit && npm run test:components && npm run typecheck && npm run test:e2e:list",
     "test:paso5:db": "bash scripts/academic-grading/test-step5-database.sh",
     "test:paso5": "npm run test:paso5:db && npm run test:unit && npm run test:components && npm run typecheck && npm run test:e2e:list",
+    "test:paso6:db": "bash scripts/academic-grading/test-step6-database.sh",
+    "test:paso6": "npm run test:paso6:db && npm run test:unit && npm run test:components && npm run typecheck && npm run test:e2e:list",
     "sync:force": "git add . && (git commit -m 'Update from Firebase Studio' || echo 'No changes to commit') && git push origin main --force"
   },
   "dependencies": {
