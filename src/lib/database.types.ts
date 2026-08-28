@@ -955,6 +955,112 @@ export type Database = {
           },
         ]
       }
+      cierres_calificaciones: {
+        Row: {
+          asignacion_id: string
+          breakdown: Json
+          ciclo_escolar_id: string
+          closed_at: string
+          closed_by: string
+          correlation_id: string
+          esquema_id: string
+          esquema_version: number
+          estado: string
+          id: string
+          inscripcion_id: string
+          motivo: string
+          periodo_id: string
+          resultado_exacto: number
+          resultado_visual: number
+          snapshot_parent_id: string | null
+          tenant_id: string
+          version_cierre: number
+        }
+        Insert: {
+          asignacion_id: string
+          breakdown: Json
+          ciclo_escolar_id: string
+          closed_at?: string
+          closed_by: string
+          correlation_id: string
+          esquema_id: string
+          esquema_version: number
+          estado: string
+          id?: string
+          inscripcion_id: string
+          motivo: string
+          periodo_id: string
+          resultado_exacto: number
+          resultado_visual: number
+          snapshot_parent_id?: string | null
+          tenant_id: string
+          version_cierre: number
+        }
+        Update: {
+          asignacion_id?: string
+          breakdown?: Json
+          ciclo_escolar_id?: string
+          closed_at?: string
+          closed_by?: string
+          correlation_id?: string
+          esquema_id?: string
+          esquema_version?: number
+          estado?: string
+          id?: string
+          inscripcion_id?: string
+          motivo?: string
+          periodo_id?: string
+          resultado_exacto?: number
+          resultado_visual?: number
+          snapshot_parent_id?: string | null
+          tenant_id?: string
+          version_cierre?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cierres_actor_tenant_fkey"
+            columns: ["closed_by", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "cierres_assignment_tenant_cycle_fkey"
+            columns: ["asignacion_id", "tenant_id", "ciclo_escolar_id"]
+            isOneToOne: false
+            referencedRelation: "asignaciones_profesor"
+            referencedColumns: ["id", "tenant_id", "ciclo_escolar_id"]
+          },
+          {
+            foreignKeyName: "cierres_enrollment_tenant_cycle_fkey"
+            columns: ["inscripcion_id", "tenant_id", "ciclo_escolar_id"]
+            isOneToOne: false
+            referencedRelation: "inscripciones_alumno"
+            referencedColumns: ["id", "tenant_id", "ciclo_escolar_id"]
+          },
+          {
+            foreignKeyName: "cierres_parent_tenant_fkey"
+            columns: ["snapshot_parent_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "cierres_calificaciones"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "cierres_period_tenant_cycle_fkey"
+            columns: ["periodo_id", "tenant_id", "ciclo_escolar_id"]
+            isOneToOne: false
+            referencedRelation: "periodos_evaluacion"
+            referencedColumns: ["id", "tenant_id", "ciclo_escolar_id"]
+          },
+          {
+            foreignKeyName: "cierres_scheme_tenant_cycle_fkey"
+            columns: ["esquema_id", "tenant_id", "ciclo_escolar_id"]
+            isOneToOne: false
+            referencedRelation: "esquemas_evaluacion"
+            referencedColumns: ["id", "tenant_id", "ciclo_escolar_id"]
+          },
+        ]
+      }
       config_credenciales: {
         Row: {
           color_panel_izquierdo: string | null
@@ -3487,6 +3593,60 @@ export type Database = {
           },
           {
             foreignKeyName: "slides_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      solicitudes_mutacion_academica: {
+        Row: {
+          actor_id: string
+          completed_at: string | null
+          correlation_id: string
+          created_at: string
+          id: string
+          idempotency_key: string
+          operacion: string
+          request_hash: string
+          respuesta: Json | null
+          tenant_id: string
+        }
+        Insert: {
+          actor_id: string
+          completed_at?: string | null
+          correlation_id: string
+          created_at?: string
+          id?: string
+          idempotency_key: string
+          operacion: string
+          request_hash: string
+          respuesta?: Json | null
+          tenant_id: string
+        }
+        Update: {
+          actor_id?: string
+          completed_at?: string | null
+          correlation_id?: string
+          created_at?: string
+          id?: string
+          idempotency_key?: string
+          operacion?: string
+          request_hash?: string
+          respuesta?: Json | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "solicitudes_mutacion_actor_tenant_fkey"
+            columns: ["actor_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "solicitudes_mutacion_tenant_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
