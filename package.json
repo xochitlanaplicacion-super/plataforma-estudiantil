@@ -33,6 +33,7 @@
     "test:paso8": "npm run test:paso8:db && npm run test:unit && npm run test:components && npm run typecheck && npm run test:e2e:list",
     "test:paso9:types": "bash scripts/academic-grading/test-step9-generated-types.sh",
     "test:paso9": "npm run test:paso9:types && vitest run tests/unit/academic-application-layer.test.ts tests/unit/academic-supabase-repository.test.ts tests/unit/academic-step9-contract.test.ts && npm run test:unit && npm run test:components && npm run typecheck && npm run test:e2e:list",
+    "test:paso10": "vitest run tests/unit/academic-configuration-step10.test.ts tests/components/academic-configuration-step10.test.tsx && npm run test:unit && npm run test:components && npm run typecheck && npm run test:e2e:list",
     "sync:force": "git add . && (git commit -m 'Update from Firebase Studio' || echo 'No changes to commit') && git push origin main --force"
   },
   "dependencies": {
@@ -117,6 +118,7 @@
     "@types/react": "^19.2.1",
     "@types/react-dom": "^19.2.1",
     "@vitejs/plugin-react": "6.1.0",
+    "axe-core": "^4.10.3",
     "genkit-cli": "^1.28.0",
     "jsdom": "26.1.0",
     "postcss": "^8",

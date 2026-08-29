@@ -21,7 +21,13 @@ export default defineConfig({
     { name: 'chromium-mobile', use: { ...devices['Pixel 5'] } },
   ],
   webServer: {
-    command: 'npm run dev',
+    command: process.env.ACADEMIC_STEP10_EVIDENCE === 'true'
+      ? 'ACADEMIC_STEP10_EVIDENCE=true npm run dev'
+      : 'npm run dev',
+    env: {
+      ...process.env,
+      ACADEMIC_STEP10_EVIDENCE: process.env.ACADEMIC_STEP10_EVIDENCE ?? 'false',
+    },
     url: 'http://127.0.0.1:9002',
     reuseExistingServer: !process.env.CI,
     timeout: 180_000,

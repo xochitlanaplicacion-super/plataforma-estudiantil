@@ -43,7 +43,9 @@ import {
   Building2,
   MonitorPlay,
   UserCircle,
-  IdCard
+  IdCard,
+  CalendarRange,
+  Scale
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -79,7 +81,7 @@ function SidebarNav({ activeMenus, pathname, hasUnreadClases }: { activeMenus: a
           <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.18em] font-extrabold text-sidebar-foreground/65 px-3 mb-2">{group.group}</SidebarGroupLabel>
           <SidebarMenu className="gap-1">
             {group.items.map((item: any) => {
-              const isActive = pathname === item.href;
+              const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
               return (
                 <SidebarMenuItem key={item.label}>
                   <SidebarMenuButton
@@ -164,6 +166,10 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
         { icon: FileText, label: 'Dictámenes de Acreditación', href: '/dashboard/admin/acreditaciones' },
         { icon: IdCard, label: 'Credenciales de Institución', href: '/dashboard/admin/credenciales' },
       ]},
+      { group: "Evaluación", items: [
+        { icon: CalendarRange, label: 'Ciclos y periodos', href: '/dashboard/admin/evaluacion/ciclos' },
+        { icon: Scale, label: 'Esquemas y criterios', href: '/dashboard/admin/evaluacion/esquemas' },
+      ]},
       { group: "Módulo 10: Reportes", items: [
         { icon: CreditCard, label: 'Control de Pagos', href: '/dashboard/admin/vigencias' },
         { icon: BarChart3, label: 'Reportes y Auditoría', href: '/dashboard/admin/auditoria' },
@@ -189,7 +195,11 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
         { icon: FileText, label: 'Dictámenes de Acreditación', href: '/dashboard/admin/acreditaciones' },
         { icon: IdCard, label: 'Credenciales de Institución', href: '/dashboard/admin/credenciales' },
         { icon: CreditCard, label: 'Control de Pagos', href: '/dashboard/admin/vigencias' },
-      ]}
+      ]},
+      { group: "Evaluación", items: [
+        { icon: CalendarRange, label: 'Ciclos y periodos', href: '/dashboard/admin/evaluacion/ciclos' },
+        { icon: Scale, label: 'Esquemas y criterios', href: '/dashboard/admin/evaluacion/esquemas' },
+      ]},
     ],
     profesor: [
       { group: "Docencia", items: [

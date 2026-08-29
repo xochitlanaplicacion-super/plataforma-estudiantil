@@ -132,6 +132,12 @@ export function mapSupabaseAcademicError(error: unknown): AcademicApplicationErr
   if (candidate.code === 'PT422' || status === 422) {
     return new AcademicApplicationError('validation', { cause: error });
   }
+  if (['22003', '22023', '23514', 'P0001'].includes(candidate.code ?? '')) {
+    return new AcademicApplicationError('validation', { cause: error });
+  }
+  if (candidate.code === '23P01') {
+    return new AcademicApplicationError('conflict', { cause: error });
+  }
   return new AcademicApplicationError('unexpected', { cause: error });
 }
 

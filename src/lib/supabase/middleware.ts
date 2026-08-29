@@ -44,6 +44,16 @@ export async function updateSession(request: NextRequest) {
     .split(',').map((host) => host.trim().toLowerCase());
   const isPlatformHost = platformHosts.includes(hostname) || hostname === 'localhost' || hostname === '127.0.0.1';
 
+  // Arnés visual local del Paso 10. En producción la ruta conserva la
+  // autenticación normal y su propia página responde 404.
+  if (
+    process.env.NODE_ENV !== 'production'
+    && pathname.startsWith('/academic-step10-evidence')
+    && (hostname === 'localhost' || hostname === '127.0.0.1')
+  ) {
+    return supabaseResponse;
+  }
+
   // Permitir siempre acceso a login, página de expiración, PREREGISTRO y endpoints de mantenimiento (cron)
   if (pathname === '/' || pathname === '/expired' || pathname === '/preregistro' || pathname.startsWith('/api/cron/')) {
     return supabaseResponse;
