@@ -34,6 +34,7 @@
     "test:paso9:types": "bash scripts/academic-grading/test-step9-generated-types.sh",
     "test:paso9": "npm run test:paso9:types && vitest run tests/unit/academic-application-layer.test.ts tests/unit/academic-supabase-repository.test.ts tests/unit/academic-step9-contract.test.ts && npm run test:unit && npm run test:components && npm run typecheck && npm run test:e2e:list",
     "test:paso10": "vitest run tests/unit/academic-configuration-step10.test.ts tests/components/academic-configuration-step10.test.tsx && npm run test:unit && npm run test:components && npm run typecheck && npm run test:e2e:list",
+    "test:paso11": "vitest run tests/unit/academic-gradebook-step11.test.ts tests/components/academic-gradebook-step11.test.tsx && npm run test:unit && npm run test:components && npm run typecheck && npm run test:e2e:list",
     "sync:force": "git add . && (git commit -m 'Update from Firebase Studio' || echo 'No changes to commit') && git push origin main --force"
   },
   "dependencies": {

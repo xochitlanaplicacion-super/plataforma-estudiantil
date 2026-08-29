@@ -32,6 +32,9 @@ import {
   revalidateAcademicRoutes,
 } from '@/lib/academic/revalidation';
 import { AcademicService } from '@/lib/academic/service';
+import type { AcademicGradebookWorkspaceDto } from '@/lib/academic/gradebook-dto';
+import { SupabaseAcademicGradebookRepository } from '@/lib/academic/gradebook-repository';
+import { AcademicGradebookService } from '@/lib/academic/gradebook-service';
 import { requireTenantSession } from '@/lib/tenant/context';
 
 async function createAcademicServiceForRequest(): Promise<AcademicService> {
@@ -55,6 +58,23 @@ async function createAcademicConfigurationServiceForRequest(): Promise<AcademicC
   const session = await requireTenantSession();
   const repository = new SupabaseAcademicConfigurationRepository(session.supabase);
   return new AcademicConfigurationService(repository, {
+    tenantId: session.tenantId,
+    actorId: session.user.id,
+    role: session.profile.rol,
+    featureEnabled: isAcademicGradingV2Enabled(
+      { tenantId: session.tenantId, tenantSlug: session.tenant.slug },
+      {
+        ACADEMIC_GRADING_V2_ENABLED: process.env.ACADEMIC_GRADING_V2_ENABLED,
+        ACADEMIC_GRADING_V2_TENANTS: process.env.ACADEMIC_GRADING_V2_TENANTS,
+      },
+    ),
+  });
+}
+
+async function createAcademicGradebookServiceForRequest(): Promise<AcademicGradebookService> {
+  const session = await requireTenantSession(['profesor']);
+  const repository = new SupabaseAcademicGradebookRepository(session.supabase);
+  return new AcademicGradebookService(repository, {
     tenantId: session.tenantId,
     actorId: session.user.id,
     role: session.profile.rol,
@@ -144,6 +164,20 @@ export async function reopenAcademicGradesAction(
   input: unknown,
 ): Promise<AcademicActionResult<AcademicClosureResultDto>> {
   return actions.reopenGrades(input);
+}
+
+export async function loadAcademicGradebookWorkspaceAction(
+  input: unknown,
+): Promise<AcademicActionResult<AcademicGradebookWorkspaceDto>> {
+  try {
+    const service = await createAcademicGradebookServiceForRequest();
+    const data = await service.loadWorkspace(input);
+    return academicSuccessResult(data, {
+      empty: data.students.length === 0 || data.columns.length === 0,
+    });
+  } catch (error) {
+    return academicFailureResult(error);
+  }
 }
 
 export async function loadAcademicConfigurationAction(): Promise<AcademicActionResult<AcademicConfigurationDto>> {

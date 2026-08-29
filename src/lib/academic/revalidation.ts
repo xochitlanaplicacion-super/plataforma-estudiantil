@@ -6,6 +6,7 @@ import type { AcademicActionRevalidationScope } from './action-handler';
 
 const ACADEMIC_REVALIDATION_PATHS = Object.freeze([
   '/dashboard/profesor',
+  '/dashboard/profesor/calificaciones',
   '/dashboard/admin/auditoria',
   '/dashboard/alumno/materias',
 ]);

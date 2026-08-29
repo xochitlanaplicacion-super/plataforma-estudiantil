@@ -45,7 +45,8 @@ import {
   UserCircle,
   IdCard,
   CalendarRange,
-  Scale
+  Scale,
+  NotebookTabs
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -204,6 +205,7 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
     profesor: [
       { group: "Docencia", items: [
         { icon: LayoutDashboard, label: 'Mis Asignaturas', href: '/dashboard/profesor' },
+        { icon: NotebookTabs, label: 'Libreta de calificaciones', href: '/dashboard/profesor/calificaciones' },
         { icon: ClipboardList, label: 'Entregas de Actividades', href: '/dashboard/profesor/entregas' },
         { icon: Users, label: 'Listas de grupos', href: '/dashboard/profesor/grupos' },
         { icon: MessageSquare, label: 'Mensajes de Clases', href: '/dashboard/profesor/mensajes-clases' },
