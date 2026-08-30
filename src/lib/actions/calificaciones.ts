@@ -19,6 +19,7 @@ import type {
 } from '@/lib/academic/dto';
 import type {
   AcademicConfigurationDto,
+  AcademicConfigurationDeletionDto,
   AcademicConfigurationMutationDto,
   AcademicSchemeVersionMutationDto,
 } from '@/lib/academic/configuration-dto';
@@ -278,6 +279,12 @@ export async function saveAcademicSubcriterionAction(
   input: unknown,
 ): Promise<AcademicActionResult<AcademicConfigurationMutationDto>> {
   return executeConfiguration((service) => service.saveSubcriterion(input), { revalidate: true });
+}
+
+export async function deleteAcademicSubcriterionAction(
+  input: unknown,
+): Promise<AcademicActionResult<AcademicConfigurationDeletionDto>> {
+  return executeConfiguration((service) => service.deleteSubcriterion(input), { revalidate: true });
 }
 
 export async function activateAcademicSchemeAction(

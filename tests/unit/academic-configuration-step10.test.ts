@@ -15,6 +15,8 @@ const IDS = {
   cycle: '1c000000-0000-4000-8000-000000000001',
   assignment: '1d000000-0000-4000-8000-000000000001',
   period: '1e000000-0000-4000-8000-000000000001',
+  criterion: '1f000000-0000-4000-8000-000000000001',
+  subcriterion: '2a000000-0000-4000-8000-000000000001',
 };
 
 function repositoryDouble() {
@@ -22,6 +24,7 @@ function repositoryDouble() {
     load: vi.fn(async () => ({ cycles: [], periods: [], assignments: [], schemes: [] })),
     saveCycle: vi.fn(), savePeriod: vi.fn(), saveScheme: vi.fn(),
     saveCriterion: vi.fn(), saveSubcriterion: vi.fn(),
+    deleteSubcriterion: vi.fn(async () => ({ id: IDS.subcriterion })),
     activateScheme: vi.fn(), copyScheme: vi.fn(),
   } as unknown as SupabaseAcademicConfigurationRepository;
 }
@@ -78,6 +81,25 @@ describe('Paso 10: contratos administrativos', () => {
     });
     await expect(student.load()).rejects.toMatchObject({ kind: 'forbidden' });
     expect(repository.load).not.toHaveBeenCalled();
+  });
+
+  it('deriva tenant y actor al borrar un subcriterio con concurrencia esperada', async () => {
+    const repository = repositoryDouble();
+    const professor = new AcademicConfigurationService(repository, {
+      tenantId: IDS.tenant, actorId: IDS.actor, role: 'profesor', featureEnabled: true,
+    });
+    await professor.deleteSubcriterion({
+      id: IDS.subcriterion,
+      criterionId: IDS.criterion,
+      expectedUpdatedAt: '2026-08-30T10:01:00.000Z',
+    });
+    expect(repository.deleteSubcriterion).toHaveBeenCalledWith({
+      tenantId: IDS.tenant, actorId: IDS.actor, role: 'profesor',
+    }, {
+      id: IDS.subcriterion,
+      criterionId: IDS.criterion,
+      expectedUpdatedAt: '2026-08-30T10:01:00.000Z',
+    });
   });
 
   it('conserva deny-by-default cuando el feature flag no habilita al tenant', async () => {

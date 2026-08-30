@@ -72,6 +72,12 @@ export const academicSubcriterionMutationSchema = baseMutation.extend({
   path: ['expectedUpdatedAt'], message: 'La versión esperada es obligatoria al editar.',
 });
 
+export const academicDeleteSubcriterionSchema = z.object({
+  id: uuid,
+  criterionId: uuid,
+  expectedUpdatedAt: z.string().datetime({ offset: true }),
+}).strict();
+
 export const academicActivateSchemeSchema = z.object({
   schemeId: uuid,
   expectedVersion: z.number().int().positive(),
@@ -88,5 +94,6 @@ export type AcademicPeriodMutationInput = z.output<typeof academicPeriodMutation
 export type AcademicSchemeMutationInput = z.output<typeof academicSchemeMutationSchema>;
 export type AcademicCriterionMutationInput = z.output<typeof academicCriterionMutationSchema>;
 export type AcademicSubcriterionMutationInput = z.output<typeof academicSubcriterionMutationSchema>;
+export type AcademicDeleteSubcriterionInput = z.output<typeof academicDeleteSubcriterionSchema>;
 export type AcademicActivateSchemeInput = z.output<typeof academicActivateSchemeSchema>;
 export type AcademicCopySchemeInput = z.output<typeof academicCopySchemeSchema>;

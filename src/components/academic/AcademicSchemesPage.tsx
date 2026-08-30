@@ -1,10 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, Copy, History, LockKeyhole, Plus, Save, Scale } from 'lucide-react';
+import { CheckCircle2, Copy, History, LockKeyhole, Plus, Save, Scale, Trash2 } from 'lucide-react';
 
 import {
   activateAcademicSchemeAction, copyAcademicSchemeAction,
+  deleteAcademicSubcriterionAction,
   listAcademicAuditAction, loadAcademicConfigurationAction,
   saveAcademicCriterionAction, saveAcademicSchemeAction,
   saveAcademicSubcriterionAction,
@@ -97,13 +98,15 @@ function defaultConfiguration(type: AcademicSubcriterionConfigurationDto['type']
 }
 
 function SubcriterionEditor({
-  child, disabled, onSave,
+  child, disabled, onSave, onDelete,
 }: {
   child: AcademicSubcriterionConfigurationDto;
   disabled: boolean;
   onSave: (draft: AcademicSubcriterionConfigurationDto) => Promise<void>;
+  onDelete: (draft: AcademicSubcriterionConfigurationDto) => Promise<void>;
 }) {
   const [draft, setDraft] = useState(child);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const sourceConfiguration = draft.configuration as { modo?: string; meta?: number };
   const participationMode = sourceConfiguration.modo === 'meta_fija' ? 'meta_fija' : 'maximo_grupo';
 
@@ -113,13 +116,13 @@ function SubcriterionEditor({
     setDraft((value) => ({ ...value, type, configuration: defaultConfiguration(type) }));
   }
 
-  return (
+  return <>
     <li className="grid gap-3 rounded-md bg-muted/40 p-3 text-sm md:grid-cols-[minmax(0,2fr)_minmax(8rem,1fr)_7rem_5rem_auto]">
       <div className="space-y-1"><Label htmlFor={`subcriterion-name-${child.id}`}>Subcriterio</Label><Input id={`subcriterion-name-${child.id}`} disabled={disabled} value={draft.name} onChange={(event) => setDraft((value) => ({ ...value, name: event.target.value }))} /></div>
       <div className="space-y-1"><Label htmlFor={`subcriterion-type-${child.id}`}>Tipo</Label><select id={`subcriterion-type-${child.id}`} className={fieldClassName} disabled={disabled} value={draft.type} onChange={(event) => changeType(event.target.value as typeof draft.type)}><option value="directo">Directo</option><option value="actividades">Actividades</option><option value="participacion">Participación</option></select></div>
       <div className="space-y-1"><Label htmlFor={`subcriterion-weight-${child.id}`}>Peso interno %</Label><Input id={`subcriterion-weight-${child.id}`} type="number" min={0} max={100} step="0.0001" disabled={disabled} value={draft.internalWeight} onChange={(event) => setDraft((value) => ({ ...value, internalWeight: Number(event.target.value) }))} /></div>
       <div className="space-y-1"><Label htmlFor={`subcriterion-order-${child.id}`}>Orden</Label><Input id={`subcriterion-order-${child.id}`} type="number" min={1} max={99} disabled={disabled} value={draft.order} onChange={(event) => setDraft((value) => ({ ...value, order: Number(event.target.value) }))} /></div>
-      <div className="flex flex-wrap items-end gap-2"><Button type="button" size="sm" disabled={disabled || !draft.name} onClick={() => void onSave(draft)}><Save />Guardar</Button>{!disabled ? <Button type="button" size="sm" variant="outline" onClick={() => setDraft((value) => ({ ...value, active: !value.active }))}>{draft.active ? 'Marcar inactivo' : 'Reactivar'}</Button> : null}</div>
+      <div className="flex flex-wrap items-end gap-2"><Button type="button" size="sm" disabled={disabled || !draft.name} onClick={() => void onSave(draft)}><Save />Guardar</Button>{!disabled ? <><Button type="button" size="sm" variant="outline" onClick={() => setDraft((value) => ({ ...value, active: !value.active }))}>{draft.active ? 'Marcar inactivo' : 'Reactivar'}</Button><Button type="button" size="sm" variant="destructive" onClick={() => setDeleteOpen(true)}><Trash2 />Eliminar</Button></> : null}</div>
       {draft.type === 'participacion' ? (
         <div className="grid gap-3 md:col-span-5 sm:grid-cols-2">
           <div className="space-y-1"><Label htmlFor={`participation-mode-${child.id}`}>Cálculo de participación</Label><select id={`participation-mode-${child.id}`} className={fieldClassName} disabled={disabled} value={participationMode} onChange={(event) => setDraft((value) => ({ ...value, configuration: event.target.value === 'meta_fija' ? { modo: 'meta_fija', meta: 1 } : { modo: 'maximo_grupo' } }))}><option value="maximo_grupo">Máximo del grupo</option><option value="meta_fija">Meta fija</option></select></div>
@@ -127,7 +130,16 @@ function SubcriterionEditor({
         </div>
       ) : null}
     </li>
-  );
+    <AcademicConfirmDialog
+      open={deleteOpen}
+      onOpenChange={setDeleteOpen}
+      onConfirm={() => { setDeleteOpen(false); void onDelete(child); }}
+      title={`Eliminar subcriterio “${child.name}”`}
+      description="Este subcriterio se eliminará definitivamente del borrador. La operación no afecta criterios ni datos de otras instituciones."
+      confirmLabel="Eliminar subcriterio"
+      destructive
+    />
+  </>;
 }
 
 function CriterionEditor({
@@ -182,6 +194,26 @@ function CriterionEditor({
     await onSaved();
   }
 
+  async function deleteChild(child: AcademicSubcriterionConfigurationDto) {
+    onFeedback({ kind: 'saving', message: `Eliminando ${child.name}…` });
+    const result = await deleteAcademicSubcriterionAction({
+      id: child.id,
+      criterionId: child.criterionId,
+      expectedUpdatedAt: child.updatedAt,
+    });
+    if (!result.ok) {
+      onFeedback({
+        kind: result.status === 'conflict' ? 'conflict' : 'error',
+        message: result.status === 'conflict'
+          ? 'El subcriterio cambió o ya está vinculado a calificaciones. Actualiza la pantalla o márcalo inactivo.'
+          : result.error.message,
+      });
+      return;
+    }
+    onFeedback({ kind: 'success', message: `El subcriterio “${child.name}” fue eliminado.` });
+    await onSaved();
+  }
+
   async function addChild() {
     onFeedback({ kind: 'saving', message: 'Agregando subcriterio…' });
     const result = await saveAcademicSubcriterionAction({
@@ -210,7 +242,7 @@ function CriterionEditor({
       {!disabled ? <Button type="button" size="sm" variant="outline" onClick={() => setDraft((value) => ({ ...value, active: !value.active }))}>{draft.active ? 'Marcar inactivo' : 'Reactivar'}</Button> : null}
       {criterion.subcriteria.length > 0 ? (
         <ul className="space-y-2 border-l pl-4" aria-label={`Subcriterios de ${criterion.name}`}>
-          {criterion.subcriteria.map((child) => <SubcriterionEditor key={child.id} child={child} disabled={disabled} onSave={saveChild} />)}
+          {criterion.subcriteria.map((child) => <SubcriterionEditor key={child.id} child={child} disabled={disabled} onSave={saveChild} onDelete={deleteChild} />)}
         </ul>
       ) : null}
       {!disabled ? (

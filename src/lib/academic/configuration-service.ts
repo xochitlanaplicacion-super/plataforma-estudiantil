@@ -1,5 +1,6 @@
 import type {
   AcademicConfigurationDto,
+  AcademicConfigurationDeletionDto,
   AcademicConfigurationMutationDto,
   AcademicSchemeVersionMutationDto,
 } from './configuration-dto';
@@ -7,6 +8,7 @@ import { SupabaseAcademicConfigurationRepository } from './configuration-reposit
 import {
   academicActivateSchemeSchema,
   academicCopySchemeSchema,
+  academicDeleteSubcriterionSchema,
   academicCriterionMutationSchema,
   academicCycleMutationSchema,
   academicPeriodMutationSchema,
@@ -72,6 +74,14 @@ export class AcademicConfigurationService {
   async saveSubcriterion(input: unknown): Promise<AcademicConfigurationMutationDto> {
     this.authorizeConfiguration();
     return this.repository.saveSubcriterion(this.repositoryContext(), academicSubcriterionMutationSchema.parse(input));
+  }
+
+  async deleteSubcriterion(input: unknown): Promise<AcademicConfigurationDeletionDto> {
+    this.authorizeConfiguration();
+    return this.repository.deleteSubcriterion(
+      this.repositoryContext(),
+      academicDeleteSubcriterionSchema.parse(input),
+    );
   }
 
   async activateScheme(input: unknown): Promise<AcademicSchemeVersionMutationDto> {

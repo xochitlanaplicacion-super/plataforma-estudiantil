@@ -9,6 +9,7 @@ import type { AcademicConfigurationDto } from '@/lib/academic/configuration-dto'
 const actionMocks = vi.hoisted(() => ({
   load: vi.fn(), audit: vi.fn(), saveCycle: vi.fn(), savePeriod: vi.fn(),
   saveScheme: vi.fn(), saveCriterion: vi.fn(), saveSubcriterion: vi.fn(),
+  deleteSubcriterion: vi.fn(),
   activate: vi.fn(), copy: vi.fn(),
 }));
 
@@ -20,6 +21,7 @@ vi.mock('@/lib/actions/calificaciones', () => ({
   saveAcademicSchemeAction: actionMocks.saveScheme,
   saveAcademicCriterionAction: actionMocks.saveCriterion,
   saveAcademicSubcriterionAction: actionMocks.saveSubcriterion,
+  deleteAcademicSubcriterionAction: actionMocks.deleteSubcriterion,
   activateAcademicSchemeAction: actionMocks.activate,
   copyAcademicSchemeAction: actionMocks.copy,
 }));
@@ -41,6 +43,7 @@ const ID = {
   teacher: '10000000-0000-4000-8000-000000000009',
   scheme: '10000000-0000-4000-8000-000000000010',
   criterion: '10000000-0000-4000-8000-000000000011',
+  subcriterion: '10000000-0000-4000-8000-000000000012',
 };
 
 function baseConfiguration(): AcademicConfigurationDto {
@@ -53,6 +56,7 @@ function baseConfiguration(): AcademicConfigurationDto {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks();
   window.localStorage.setItem('academic-criteria-tour-seen-v1', 'true');
   actionMocks.audit.mockResolvedValue({ ok: true, status: 'empty', data: { items: [], page: 1, pageSize: 10, total: 0, totalPages: 0, hasPreviousPage: false, hasNextPage: false } });
 });
@@ -162,5 +166,38 @@ describe('Paso 10: interfaz administrativa accesible', () => {
     await user.click(screen.getByRole('button', { name: 'Siguiente' }));
     expect(screen.getByRole('dialog', { name: '2. Abre un borrador editable' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Abrir tutorial de criterios de evaluación' })).toBeVisible();
+  }, 20_000);
+
+  it('elimina un subcriterio del borrador únicamente después de confirmarlo', async () => {
+    const data = baseConfiguration();
+    data.schemes = [{
+      id: ID.scheme, cycleId: ID.cycle, assignmentId: ID.assignment, periodId: ID.period,
+      name: 'Borrador docente', scale: '0-10', passingGrade: 6, displayDecimals: 1,
+      roundingMode: 'half_up', missingRule: 'zero_on_close', missingValue: 0,
+      excusedRule: 'exclude', state: 'borrador', version: 1, copiedFromId: null,
+      updatedAt: '2026-08-30T10:00:00.000Z', criteria: [{
+        id: ID.criterion, schemeId: ID.scheme, name: 'Tareas', type: 'actividades',
+        weight: 100, order: 1, active: true, updatedAt: '2026-08-30T10:00:00.000Z',
+        subcriteria: [{
+          id: ID.subcriterion, criterionId: ID.criterion, name: 'Examen', type: 'directo',
+          internalWeight: 25, order: 2, configuration: {}, active: true,
+          updatedAt: '2026-08-30T10:01:00.000Z',
+        }],
+      }],
+    }];
+    actionMocks.load.mockResolvedValue({ ok: true, status: 'success', data });
+    actionMocks.deleteSubcriterion.mockResolvedValue({
+      ok: true, status: 'success', data: { id: ID.subcriterion },
+    });
+    const user = userEvent.setup();
+    render(<AcademicSchemesPage audience="teacher" />);
+    await user.click(await screen.findByRole('button', { name: 'Eliminar' }));
+    expect(screen.getByRole('alertdialog', { name: 'Eliminar subcriterio “Examen”' })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Eliminar subcriterio' }));
+    await waitFor(() => expect(actionMocks.deleteSubcriterion).toHaveBeenCalledWith({
+      id: ID.subcriterion,
+      criterionId: ID.criterion,
+      expectedUpdatedAt: '2026-08-30T10:01:00.000Z',
+    }));
   }, 20_000);
 });

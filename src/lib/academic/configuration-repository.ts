@@ -5,6 +5,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { Database, Json } from '@/lib/database.types';
 import type {
   AcademicConfigurationDto,
+  AcademicConfigurationDeletionDto,
   AcademicConfigurationMutationDto,
   AcademicCriterionConfigurationDto,
   AcademicSchemeConfigurationDto,
@@ -13,6 +14,7 @@ import type {
 import type {
   AcademicActivateSchemeInput,
   AcademicCopySchemeInput,
+  AcademicDeleteSubcriterionInput,
   AcademicCriterionMutationInput,
   AcademicCycleMutationInput,
   AcademicPeriodMutationInput,
@@ -252,6 +254,23 @@ export class SupabaseAcademicConfigurationRepository {
       .select('id, updated_at').maybeSingle();
     if (error) databaseFailure(error);
     return assertMutationRow(data);
+  }
+
+  async deleteSubcriterion(
+    context: AcademicRepositoryContext,
+    input: AcademicDeleteSubcriterionInput,
+  ): Promise<AcademicConfigurationDeletionDto> {
+    const { data, error } = await this.client.from('subcriterios_evaluacion')
+      .delete()
+      .eq('tenant_id', context.tenantId)
+      .eq('criterio_evaluacion_id', input.criterionId)
+      .eq('id', input.id)
+      .eq('updated_at', input.expectedUpdatedAt)
+      .select('id')
+      .maybeSingle();
+    if (error) databaseFailure(error);
+    if (!data) throw new AcademicApplicationError('conflict');
+    return { id: data.id };
   }
 
   async activateScheme(

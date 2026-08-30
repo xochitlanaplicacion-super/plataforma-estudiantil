@@ -58,6 +58,10 @@ export interface AcademicSubcriterionConfigurationDto {
   updatedAt: string;
 }
 
+export interface AcademicConfigurationDeletionDto {
+  id: string;
+}
+
 export interface AcademicCriterionConfigurationDto {
   id: string;
   schemeId: string;
