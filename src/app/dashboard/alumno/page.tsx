@@ -34,6 +34,8 @@ import { PaymentNotificationPopup } from './components/PaymentNotificationPopup'
 import { AcreditacionNotificationPopup } from './components/AcreditacionNotificationPopup';
 import Image from 'next/image';
 import { getDatosContactoFormateados } from '@/lib/actions/horarios';
+import { loadMyAcademicResultsAction } from '@/lib/actions/calificaciones';
+import { averageAcademicResults } from '@/lib/academic/results-projector';
 
 // Helper for dynamic subject icons
 const getSubjectIcon = (nombre: string) => {
@@ -62,7 +64,10 @@ export default async function AlumnoDashboard() {
 
   if (!user) redirect('/');
 
-  const data = await getAlumnoDashboardData(user.id) as any;
+  const [data, academicResults] = await Promise.all([
+    getAlumnoDashboardData(user.id),
+    loadMyAcademicResultsAction(),
+  ]) as [any, Awaited<ReturnType<typeof loadMyAcademicResultsAction>>];
   const profile = data?.profile;
   const materias = data?.materiasAsignadas || [];
 
@@ -90,18 +95,11 @@ export default async function AlumnoDashboard() {
   const ejerciciosCompletados = data?.todosLosEjercicios?.filter((ej: any) => ej.completado) || [];
   const numeroCompletados = ejerciciosCompletados.length;
 
-  const ejerciciosVencidosNoCompletados = data?.todosLosEjercicios?.filter((ej: any) => {
-    if (ej.completado) return false;
-    if (!ej.fecha_entrega) return false;
-    return parseFechaLocal(ej.fecha_entrega) < now;
-  }) || [];
-
-  const ejerciciosEvaluables = numeroCompletados + ejerciciosVencidosNoCompletados.length;
-
-  // La autoridad persistida ya está en la escala canónica 0-10.
-  const sumaCalificaciones = ejerciciosCompletados.reduce((acc: number, ej: any) => acc + Number(ej.calificacion || 0), 0);
-  const promedioAcumulado = ejerciciosEvaluables > 0 ? sumaCalificaciones / ejerciciosEvaluables : 0;
-  const promedio = ejerciciosEvaluables > 0 ? promedioAcumulado.toFixed(1) : 'N/A';
+  // Sólo se agregan resultados producidos por el motor canónico; los ejercicios
+  // ya no constituyen una segunda fórmula de calificación en el dashboard.
+  const promedio = academicResults.ok
+    ? averageAcademicResults(academicResults.data.items, 1) ?? 'N/A'
+    : 'N/A';
 
   const labelCompletados = "Completados";
 
@@ -219,7 +217,7 @@ export default async function AlumnoDashboard() {
             </div>
             <div className="text-center bg-white/10 rounded-2xl p-4 backdrop-blur-md border border-white/20 hover:bg-white/15 transition-all shadow-inner">
               <p className="text-4xl md:text-5xl font-black text-white font-headline tracking-tighter drop-shadow">{promedio}</p>
-              <p className="text-[10px] md:text-xs font-bold uppercase text-white/75 tracking-widest mt-1">Promedio</p>
+              <p className="text-[10px] md:text-xs font-bold uppercase text-white/75 tracking-widest mt-1">Promedio visible</p>
             </div>
             <div className="text-center bg-white/10 rounded-2xl p-4 backdrop-blur-md border border-white/20 hover:bg-white/15 transition-all shadow-inner hidden md:block">
               <p className="text-4xl md:text-5xl font-black text-white font-headline tracking-tighter drop-shadow">{totalTareas}</p>

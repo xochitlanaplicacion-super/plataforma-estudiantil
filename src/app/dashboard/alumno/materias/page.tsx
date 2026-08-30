@@ -4,7 +4,7 @@ import { getAlumnoDashboardData } from '@/lib/actions/alumno';
 import { redirect } from 'next/navigation';
 import { BookOpen } from 'lucide-react';
 import { SubjectCard } from '../components/SubjectCard';
-import { parseFechaLocal } from '@/lib/utils';
+import { loadMyAcademicResultsAction } from '@/lib/actions/calificaciones';
 
 export default async function MisMateriasPage() {
   const supabase = await createServerSupabaseClient();
@@ -12,7 +12,10 @@ export default async function MisMateriasPage() {
 
   if (!user) redirect('/');
 
-  const data = await getAlumnoDashboardData(user.id) as any;
+  const [data, academicResults] = await Promise.all([
+    getAlumnoDashboardData(user.id),
+    loadMyAcademicResultsAction(),
+  ]) as [any, Awaited<ReturnType<typeof loadMyAcademicResultsAction>>];
   const profile = data?.profile;
   const materias = data?.materiasAsignadas || [];
 
@@ -52,24 +55,15 @@ export default async function MisMateriasPage() {
               (ex: any) => ex.materia_id === materia.id
             );
 
-            // Calcular promedio de la materia (basado en intentos realizados y tareas vencidas)
             const realizados = ejerciciosDeMateria.filter((ex: any) => ex.completado);
-            const vencidosNoRealizados = ejerciciosDeMateria.filter((ex: any) => {
-              if (ex.completado) return false;
-              if (!ex.fecha_entrega) return false;
-              return parseFechaLocal(ex.fecha_entrega) < new Date();
-            });
-            const evaluables = realizados.length + vencidosNoRealizados.length;
-
-            const sumaCalificaciones = realizados.reduce((acc: number, ex: any) => acc + Number(ex.calificacion || 0), 0);
-            const promedioMateria = evaluables > 0
-              ? ((sumaCalificaciones / evaluables) / 10).toFixed(1)
-              : 'N/A';
-
-            // Calcular progreso real: (Realizados / Total de la materia)
-            const progresoMateria = ejerciciosDeMateria.length > 0
-              ? Math.round((realizados.length / ejerciciosDeMateria.length) * 100)
-              : 0;
+            const resultadosMateria = academicResults.ok
+              ? academicResults.data.items.filter((item) => item.subjectId === materia.id)
+              : [];
+            const resultadoMateria = resultadosMateria.find((item) => item.periodState === 'activo')
+              ?? resultadosMateria.find((item) => item.publicationState === 'final')
+              ?? resultadosMateria[0];
+            const promedioMateria = resultadoMateria?.displayGrade ?? 'N/A';
+            const progresoMateria = resultadoMateria?.progressPercent ?? 0;
 
             return (
               <SubjectCard

@@ -170,6 +170,7 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
       { group: "Evaluación", items: [
         { icon: CalendarRange, label: 'Ciclos y periodos', href: '/dashboard/admin/evaluacion/ciclos' },
         { icon: Scale, label: 'Esquemas y criterios', href: '/dashboard/admin/evaluacion/esquemas' },
+        { icon: BarChart3, label: 'Resultados académicos', href: '/dashboard/admin/evaluacion/resultados' },
       ]},
       { group: "Módulo 10: Reportes", items: [
         { icon: CreditCard, label: 'Control de Pagos', href: '/dashboard/admin/vigencias' },
@@ -200,6 +201,7 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
       { group: "Evaluación", items: [
         { icon: CalendarRange, label: 'Ciclos y periodos', href: '/dashboard/admin/evaluacion/ciclos' },
         { icon: Scale, label: 'Esquemas y criterios', href: '/dashboard/admin/evaluacion/esquemas' },
+        { icon: BarChart3, label: 'Resultados académicos', href: '/dashboard/admin/evaluacion/resultados' },
       ]},
     ],
     profesor: [
@@ -217,6 +219,7 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
         { icon: LayoutDashboard, label: 'Mi Portal Educativo', href: '/dashboard/alumno' },
         { icon: UserCircle, label: 'Mis Datos', href: '/dashboard/alumno/perfil' },
         { icon: BookOpen, label: 'Mis Materias', href: '/dashboard/alumno/materias' },
+        { icon: BarChart3, label: 'Mis Calificaciones', href: '/dashboard/alumno/calificaciones' },
         { icon: CreditCard, label: 'Mis Pagos', href: '/dashboard/alumno/pagos' },
         { icon: FileText, label: 'Documento de Acreditación', href: '/dashboard/alumno/acreditacion' },
         { icon: MessageSquare, label: 'Mensajes de Clases', href: '/dashboard/alumno/mensajes-clases' },

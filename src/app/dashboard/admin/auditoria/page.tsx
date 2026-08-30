@@ -2,16 +2,15 @@
 
 import React, { useState, useEffect, useTransition } from 'react';
 import {
-  BarChart3, Users, GraduationCap, BookOpen, ChevronDown,
-  TrendingUp, TrendingDown, Star, Zap, AlertTriangle,
-  Calendar, Save, Trash2, Loader2, CheckCircle2, XCircle,
-  FileCheck, Layers, Presentation, FolderOpen, Clock,
+  BarChart3, GraduationCap, BookOpen, ChevronDown,
+  Zap, AlertTriangle,
+  Calendar, Save, Loader2, CheckCircle2,
+  Presentation, FolderOpen, Clock,
   Flame, ChevronRight, Globe, Edit3, RotateCcw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
   getGruposActivos,
-  getRendimientoAlumnos,
   getActividadProfesores,
   getFechasEvaluacion,
   upsertFechaEvaluacion,
@@ -19,6 +18,7 @@ import {
   getMateriasDeGrupo
 } from '@/lib/actions/auditoria';
 import { useToast } from '@/hooks/use-toast';
+import { AcademicTenantResultsPage } from '@/components/academic/AcademicTenantResultsPage';
 
 // ═══════════════════════════════════════════════════════════════
 // COMPONENTE PRINCIPAL
@@ -80,224 +80,7 @@ export default function AuditoriaPage() {
 // TAB 1: RENDIMIENTO DE ALUMNOS
 // ═══════════════════════════════════════════════════════════════
 function TabAlumnos() {
-  const [grupos, setGrupos] = useState<any[]>([]);
-  const [grupoId, setGrupoId] = useState('');
-  const [data, setData] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-  const [expandido, setExpandido] = useState<string | null>(null);
-
-  useEffect(() => {
-    getGruposActivos().then(setGrupos);
-  }, []);
-
-  const cargarRendimiento = async (id: string) => {
-    setGrupoId(id);
-    setLoading(true);
-    const res = await getRendimientoAlumnos(id);
-    setData(res);
-    setLoading(false);
-  };
-
-  const getBadge = (pct: number) => {
-    if (pct >= 75) return { color: 'bg-emerald-100 text-emerald-700 border-emerald-200', label: 'Excelente', icon: TrendingUp };
-    if (pct >= 50) return { color: 'bg-amber-100 text-amber-700 border-amber-200', label: 'Regular', icon: TrendingDown };
-    return { color: 'bg-red-100 text-red-700 border-red-200', label: 'En Riesgo', icon: AlertTriangle };
-  };
-
-  return (
-    <div className="space-y-6">
-      {/* Selector de grupo */}
-      <div className="bg-white rounded-2xl border border-border p-6 shadow-sm">
-        <label className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-3 block">
-          Seleccionar Grupo Activo
-        </label>
-        <div className="relative">
-          <select
-            value={grupoId}
-            onChange={e => cargarRendimiento(e.target.value)}
-            className="w-full md:w-96 h-12 px-4 pr-10 bg-white border border-border rounded-xl text-sm font-bold text-foreground appearance-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary"
-          >
-            <option value="">— Selecciona un grupo —</option>
-            {grupos.map((g: any) => (
-              <option key={g.id} value={g.id}>
-                {(g.carreras as any)?.nombre} — {g.nombre} ({g.turno}) — {g.totalAlumnos} alumnos
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-        </div>
-      </div>
-
-      {loading && (
-        <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
-          <Loader2 className="w-6 h-6 animate-spin" />
-          <span className="text-sm font-bold uppercase tracking-widest">Cargando rendimiento...</span>
-        </div>
-      )}
-
-      {data && !loading && (
-        <>
-          {/* Resumen Global del Grupo */}
-          {data.resumen && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white rounded-2xl border border-border p-5 shadow-sm text-center">
-                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Promedio Grupo</p>
-                <p className="text-4xl font-black text-primary">{data.resumen.promedioGrupo}</p>
-              </div>
-              <div className="bg-white rounded-2xl border border-border p-5 shadow-sm text-center">
-                <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mb-1">Total Alumnos</p>
-                <p className="text-4xl font-black text-foreground">{data.resumen.totalAlumnos}</p>
-              </div>
-              {data.resumen.mejorAlumno && (
-                <div className="bg-emerald-50 rounded-2xl border border-emerald-200 p-5 shadow-sm">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-emerald-600 mb-1 flex items-center gap-1"><Star className="w-3 h-3" /> Mejor Promedio</p>
-                  <p className="text-sm font-black text-emerald-800 truncate">{data.resumen.mejorAlumno.nombre}</p>
-                  <p className="text-2xl font-black text-emerald-700">{data.resumen.mejorAlumno.promedio}</p>
-                </div>
-              )}
-              {data.resumen.peorAlumno && (
-                <div className="bg-red-50 rounded-2xl border border-red-200 p-5 shadow-sm">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-red-600 mb-1 flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Menor Promedio</p>
-                  <p className="text-sm font-black text-red-800 truncate">{data.resumen.peorAlumno.nombre}</p>
-                  <p className="text-2xl font-black text-red-700">{data.resumen.peorAlumno.promedio}</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Tarjetas de Alumnos */}
-          <div className="space-y-4">
-            {data.alumnos?.map((alumno: any) => {
-              const badge = getBadge(alumno.progresoGlobal);
-              const BadgeIcon = badge.icon;
-              const isOpen = expandido === alumno.id;
-
-              return (
-                <div key={alumno.id} className="bg-white rounded-2xl border border-border shadow-sm overflow-hidden transition-all hover:shadow-md">
-                  <button
-                    onClick={() => setExpandido(isOpen ? null : alumno.id)}
-                    className="w-full flex items-center justify-between p-5 text-left"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="h-12 w-12 rounded-2xl bg-primary/10 flex items-center justify-center font-black text-primary text-lg shrink-0">
-                        {alumno.nombre.charAt(0)}
-                      </div>
-                      <div>
-                        <p className="font-black text-foreground text-sm">{alumno.nombre}</p>
-                        <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">{alumno.matricula}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <div className="hidden md:flex items-center gap-6 mr-4">
-                        <div className="text-center">
-                          <p className="text-[9px] font-black uppercase text-muted-foreground">Progreso</p>
-                          <p className="text-lg font-black text-foreground">{alumno.progresoGlobal}%</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-[9px] font-black uppercase text-muted-foreground">Promedio</p>
-                          <p className="text-lg font-black text-foreground">{alumno.promedioGeneral}</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-[9px] font-black uppercase text-muted-foreground">Perfectas</p>
-                          <p className="text-lg font-black text-primary">{alumno.notasPerfectas}</p>
-                        </div>
-                      </div>
-                      <span className={cn('flex items-center gap-1 px-3 py-1.5 rounded-full text-[9px] font-black uppercase border', badge.color)}>
-                        <BadgeIcon className="w-3 h-3" />
-                        {badge.label}
-                      </span>
-                      <ChevronRight className={cn('w-4 h-4 text-muted-foreground transition-transform', isOpen && 'rotate-90')} />
-                    </div>
-                  </button>
-
-                  {isOpen && (
-                    <div className="border-t border-border bg-muted/20 p-5 space-y-4">
-                      {/* Stats móviles */}
-                      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:hidden">
-                        <div className="bg-white rounded-xl border p-3 text-center">
-                          <p className="text-[9px] font-black uppercase text-muted-foreground">Progreso</p>
-                          <p className="text-xl font-black">{alumno.progresoGlobal}%</p>
-                        </div>
-                        <div className="bg-white rounded-xl border p-3 text-center">
-                          <p className="text-[9px] font-black uppercase text-muted-foreground">Promedio</p>
-                          <p className="text-xl font-black">{alumno.promedioGeneral}</p>
-                        </div>
-                        <div className="bg-white rounded-xl border p-3 text-center">
-                          <p className="text-[9px] font-black uppercase text-muted-foreground">Perfectas</p>
-                          <p className="text-xl font-black text-primary">{alumno.notasPerfectas}</p>
-                        </div>
-                        <div className="bg-white rounded-xl border p-3 text-center">
-                          <p className="text-[9px] font-black uppercase text-muted-foreground">Intentos Prom.</p>
-                          <p className="text-xl font-black">{alumno.intentosPromedio}</p>
-                        </div>
-                      </div>
-
-                      {/* Barra de progreso global */}
-                      <div className="flex items-center gap-3 p-3 bg-white rounded-xl border">
-                        <span className="text-xs font-bold text-foreground w-10 text-right">{alumno.progresoGlobal}%</span>
-                        <div className="flex-1 h-2.5 bg-border/50 rounded-full overflow-hidden">
-                          <div
-                            className={cn(
-                              'h-full rounded-full transition-all duration-700',
-                              alumno.progresoGlobal >= 75 ? 'bg-emerald-500' :
-                              alumno.progresoGlobal >= 50 ? 'bg-amber-500' : 'bg-red-500'
-                            )}
-                            style={{ width: `${alumno.progresoGlobal}%` }}
-                          />
-                        </div>
-                        <span className="text-[9px] font-black uppercase text-muted-foreground">Completado</span>
-                      </div>
-
-                      {/* Desglose por materia */}
-                      <div className="space-y-2">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Desglose por Materia</p>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                          {alumno.desgloseMateria?.map((mat: any) => (
-                            <div key={mat.materiaId} className="flex items-center justify-between p-3 bg-white rounded-xl border">
-                              <div className="flex items-center gap-2 overflow-hidden">
-                                <BookOpen className="w-4 h-4 text-primary shrink-0" />
-                                <span className="text-xs font-bold text-foreground truncate">{mat.materiaNombre}</span>
-                              </div>
-                              <div className="flex items-center gap-3 shrink-0">
-                                <span className="text-[10px] font-black text-muted-foreground">
-                                  {mat.completados}/{mat.total}
-                                </span>
-                                <span className={cn(
-                                  'text-xs font-black px-2.5 py-1 rounded-lg',
-                                  mat.promedio >= 70 ? 'bg-emerald-100 text-emerald-700' :
-                                  mat.promedio >= 50 ? 'bg-amber-100 text-amber-700' : 'bg-red-100 text-red-700'
-                                )}>
-                                  {mat.promedio}
-                                </span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Pagos */}
-                      <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                        <FileCheck className="w-3.5 h-3.5" />
-                        Pagos: {alumno.pagos.pagados}/{alumno.pagos.total} al corriente
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </>
-      )}
-
-      {!grupoId && !loading && (
-        <div className="text-center py-16 text-muted-foreground">
-          <Users className="w-16 h-16 mx-auto opacity-20 mb-4" />
-          <p className="font-bold text-lg">Selecciona un grupo para ver el rendimiento</p>
-          <p className="text-sm mt-1">Solo se muestran alumnos con estatus <strong>activo</strong></p>
-        </div>
-      )}
-    </div>
-  );
+  return <AcademicTenantResultsPage embedded />;
 }
 
 // ═══════════════════════════════════════════════════════════════

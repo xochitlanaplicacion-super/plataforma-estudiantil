@@ -334,7 +334,7 @@ export function SubjectCard({ materia, exercises, unidades = [], promedio, progr
             </span>
             <div className="flex items-center md:justify-end gap-2">
               <span className="text-3xl md:text-4xl font-black font-headline text-foreground">{promedio}</span>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground leading-tight">Promedio<br/>Gral.</span>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground leading-tight">Resultado<br/>canónico</span>
             </div>
           </div>
           <div className="flex flex-col gap-2">

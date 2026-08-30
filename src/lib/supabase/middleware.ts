@@ -44,13 +44,14 @@ export async function updateSession(request: NextRequest) {
     .split(',').map((host) => host.trim().toLowerCase());
   const isPlatformHost = platformHosts.includes(hostname) || hostname === 'localhost' || hostname === '127.0.0.1';
 
-  // Arneses visuales locales de los Pasos 10/11. En producción las rutas
+  // Arneses visuales locales de los Pasos 10/11/13. En producción las rutas
   // conservan la autenticación normal y sus páginas responden 404.
   if (
     process.env.NODE_ENV !== 'production'
     && (
       pathname.startsWith('/academic-step10-evidence')
       || pathname.startsWith('/academic-step11-evidence')
+      || pathname.startsWith('/academic-step13-evidence')
     )
     && (hostname === 'localhost' || hostname === '127.0.0.1')
   ) {

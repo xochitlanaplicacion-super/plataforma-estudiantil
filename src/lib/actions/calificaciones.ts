@@ -35,6 +35,13 @@ import { AcademicService } from '@/lib/academic/service';
 import type { AcademicGradebookWorkspaceDto } from '@/lib/academic/gradebook-dto';
 import { SupabaseAcademicGradebookRepository } from '@/lib/academic/gradebook-repository';
 import { AcademicGradebookService } from '@/lib/academic/gradebook-service';
+import type {
+  AcademicResultsExportDto,
+  AcademicStudentResultsDto,
+  AcademicTenantResultsDto,
+} from '@/lib/academic/results-dto';
+import { SupabaseAcademicResultsRepository } from '@/lib/academic/results-repository';
+import { AcademicResultsService } from '@/lib/academic/results-service';
 import { requireTenantSession } from '@/lib/tenant/context';
 
 async function createAcademicServiceForRequest(): Promise<AcademicService> {
@@ -75,6 +82,23 @@ async function createAcademicGradebookServiceForRequest(): Promise<AcademicGrade
   const session = await requireTenantSession(['profesor']);
   const repository = new SupabaseAcademicGradebookRepository(session.supabase);
   return new AcademicGradebookService(repository, {
+    tenantId: session.tenantId,
+    actorId: session.user.id,
+    role: session.profile.rol,
+    featureEnabled: isAcademicGradingV2Enabled(
+      { tenantId: session.tenantId, tenantSlug: session.tenant.slug },
+      {
+        ACADEMIC_GRADING_V2_ENABLED: process.env.ACADEMIC_GRADING_V2_ENABLED,
+        ACADEMIC_GRADING_V2_TENANTS: process.env.ACADEMIC_GRADING_V2_TENANTS,
+      },
+    ),
+  });
+}
+
+async function createAcademicResultsServiceForRequest(): Promise<AcademicResultsService> {
+  const session = await requireTenantSession();
+  const repository = new SupabaseAcademicResultsRepository(session.supabase);
+  return new AcademicResultsService(repository, {
     tenantId: session.tenantId,
     actorId: session.user.id,
     role: session.profile.rol,
@@ -175,6 +199,42 @@ export async function loadAcademicGradebookWorkspaceAction(
     return academicSuccessResult(data, {
       empty: data.students.length === 0 || data.columns.length === 0,
     });
+  } catch (error) {
+    return academicFailureResult(error);
+  }
+}
+
+export async function loadMyAcademicResultsAction(
+  input: unknown = {},
+): Promise<AcademicActionResult<AcademicStudentResultsDto>> {
+  try {
+    const service = await createAcademicResultsServiceForRequest();
+    const data = await service.listMyResults(input);
+    return academicSuccessResult(data, { empty: data.items.length === 0 });
+  } catch (error) {
+    return academicFailureResult(error);
+  }
+}
+
+export async function loadAcademicTenantResultsAction(
+  input: unknown,
+): Promise<AcademicActionResult<AcademicTenantResultsDto>> {
+  try {
+    const service = await createAcademicResultsServiceForRequest();
+    const data = await service.listTenantResults(input);
+    return academicSuccessResult(data, { empty: data.results.items.length === 0 });
+  } catch (error) {
+    return academicFailureResult(error);
+  }
+}
+
+export async function exportAcademicTenantResultsAction(
+  input: unknown,
+): Promise<AcademicActionResult<AcademicResultsExportDto>> {
+  try {
+    const service = await createAcademicResultsServiceForRequest();
+    const data = await service.exportTenantResults(input);
+    return academicSuccessResult(data, { empty: data.rowCount === 0 });
   } catch (error) {
     return academicFailureResult(error);
   }
