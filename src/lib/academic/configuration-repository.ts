@@ -38,6 +38,14 @@ export class SupabaseAcademicConfigurationRepository {
 
   async load(context: AcademicRepositoryContext): Promise<AcademicConfigurationDto> {
     const tenant = context.tenantId;
+    const assignmentsQuery = this.client.from('asignaciones_profesor').select('*')
+      .eq('tenant_id', tenant).eq('activo', true).order('id');
+    const teachersQuery = this.client.from('profiles').select('id, nombre, apellidos')
+      .eq('tenant_id', tenant).eq('rol', 'profesor');
+    if (context.role === 'profesor') {
+      assignmentsQuery.eq('profesor_id', context.actorId);
+      teachersQuery.eq('id', context.actorId);
+    }
     const [
       cyclesResult, periodsResult, assignmentsResult, levelsResult, careersResult,
       gradesResult, groupsResult, subjectsResult, teachersResult, schemesResult,
@@ -45,13 +53,13 @@ export class SupabaseAcademicConfigurationRepository {
     ] = await Promise.all([
       this.client.from('ciclos_escolares').select('*').eq('tenant_id', tenant).order('fecha_inicio', { ascending: false }),
       this.client.from('periodos_evaluacion').select('*').eq('tenant_id', tenant).order('orden'),
-      this.client.from('asignaciones_profesor').select('*').eq('tenant_id', tenant).eq('activo', true).order('id'),
+      assignmentsQuery,
       this.client.from('niveles').select('id, nombre').eq('tenant_id', tenant),
       this.client.from('carreras').select('id, nombre').eq('tenant_id', tenant),
       this.client.from('grados').select('id, nombre').eq('tenant_id', tenant),
       this.client.from('grupos').select('id, nombre').eq('tenant_id', tenant),
       this.client.from('materias').select('id, nombre').eq('tenant_id', tenant),
-      this.client.from('profiles').select('id, nombre, apellidos').eq('tenant_id', tenant).eq('rol', 'profesor'),
+      teachersQuery,
       this.client.from('esquemas_evaluacion').select('*').eq('tenant_id', tenant).order('created_at', { ascending: false }),
       this.client.from('criterios_evaluacion').select('*').eq('tenant_id', tenant).order('orden'),
       this.client.from('subcriterios_evaluacion').select('*').eq('tenant_id', tenant).order('orden'),

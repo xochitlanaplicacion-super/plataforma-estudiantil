@@ -140,4 +140,14 @@ describe('Paso 10: interfaz administrativa accesible', () => {
     expect(screen.getByRole('button', { name: 'Activar esquema' })).toBeDisabled();
     expect(screen.getByLabelText('estado del total de ponderaciones')).toHaveTextContent('80.0000%');
   }, 20_000);
+
+  it('ofrece al profesor únicamente sus materias y omite la auditoría administrativa', async () => {
+    actionMocks.load.mockResolvedValue({ ok: true, status: 'success', data: baseConfiguration() });
+    render(<AcademicSchemesPage audience="teacher" />);
+    expect(await screen.findByRole('heading', { name: 'Mis criterios de evaluación' })).toBeVisible();
+    expect(screen.getByLabelText('Mi materia y grupo')).toHaveTextContent('Matemáticas — Primero A');
+    expect(screen.queryByLabelText('Nivel')).not.toBeInTheDocument();
+    expect(screen.queryByText('Auditoría académica')).not.toBeInTheDocument();
+    expect(actionMocks.audit).not.toHaveBeenCalled();
+  }, 20_000);
 });

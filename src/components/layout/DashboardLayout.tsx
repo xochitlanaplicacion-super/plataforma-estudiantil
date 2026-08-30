@@ -208,6 +208,7 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
       { group: "Docencia", items: [
         { icon: LayoutDashboard, label: 'Mis Asignaturas', href: '/dashboard/profesor' },
         { icon: NotebookTabs, label: 'Libreta de calificaciones', href: '/dashboard/profesor/calificaciones' },
+        { icon: Scale, label: 'Mis criterios de evaluación', href: '/dashboard/profesor/criterios-evaluacion' },
         { icon: ClipboardList, label: 'Entregas de Actividades', href: '/dashboard/profesor/entregas' },
         { icon: Users, label: 'Listas de grupos', href: '/dashboard/profesor/grupos' },
         { icon: MessageSquare, label: 'Mensajes de Clases', href: '/dashboard/profesor/mensajes-clases' },

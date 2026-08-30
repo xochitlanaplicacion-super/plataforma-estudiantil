@@ -14,6 +14,7 @@ const ACADEMIC_REVALIDATION_PATHS = Object.freeze([
 const ACADEMIC_CONFIGURATION_PATHS = Object.freeze([
   '/dashboard/admin/evaluacion/ciclos',
   '/dashboard/admin/evaluacion/esquemas',
+  '/dashboard/profesor/criterios-evaluacion',
   '/dashboard/admin/auditoria',
 ]);
 

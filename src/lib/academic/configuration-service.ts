@@ -22,8 +22,15 @@ export class AcademicConfigurationService {
     private readonly context: AcademicServiceContext,
   ) {}
 
-  private authorize(): void {
+  private authorizeConfiguration(): void {
     if (!this.context.featureEnabled) throw new AcademicApplicationError('disabled');
+    if (!['superuser', 'admin', 'profesor'].includes(this.context.role)) {
+      throw new AcademicApplicationError('forbidden');
+    }
+  }
+
+  private authorizeAdministration(): void {
+    this.authorizeConfiguration();
     if (this.context.role !== 'superuser' && this.context.role !== 'admin') {
       throw new AcademicApplicationError('forbidden');
     }
@@ -38,42 +45,42 @@ export class AcademicConfigurationService {
   }
 
   async load(): Promise<AcademicConfigurationDto> {
-    this.authorize();
+    this.authorizeConfiguration();
     return this.repository.load(this.repositoryContext());
   }
 
   async saveCycle(input: unknown): Promise<AcademicConfigurationMutationDto> {
-    this.authorize();
+    this.authorizeAdministration();
     return this.repository.saveCycle(this.repositoryContext(), academicCycleMutationSchema.parse(input));
   }
 
   async savePeriod(input: unknown): Promise<AcademicConfigurationMutationDto> {
-    this.authorize();
+    this.authorizeAdministration();
     return this.repository.savePeriod(this.repositoryContext(), academicPeriodMutationSchema.parse(input));
   }
 
   async saveScheme(input: unknown): Promise<AcademicConfigurationMutationDto> {
-    this.authorize();
+    this.authorizeConfiguration();
     return this.repository.saveScheme(this.repositoryContext(), academicSchemeMutationSchema.parse(input));
   }
 
   async saveCriterion(input: unknown): Promise<AcademicConfigurationMutationDto> {
-    this.authorize();
+    this.authorizeConfiguration();
     return this.repository.saveCriterion(this.repositoryContext(), academicCriterionMutationSchema.parse(input));
   }
 
   async saveSubcriterion(input: unknown): Promise<AcademicConfigurationMutationDto> {
-    this.authorize();
+    this.authorizeConfiguration();
     return this.repository.saveSubcriterion(this.repositoryContext(), academicSubcriterionMutationSchema.parse(input));
   }
 
   async activateScheme(input: unknown): Promise<AcademicSchemeVersionMutationDto> {
-    this.authorize();
+    this.authorizeConfiguration();
     return this.repository.activateScheme(this.repositoryContext(), academicActivateSchemeSchema.parse(input));
   }
 
   async copyScheme(input: unknown): Promise<AcademicSchemeVersionMutationDto> {
-    this.authorize();
+    this.authorizeConfiguration();
     return this.repository.copyScheme(this.repositoryContext(), academicCopySchemeSchema.parse(input));
   }
 }

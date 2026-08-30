@@ -48,13 +48,19 @@ describe('Paso 10: contratos administrativos', () => {
     expect(academicActivateSchemeSchema.safeParse({ schemeId: IDS.scheme, expectedVersion: 0 }).success).toBe(false);
   });
 
-  it('bloquea profesor antes de consultar y deriva tenant/actor del contexto', async () => {
+  it('permite al profesor configurar sus asignaciones pero reserva ciclos y periodos a dirección', async () => {
     const repository = repositoryDouble();
     const professor = new AcademicConfigurationService(repository, {
       tenantId: IDS.tenant, actorId: IDS.actor, role: 'profesor', featureEnabled: true,
     });
-    await expect(professor.load()).rejects.toMatchObject({ kind: 'forbidden' });
-    expect(repository.load).not.toHaveBeenCalled();
+    await professor.load();
+    expect(repository.load).toHaveBeenCalledWith({
+      tenantId: IDS.tenant, actorId: IDS.actor, role: 'profesor',
+    });
+    await expect(professor.saveCycle({})).rejects.toMatchObject({ kind: 'forbidden' });
+    await expect(professor.savePeriod({})).rejects.toMatchObject({ kind: 'forbidden' });
+    expect(repository.saveCycle).not.toHaveBeenCalled();
+    expect(repository.savePeriod).not.toHaveBeenCalled();
 
     const admin = new AcademicConfigurationService(repository, {
       tenantId: IDS.tenant, actorId: IDS.actor, role: 'admin', featureEnabled: true,
@@ -63,6 +69,15 @@ describe('Paso 10: contratos administrativos', () => {
     expect(repository.load).toHaveBeenCalledWith({
       tenantId: IDS.tenant, actorId: IDS.actor, role: 'admin',
     });
+  });
+
+  it('mantiene estudiantes fuera de la configuración de criterios', async () => {
+    const repository = repositoryDouble();
+    const student = new AcademicConfigurationService(repository, {
+      tenantId: IDS.tenant, actorId: IDS.actor, role: 'alumno', featureEnabled: true,
+    });
+    await expect(student.load()).rejects.toMatchObject({ kind: 'forbidden' });
+    expect(repository.load).not.toHaveBeenCalled();
   });
 
   it('conserva deny-by-default cuando el feature flag no habilita al tenant', async () => {

@@ -16,7 +16,7 @@ import type {
 } from '@/lib/academic/configuration-dto';
 import type { AcademicActionResult, AcademicAuditDto } from '@/lib/academic/dto';
 import type { EvaluationCriterionInput } from '@/lib/academic-grading/criterion-policy';
-import { sumWeights } from '@/lib/academic-grading/weights';
+import { redistributeWeights, sumWeights } from '@/lib/academic-grading/weights';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -225,7 +225,12 @@ function CriterionEditor({
   );
 }
 
-export function AcademicSchemesPage() {
+interface AcademicSchemesPageProps {
+  audience?: 'administration' | 'teacher';
+}
+
+export function AcademicSchemesPage({ audience = 'administration' }: AcademicSchemesPageProps) {
+  const teacherView = audience === 'teacher';
   const [loadState, setLoadState] = useState<LoadState>({ kind: 'loading' });
   const [feedback, setFeedback] = useState<Feedback>(null);
   const [confirmation, setConfirmation] = useState<Confirmation>(null);
@@ -246,14 +251,16 @@ export function AcademicSchemesPage() {
     setLoadState({ kind: 'loading' });
     const [result, auditResult] = await Promise.all([
       loadAcademicConfigurationAction(),
-      listAcademicAuditAction({ page: 1, pageSize: 10 }),
+      teacherView
+        ? Promise.resolve(null)
+        : listAcademicAuditAction({ page: 1, pageSize: 10 }),
     ]);
     if (!result.ok) {
       setLoadState({ kind: 'failed', result });
       return;
     }
     setLoadState({ kind: 'ready', data: result.data });
-    if (auditResult.ok) setAudit(auditResult.data.items);
+    if (auditResult?.ok) setAudit(auditResult.data.items);
     const scheme = result.data.schemes.find((item) => item.id === preferredSchemeId)
       ?? result.data.schemes.find((item) => item.state === 'borrador')
       ?? result.data.schemes.find((item) => item.state === 'activo');
@@ -274,7 +281,7 @@ export function AcademicSchemesPage() {
     } else {
       setSelectedSchemeId(''); setSchemeDraft({ ...emptyScheme, cycleId: cycle, assignmentId: assignment?.id ?? '', periodId: period });
     }
-  }, []);
+  }, [teacherView]);
 
   useEffect(() => { void load(); }, [load]);
   const data = loadState.kind === 'ready' ? loadState.data : null;
@@ -351,27 +358,71 @@ export function AcademicSchemesPage() {
     await load(result.data.schemeId);
   }
 
+  async function redistributeCriteria() {
+    if (!selectedScheme || readOnly) return;
+    const activeCriteria = selectedScheme.criteria.filter((criterion) => criterion.active);
+    const weights = redistributeWeights(activeCriteria.map((criterion) => criterion.weight));
+    setFeedback({ kind: 'saving', message: 'Redistribuyendo los criterios a 100%…' });
+
+    for (const [index, criterion] of activeCriteria.entries()) {
+      const result = await saveAcademicCriterionAction({
+        id: criterion.id,
+        expectedUpdatedAt: criterion.updatedAt,
+        schemeId: criterion.schemeId,
+        name: criterion.name,
+        type: criterion.type,
+        weight: weights[index],
+        order: criterion.order,
+        active: criterion.active,
+      });
+      if (!result.ok) {
+        setFeedback({
+          kind: result.status === 'conflict' ? 'conflict' : 'error',
+          message: `No se pudo completar la redistribución: ${result.error.message}`,
+        });
+        await load(selectedScheme.id);
+        return;
+      }
+    }
+
+    setFeedback({ kind: 'success', message: 'Los porcentajes se redistribuyeron y guardaron con total exacto de 100%.' });
+    await load(selectedScheme.id);
+  }
+
   return (
     <div className="mx-auto max-w-7xl space-y-6">
-      <AcademicConfigurationHeader current="schemes" />
+      {teacherView ? (
+        <Card>
+          <CardHeader>
+            <CardTitle role="heading" aria-level={1} className="flex items-center gap-2"><Scale aria-hidden="true" />Mis criterios de evaluación</CardTitle>
+            <CardDescription>
+              Define cómo evaluarás a tus alumnos en cada materia y grupo. Dirección puede supervisar y editar estos mismos criterios.
+            </CardDescription>
+          </CardHeader>
+        </Card>
+      ) : <AcademicConfigurationHeader current="schemes" />}
       {loadState.kind === 'loading' ? <AcademicLoadingState /> : null}
       {loadState.kind === 'failed' ? <AcademicErrorState status={loadState.result.status} error={loadState.result.error} onRetry={() => void load()} /> : null}
       {data ? (
         <>
           <AcademicFeedback state={feedback} />
           {data.assignments.length === 0 || data.periods.length === 0 ? (
-            <Card><CardHeader><CardTitle>Falta contexto académico</CardTitle><CardDescription>Crea al menos un periodo y una asignación docente activa antes de definir un esquema.</CardDescription></CardHeader></Card>
+            <Card><CardHeader><CardTitle>Falta contexto académico</CardTitle><CardDescription>{teacherView ? 'Dirección debe asignarte al menos una materia y mantener disponible un periodo de evaluación.' : 'Crea al menos un periodo y una asignación docente activa antes de definir un esquema.'}</CardDescription></CardHeader></Card>
           ) : (
             <>
               <Card>
-                <CardHeader><CardTitle>Alcance del esquema</CardTitle><CardDescription>Selecciona de lo general a lo específico. Cada filtro reduce las opciones siguientes.</CardDescription></CardHeader>
+                <CardHeader><CardTitle>{teacherView ? 'Materia, grupo y periodo' : 'Alcance del esquema'}</CardTitle><CardDescription>{teacherView ? 'Sólo aparecen las asignaciones docentes que te corresponden.' : 'Selecciona de lo general a lo específico. Cada filtro reduce las opciones siguientes.'}</CardDescription></CardHeader>
                 <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                   <div className="space-y-2"><Label htmlFor="scheme-cycle">Ciclo</Label><select id="scheme-cycle" className={fieldClassName} value={cycleId} onChange={(event) => { const id = event.target.value; setCycleId(id); setLevelId(''); setCareerId(''); setGradeId(''); setGroupId(''); setAssignmentId(''); setPeriodId(''); setSelectedSchemeId(''); }}><option value="">Selecciona ciclo</option>{data.cycles.map((cycle) => <option key={cycle.id} value={cycle.id}>{cycle.name}</option>)}</select></div>
+                  {teacherView ? (
+                    <div className="space-y-2 sm:col-span-2"><Label htmlFor="scheme-assignment">Mi materia y grupo</Label><select id="scheme-assignment" className={fieldClassName} value={assignmentId} onChange={(event) => chooseAssignment(event.target.value)}><option value="">Selecciona asignación</option>{cycleAssignments.map((row) => <option key={row.id} value={row.id}>{row.subjectName} — {row.gradeName} {row.groupName}</option>)}</select></div>
+                  ) : <>
                   <div className="space-y-2"><Label htmlFor="scheme-level">Nivel</Label><select id="scheme-level" className={fieldClassName} value={levelId} onChange={(event) => { setLevelId(event.target.value); setCareerId(''); setGradeId(''); setGroupId(''); setAssignmentId(''); }}><option value="">Selecciona nivel</option>{uniqueOptions(cycleAssignments, 'levelId', 'levelName').map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></div>
                   <div className="space-y-2"><Label htmlFor="scheme-career">Carrera o programa</Label><select id="scheme-career" className={fieldClassName} value={careerId} onChange={(event) => { setCareerId(event.target.value); setGradeId(''); setGroupId(''); setAssignmentId(''); }}><option value="">Selecciona carrera</option>{uniqueOptions(levelAssignments, 'careerId', 'careerName').map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></div>
                   <div className="space-y-2"><Label htmlFor="scheme-grade">Grado</Label><select id="scheme-grade" className={fieldClassName} value={gradeId} onChange={(event) => { setGradeId(event.target.value); setGroupId(''); setAssignmentId(''); }}><option value="">Selecciona grado</option>{uniqueOptions(careerAssignments, 'gradeId', 'gradeName').map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></div>
                   <div className="space-y-2"><Label htmlFor="scheme-group">Grupo</Label><select id="scheme-group" className={fieldClassName} value={groupId} onChange={(event) => { setGroupId(event.target.value); setAssignmentId(''); }}><option value="">Selecciona grupo</option>{uniqueOptions(gradeAssignments, 'groupId', 'groupName').map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></div>
                   <div className="space-y-2 sm:col-span-2"><Label htmlFor="scheme-assignment">Materia y profesor</Label><select id="scheme-assignment" className={fieldClassName} value={assignmentId} onChange={(event) => chooseAssignment(event.target.value)}><option value="">Selecciona asignación</option>{groupAssignments.map((row) => <option key={row.id} value={row.id}>{row.subjectName} — {row.teacherName}</option>)}</select></div>
+                  </>}
                   <div className="space-y-2"><Label htmlFor="scheme-period">Periodo</Label><select id="scheme-period" className={fieldClassName} value={periodId} onChange={(event) => { const id = event.target.value; setPeriodId(id); setSelectedSchemeId(''); setSchemeDraft({ ...emptyScheme, cycleId, assignmentId, periodId: id }); }}><option value="">Selecciona periodo</option>{data.periods.filter((row) => row.cycleId === cycleId).map((period) => <option key={period.id} value={period.id}>{period.order}. {period.name} — {period.state}</option>)}</select></div>
                 </CardContent>
               </Card>
@@ -392,11 +443,11 @@ export function AcademicSchemesPage() {
               </Card>
 
               {selectedScheme ? (
-                <div className="grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(20rem,0.6fr)]">
+                <div className={teacherView ? 'grid gap-6' : 'grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(20rem,0.6fr)]'}>
                   <Card>
                     <CardHeader><CardTitle>Criterios y subcriterios</CardTitle><CardDescription>El total superior y cada distribución interna deben sumar exactamente 100%.</CardDescription></CardHeader>
                     <CardContent className="space-y-5">
-                      <WeightDistributionPreview criteria={toWeightCriteria(selectedScheme.criteria)} disabled={readOnly} />
+                      <WeightDistributionPreview criteria={toWeightCriteria(selectedScheme.criteria)} disabled={readOnly} onRedistribute={() => void redistributeCriteria()} />
                       <ol className="space-y-3" aria-label="Editor de criterios">
                         {selectedScheme.criteria.map((criterion) => <CriterionEditor key={criterion.id} criterion={criterion} disabled={readOnly} onSaved={() => load(selectedScheme.id)} onFeedback={setFeedback} />)}
                       </ol>
@@ -405,10 +456,10 @@ export function AcademicSchemesPage() {
                       {!activationReady && selectedScheme.state === 'borrador' ? <p role="status" className="text-sm text-muted-foreground">La activación seguirá bloqueada hasta tener criterios válidos con total superior e internos exactamente en 100%.</p> : null}
                     </CardContent>
                   </Card>
-                  <Card>
+                  {!teacherView ? <Card>
                     <CardHeader><CardTitle className="flex items-center gap-2"><History aria-hidden="true" />Auditoría académica</CardTitle><CardDescription>Sólo lectura. Cambios recientes del tenant visibles para administración.</CardDescription></CardHeader>
                     <CardContent>{audit.length === 0 ? <p className="text-sm text-muted-foreground">No hay eventos académicos registrados todavía.</p> : <ol className="space-y-3">{audit.map((event) => <li key={event.id} className="rounded-md border p-3 text-sm"><p className="font-medium">{event.action}</p><p className="text-muted-foreground">{event.createdAt ? new Date(event.createdAt).toLocaleString('es-MX') : 'Fecha no disponible'} · {event.entity}</p></li>)}</ol>}</CardContent>
-                  </Card>
+                  </Card> : null}
                 </div>
               ) : null}
             </>
