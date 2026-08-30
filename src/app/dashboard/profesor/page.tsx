@@ -1477,7 +1477,12 @@ export default function ProfesorDashboard() {
       if (type === 'tema') { fetchTemas(selectedUnidad.id); setSelectedTema(null); }
       if (type === 'ejercicio') fetchEjercicios(selectedTema.id);
     } else {
-      toast({ variant: "destructive", title: "Error al eliminar", description: "No se pudo realizar la operación." });
+      console.error('Error al eliminar contenido académico', error);
+      const errorMessage = typeof error?.message === 'string' ? error.message : '';
+      const description = errorMessage.includes('ACADEMIC_SCOPE_CLOSED')
+        ? 'Este contenido pertenece a un periodo de calificaciones cerrado y no puede eliminarse.'
+        : errorMessage || 'No se pudo realizar la operación.';
+      toast({ variant: "destructive", title: "Error al eliminar", description });
     }
   };
 

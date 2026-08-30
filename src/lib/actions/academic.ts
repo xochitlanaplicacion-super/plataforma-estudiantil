@@ -357,15 +357,27 @@ export async function upsertUnidad(unidad: any, syncTargetMateriaIds?: string[])
 }
 
 export async function deleteUnidad(id: string, sync_id?: string) {
-  const { supabase: supabaseAdmin } = await requireTenantSession();
+  const { supabase: supabaseAdmin, tenantId } = await requireTenantSession([
+    'profesor', 'admin', 'superuser',
+  ]);
   if (sync_id) {
-    const { error } = await supabaseAdmin.from('unidades').delete().eq('sync_id', sync_id);
+    const { data, error } = await supabaseAdmin.from('unidades').delete()
+      .eq('tenant_id', tenantId).eq('sync_id', sync_id).select('id');
     revalidatePath('/dashboard/profesor');
-    return { error };
+    return {
+      error: error || (!data?.length
+        ? { code: 'ACADEMIC_DELETE_NOT_FOUND', message: 'La unidad no existe o no tienes permiso para eliminarla.' }
+        : null),
+    };
   }
-  const { error } = await supabaseAdmin.from('unidades').delete().eq('id', id);
+  const { data, error } = await supabaseAdmin.from('unidades').delete()
+    .eq('tenant_id', tenantId).eq('id', id).select('id');
   revalidatePath('/dashboard/profesor');
-  return { error };
+  return {
+    error: error || (!data?.length
+      ? { code: 'ACADEMIC_DELETE_NOT_FOUND', message: 'La unidad no existe o no tienes permiso para eliminarla.' }
+      : null),
+  };
 }
 
 // --- TEMAS ---
@@ -412,15 +424,27 @@ export async function upsertTema(tema: any, isSyncCreation: boolean = false) {
 }
 
 export async function deleteTema(id: string, sync_id?: string) {
-  const { supabase: supabaseAdmin } = await requireTenantSession();
+  const { supabase: supabaseAdmin, tenantId } = await requireTenantSession([
+    'profesor', 'admin', 'superuser',
+  ]);
   if (sync_id) {
-    const { error } = await supabaseAdmin.from('temas').delete().eq('sync_id', sync_id);
+    const { data, error } = await supabaseAdmin.from('temas').delete()
+      .eq('tenant_id', tenantId).eq('sync_id', sync_id).select('id');
     revalidatePath('/dashboard/profesor');
-    return { error };
+    return {
+      error: error || (!data?.length
+        ? { code: 'ACADEMIC_DELETE_NOT_FOUND', message: 'El tema no existe o no tienes permiso para eliminarlo.' }
+        : null),
+    };
   }
-  const { error } = await supabaseAdmin.from('temas').delete().eq('id', id);
+  const { data, error } = await supabaseAdmin.from('temas').delete()
+    .eq('tenant_id', tenantId).eq('id', id).select('id');
   revalidatePath('/dashboard/profesor');
-  return { error };
+  return {
+    error: error || (!data?.length
+      ? { code: 'ACADEMIC_DELETE_NOT_FOUND', message: 'El tema no existe o no tienes permiso para eliminarlo.' }
+      : null),
+  };
 }
 
 // --- EJERCICIOS ---
@@ -614,15 +638,27 @@ export async function upsertEjercicio(ejercicio: any, isSyncCreation: boolean = 
 }
 
 export async function deleteEjercicio(id: string, sync_id?: string) {
-  const { supabase: supabaseAdmin } = await requireTenantSession();
+  const { supabase: supabaseAdmin, tenantId } = await requireTenantSession([
+    'profesor', 'admin', 'superuser',
+  ]);
   if (sync_id) {
-    const { error } = await supabaseAdmin.from('ejercicios').delete().eq('sync_id', sync_id);
+    const { data, error } = await supabaseAdmin.from('ejercicios').delete()
+      .eq('tenant_id', tenantId).eq('sync_id', sync_id).select('id');
     revalidatePath('/dashboard/profesor');
-    return { error };
+    return {
+      error: error || (!data?.length
+        ? { code: 'ACADEMIC_DELETE_NOT_FOUND', message: 'La actividad no existe o no tienes permiso para eliminarla.' }
+        : null),
+    };
   }
-  const { error } = await supabaseAdmin.from('ejercicios').delete().eq('id', id);
+  const { data, error } = await supabaseAdmin.from('ejercicios').delete()
+    .eq('tenant_id', tenantId).eq('id', id).select('id');
   revalidatePath('/dashboard/profesor');
-  return { error };
+  return {
+    error: error || (!data?.length
+      ? { code: 'ACADEMIC_DELETE_NOT_FOUND', message: 'La actividad no existe o no tienes permiso para eliminarla.' }
+      : null),
+  };
 }
 
 // --- SLIDES (PRESENTACIONES) ---
