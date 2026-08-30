@@ -139,6 +139,16 @@ describe('Paso 9: feature flag servidor/tenant', () => {
       ACADEMIC_GRADING_V2_TENANTS: '*',
     })).toBe(true);
   });
+
+  it('permite rollout persistente dual/canonical y conserva el apagado de emergencia', () => {
+    const context = { tenantId: IDS.tenant, tenantSlug: 'colegio-demo' };
+    expect(isAcademicGradingV2Enabled(context, {}, 'legacy')).toBe(false);
+    expect(isAcademicGradingV2Enabled(context, {}, 'dual')).toBe(true);
+    expect(isAcademicGradingV2Enabled(context, {}, 'canonical')).toBe(true);
+    expect(isAcademicGradingV2Enabled(context, {
+      ACADEMIC_GRADING_V2_ENABLED: 'false',
+    }, 'canonical')).toBe(false);
+  });
 });
 describe('Paso 9: servicio y validación duplicada', () => {
   it('no consulta el repositorio cuando el tenant no está habilitado', async () => {

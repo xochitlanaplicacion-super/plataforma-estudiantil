@@ -38,6 +38,8 @@
     "test:paso12:db": "bash scripts/academic-grading/test-step12-database.sh",
     "test:paso12": "npm run test:paso12:db && vitest run tests/unit/academic-exercise-results-step12.test.ts && npm run test:unit && npm run test:components && npm run typecheck && npm run test:e2e:list",
     "test:paso13": "vitest run tests/unit/academic-results-step13.test.ts tests/components/academic-results-step13.test.tsx && npm run test:unit && npm run test:components && npm run typecheck && npm run test:e2e:list",
+    "test:paso14:db": "bash scripts/academic-grading/test-step14-database.sh",
+    "test:paso14": "npm run test:paso14:db && vitest run tests/unit/academic-application-layer.test.ts && npm run test:unit && npm run test:components && npm run typecheck && npm run test:e2e:list",
     "sync:force": "git add . && (git commit -m 'Update from Firebase Studio' || echo 'No changes to commit') && git push origin main --force"
   },
   "dependencies": {

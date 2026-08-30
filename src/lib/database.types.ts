@@ -55,6 +55,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "abonos_pago_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       acreditaciones_alumnos: {
@@ -140,6 +147,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "acreditaciones_alumnos_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       agrupaciones_profesor: {
@@ -189,6 +203,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "agrupaciones_profesor_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       ai_alumno_daily_messages: {
@@ -227,6 +248,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "ai_alumno_daily_messages_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       ai_daily_web_searches: {
@@ -264,6 +292,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_daily_web_searches_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
           },
         ]
       }
@@ -312,6 +347,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "ai_red_list_alerts_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       ai_session_categories: {
@@ -352,6 +394,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_session_categories_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
           },
         ]
       }
@@ -402,6 +451,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_token_usage_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
           },
         ]
       }
@@ -454,6 +510,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "ai_usage_log_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       alumno_chat_history: {
@@ -505,6 +568,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "alumno_chat_history_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
           },
         ]
       }
@@ -617,6 +687,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "asignaciones_profesor_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       aspirantes: {
@@ -686,6 +763,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "aspirantes_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       auditoria: {
@@ -726,6 +810,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "auditoria_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
           },
           {
             foreignKeyName: "auditoria_user_id_fkey"
@@ -899,6 +990,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "carreras_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       ciclos_escolares: {
@@ -952,6 +1050,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ciclos_escolares_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
           },
         ]
       }
@@ -1145,6 +1250,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "config_credenciales_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       config_cuotas_servicio: {
@@ -1176,6 +1288,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "config_cuotas_servicio_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
           },
         ]
       }
@@ -1284,6 +1403,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "configuracion_sistema_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       credenciales_autorizadas: {
@@ -1349,6 +1475,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "credenciales_autorizadas_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
           },
         ]
       }
@@ -1490,6 +1623,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "ejercicios_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       encuesta_opciones: {
@@ -1531,6 +1671,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "encuesta_opciones_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
           },
         ]
       }
@@ -1583,6 +1730,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "encuesta_votos_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
           },
           {
             foreignKeyName: "encuesta_votos_votante_tenant_fkey"
@@ -1688,6 +1842,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "encuestas_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       esquemas_evaluacion: {
@@ -1702,6 +1863,7 @@ export type Database = {
           escala: string | null
           estado: string
           id: string
+          migration_version: string | null
           modo_redondeo: string
           nombre: string
           periodo_evaluacion_id: string
@@ -1723,6 +1885,7 @@ export type Database = {
           escala?: string | null
           estado?: string
           id?: string
+          migration_version?: string | null
           modo_redondeo?: string
           nombre: string
           periodo_evaluacion_id: string
@@ -1744,6 +1907,7 @@ export type Database = {
           escala?: string | null
           estado?: string
           id?: string
+          migration_version?: string | null
           modo_redondeo?: string
           nombre?: string
           periodo_evaluacion_id?: string
@@ -1981,6 +2145,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "fechas_evaluacion_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       grados: {
@@ -2025,6 +2196,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grados_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
           },
         ]
       }
@@ -2074,6 +2252,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grupo_materias_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
           },
         ]
       }
@@ -2129,6 +2314,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "grupos_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
           },
         ]
       }
@@ -2228,6 +2420,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "inscripciones_alumno_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       material_apoyo: {
@@ -2308,6 +2507,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "material_apoyo_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       materias: {
@@ -2366,6 +2572,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "materias_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       mensajes_acreditacion: {
@@ -2400,6 +2613,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mensajes_acreditacion_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
           },
         ]
       }
@@ -2490,6 +2710,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "mensajes_clases_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       mensajes_clases_vistos: {
@@ -2528,6 +2755,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mensajes_clases_vistos_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
           },
           {
             foreignKeyName: "mensajes_clases_vistos_usuario_id_fkey"
@@ -2589,6 +2823,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mensajes_contacto_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
           },
         ]
       }
@@ -2662,6 +2903,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "mensajes_internos_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       mensajes_vistos: {
@@ -2700,6 +2948,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mensajes_vistos_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
           },
           {
             foreignKeyName: "mensajes_vistos_usuario_id_fkey"
@@ -2756,6 +3011,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "niveles_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       notificaciones: {
@@ -2811,6 +3073,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "notificaciones_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       pago_de_servicios: {
@@ -2857,6 +3126,13 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pago_de_servicios_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
           },
         ]
       }
@@ -2928,6 +3204,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pagos_alumno_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
           },
         ]
       }
@@ -3043,6 +3326,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "plan_pagos_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       platform_admins: {
@@ -3096,6 +3386,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "platform_audit_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       profesor_chat_history: {
@@ -3133,6 +3430,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "profesor_chat_history_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
           },
         ]
       }
@@ -3237,6 +3541,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "profiles_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       recursos: {
@@ -3317,6 +3628,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "recursos_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       resources: {
@@ -3385,6 +3703,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "resources_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       resultados_ejercicios: {
@@ -3408,6 +3733,7 @@ export type Database = {
           idempotency_key: string | null
           inscripcion_alumno_id: string | null
           intentos: number | null
+          migration_version: string | null
           observacion: string | null
           origen: string | null
           primer_envio_en: string | null
@@ -3440,6 +3766,7 @@ export type Database = {
           idempotency_key?: string | null
           inscripcion_alumno_id?: string | null
           intentos?: number | null
+          migration_version?: string | null
           observacion?: string | null
           origen?: string | null
           primer_envio_en?: string | null
@@ -3472,6 +3799,7 @@ export type Database = {
           idempotency_key?: string | null
           inscripcion_alumno_id?: string | null
           intentos?: number | null
+          migration_version?: string | null
           observacion?: string | null
           origen?: string | null
           primer_envio_en?: string | null
@@ -3498,6 +3826,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "resultados_ejercicios_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
           },
           {
             foreignKeyName: "resultados_enrollment_tenant_cycle_fkey"
@@ -3598,6 +3933,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "slides_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       solicitudes_mutacion_academica: {
@@ -3651,6 +3993,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitudes_mutacion_tenant_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
           },
         ]
       }
@@ -3789,6 +4138,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "temas_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
+          {
             foreignKeyName: "temas_unidad_id_fkey"
             columns: ["unidad_id"]
             isOneToOne: false
@@ -3808,6 +4164,57 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vista_alumnos_inscritos"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      tenant_academic_rollout: {
+        Row: {
+          activated_at: string | null
+          created_at: string
+          details: Json
+          migration_version: string | null
+          mode: string
+          observation_ends_at: string | null
+          observation_started_at: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          activated_at?: string | null
+          created_at?: string
+          details?: Json
+          migration_version?: string | null
+          mode?: string
+          observation_ends_at?: string | null
+          observation_started_at?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          activated_at?: string | null
+          created_at?: string
+          details?: Json
+          migration_version?: string | null
+          mode?: string
+          observation_ends_at?: string | null
+          observation_started_at?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "tenant_academic_rollout_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_academic_rollout_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
           },
         ]
       }
@@ -3849,6 +4256,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_domains_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
           },
         ]
       }
@@ -3894,6 +4308,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "tenant_provisioning_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       tenant_smtp_settings: {
@@ -3937,6 +4358,13 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "tenants"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "tenant_smtp_settings_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
           },
         ]
       }
@@ -4039,6 +4467,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "unidades_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       video_progreso_alumno: {
@@ -4110,6 +4545,13 @@ export type Database = {
             referencedRelation: "tenants"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "video_progreso_alumno_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "vista_metricas_corte_academico"
+            referencedColumns: ["tenant_id"]
+          },
         ]
       }
       vinculos_evaluacion_ejercicio: {
@@ -4122,6 +4564,7 @@ export type Database = {
           criterio_evaluacion_id: string
           ejercicio_id: string
           id: string
+          migration_version: string | null
           origen: string
           periodo_evaluacion_id: string
           subcriterio_evaluacion_id: string | null
@@ -4137,6 +4580,7 @@ export type Database = {
           criterio_evaluacion_id: string
           ejercicio_id: string
           id?: string
+          migration_version?: string | null
           origen: string
           periodo_evaluacion_id: string
           subcriterio_evaluacion_id?: string | null
@@ -4152,6 +4596,7 @@ export type Database = {
           criterio_evaluacion_id?: string
           ejercicio_id?: string
           id?: string
+          migration_version?: string | null
           origen?: string
           periodo_evaluacion_id?: string
           subcriterio_evaluacion_id?: string | null
@@ -4245,11 +4690,11 @@ export type Database = {
           inscripcion_alumno_id: string | null
           observacion: string | null
           periodo_evaluacion_id: string | null
+          peso_interno: number | null
           row_version: number | null
           subcriterio_evaluacion_id: string | null
           subcriterio_nombre: string | null
           subcriterio_tipo: string | null
-          peso_interno: number | null
           tenant_id: string | null
           tipo_fuente: string | null
           valor_fuente: number | null
@@ -4272,11 +4717,11 @@ export type Database = {
           inscripcion_alumno_id: string | null
           observacion: string | null
           periodo_evaluacion_id: string | null
+          peso_interno: number | null
           row_version: number | null
           subcriterio_evaluacion_id: string | null
           subcriterio_nombre: string | null
           subcriterio_tipo: string | null
-          peso_interno: number | null
           tenant_id: string | null
           tipo_fuente: string | null
           valor_fuente: number | null
@@ -4324,6 +4769,23 @@ export type Database = {
           tenant_id: string | null
           tipo_fuente: string | null
           valor_fuente: number | null
+        }
+        Relationships: []
+      }
+      vista_metricas_corte_academico: {
+        Row: {
+          exercise_count: number | null
+          legacy_result_count: number | null
+          linked_exercise_count: number | null
+          migration_version: string | null
+          observation_ends_at: string | null
+          observation_started_at: string | null
+          orphan_context_count: number | null
+          out_of_range_count: number | null
+          result_count: number | null
+          rollout_mode: string | null
+          shadow_difference_count: number | null
+          tenant_id: string | null
         }
         Relationships: []
       }
@@ -4392,16 +4854,6 @@ export type Database = {
       }
     }
     Functions: {
-      configurar_vinculo_evaluacion_ejercicio: {
-        Args: {
-          p_asignacion_id: string
-          p_criterio_id: string
-          p_ejercicio_id: string
-          p_periodo_id: string
-          p_subcriterio_id?: string | null
-        }
-        Returns: Json
-      }
       activar_esquema_evaluacion: {
         Args: { expected_scheme_version: number; target_scheme_id: string }
         Returns: {
@@ -4409,28 +4861,6 @@ export type Database = {
           estado: string
           version: number
         }[]
-      }
-      calcular_calificacion_academica: {
-        Args: { p_dataset: Json }
-        Returns: Json
-      }
-      calcular_resultado_academico: {
-        Args: {
-          p_asignacion_id: string
-          p_inscripcion_id: string
-          p_periodo_id: string
-        }
-        Returns: Json
-      }
-      cerrar_calificaciones_academicas: {
-        Args: {
-          p_asignacion_id: string
-          p_correlation_id?: string | null
-          p_idempotency_key: string
-          p_motivo: string
-          p_periodo_id: string
-        }
-        Returns: Json
       }
       actualizar_encuesta: {
         Args: {
@@ -4447,6 +4877,38 @@ export type Database = {
           p_titulo: string
         }
         Returns: boolean
+      }
+      calcular_calificacion_academica: {
+        Args: { p_dataset: Json }
+        Returns: Json
+      }
+      calcular_resultado_academico: {
+        Args: {
+          p_asignacion_id: string
+          p_inscripcion_id: string
+          p_periodo_id: string
+        }
+        Returns: Json
+      }
+      cerrar_calificaciones_academicas: {
+        Args: {
+          p_asignacion_id: string
+          p_correlation_id?: string
+          p_idempotency_key: string
+          p_motivo: string
+          p_periodo_id: string
+        }
+        Returns: Json
+      }
+      configurar_vinculo_evaluacion_ejercicio: {
+        Args: {
+          p_asignacion_id: string
+          p_criterio_id: string
+          p_ejercicio_id: string
+          p_periodo_id: string
+          p_subcriterio_id?: string
+        }
+        Returns: Json
       }
       consumir_cuota_servicio: {
         Args: { p_servicio: string }
@@ -4482,11 +4944,10 @@ export type Database = {
         }
         Returns: string
       }
-      eliminar_encuesta: { Args: { p_encuesta_id: string }; Returns: boolean }
       editar_calificaciones_academicas: {
         Args: {
           p_asignacion_id: string
-          p_correlation_id?: string | null
+          p_correlation_id?: string
           p_idempotency_key: string
           p_items: Json
           p_motivo: string
@@ -4494,23 +4955,8 @@ export type Database = {
         }
         Returns: Json
       }
+      eliminar_encuesta: { Args: { p_encuesta_id: string }; Returns: boolean }
       generar_folio_recibo: { Args: { prefijo: string }; Returns: string }
-      guardar_resultado_ejercicio_academico: {
-        Args: {
-          p_aciertos?: number | null
-          p_alumno_id?: string | null
-          p_calificacion_10?: number | null
-          p_detalles?: Json | null
-          p_ejercicio_id: string
-          p_expected_row_version?: number
-          p_idempotency_key: string
-          p_observacion?: string | null
-          p_operacion: string
-          p_porcentaje_bruto?: number | null
-          p_total_preguntas?: number | null
-        }
-        Returns: Json
-      }
       get_active_storage_urls: {
         Args: { bucket_name: string }
         Returns: {
@@ -4529,6 +4975,22 @@ export type Database = {
           smtp_user: string
         }[]
       }
+      guardar_resultado_ejercicio_academico: {
+        Args: {
+          p_aciertos?: number
+          p_alumno_id?: string
+          p_calificacion_10?: number
+          p_detalles?: Json
+          p_ejercicio_id: string
+          p_expected_row_version?: number
+          p_idempotency_key: string
+          p_observacion?: string
+          p_operacion: string
+          p_porcentaje_bruto?: number
+          p_total_preguntas?: number
+        }
+        Returns: Json
+      }
       is_admin_or_super: { Args: never; Returns: boolean }
       previsualizar_cierre_calificaciones: {
         Args: { p_asignacion_id: string; p_periodo_id: string }
@@ -4537,7 +4999,7 @@ export type Database = {
       reabrir_calificaciones_academicas: {
         Args: {
           p_asignacion_id: string
-          p_correlation_id?: string | null
+          p_correlation_id?: string
           p_idempotency_key: string
           p_motivo: string
           p_periodo_id: string

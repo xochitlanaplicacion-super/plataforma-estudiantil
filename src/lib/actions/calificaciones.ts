@@ -25,7 +25,10 @@ import type {
 import { SupabaseAcademicConfigurationRepository } from '@/lib/academic/configuration-repository';
 import { AcademicConfigurationService } from '@/lib/academic/configuration-service';
 import { academicFailureResult, academicSuccessResult } from '@/lib/academic/errors';
-import { isAcademicGradingV2Enabled } from '@/lib/academic/feature-flags';
+import {
+  isAcademicGradingV2Enabled,
+  type AcademicRolloutMode,
+} from '@/lib/academic/feature-flags';
 import { SupabaseAcademicRepository } from '@/lib/academic/repository';
 import {
   revalidateAcademicConfigurationRoutes,
@@ -44,6 +47,30 @@ import { SupabaseAcademicResultsRepository } from '@/lib/academic/results-reposi
 import { AcademicResultsService } from '@/lib/academic/results-service';
 import { requireTenantSession } from '@/lib/tenant/context';
 
+type TenantSession = Awaited<ReturnType<typeof requireTenantSession>>;
+
+async function resolveAcademicFeatureForSession(session: TenantSession): Promise<boolean> {
+  const { data, error } = await session.admin
+    .from('tenant_academic_rollout')
+    .select('mode')
+    .eq('tenant_id', session.tenantId)
+    .maybeSingle();
+  const rolloutMode = !error && (data?.mode === 'legacy'
+    || data?.mode === 'dual'
+    || data?.mode === 'canonical')
+    ? data.mode as AcademicRolloutMode
+    : null;
+
+  return isAcademicGradingV2Enabled(
+    { tenantId: session.tenantId, tenantSlug: session.tenant.slug },
+    {
+      ACADEMIC_GRADING_V2_ENABLED: process.env.ACADEMIC_GRADING_V2_ENABLED,
+      ACADEMIC_GRADING_V2_TENANTS: process.env.ACADEMIC_GRADING_V2_TENANTS,
+    },
+    rolloutMode,
+  );
+}
+
 async function createAcademicServiceForRequest(): Promise<AcademicService> {
   const session = await requireTenantSession();
   const repository = new SupabaseAcademicRepository(session.supabase);
@@ -51,13 +78,7 @@ async function createAcademicServiceForRequest(): Promise<AcademicService> {
     tenantId: session.tenantId,
     actorId: session.user.id,
     role: session.profile.rol,
-    featureEnabled: isAcademicGradingV2Enabled(
-      { tenantId: session.tenantId, tenantSlug: session.tenant.slug },
-      {
-        ACADEMIC_GRADING_V2_ENABLED: process.env.ACADEMIC_GRADING_V2_ENABLED,
-        ACADEMIC_GRADING_V2_TENANTS: process.env.ACADEMIC_GRADING_V2_TENANTS,
-      },
-    ),
+    featureEnabled: await resolveAcademicFeatureForSession(session),
   });
 }
 
@@ -68,13 +89,7 @@ async function createAcademicConfigurationServiceForRequest(): Promise<AcademicC
     tenantId: session.tenantId,
     actorId: session.user.id,
     role: session.profile.rol,
-    featureEnabled: isAcademicGradingV2Enabled(
-      { tenantId: session.tenantId, tenantSlug: session.tenant.slug },
-      {
-        ACADEMIC_GRADING_V2_ENABLED: process.env.ACADEMIC_GRADING_V2_ENABLED,
-        ACADEMIC_GRADING_V2_TENANTS: process.env.ACADEMIC_GRADING_V2_TENANTS,
-      },
-    ),
+    featureEnabled: await resolveAcademicFeatureForSession(session),
   });
 }
 
@@ -85,13 +100,7 @@ async function createAcademicGradebookServiceForRequest(): Promise<AcademicGrade
     tenantId: session.tenantId,
     actorId: session.user.id,
     role: session.profile.rol,
-    featureEnabled: isAcademicGradingV2Enabled(
-      { tenantId: session.tenantId, tenantSlug: session.tenant.slug },
-      {
-        ACADEMIC_GRADING_V2_ENABLED: process.env.ACADEMIC_GRADING_V2_ENABLED,
-        ACADEMIC_GRADING_V2_TENANTS: process.env.ACADEMIC_GRADING_V2_TENANTS,
-      },
-    ),
+    featureEnabled: await resolveAcademicFeatureForSession(session),
   });
 }
 
@@ -102,13 +111,7 @@ async function createAcademicResultsServiceForRequest(): Promise<AcademicResults
     tenantId: session.tenantId,
     actorId: session.user.id,
     role: session.profile.rol,
-    featureEnabled: isAcademicGradingV2Enabled(
-      { tenantId: session.tenantId, tenantSlug: session.tenant.slug },
-      {
-        ACADEMIC_GRADING_V2_ENABLED: process.env.ACADEMIC_GRADING_V2_ENABLED,
-        ACADEMIC_GRADING_V2_TENANTS: process.env.ACADEMIC_GRADING_V2_TENANTS,
-      },
-    ),
+    featureEnabled: await resolveAcademicFeatureForSession(session),
   });
 }
 

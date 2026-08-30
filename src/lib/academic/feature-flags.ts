@@ -7,20 +7,27 @@ export interface AcademicFeatureFlagContext {
   tenantSlug: string;
 }
 
+export type AcademicRolloutMode = 'legacy' | 'dual' | 'canonical';
+
 function enabled(value: string | undefined): boolean {
   return ['1', 'true', 'yes', 'on'].includes(value?.trim().toLowerCase() ?? '');
 }
 
 /**
- * El flag es deny-by-default y sólo consume variables de servidor. La lista
- * acepta UUID o slug; `*` habilita todos los tenants únicamente si el switch
- * global también está encendido.
+ * Sin override de servidor, el rollout persistente decide por tenant y sigue
+ * siendo deny-by-default (`legacy`/sin fila = apagado). Un override explícito
+ * conserva el apagado de emergencia y la allowlist histórica.
  */
 export function isAcademicGradingV2Enabled(
   context: AcademicFeatureFlagContext,
   environment: AcademicFeatureFlagEnvironment,
+  rolloutMode: AcademicRolloutMode | null = null,
 ): boolean {
-  if (!enabled(environment.ACADEMIC_GRADING_V2_ENABLED)) return false;
+  const explicitSwitch = environment.ACADEMIC_GRADING_V2_ENABLED?.trim();
+  if (!explicitSwitch) {
+    return rolloutMode === 'dual' || rolloutMode === 'canonical';
+  }
+  if (!enabled(explicitSwitch)) return false;
   const allowlist = new Set(
     (environment.ACADEMIC_GRADING_V2_TENANTS ?? '')
       .split(',')

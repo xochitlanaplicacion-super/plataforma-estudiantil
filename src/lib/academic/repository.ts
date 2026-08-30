@@ -349,7 +349,7 @@ export class SupabaseAcademicRepository implements AcademicRepository {
       p_items: jsonPayload(input.items),
       p_motivo: input.reason,
       p_idempotency_key: input.idempotencyKey,
-      p_correlation_id: input.correlationId ?? null,
+      ...(input.correlationId ? { p_correlation_id: input.correlationId } : {}),
     });
     if (error) throwDatabaseError(error);
     return parseDatabaseContract(academicMutationResultSchema, data);
@@ -364,7 +364,7 @@ export class SupabaseAcademicRepository implements AcademicRepository {
       p_periodo_id: input.periodId,
       p_motivo: input.reason,
       p_idempotency_key: input.idempotencyKey,
-      p_correlation_id: input.correlationId ?? null,
+      ...(input.correlationId ? { p_correlation_id: input.correlationId } : {}),
     });
     if (error) throwDatabaseError(error);
     return parseDatabaseContract(academicClosureResultSchema, data);
@@ -379,7 +379,7 @@ export class SupabaseAcademicRepository implements AcademicRepository {
       p_periodo_id: input.periodId,
       p_motivo: input.reason,
       p_idempotency_key: input.idempotencyKey,
-      p_correlation_id: input.correlationId ?? null,
+      ...(input.correlationId ? { p_correlation_id: input.correlationId } : {}),
     });
     if (error) throwDatabaseError(error);
     return parseDatabaseContract(academicClosureResultSchema, data);
