@@ -624,7 +624,7 @@ export default function InstitucionPage() {
 
       {/* ─── SECCIÓN 6: CONTACTO Y HORARIOS ────────────────────────────────── */}
       <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2"><Clock size={18} /> Contacto y Horarios de Atención</CardTitle><CardDescription>Se muestran en correos, pantalla de expiración y "Acerca de nosotros".</CardDescription></CardHeader>
+        <CardHeader><CardTitle className="flex items-center gap-2"><Clock size={18} /> Contacto y Horarios de Atención</CardTitle><CardDescription>Se muestran en correos, pantalla de expiración y &quot;Acerca de nosotros&quot;.</CardDescription></CardHeader>
         <CardContent className="space-y-6">
           <div className="grid grid-cols-2 gap-4">
             <div className="p-4 border rounded-xl bg-card shadow-sm space-y-2"><label className="text-sm font-semibold flex items-center gap-2"><Phone className="w-4 h-4" /> Teléfono</label><Input type="tel" value={telefono} onChange={e => setTelefono(e.target.value)} placeholder="735 2826206" /></div>
@@ -671,7 +671,7 @@ export default function InstitucionPage() {
         <CardContent className="space-y-6">
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-muted/50 p-4 rounded-xl border border-border/50">
             <div>
-              <Label className="font-bold flex items-center gap-2">Proveedor <Popover><PopoverTrigger asChild><Info className="h-4 w-4 text-primary cursor-pointer hover:opacity-80" /></PopoverTrigger><PopoverContent className="w-80 text-sm p-4"><p className="mb-2"><strong>¿Qué es SMTP?</strong> Es el servidor que enviará los correos.</p><p className="mb-2"><strong>Gmail / Outlook:</strong> Requieren una <em>"Contraseña de Aplicación"</em> (App Password), NO tu contraseña normal.</p><p className="text-muted-foreground text-xs">Para obtenerla en Gmail: Gestionar tu cuenta &gt; Seguridad &gt; Verificación en 2 pasos &gt; Contraseñas de aplicaciones.</p></PopoverContent></Popover></Label>
+              <Label className="font-bold flex items-center gap-2">Proveedor <Popover><PopoverTrigger asChild><Info className="h-4 w-4 text-primary cursor-pointer hover:opacity-80" /></PopoverTrigger><PopoverContent className="w-80 text-sm p-4"><p className="mb-2"><strong>¿Qué es SMTP?</strong> Es el servidor que enviará los correos.</p><p className="mb-2"><strong>Gmail / Outlook:</strong> Requieren una <em>&quot;Contraseña de Aplicación&quot;</em> (App Password), NO tu contraseña normal.</p><p className="text-muted-foreground text-xs">Para obtenerla en Gmail: Gestionar tu cuenta &gt; Seguridad &gt; Verificación en 2 pasos &gt; Contraseñas de aplicaciones.</p></PopoverContent></Popover></Label>
               <p className="text-xs text-muted-foreground mt-1">Selecciona un proveedor para autocompletar el Host y el Puerto.</p>
             </div>
             <Select value={proveedorSmtp} onValueChange={handleProveedorChange}>
@@ -823,7 +823,7 @@ export default function InstitucionPage() {
           <AlertDialogTitle>¿Eliminar imagen?</AlertDialogTitle>
           <AlertDialogDescription>
             ¿Estás seguro de que deseas eliminar este archivo de imagen? La plataforma volverá a usar el logo en blanco (marca blanca) por defecto.
-            Recuerda dar clic en "Guardar Cambios" después para aplicar esta configuración.
+            Recuerda dar clic en &quot;Guardar Cambios&quot; después para aplicar esta configuración.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

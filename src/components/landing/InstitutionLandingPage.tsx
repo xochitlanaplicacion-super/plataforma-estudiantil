@@ -16,6 +16,7 @@ import { Variants } from 'framer-motion';
 import { createContactoRecord } from '@/lib/actions/contacto';
 import { useToast } from '@/hooks/use-toast';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useInstitucion } from '@/hooks/use-institucion';
 import FileViewerModal from '@/components/ui/file-viewer-modal';
 
@@ -112,7 +113,7 @@ const Navbar = ({ theme }: { theme: any }) => {
             ))}
           </div>
           <Magnetic intensity={0.4}>
-            <a
+            <Link
               href="/"
               className={cn(
                 "px-8 py-3 rounded-full font-bold text-sm uppercase tracking-widest transition-all duration-300 transform hover:scale-105 hover:shadow-xl",
@@ -123,7 +124,7 @@ const Navbar = ({ theme }: { theme: any }) => {
               style={scrolled ? { backgroundColor: theme.primary } : {}}
             >
               Plataforma
-            </a>
+            </Link>
           </Magnetic>
         </div>
 
@@ -155,14 +156,14 @@ const Navbar = ({ theme }: { theme: any }) => {
                 {link.name}
               </a>
             ))}
-            <a
+            <Link
               href="/"
               onClick={() => setMobileMenuOpen(false)}
               className="mt-4 text-center text-white px-6 py-4 rounded-xl font-bold text-sm uppercase tracking-widest shadow-lg"
               style={{ backgroundColor: theme.primary }}
             >
               Acceso Plataforma
-            </a>
+            </Link>
           </motion.div>
         )}
       </AnimatePresence>

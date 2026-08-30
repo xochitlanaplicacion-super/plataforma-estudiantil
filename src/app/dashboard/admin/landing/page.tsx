@@ -632,7 +632,7 @@ export default function EditorLandingPage() {
       {/* SECCIÓN ACERCA DE */}
       <Card>
         <CardHeader>
-          <CardTitle>Sección "Acerca de Nosotros"</CardTitle>
+          <CardTitle>Sección &quot;Acerca de Nosotros&quot;</CardTitle>
           <CardDescription>Historia y descripción principal de la institución.</CardDescription>
         </CardHeader>
         <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -1035,7 +1035,7 @@ export default function EditorLandingPage() {
                   </div>
                 ) : (
                   <div className="text-center py-4 text-muted-foreground text-xs border rounded-lg border-dashed">
-                    No hay archivos adjuntos. Usa el botón "Subir" para agregar PDFs o imágenes.
+                    No hay archivos adjuntos. Usa el botón &quot;Subir&quot; para agregar PDFs o imágenes.
                   </div>
                 )}
               </div>

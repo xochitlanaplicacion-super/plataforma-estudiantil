@@ -75,7 +75,7 @@ Crea el archivo `.env.local` en la raíz del proyecto para pruebas locales:
 # URL y Claves del Supabase del Cliente
 NEXT_PUBLIC_SUPABASE_URL=https://xxxx.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_xxxx
-SUPABASE_SERVICE_ROLE_KEY=sb_secret_xxxx
+SUPABASE_SERVICE_ROLE_KEY=tu_service_role_key
 
 # IA / OpenRouter (Clave global de servicio o por cliente)
 OPENROUTER_API_KEY=sk-or-v1-xxxx
@@ -101,7 +101,7 @@ CRON_SECRET=secreto-unico-para-este-colegio
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | URL pública de Supabase del colegio | `https://xxxx.supabase.co` |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Clave pública Anon de Supabase | `sb_publishable_xxxx` |
-| `SUPABASE_SERVICE_ROLE_KEY` | Clave secreta Service Role | `sb_secret_xxxx` |
+| `SUPABASE_SERVICE_ROLE_KEY` | Clave secreta Service Role | `configurar sólo en el entorno seguro` |
 | `OPENROUTER_API_KEY` | Clave para IA (Copiloto y Ejercicios) | `sk-or-v1-xxxx` |
 | `OPENROUTER_SLIDES_API_KEY` | Clave para IA de Diapositivas | `sk-or-v1-xxxx` |
 | `NEXT_PUBLIC_APP_URL` | Dominio final de Vercel | `https://colegio.vercel.app` |

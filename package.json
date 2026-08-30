@@ -8,7 +8,7 @@
     "genkit:watch": "genkit start -- tsx --watch src/ai/dev.ts",
     "build": "NODE_ENV=production next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
@@ -40,6 +40,8 @@
     "test:paso13": "vitest run tests/unit/academic-results-step13.test.ts tests/components/academic-results-step13.test.tsx && npm run test:unit && npm run test:components && npm run typecheck && npm run test:e2e:list",
     "test:paso14:db": "bash scripts/academic-grading/test-step14-database.sh",
     "test:paso14": "npm run test:paso14:db && vitest run tests/unit/academic-application-layer.test.ts && npm run test:unit && npm run test:components && npm run typecheck && npm run test:e2e:list",
+    "test:paso15:db": "bash scripts/academic-grading/test-step15-database.sh",
+    "test:paso15": "npm run test:paso15:db && npm run test:unit && npm run test:components && npm run typecheck && npm run build && npm run test:e2e",
     "sync:force": "git add . && (git commit -m 'Update from Firebase Studio' || echo 'No changes to commit') && git push origin main --force"
   },
   "dependencies": {
@@ -87,11 +89,11 @@
     "katex": "^0.17.0",
     "lucide-react": "^0.475.0",
     "mobile-drag-drop": "^3.0.0-rc.0",
-    "next": "15.5.9",
+    "next": "15.5.24",
     "node-fetch": "^3.3.2",
-    "nodemailer": "^6.9.13",
+    "nodemailer": "9.0.6",
     "patch-package": "^8.0.0",
-    "pdfjs-dist": "^5.6.205",
+    "pdfjs-dist": "5.5.207",
     "pptxgenjs": "^4.0.1",
     "react": "^19.2.1",
     "react-colorful": "^5.7.0",
@@ -125,6 +127,8 @@
     "@types/react-dom": "^19.2.1",
     "@vitejs/plugin-react": "6.1.0",
     "axe-core": "^4.10.3",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "15.5.24",
     "genkit-cli": "^1.28.0",
     "jsdom": "26.1.0",
     "postcss": "^8",
@@ -132,5 +136,10 @@
     "tailwindcss": "^3.4.1",
     "typescript": "^5",
     "vitest": "4.1.11"
+  },
+  "overrides": {
+    "handlebars": "4.7.9",
+    "protobufjs": "7.6.6",
+    "websocket-driver": "0.7.5"
   }
 }

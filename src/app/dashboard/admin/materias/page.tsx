@@ -402,7 +402,7 @@ export default function MateriasUnidades() {
             <DialogTitle className="text-3xl font-black uppercase tracking-tight text-slate-800">¿Estás seguro?</DialogTitle>
             <DialogDescription className="text-slate-500 text-lg leading-relaxed pt-4">
               Estás a punto de borrar irremediablemente este elemento: 
-              <span className="font-black text-slate-900 block my-3 text-xl italic underline decoration-destructive/30">"{deleteConfirmData?.title}"</span>
+              <span className="font-black text-slate-900 block my-3 text-xl italic underline decoration-destructive/30">&quot;{deleteConfirmData?.title}&quot;</span>
               Esta acción eliminará <span className="text-destructive font-black underline">TODO</span> el contenido atado a él (unidades, asignaciones, ejercicios, entregas de alumnos) y <span className="font-black text-slate-900">no se puede deshacer.</span>
             </DialogDescription>
           </DialogHeader>

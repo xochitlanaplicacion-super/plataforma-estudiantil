@@ -123,7 +123,7 @@ export function ProfesorAIAssistant({ userId, userName }: ProfesorAIAssistantPro
                   </h3>
                   <div className="space-y-4 text-slate-600 text-lg">
                     <div className="flex items-start gap-3"><span className="font-black text-indigo-600 shrink-0">1.</span><span>Ve a cualquiera de tus <strong>Temas</strong>.</span></div>
-                    <div className="flex items-start gap-3"><span className="font-black text-indigo-600 shrink-0">2.</span><span>Haz clic en el botón de <strong>"Diseño de Clase con IA"</strong>.</span></div>
+                    <div className="flex items-start gap-3"><span className="font-black text-indigo-600 shrink-0">2.</span><span>Haz clic en el botón de <strong>&quot;Diseño de Clase con IA&quot;</strong>.</span></div>
                     <div className="flex items-start gap-3"><span className="font-black text-indigo-600 shrink-0">3.</span><span>Escribe de qué tratará tu clase y la IA armará todo el contenido estructurado en diapositivas.</span></div>
                     <p className="pt-2 font-black text-slate-800">¡Incluso puedes exportarlas a PowerPoint directo a tu computadora!</p>
                   </div>
@@ -163,7 +163,7 @@ export function ProfesorAIAssistant({ userId, userName }: ProfesorAIAssistantPro
                   <div className="space-y-4 text-slate-600 text-lg">
                     <div className="flex items-start gap-3"><span className="font-black text-blue-600 shrink-0">1.</span><span>Dentro de un Tema, ve a la pestaña de <strong>Actividades</strong>.</span></div>
                     <div className="flex items-start gap-3"><span className="font-black text-blue-600 shrink-0">2.</span><span>Selecciona crear una (ej. Crucigrama, Cuestionario, Completar Espacios).</span></div>
-                    <div className="flex items-start gap-3"><span className="font-black text-blue-600 shrink-0">3.</span><span>Verás un botón de <strong>"Generar con IA"</strong>.</span></div>
+                    <div className="flex items-start gap-3"><span className="font-black text-blue-600 shrink-0">3.</span><span>Verás un botón de <strong>&quot;Generar con IA&quot;</strong>.</span></div>
                     <div className="flex items-start gap-3"><span className="font-black text-blue-600 shrink-0">4.</span><span>Pega un texto o escribe tus instrucciones, y la IA llenará todo el formulario por ti ¡al instante!</span></div>
                     <p className="pt-2 font-black text-slate-800">¡Ahorrarás muchísimo tiempo preparando tus clases!</p>
                   </div>
@@ -188,7 +188,7 @@ export function ProfesorAIAssistant({ userId, userName }: ProfesorAIAssistantPro
                     <div className="flex items-start gap-3"><span className="font-black text-purple-600 shrink-0">•</span><span>Analizar en qué temas fallan tus estudiantes.</span></div>
                     <div className="flex items-start gap-3"><span className="font-black text-purple-600 shrink-0">•</span><span>Ayudarte en planeación buscando recursos, artículos y estrategias en la web.</span></div>
                     <p className="pt-2 font-medium text-slate-800">
-                      Encuéntrame siempre en el botón <strong className="text-purple-600">"Ayuda IA"</strong> en la esquina inferior derecha de tu pantalla.
+                      Encuéntrame siempre en el botón <strong className="text-purple-600">&quot;Ayuda IA&quot;</strong> en la esquina inferior derecha de tu pantalla.
                     </p>
                   </div>
                   <div className="pt-4 flex justify-end">

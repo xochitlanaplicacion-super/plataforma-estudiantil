@@ -63,6 +63,7 @@ const MemoizedMarkdown = React.memo(({ content, isDark }: { content: string; isD
   </ReactMarkdown>
   </div>
 ));
+MemoizedMarkdown.displayName = 'MemoizedMarkdown';
 
 // ── Componente Principal ───────────────────────────────────────────────
 export function ProfesorAICopilot({ userId, userName, onClose }: ProfesorAICopilotProps) {

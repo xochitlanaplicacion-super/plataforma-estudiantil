@@ -380,7 +380,7 @@ export default function MonitoreoIAPage() {
               <div className="h-80 flex flex-col items-center justify-center border-2 border-dashed border-gray-200 rounded-3xl bg-gray-50/50">
                 <RefreshCw className="text-gray-300 mb-3" size={32} />
                 <p className="text-sm text-gray-500 font-medium text-center px-6">
-                  No hay categorías aún. Presiona "Sincronizar Análisis" para que el sistema clasifique los chats.
+                  No hay categorías aún. Presiona &quot;Sincronizar Análisis&quot; para que el sistema clasifique los chats.
                 </p>
               </div>
             ) : (
@@ -526,7 +526,7 @@ export default function MonitoreoIAPage() {
                                 </span>
                               </div>
                               <p className="text-xs text-gray-700 bg-red-50/50 p-2.5 rounded-lg italic mb-3 leading-relaxed">
-                                "{alert.motivo}"
+                                &quot;{alert.motivo}&quot;
                               </p>
                               <button
                                 onClick={() => setSelectedUserForChat({

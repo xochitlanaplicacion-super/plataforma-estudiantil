@@ -2840,7 +2840,7 @@ export default function ProfesorDashboard() {
             <DialogTitle className="text-3xl font-black uppercase tracking-tight text-slate-800">¿Estás seguro?</DialogTitle>
             <DialogDescription className="text-slate-500 text-lg leading-relaxed pt-4">
               Estás a punto de borrar el/la {deleteConfirmTarget?.type === 'unidad' ? 'unidad' : (deleteConfirmTarget?.type === 'tema' ? 'tema' : 'actividad')}: 
-              <span className="font-black text-slate-900 block my-3 text-xl italic underline decoration-destructive/30">"{deleteConfirmTarget?.title}"</span>
+              <span className="font-black text-slate-900 block my-3 text-xl italic underline decoration-destructive/30">&quot;{deleteConfirmTarget?.title}&quot;</span>
               Esta acción eliminará <span className="text-destructive font-black underline">TODO</span> {deleteConfirmTarget?.type === 'ejercicio' ? 'el contenido de esta actividad' : 'el contenido relacionado (temas, ejercicios, presentaciones y recursos)'} y <span className="font-black text-slate-900">no se puede deshacer.</span>
             </DialogDescription>
           </DialogHeader>

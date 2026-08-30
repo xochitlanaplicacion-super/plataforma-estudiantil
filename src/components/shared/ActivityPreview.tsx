@@ -1138,7 +1138,7 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
                 <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-6">Pistas</h4>
                 <div className="space-y-4">
                   {(content.clues || []).filter((c:string)=>c.length>0).map((c: string, i: number) => (
-                    <p key={i} className="text-xs font-bold text-slate-600 uppercase italic leading-relaxed border-l-4 border-indigo-200 pl-4">"{c}"</p>
+                    <p key={i} className="text-xs font-bold text-slate-600 uppercase italic leading-relaxed border-l-4 border-indigo-200 pl-4">&quot;{c}&quot;</p>
                   ))}
                 </div>
               </div>

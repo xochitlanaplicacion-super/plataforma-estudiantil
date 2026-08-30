@@ -64,6 +64,7 @@ const MemoizedMarkdown = React.memo(({ content, isDark }: { content: string; isD
   </ReactMarkdown>
   </div>
 ));
+MemoizedMarkdown.displayName = 'MemoizedMarkdown';
 
 interface ChatSession {
   id: string;

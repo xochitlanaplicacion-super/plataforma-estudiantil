@@ -382,7 +382,7 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
                   <p className="text-[10px] text-blue-600 font-bold mt-1 pl-1">✓ Autodetectado basado en la carrera del alumno.</p>
                 )}
                 {todosEnPendiente && programaSeleccionado && programaSeleccionado !== programaActual && (
-                  <p className="text-[10px] text-amber-600 font-bold mt-1 pl-1">⚠️ Se eliminarán los {pagos.length} conceptos actuales y se cargarán los de "{programaSeleccionado}".</p>
+                  <p className="text-[10px] text-amber-600 font-bold mt-1 pl-1">⚠️ Se eliminarán los {pagos.length} conceptos actuales y se cargarán los de &quot;{programaSeleccionado}&quot;.</p>
                 )}
               </div>
               <Button
@@ -531,7 +531,7 @@ function ModalPagosAlumno({ alumno, open, onClose, onUpdate, programasDisponible
               <Input type="number" value={form.monto_pagado} onChange={e => setForm(f => ({ ...f, monto_pagado: e.target.value }))} />
               {editando && (
                 <p className="text-xs mt-1 font-bold text-muted-foreground">
-                  Al registrar un pago completo, la cantidad debe ser exacta. Para pagos parciales, usa la opción "+ Abono".
+                  Al registrar un pago completo, la cantidad debe ser exacta. Para pagos parciales, usa la opción &quot;+ Abono&quot;.
                 </p>
               )}
             </div>
@@ -925,7 +925,7 @@ export default function ControlVigenciasPage() {
           <Card>
             <CardHeader>
               <CardTitle>Estado de Pagos por Alumno</CardTitle>
-              <CardDescription>Haz clic en "Gestionar" para ver conceptos, registrar pagos o agregar abonos.</CardDescription>
+              <CardDescription>Haz clic en &quot;Gestionar&quot; para ver conceptos, registrar pagos o agregar abonos.</CardDescription>
               <div className="flex gap-3 flex-wrap mt-3">
                 <Input placeholder="Buscar por nombre o matrícula..." value={busqueda} onChange={e => setBusqueda(e.target.value)} className="max-w-xs" />
                 <Select value={filtroPrograma} onValueChange={setFiltroPrograma}>
@@ -1029,7 +1029,7 @@ export default function ControlVigenciasPage() {
                   {expandedPrograma === prog.nombre && (
                     <div className="divide-y">
                       {prog.conceptos.length === 0 ? (
-                        <p className="text-center py-6 text-sm text-muted-foreground">Sin conceptos. Usa "Nuevo Concepto" para añadir.</p>
+                        <p className="text-center py-6 text-sm text-muted-foreground">Sin conceptos. Usa &quot;Nuevo Concepto&quot; para añadir.</p>
                       ) : prog.conceptos.map(c => <ConceptoRow key={c.id} concepto={c} onDelete={handleEliminarConcepto} onUpdate={fetchData} />)}
                     </div>
                   )}
@@ -1048,7 +1048,7 @@ export default function ControlVigenciasPage() {
       {/* Modal Nuevo Programa */}
       <Dialog open={modalPrograma} onOpenChange={setModalPrograma}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Nuevo Programa de Pago</DialogTitle><DialogDescription>Se creará el nuevo programa con un concepto inicial "INSCRIPCIÓN". Podrás añadir más conceptos después.</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>Nuevo Programa de Pago</DialogTitle><DialogDescription>Se creará el nuevo programa con un concepto inicial &quot;INSCRIPCIÓN&quot;. Podrás añadir más conceptos después.</DialogDescription></DialogHeader>
           <div>
             <Label>Nombre del Programa</Label>
             <Input placeholder="Ej: CURSOS DE INGLÉS PARA TITULACIÓN" value={nuevoPrograma} onChange={e => setNuevoPrograma(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleCrearPrograma()} />
@@ -1119,7 +1119,7 @@ export default function ControlVigenciasPage() {
             - Todos sus conceptos asociados.<br/>
             - Todos los pagos y abonos realizados por los estudiantes vinculados a estos conceptos.<br/>
             <br/>
-            Para confirmar, escribe la palabra "BORRAR" en mayúsculas a continuación:
+            Para confirmar, escribe la palabra &quot;BORRAR&quot; en mayúsculas a continuación:
           </DialogDescription>
           </DialogHeader>
           <div>

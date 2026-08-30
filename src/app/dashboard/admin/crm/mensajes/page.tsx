@@ -179,7 +179,7 @@ export default function MensajesCRM() {
 
                             {msg.mensaje && (
                               <div className="p-2 bg-slate-50/80 rounded-md text-[10px] italic text-slate-500 border-l-2 border-primary/20 line-clamp-2">
-                                "{msg.mensaje}"
+                                &quot;{msg.mensaje}&quot;
                               </div>
                             )}
 
