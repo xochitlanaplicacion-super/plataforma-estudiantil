@@ -2,9 +2,9 @@
 
 Fecha: 2026-08-30 (America/Mexico_City)
 
-## Resultado técnico previo al despliegue
+## Resultado
 
-La implementación académica multitenant está certificada localmente y en Supabase productivo. La aplicación conserva el tenant existente en modo `dual` hasta que finalice la ventana de observación el 2026-09-06; este paso no anticipa la promoción a `canonical`.
+La implementación académica multitenant quedó certificada, sincronizada y desplegada en producción. La aplicación conserva el tenant existente en modo `dual` hasta que finalice la ventana de observación el 2026-09-06; este paso no anticipó la promoción a `canonical`.
 
 ## Base de datos productiva
 
@@ -48,4 +48,21 @@ Riesgo residual: `npm audit --omit=dev` informa 0 críticas, 10 altas y 54 moder
 
 ## Despliegue
 
-La evidencia de preview, producción, smoke tests y commit final se añadirá en el cierre formal después de completar la publicación gradual autorizada.
+- Commit funcional certificado: `d50116e4aa7dbeb5df7152e1cd8ccf9cddd27a42`.
+- Preview: rama `codex/paso15-preview`; Vercel confirmó `Deployment has completed`. La URL de preview está protegida por Vercel Authentication, por lo que el smoke funcional por roles se ejecutó con el build exacto en Playwright local.
+- Producción: `main` avanzó de `b75e6af` a `d50116e`; deployment Vercel `CY5FyMR5dudtos9L6QgtfKrLvyya` completado.
+- Dominio principal `www`: HTTP 200 y marca Xochitlán; no apareció la interfaz blanca predeterminada.
+- Dominio apex: HTTP 308 hacia `www`, como está configurado en Vercel.
+- Dominio Vercel heredado: HTTP 200 y el mismo tenant correcto.
+- `/platform`, admin, profesor y alumno sin sesión: HTTP 307 hacia login; no se expuso contenido privado.
+- Credencial real del superduperuser: autenticación aprobada, claim `platform_admin`, sin perfil escolar ni tenant asignado.
+- Credencial real del director: autenticación aprobada, claim/perfil `superuser`, estado activo y tenant asignado.
+- Rutas sintéticas de evidencia: inaccesibles sin autorización en producción.
+- Latencia posterior, cinco muestras: dominio `www` mediana 1,067 ms (máx. 1,490 ms); dominio Vercel mediana 848 ms; redirección protegida mediana 341 ms.
+- Observación de Supabase posterior: cero bloqueos, cero consultas largas y checksum/conteos sin cambios.
+
+No fue posible consultar logs privados del proyecto con la sesión local de Vercel porque pertenece a otra cuenta. Este límite no se sorteó vinculando un proyecto ajeno: se usaron el estado firmado de la integración GitHub–Vercel, smoke HTTP público y métricas/locks directos de Supabase.
+
+## Condición de cierre
+
+Todos los gates bloqueantes del Paso 15 están aprobados. El riesgo operativo restante es la ventana `dual`, que debe concluir el 2026-09-06 antes de decidir una promoción separada a `canonical`.
