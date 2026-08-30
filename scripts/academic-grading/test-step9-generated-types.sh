@@ -14,6 +14,7 @@ MIGRATIONS=(
   "$REPO_ROOT/supabase/migrations/20260827235444_academic_rls_grants_secure_read_models.sql"
   "$REPO_ROOT/supabase/migrations/20260828014613_academic_deterministic_calculation_engine.sql"
   "$REPO_ROOT/supabase/migrations/20260828042542_academic_atomic_grade_mutations_closures.sql"
+  "$REPO_ROOT/supabase/migrations/20260829032136_academic_unify_exercise_results_step12.sql"
 )
 
 cleanup() {
@@ -51,6 +52,13 @@ for contract in \
   'editar_calificaciones_academicas:' \
   'cerrar_calificaciones_academicas:' \
   'reabrir_calificaciones_academicas:'; do
+  grep -Fq "$contract" "$GENERATED_TYPES"
+  grep -Fq "$contract" "$REPO_ROOT/src/lib/database.types.ts"
+done
+
+for contract in \
+  'configurar_vinculo_evaluacion_ejercicio:' \
+  'guardar_resultado_ejercicio_academico:'; do
   grep -Fq "$contract" "$GENERATED_TYPES"
   grep -Fq "$contract" "$REPO_ROOT/src/lib/database.types.ts"
 done

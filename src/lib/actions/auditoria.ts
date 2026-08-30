@@ -123,7 +123,7 @@ export async function getRendimientoAlumnos(grupoId: string) {
   const alumnoIds = alumnos.map(a => a.id);
   const { data: resultados } = await supabaseAdmin
     .from('resultados_ejercicios')
-    .select('alumno_id, ejercicio_id, calificacion, bloqueado, intentos, calificacion_manual, estado')
+    .select('alumno_id, ejercicio_id, calificacion, bloqueado, intentos, estado')
     .in('alumno_id', alumnoIds);
 
   // 5. Estado de pagos
@@ -137,7 +137,7 @@ export async function getRendimientoAlumnos(grupoId: string) {
   const alumnosConRendimiento = alumnos.map(alumno => {
     // BUG 1: Filtrar resultados para que solo sean de las materias de este grupo
     const misResultados = resultados?.filter(r => r.alumno_id === alumno.id && ejercicioToMateria.has(r.ejercicio_id)) || [];
-    const completados = misResultados.filter(r => r.estado === 'completado' || r.calificacion !== null || r.calificacion_manual !== null);
+    const completados = misResultados.filter(r => r.calificacion !== null);
     
     // Total de ejercicios asignados al grupo
     const ejerciciosDelGrupo = ejercicios?.filter(ej => ejercicioToMateria.has(ej.id)) || [];
@@ -146,27 +146,27 @@ export async function getRendimientoAlumnos(grupoId: string) {
       ? Math.round((completados.length / ejerciciosDelGrupo.length) * 100)
       : 0;
 
-    // BUG 2, 3 y 4: Calcular promedio correctamente (base completados + vencidos, y usando calificacion_manual)
+    // Promedio canónico 0-10: completados más vencidos sin entrega (nota cero).
     let sumaCalificacionesGlobal = 0;
     let evaluablesGlobal = 0;
 
     ejerciciosDelGrupo.forEach(ej => {
       const resultado = misResultados.find(r => r.ejercicio_id === ej.id);
-      const estaCompletado = resultado && (resultado.estado === 'completado' || resultado.calificacion !== null || resultado.calificacion_manual !== null);
+      const estaCompletado = resultado && resultado.calificacion !== null;
       const estaVencido = ej.fecha_entrega ? parseFechaLocal(ej.fecha_entrega) < ahora : false;
 
       if (estaCompletado) {
         evaluablesGlobal++;
-        const cal = resultado?.calificacion ?? resultado?.calificacion_manual ?? 0;
+        const cal = resultado?.calificacion ?? 0;
         sumaCalificacionesGlobal += cal;
       } else if (estaVencido) {
         evaluablesGlobal++;
       }
     });
 
-    const promedioGeneralBase100 = evaluablesGlobal > 0 ? sumaCalificacionesGlobal / evaluablesGlobal : 0;
-    // BUG 5: Estandarizar a escala base 10
-    const promedioGeneral = evaluablesGlobal > 0 ? Math.round((promedioGeneralBase100 / 10) * 10) / 10 : 0;
+    const promedioGeneral = evaluablesGlobal > 0
+      ? Math.round((sumaCalificacionesGlobal / evaluablesGlobal) * 10) / 10
+      : 0;
 
     const notasPerfectas = misResultados.filter(r => r.bloqueado === true).length;
     const intentosArr = misResultados.map(r => r.intentos || 1);
@@ -184,21 +184,22 @@ export async function getRendimientoAlumnos(grupoId: string) {
 
       ejsDeMateria.forEach(ej => {
         const resultado = misResultados.find(r => r.ejercicio_id === ej.id);
-        const estaCompletado = resultado && (resultado.estado === 'completado' || resultado.calificacion !== null || resultado.calificacion_manual !== null);
+        const estaCompletado = resultado && resultado.calificacion !== null;
         const estaVencido = ej.fecha_entrega ? parseFechaLocal(ej.fecha_entrega) < ahora : false;
 
         if (estaCompletado) {
           evaluablesMateria++;
           completadosMateria++;
-          const cal = resultado?.calificacion ?? resultado?.calificacion_manual ?? 0;
+          const cal = resultado?.calificacion ?? 0;
           sumaMateria += cal;
         } else if (estaVencido) {
           evaluablesMateria++;
         }
       });
 
-      const promMateriaBase100 = evaluablesMateria > 0 ? sumaMateria / evaluablesMateria : 0;
-      const promMateria = evaluablesMateria > 0 ? Math.round((promMateriaBase100 / 10) * 10) / 10 : 0;
+      const promMateria = evaluablesMateria > 0
+        ? Math.round((sumaMateria / evaluablesMateria) * 10) / 10
+        : 0;
 
       return {
         materiaId: mat.id,
@@ -324,7 +325,7 @@ export async function getActividadProfesores() {
 
   const { data: resultadosDesc } = await supabaseAdmin
     .from('resultados_ejercicios')
-    .select('ejercicio_id, calificacion_manual, caduca_el, estado')
+    .select('ejercicio_id, calificacion, caduca_el, estado')
     .in('ejercicio_id', ejDescIds.length > 0 ? ejDescIds : ['__none__']);
 
   const ahora = new Date();
@@ -372,16 +373,16 @@ export async function getActividadProfesores() {
     const misDescIds = misDescriptivos.map(e => e.id);
     const resultadosMios = resultadosDesc?.filter(r => misDescIds.includes(r.ejercicio_id)) || [];
 
-    const calificadasCount = resultadosMios.filter(r => r.calificacion_manual !== null).length;
+    const calificadasCount = resultadosMios.filter(r => r.calificacion !== null).length;
     const pendientesCount = resultadosMios.filter(r =>
-      r.calificacion_manual === null && r.estado === 'completado'
+      r.calificacion === null && ['entregado', 'tardio'].includes(r.estado)
     ).length;
 
     // Urgentes: pendientes + caducidad < 3 días
     const tresDias = new Date(ahora.getTime() + 3 * 24 * 60 * 60 * 1000);
     const urgentes = resultadosMios.filter(r =>
-      r.calificacion_manual === null &&
-      r.estado === 'completado' &&
+      r.calificacion === null &&
+      ['entregado', 'tardio'].includes(r.estado) &&
       r.caduca_el &&
       new Date(r.caduca_el) < tresDias
     ).length;

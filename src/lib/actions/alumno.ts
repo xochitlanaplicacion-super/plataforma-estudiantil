@@ -2,10 +2,13 @@
 
 import { requireTenantSession } from '@/lib/tenant/context';
 
-import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'node:crypto';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
-import { parseFechaLocal } from '@/lib/utils';
-import { automaticExercise } from '@/lib/academic-grading/source-adapters';
+import {
+  academicExerciseErrorMessage,
+  parseExerciseResultResponse,
+  validateAutomaticAttempt,
+} from '@/lib/academic-grading/exercise-results';
 
 export async function getAlumnoDashboardData(userId: string) {
   const { supabase: supabaseAdmin } = await requireTenantSession();
@@ -151,7 +154,7 @@ export async function getAlumnoDashboardData(userId: string) {
 
     const hechos = (await supabaseAdmin
       .from('resultados_ejercicios')
-      .select('ejercicio_id, calificacion, aciertos, total_preguntas, bloqueado, calificacion_manual')
+      .select('ejercicio_id, calificacion, aciertos, total_preguntas, bloqueado')
       .eq('alumno_id', userId)).data || [];
 
     const hechosMap = new Map(hechos.map(h => [h.ejercicio_id, h]));
@@ -169,7 +172,7 @@ export async function getAlumnoDashboardData(userId: string) {
         materia_id: ej.temas?.unidades?.materia_id,
         tema: ej.temas?.titulo || '',
         completado: !!resultado,
-        calificacion: resultado?.calificacion ?? resultado?.calificacion_manual ?? null,
+        calificacion: resultado?.calificacion ?? null,
         aciertos: resultado?.aciertos || 0,
         total_preguntas: resultado?.total_preguntas || 0,
         bloqueado: resultado?.bloqueado || false
@@ -235,120 +238,48 @@ export async function saveExerciseResult(
   calificacionIntento: number,
   detallesErrores?: any
 ) {
-  const { admin, tenantId, user } = await requireTenantSession(['alumno']);
+  const { supabase } = await requireTenantSession(['alumno']);
+  try {
+    validateAutomaticAttempt({ hits: aciertos, total, rawPercentage: calificacionIntento });
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Resultado inválido' };
+  }
 
-  // 1. Obtener datos del ejercicio y registro existente para este alumno
-  const { data: exerciseData } = await admin
-    .from('ejercicios')
-    .select('fecha_entrega, temas(unidad_id)')
-    .eq('id', ejercicioId)
-    .eq('tenant_id', tenantId)
-    .single();
-
-  const { data: existing } = await admin
+  const { data: existing, error: readError } = await supabase
     .from('resultados_ejercicios')
-    .select('*')
-    .eq('alumno_id', user.id)
+    .select('row_version')
     .eq('ejercicio_id', ejercicioId)
     .maybeSingle();
+  if (readError) return { error: readError.message };
 
-  // 2. Seguridad: Validar si el ejercicio ya venció
-  if (exerciseData?.fecha_entrega) {
-    const deadline = parseFechaLocal(exerciseData.fecha_entrega);
-    const now = new Date();
-    if (now > deadline) {
-      return {
-        success: true,
-        isExpired: true,
-        message: 'Ejercicio vencido. Puedes practicar, pero la nota no se guardará.'
-      };
-    }
+  const { data, error } = await supabase.rpc('guardar_resultado_ejercicio_academico', {
+    p_ejercicio_id: ejercicioId,
+    p_operacion: 'automatic_attempt',
+    p_idempotency_key: randomUUID(),
+    p_expected_row_version: existing?.row_version ?? 0,
+    p_aciertos: aciertos,
+    p_total_preguntas: total,
+    p_porcentaje_bruto: calificacionIntento,
+    p_detalles: detallesErrores ?? null,
+  });
+  if (error) return { error: academicExerciseErrorMessage(error) };
+
+  try {
+    const response = parseExerciseResultResponse(data);
+    return {
+      success: true,
+      isExpired: response.status === 'expired',
+      message: response.message,
+      data: response.grade === undefined ? undefined : {
+        calificacion: response.grade,
+        row_version: response.rowVersion,
+        intentos: response.attempts,
+        bloqueado: response.blocked ?? response.status === 'locked',
+      },
+    };
+  } catch {
+    return { error: 'La base de datos devolvió una respuesta académica inválida.' };
   }
-
-  // 3. Si ya está bloqueado (sacó 100 antes), no promediar más
-  if (existing?.bloqueado) {
-    return { success: true, data: existing, message: 'Calificación perfecta ya registrada.' };
-  }
-
-  // Cálculos de promedio acumulado
-  const notaIntento = automaticExercise(calificacionIntento).grade!;
-  const nuevosIntentos = (existing?.intentos || 0) + 1;
-  const nuevaSuma = (Number(existing?.suma_calificaciones) || 0) + notaIntento;
-  const nuevaCalificacionPromedio = Math.min(10, nuevaSuma / nuevosIntentos);
-
-  // Determinar si bloqueamos (si EN ESTE INTENTO obtuvo 10)
-  const debeBloquear = notaIntento >= 10;
-
-  // Actualizar el historial de intentos
-  const historicoPrevio = Array.isArray(existing?.historico_intentos) ? existing.historico_intentos : [];
-  const nuevoIntento = {
-    intento: nuevosIntentos,
-    fecha: new Date().toISOString(),
-    calificacion: notaIntento,
-    aciertos,
-    total_preguntas: total,
-    detalles: detallesErrores || null
-  };
-  const nuevoHistorico = [...historicoPrevio, nuevoIntento];
-
-  const { data: link } = await admin
-    .from('vinculos_evaluacion_ejercicio')
-    .select('id, ciclo_escolar_id, origen, periodos_evaluacion!inner(estado)')
-    .eq('tenant_id', tenantId)
-    .eq('ejercicio_id', ejercicioId)
-    .eq('activo', true)
-    .eq('periodos_evaluacion.estado', 'activo')
-    .limit(1)
-    .maybeSingle();
-  const { data: enrollment } = link ? await admin
-    .from('inscripciones_alumno')
-    .select('id')
-    .eq('tenant_id', tenantId)
-    .eq('ciclo_escolar_id', link.ciclo_escolar_id)
-    .eq('alumno_id', user.id)
-    .eq('activo', true)
-    .maybeSingle() : { data: null };
-  const unitId = exerciseData?.temas?.[0]?.unidad_id;
-  if (!existing && (!link || !enrollment || !unitId)) {
-    return { error: 'El ejercicio aún no tiene una fuente de evaluación activa para tu inscripción.' };
-  }
-
-  const { data, error } = await admin
-    .from('resultados_ejercicios')
-    .upsert({
-      tenant_id: tenantId,
-      alumno_id: user.id,
-      ejercicio_id: ejercicioId,
-      calificacion: nuevaCalificacionPromedio,
-      aciertos: aciertos,
-      total_preguntas: total,
-      intentos: nuevosIntentos,
-      suma_calificaciones: nuevaSuma,
-      bloqueado: debeBloquear,
-      estado: 'calificado',
-      calificado_por: user.id,
-      calificado_at: new Date().toISOString(),
-      fecha_completado: new Date().toISOString(),
-      historico_intentos: nuevoHistorico,
-      ...(existing ? {} : {
-        inscripcion_alumno_id: enrollment!.id,
-        vinculo_evaluacion_id: link!.id,
-        unidad_origen_id: unitId,
-        origen: 'automaticExercise' as const,
-        registro_legacy: false,
-      })
-    }, {
-      onConflict: 'alumno_id, ejercicio_id'
-    })
-    .select()
-    .single();
-
-  if (error) {
-    console.error('Error saving exercise result:', error);
-    return { error: error.message };
-  }
-
-  return { success: true, data };
 }
 
 export async function getMateriasYTemasParaAlumno(userId: string) {

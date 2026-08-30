@@ -430,8 +430,140 @@ export async function getEjercicios(temaId: string) {
   return { data, error };
 }
 
+export interface ExerciseEvaluationSelection {
+  assignmentId: string;
+  periodId: string;
+  criterionId: string;
+  subcriterionId?: string | null;
+}
+
+export async function getExerciseEvaluationOptions(
+  assignmentIds: string[],
+  exerciseId?: string,
+  syncId?: string,
+) {
+  const { supabase, tenantId, user, profile } = await requireTenantSession([
+    'profesor', 'admin', 'superuser',
+  ]);
+  const uniqueAssignmentIds = [...new Set(assignmentIds.filter(Boolean))];
+  if (uniqueAssignmentIds.length === 0) return { data: [], existing: [], error: null };
+
+  let assignmentsQuery = supabase
+    .from('asignaciones_profesor')
+    .select('id, materia_id, grupos(nombre), materias(nombre)')
+    .eq('tenant_id', tenantId)
+    .eq('activo', true)
+    .in('id', uniqueAssignmentIds);
+  if (profile.rol === 'profesor') assignmentsQuery = assignmentsQuery.eq('profesor_id', user.id);
+  const { data: assignments, error: assignmentError } = await assignmentsQuery;
+  if (assignmentError) return { data: null, existing: [], error: assignmentError };
+  if ((assignments?.length || 0) !== uniqueAssignmentIds.length) {
+    return { data: null, existing: [], error: new Error('Una asignación no pertenece al profesor autenticado') };
+  }
+
+  const { data: schemes, error: schemeError } = await supabase
+    .from('esquemas_evaluacion')
+    .select('id, asignacion_profesor_id, periodo_evaluacion_id')
+    .eq('tenant_id', tenantId)
+    .eq('estado', 'activo')
+    .in('asignacion_profesor_id', uniqueAssignmentIds);
+  if (schemeError) return { data: null, existing: [], error: schemeError };
+  const schemeIds = (schemes || []).map((row) => row.id);
+  const periodIds = [...new Set((schemes || []).map((row) => row.periodo_evaluacion_id))];
+
+  const [{ data: periods, error: periodError }, { data: criteria, error: criterionError }] = await Promise.all([
+    periodIds.length > 0
+      ? supabase.from('periodos_evaluacion').select('id, nombre, orden, estado')
+        .eq('tenant_id', tenantId).eq('estado', 'activo').in('id', periodIds).order('orden')
+      : Promise.resolve({ data: [], error: null }),
+    schemeIds.length > 0
+      ? supabase.from('criterios_evaluacion')
+        .select('id, esquema_evaluacion_id, nombre, tipo, orden, subcriterios_evaluacion(id, nombre, tipo, orden, activo)')
+        .eq('tenant_id', tenantId).eq('activo', true).in('esquema_evaluacion_id', schemeIds)
+        .in('tipo', ['actividades', 'hibrido']).order('orden')
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+  if (periodError || criterionError) {
+    return { data: null, existing: [], error: periodError || criterionError };
+  }
+
+  const contexts = (assignments || []).map((assignment: any) => ({
+    assignmentId: assignment.id,
+    label: `${assignment.materias?.nombre || 'Materia'} · ${assignment.grupos?.nombre || 'Grupo'}`,
+    periods: (schemes || []).filter((scheme) => scheme.asignacion_profesor_id === assignment.id)
+      .map((scheme) => {
+        const period = (periods || []).find((row) => row.id === scheme.periodo_evaluacion_id);
+        return period ? {
+          id: period.id,
+          name: period.nombre,
+          order: period.orden,
+          criteria: (criteria || []).filter((criterion) => criterion.esquema_evaluacion_id === scheme.id)
+            .map((criterion: any) => ({
+              id: criterion.id,
+              name: criterion.nombre,
+              type: criterion.tipo,
+              subcriteria: (criterion.subcriterios_evaluacion || [])
+                .filter((subcriterion: any) => subcriterion.activo
+                  && ['actividades', 'hibrido'].includes(subcriterion.tipo))
+                .sort((a: any, b: any) => a.orden - b.orden),
+            })),
+        } : null;
+      }).filter(Boolean),
+  }));
+
+  let targetExerciseIds = exerciseId ? [exerciseId] : [];
+  if (syncId) {
+    const { data: synced } = await supabase.from('ejercicios').select('id')
+      .eq('tenant_id', tenantId).eq('sync_id', syncId);
+    targetExerciseIds = (synced || []).map((row) => row.id);
+  }
+  const { data: existing } = targetExerciseIds.length > 0
+    ? await supabase.from('vinculos_evaluacion_ejercicio')
+      .select('ejercicio_id, asignacion_profesor_id, periodo_evaluacion_id, criterio_evaluacion_id, subcriterio_evaluacion_id')
+      .eq('tenant_id', tenantId).eq('activo', true).in('ejercicio_id', targetExerciseIds)
+    : { data: [] };
+  return { data: contexts, existing: existing || [], error: null };
+}
+
+async function configureExerciseEvaluationLinks(
+  supabase: Awaited<ReturnType<typeof requireTenantSession>>['supabase'],
+  exercises: any[],
+  selections: ExerciseEvaluationSelection[],
+) {
+  if (selections.length === 0) return null;
+  const assignmentIds = selections.map((selection) => selection.assignmentId);
+  const { data: assignments, error: assignmentError } = await supabase
+    .from('asignaciones_profesor').select('id, materia_id').in('id', assignmentIds);
+  if (assignmentError) return assignmentError;
+
+  for (const exercise of exercises) {
+    const materiaId = exercise.temas?.unidades?.materia_id
+      ?? exercise.temas?.[0]?.unidades?.materia_id
+      ?? exercise.temas?.unidades?.[0]?.materia_id;
+    const candidates = (assignments || []).filter((assignment) => assignment.materia_id === materiaId);
+    const selection = selections.find((item) => item.assignmentId === candidates[0]?.id)
+      ?? (exercises.length === 1 ? selections[0] : undefined);
+    if (!selection) return new Error('No se pudo asociar un ejercicio sincronizado con su asignación');
+
+    const { error } = await supabase.rpc('configurar_vinculo_evaluacion_ejercicio', {
+      p_ejercicio_id: exercise.id,
+      p_asignacion_id: selection.assignmentId,
+      p_periodo_id: selection.periodId,
+      p_criterio_id: selection.criterionId,
+      p_subcriterio_id: selection.subcriterionId ?? null,
+    });
+    if (error) return error;
+  }
+  return null;
+}
+
 export async function upsertEjercicio(ejercicio: any, isSyncCreation: boolean = false) {
   const { supabase: supabaseAdmin } = await requireTenantSession();
+  const evaluationSelections = Array.isArray(ejercicio.evaluationLinks)
+    ? ejercicio.evaluationLinks as ExerciseEvaluationSelection[]
+    : [];
+  delete ejercicio.evaluationLinks;
+  delete ejercicio.syncToAll;
   const cleanData = prepareForUpsert(ejercicio);
 
   if (isSyncCreation && !cleanData.id && cleanData.tema_id) {
@@ -445,7 +577,12 @@ export async function upsertEjercicio(ejercicio: any, isSyncCreation: boolean = 
           tema_id: t.id,
           sync_id
         }));
-        const { data, error } = await supabaseAdmin.from('ejercicios').insert(recordsToInsert).select();
+        const { data, error } = await supabaseAdmin.from('ejercicios').insert(recordsToInsert)
+          .select('*, temas!inner(unidades!inner(materia_id))');
+        if (!error && data) {
+          const linkError = await configureExerciseEvaluationLinks(supabaseAdmin, data, evaluationSelections);
+          if (linkError) return { data: null, error: linkError };
+        }
         revalidatePath('/dashboard/profesor');
         return { data: data?.find(d => d.tema_id === cleanData.tema_id) || data?.[0], error };
       }
@@ -456,12 +593,22 @@ export async function upsertEjercicio(ejercicio: any, isSyncCreation: boolean = 
     const updateData = { ...cleanData };
     delete updateData.id;
     delete updateData.tema_id;
-    const { data, error } = await supabaseAdmin.from('ejercicios').update(updateData).eq('sync_id', cleanData.sync_id).select();
+    const { data, error } = await supabaseAdmin.from('ejercicios').update(updateData)
+      .eq('sync_id', cleanData.sync_id).select('*, temas!inner(unidades!inner(materia_id))');
+    if (!error && data) {
+      const linkError = await configureExerciseEvaluationLinks(supabaseAdmin, data, evaluationSelections);
+      if (linkError) return { data: null, error: linkError };
+    }
     revalidatePath('/dashboard/profesor');
     return { data: data?.find(d => d.id === cleanData.id) || null, error };
   }
 
-  const { data, error } = await supabaseAdmin.from('ejercicios').upsert(cleanData).select().single();
+  const { data, error } = await supabaseAdmin.from('ejercicios').upsert(cleanData)
+    .select('*, temas!inner(unidades!inner(materia_id))').single();
+  if (!error && data) {
+    const linkError = await configureExerciseEvaluationLinks(supabaseAdmin, [data], evaluationSelections);
+    if (linkError) return { data: null, error: linkError };
+  }
   revalidatePath('/dashboard/profesor');
   return { data, error };
 }
@@ -983,7 +1130,7 @@ export async function getRendimientoGrupoParaProfesor(grupoId: string, profesorI
   const ejercicioIds = ejercicios?.map(e => e.id) || [];
   const { data: resultados } = await supabaseAdmin
     .from('resultados_ejercicios')
-    .select('alumno_id, ejercicio_id, calificacion, calificacion_manual, estado, intentos, bloqueado')
+    .select('alumno_id, ejercicio_id, calificacion, estado, intentos, bloqueado')
     .in('alumno_id', alumnoIds)
     .in('ejercicio_id', ejercicioIds.length > 0 ? ejercicioIds : ['__none__']);
 
@@ -1010,10 +1157,10 @@ export async function getRendimientoGrupoParaProfesor(grupoId: string, profesorI
 
           const detalleEjercicios = ejerciciosTema.map(ej => {
             const res = misResultados.find(r => r.ejercicio_id === ej.id);
-            const estaCompletado = res && (res.estado === 'completado' || res.calificacion !== null || res.calificacion_manual !== null);
+            const estaCompletado = res && res.calificacion !== null;
             const estaVencido = ej.fecha_entrega ? parseFechaLocal(ej.fecha_entrega) < ahora : false;
             
-            const calificacionFinal = res?.calificacion ?? res?.calificacion_manual ?? null;
+            const calificacionFinal = res?.calificacion ?? null;
 
             if (estaCompletado) {
               evaluablesMateria++;
@@ -1046,8 +1193,9 @@ export async function getRendimientoGrupoParaProfesor(grupoId: string, profesorI
         };
       });
 
-      const promedioBase100 = evaluablesMateria > 0 ? sumaMateria / evaluablesMateria : 0;
-      const promedio = evaluablesMateria > 0 ? Math.round((promedioBase100 / 10) * 10) / 10 : 0;
+      const promedio = evaluablesMateria > 0
+        ? Math.round((sumaMateria / evaluablesMateria) * 10) / 10
+        : 0;
       const progreso = totalEjerciciosMateria > 0 ? Math.round((completadosMateria / totalEjerciciosMateria) * 100) : 0;
 
       return {

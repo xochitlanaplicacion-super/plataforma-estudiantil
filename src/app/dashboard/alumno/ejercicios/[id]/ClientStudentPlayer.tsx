@@ -13,7 +13,7 @@ interface EntregaExistente {
   archivo_path?: string | null;
   primer_envio_en?: string | null;
   caduca_el?: string | null;
-  calificacion_manual?: number | null;
+  calificacion?: number | null;
 }
 
 export default function ClientStudentPlayer({ 
@@ -45,13 +45,18 @@ export default function ClientStudentPlayer({
           variant: "destructive"
         });
         setHasProcessed(false);
-      } else {
+      } else if (res.isExpired) {
+        toast({
+          title: 'Ejercicio de práctica',
+          description: res.message,
+        });
+      } else if (res.data) {
         setFinalScore(res.data.calificacion);
         confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
         router.refresh();
         toast({
           title: "¡Actividad guardada!",
-          description: `Promedio acumulado: ${res.data.calificacion.toFixed(1)}%`,
+          description: `Promedio acumulado: ${res.data.calificacion.toFixed(1)}/10`,
           variant: "default"
         });
       }
@@ -89,4 +94,3 @@ export default function ClientStudentPlayer({
     </div>
   );
 }
-

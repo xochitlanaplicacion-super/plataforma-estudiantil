@@ -28,7 +28,8 @@ interface EntregaGlobal {
   archivo_path: string;
   primer_envio_en: string;
   caduca_el: string;
-  calificacion_manual: number | null;
+  calificacion: number | null;
+  row_version: number;
   estado: string;
   profiles: {
     nombre: string;
@@ -74,12 +75,12 @@ function EntregaRowGlobal({
 }: {
   entrega: EntregaGlobal;
   profesorId: string;
-  onCalificado: (alumnoId: string, ejercicioId: string, cal: number) => void;
+  onCalificado: (alumnoId: string, ejercicioId: string, cal: number, rowVersion: number) => void;
 }) {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [calInput, setCalInput] = useState(
-    entrega.calificacion_manual !== null ? String(entrega.calificacion_manual) : ''
+    entrega.calificacion !== null ? String(entrega.calificacion) : ''
   );
   const { dias, horas, pct, vencido } = getDiasRestantes(entrega.caduca_el || '');
   const nombreCompleto = entrega.profiles
@@ -98,12 +99,22 @@ function EntregaRowGlobal({
       return;
     }
     startTransition(async () => {
-      const res = await calificarEntregaDescriptiva(entrega.alumno_id, entrega.ejercicio_id, cal);
+      const res = await calificarEntregaDescriptiva(
+        entrega.alumno_id,
+        entrega.ejercicio_id,
+        cal,
+        entrega.row_version,
+      );
       if (res.error) {
         toast({ title: 'Error', description: res.error, variant: 'destructive' });
       } else {
         toast({ title: '✅ Calificación guardada', description: `${nombreCompleto}: ${cal}/10` });
-        onCalificado(entrega.alumno_id, entrega.ejercicio_id, cal);
+        onCalificado(
+          entrega.alumno_id,
+          entrega.ejercicio_id,
+          res.grade ?? cal,
+          res.rowVersion ?? entrega.row_version,
+        );
       }
     });
   };
@@ -136,7 +147,7 @@ function EntregaRowGlobal({
     <>
       <div className={cn(
         'bg-white border rounded-2xl p-5 space-y-4 transition-all',
-        entrega.calificacion_manual !== null
+        entrega.calificacion !== null
           ? 'border-emerald-200 bg-emerald-50/30'
           : vencido
           ? 'border-red-200 bg-red-50/20 opacity-70'
@@ -159,10 +170,10 @@ function EntregaRowGlobal({
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {entrega.calificacion_manual !== null && (
+            {entrega.calificacion !== null && (
               <div className="shrink-0 flex items-center gap-1 bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-xl font-black text-sm">
                 <Star className="w-3 h-3" />
-                {entrega.calificacion_manual}/10
+                {entrega.calificacion}/10
               </div>
             )}
             {/* Botón de mensaje privado */}
@@ -220,7 +231,7 @@ function EntregaRowGlobal({
         )}
 
         {/* Calificar */}
-        {entrega.calificacion_manual === null && !vencido && (
+        {entrega.calificacion === null && !vencido && (
           <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
             <label className="text-[11px] font-black uppercase text-slate-500 shrink-0">Calificación (0–10)</label>
             <input
@@ -322,7 +333,7 @@ export function PanelEntregasGlobales({ profesorId, initialData }: Props) {
   // Conteo total de entregas pendientes (sin calificación)
   const totalPendientes = materias.reduce((acc, m) => {
     return acc + m.ejercicios.reduce((acc2, ej) => {
-      return acc2 + ej.entregas.filter(e => e.calificacion_manual === null).length;
+      return acc2 + ej.entregas.filter(e => e.calificacion === null).length;
     }, 0);
   }, 0);
 
@@ -330,7 +341,12 @@ export function PanelEntregasGlobales({ profesorId, initialData }: Props) {
     return acc + m.ejercicios.reduce((acc2, ej) => acc2 + ej.entregas.length, 0);
   }, 0);
 
-  const handleCalificado = (alumnoId: string, ejercicioId: string, cal: number) => {
+  const handleCalificado = (
+    alumnoId: string,
+    ejercicioId: string,
+    cal: number,
+    rowVersion: number,
+  ) => {
     setMaterias(prev =>
       prev.map(m => ({
         ...m,
@@ -338,7 +354,7 @@ export function PanelEntregasGlobales({ profesorId, initialData }: Props) {
           ...ej,
           entregas: ej.entregas.map(e =>
             e.alumno_id === alumnoId && e.ejercicio_id === ejercicioId
-              ? { ...e, calificacion_manual: cal }
+              ? { ...e, calificacion: cal, row_version: rowVersion }
               : e
           ),
         })),
@@ -407,7 +423,7 @@ export function PanelEntregasGlobales({ profesorId, initialData }: Props) {
       {materias.map((materia) => {
         const isOpen = materiaAbierta === materia.materiaId;
         const pendientesMateria = materia.ejercicios.reduce((acc, ej) => {
-          return acc + ej.entregas.filter(e => e.calificacion_manual === null).length;
+          return acc + ej.entregas.filter(e => e.calificacion === null).length;
         }, 0);
         const totalMateria = materia.ejercicios.reduce((acc, ej) => acc + ej.entregas.length, 0);
 
@@ -453,7 +469,7 @@ export function PanelEntregasGlobales({ profesorId, initialData }: Props) {
               <div className="border-t border-slate-100 bg-slate-50/50 p-5 space-y-4">
                 {materia.ejercicios.map((ej) => {
                   const ejOpen = ejercicioAbierto === ej.ejercicioId;
-                  const calificados = ej.entregas.filter(e => e.calificacion_manual !== null).length;
+                  const calificados = ej.entregas.filter(e => e.calificacion !== null).length;
 
                   // Recopilar grupos únicos para filtro
                   const gruposUnicos = Array.from(

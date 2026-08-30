@@ -98,9 +98,9 @@ export default async function AlumnoDashboard() {
 
   const ejerciciosEvaluables = numeroCompletados + ejerciciosVencidosNoCompletados.length;
 
-  // La calificación está en base 100, calculamos el promedio en base 10
+  // La autoridad persistida ya está en la escala canónica 0-10.
   const sumaCalificaciones = ejerciciosCompletados.reduce((acc: number, ej: any) => acc + Number(ej.calificacion || 0), 0);
-  const promedioAcumulado = ejerciciosEvaluables > 0 ? (sumaCalificaciones / ejerciciosEvaluables) / 10 : 0;
+  const promedioAcumulado = ejerciciosEvaluables > 0 ? sumaCalificaciones / ejerciciosEvaluables : 0;
   const promedio = ejerciciosEvaluables > 0 ? promedioAcumulado.toFixed(1) : 'N/A';
 
   const labelCompletados = "Completados";

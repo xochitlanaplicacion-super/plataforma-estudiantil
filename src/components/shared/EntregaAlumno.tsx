@@ -13,7 +13,7 @@ interface EntregaAlumnoProps {
     archivo_path?: string | null;
     caduca_el?: string | null;
     primer_envio_en?: string | null;
-    calificacion_manual?: number | null;
+    calificacion?: number | null;
   } | null;
   isPreview?: boolean;
 }
@@ -72,7 +72,7 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
   const inputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
 
-  const yaCalificado = entrega?.calificacion_manual !== null && entrega?.calificacion_manual !== undefined;
+  const yaCalificado = entrega?.calificacion !== null && entrega?.calificacion !== undefined;
   const tieneArchivo = !!entrega?.archivo_nombre;
   const { dias, horas, pct } = entrega?.caduca_el 
     ? getDiasRestantes(entrega.caduca_el) 
@@ -145,7 +145,7 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
           <div>
             <p className="font-black text-emerald-800 text-xl uppercase">Actividad Calificada</p>
             <p className="text-emerald-600 font-bold mt-1">
-              Tu calificación: <span className="text-3xl font-black">{entrega?.calificacion_manual}</span> / 10
+              Tu calificación: <span className="text-3xl font-black">{entrega?.calificacion}</span> / 10
             </p>
             <p className="text-xs text-emerald-500 mt-2 uppercase tracking-wider">El profesor ha revisado y evaluado tu entrega.</p>
           </div>

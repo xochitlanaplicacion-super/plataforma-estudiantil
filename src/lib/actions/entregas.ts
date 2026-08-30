@@ -5,7 +5,11 @@ import { requireTenantSession } from '@/lib/tenant/context';
 import { revalidatePath } from 'next/cache';
 import { randomUUID } from 'node:crypto';
 import { descriptiveSubmission } from '@/lib/academic-grading/source-adapters';
-import { assertGrade10 } from '@/lib/academic-grading/scale';
+import {
+  academicExerciseErrorMessage,
+  parseExerciseResultResponse,
+  validateDescriptiveGrade,
+} from '@/lib/academic-grading/exercise-results';
 
 const BUCKET = 'entregas-alumnos';
 const EXPIRY_DAYS = 10;
@@ -251,7 +255,7 @@ export async function getEntregaAlumno(ejercicioId: string) {
 
   const { data } = await admin
     .from('resultados_ejercicios')
-    .select('archivo_url, archivo_nombre, archivo_path, primer_envio_en, caduca_el, calificacion_manual')
+    .select('archivo_url, archivo_nombre, archivo_path, primer_envio_en, caduca_el, calificacion')
     .eq('tenant_id', tenantId)
     .eq('alumno_id', user.id)
     .eq('ejercicio_id', ejercicioId)
@@ -331,45 +335,45 @@ export async function obtenerAccesoArchivoEntrega(
 export async function calificarEntregaDescriptiva(
   alumnoId: string,
   ejercicioId: string,
-  calificacion: number
+  calificacion: number,
+  expectedRowVersion: number
 ) {
-  const { admin, tenantId, user, profile } = await requireTenantSession(['profesor', 'admin', 'superuser']);
+  const { supabase } = await requireTenantSession(['profesor', 'admin', 'superuser']);
 
   let notaCanonica: number;
   try {
-    notaCanonica = assertGrade10(calificacion);
+    notaCanonica = validateDescriptiveGrade(calificacion);
   } catch {
     return { error: 'Calificación debe ser entre 0 y 10' };
   }
 
-  if (profile.rol === 'profesor') {
-    const permitido = await profesorPuedeAccederEjercicio(
-      admin,
-      tenantId,
-      user.id,
-      ejercicioId,
-      alumnoId
-    );
-    if (!permitido) return { error: 'La entrega no pertenece a uno de tus grupos' };
+  if (!Number.isInteger(expectedRowVersion) || expectedRowVersion < 1) {
+    return { error: 'La versión de la entrega es inválida. Actualiza la lista.' };
+  }
+  const { data, error } = await supabase.rpc('guardar_resultado_ejercicio_academico', {
+    p_ejercicio_id: ejercicioId,
+    p_operacion: 'descriptive_grade',
+    p_idempotency_key: randomUUID(),
+    p_expected_row_version: expectedRowVersion,
+    p_alumno_id: alumnoId,
+    p_calificacion_10: notaCanonica,
+  });
+  if (error) return { error: academicExerciseErrorMessage(error) };
+
+  let response;
+  try {
+    response = parseExerciseResultResponse(data);
+  } catch {
+    return { error: 'La base de datos devolvió una respuesta académica inválida.' };
   }
 
-  const { error } = await admin
-    .from('resultados_ejercicios')
-    .update({
-      calificacion: notaCanonica,
-      bloqueado: true,
-      estado: 'calificado',
-      calificado_por: user.id,
-      calificado_at: new Date().toISOString(),
-    })
-    .eq('tenant_id', tenantId)
-    .eq('alumno_id', alumnoId)
-    .eq('ejercicio_id', ejercicioId);
-
-  if (error) return { error: error.message };
-
   revalidatePath('/dashboard/profesor');
-  return { success: true };
+  return {
+    success: true,
+    grade: response.grade,
+    rowVersion: response.rowVersion,
+    correlationId: response.correlationId,
+  };
 }
 
 // -------------------------------------------------------------------
@@ -388,9 +392,9 @@ export async function getEntregasDeEjercicio(ejercicioId: string) {
       archivo_path,
       primer_envio_en,
       caduca_el,
-      calificacion_manual,
       estado,
       calificacion,
+      row_version,
       aciertos,
       total_preguntas,
       intentos,
@@ -472,9 +476,9 @@ export async function getEntregasAgrupadasPorSyncId(syncId: string) {
       archivo_path,
       primer_envio_en,
       caduca_el,
-      calificacion_manual,
       estado,
       calificacion,
+      row_version,
       aciertos,
       total_preguntas,
       intentos,
@@ -594,7 +598,8 @@ export async function getEntregasGlobalesProfesor(_profesorId?: string) {
         archivo_path,
         primer_envio_en,
         caduca_el,
-        calificacion_manual,
+        calificacion,
+        row_version,
         estado
       `)
       .eq('tenant_id', tenantId)

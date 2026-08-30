@@ -4392,6 +4392,16 @@ export type Database = {
       }
     }
     Functions: {
+      configurar_vinculo_evaluacion_ejercicio: {
+        Args: {
+          p_asignacion_id: string
+          p_criterio_id: string
+          p_ejercicio_id: string
+          p_periodo_id: string
+          p_subcriterio_id?: string | null
+        }
+        Returns: Json
+      }
       activar_esquema_evaluacion: {
         Args: { expected_scheme_version: number; target_scheme_id: string }
         Returns: {
@@ -4485,6 +4495,22 @@ export type Database = {
         Returns: Json
       }
       generar_folio_recibo: { Args: { prefijo: string }; Returns: string }
+      guardar_resultado_ejercicio_academico: {
+        Args: {
+          p_aciertos?: number | null
+          p_alumno_id?: string | null
+          p_calificacion_10?: number | null
+          p_detalles?: Json | null
+          p_ejercicio_id: string
+          p_expected_row_version?: number
+          p_idempotency_key: string
+          p_observacion?: string | null
+          p_operacion: string
+          p_porcentaje_bruto?: number | null
+          p_total_preguntas?: number | null
+        }
+        Returns: Json
+      }
       get_active_storage_urls: {
         Args: { bucket_name: string }
         Returns: {

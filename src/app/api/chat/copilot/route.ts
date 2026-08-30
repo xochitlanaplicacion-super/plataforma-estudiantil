@@ -185,7 +185,7 @@ async function buildProfesorContext(
       const promedioGrupo = conNota.length > 0
         ? (conNota.reduce((s, a) => s + parseFloat(a.promedio as string), 0) / conNota.length).toFixed(1)
         : "Sin datos";
-      return `- Grupo ${grupoNombre}: ${alumnosGrupo.length} alumnos activos, promedio general: ${promedioGrupo}/100`;
+      return `- Grupo ${grupoNombre}: ${alumnosGrupo.length} alumnos activos, promedio general: ${promedioGrupo}/10`;
     }).join("\n");
 
     return `
@@ -204,14 +204,14 @@ ${topDebilidadesGlobales.length > 0 ? topDebilidadesGlobales.join("\n") : "No se
 
 ## Top 5 alumnos con mejor promedio (de todos sus grupos):
 ${top5.length > 0
-  ? top5.map((a, i) => `${i + 1}. ${a.nombre} | Grupo: ${a.grupo} | Matricula: ${a.matricula} | Promedio: ${a.promedio}/100 | Ejercicios completados: ${a.totalEjercicios}`).join("\n")
+  ? top5.map((a, i) => `${i + 1}. ${a.nombre} | Grupo: ${a.grupo} | Matricula: ${a.matricula} | Promedio: ${a.promedio}/10 | Ejercicios completados: ${a.totalEjercicios}`).join("\n")
   : "No hay calificaciones registradas aun."}
 
 ## 5 alumnos con menor promedio (posibles candidatos a apoyo extra o planes de accion):
 ${bottom5.length > 0 && conCalificacion.length >= 5
   ? bottom5.map((a, i) => {
       const errores = debilidadesAlumnos[a.id] ? debilidadesAlumnos[a.id].slice(0, 4).join(" || ") : "Sin detalles de errores recientes";
-      return `${i + 1}. ${a.nombre} | Grupo: ${a.grupo} | Matricula: ${a.matricula} | Promedio: ${a.promedio}/100 | Ejercicios completados: ${a.totalEjercicios}\n   Dificultades detalladas: ${errores}`;
+      return `${i + 1}. ${a.nombre} | Grupo: ${a.grupo} | Matricula: ${a.matricula} | Promedio: ${a.promedio}/10 | Ejercicios completados: ${a.totalEjercicios}\n   Dificultades detalladas: ${errores}`;
     }).join("\n\n")
   : "No hay suficientes datos para esta seccion aun."}
 

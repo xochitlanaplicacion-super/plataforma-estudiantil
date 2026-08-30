@@ -24,9 +24,9 @@ interface Entrega {
   archivo_path: string;
   primer_envio_en: string;
   caduca_el: string;
-  calificacion_manual: number | null;
+  calificacion: number | null;
+  row_version: number;
   estado: string;
-  calificacion?: number;
   intentos?: number;
   aciertos?: number;
   total_preguntas?: number;
@@ -75,12 +75,12 @@ function EntregaRow({
   entrega: Entrega; 
   ejercicioId: string;
   ejercicioTipo: string;
-  onCalificado: (alumnoId: string, cal: number) => void;
+  onCalificado: (alumnoId: string, cal: number, rowVersion: number) => void;
 }) {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
   const [calInput, setCalInput] = useState(
-    entrega.calificacion_manual !== null ? String(entrega.calificacion_manual) : ''
+    entrega.calificacion !== null ? String(entrega.calificacion) : ''
   );
   const { dias, horas, pct, vencido } = getDiasRestantes(entrega.caduca_el || '');
   const nombreCompleto = entrega.profiles 
@@ -94,12 +94,17 @@ function EntregaRow({
       return;
     }
     startTransition(async () => {
-      const res = await calificarEntregaDescriptiva(entrega.alumno_id, ejercicioId, cal);
+      const res = await calificarEntregaDescriptiva(
+        entrega.alumno_id,
+        ejercicioId,
+        cal,
+        entrega.row_version,
+      );
       if (res.error) {
         toast({ title: 'Error', description: res.error, variant: 'destructive' });
       } else {
         toast({ title: '✅ Calificación guardada', description: `${nombreCompleto}: ${cal}/10` });
-        onCalificado(entrega.alumno_id, cal);
+        onCalificado(entrega.alumno_id, res.grade ?? cal, res.rowVersion ?? entrega.row_version);
       }
     });
   };
@@ -218,7 +223,7 @@ function EntregaRow({
   return (
     <div className={cn(
       'bg-white border rounded-2xl p-5 space-y-4 transition-all',
-      entrega.calificacion_manual !== null
+      entrega.calificacion !== null
         ? 'border-emerald-200 bg-emerald-50/30'
         : vencido
         ? 'border-red-200 bg-red-50/20 opacity-70'
@@ -235,10 +240,10 @@ function EntregaRow({
             <p className="text-[11px] text-slate-400">{entrega.profiles?.email}</p>
           </div>
         </div>
-        {entrega.calificacion_manual !== null && (
+        {entrega.calificacion !== null && (
           <div className="shrink-0 flex items-center gap-1 bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-xl font-black text-sm">
             <Star className="w-3 h-3" />
-            {entrega.calificacion_manual}/10
+            {entrega.calificacion}/10
           </div>
         )}
       </div>
@@ -287,7 +292,7 @@ function EntregaRow({
       )}
 
       {/* Calificar */}
-      {entrega.calificacion_manual === null && !vencido && (
+      {entrega.calificacion === null && !vencido && (
         <div className="flex items-center gap-3 pt-2 border-t border-slate-100">
           <label className="text-[11px] font-black uppercase text-slate-500 shrink-0">Calificación (0–10)</label>
           <input
@@ -345,9 +350,11 @@ export function PanelEntregasProfesor({ ejercicios, materiaNombre, isGroupMode }
     setCargando(false);
   };
 
-  const handleCalificado = (alumnoId: string, cal: number) => {
+  const handleCalificado = (alumnoId: string, cal: number, rowVersion: number) => {
     setEntregas(prev =>
-      prev.map(e => e.alumno_id === alumnoId ? { ...e, calificacion_manual: cal } : e)
+      prev.map(e => e.alumno_id === alumnoId
+        ? { ...e, calificacion: cal, row_version: rowVersion }
+        : e)
     );
   };
 
@@ -370,7 +377,7 @@ export function PanelEntregasProfesor({ ejercicios, materiaNombre, isGroupMode }
       {ejercicios.map((ej) => {
         const activo = ejercicioActivo === ej.id;
         const entregasDelEj = activo ? entregas : [];
-        const calificadas = entregasDelEj.filter(e => e.calificacion_manual !== null).length;
+        const calificadas = entregasDelEj.filter(e => e.calificacion !== null).length;
 
         return (
           <div key={ej.id} className="border border-slate-200 rounded-2xl overflow-hidden">

@@ -28,7 +28,7 @@ export default async function RealizarEjercicioPage({ params }: { params: Promis
   if (ejercicio.tipo === 'actividad_descriptiva') {
     const { data: entrega } = await supabase
       .from('resultados_ejercicios')
-      .select('archivo_url, archivo_nombre, archivo_path, primer_envio_en, caduca_el, calificacion_manual')
+      .select('archivo_url, archivo_nombre, archivo_path, primer_envio_en, caduca_el, calificacion')
       .eq('alumno_id', user.id)
       .eq('ejercicio_id', resolvedParams.id)
       .maybeSingle();

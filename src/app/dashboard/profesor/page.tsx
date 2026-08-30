@@ -71,6 +71,7 @@ import {
   getResourcesAgrupacion,
   getTemas, 
   getEjercicios, 
+  getExerciseEvaluationOptions,
   upsertUnidad, 
   upsertTema, 
   upsertEjercicio, 
@@ -1004,10 +1005,72 @@ export default function ProfesorDashboard() {
 
   const [currentTab, setCurrentTab] = useState('materias');
   const [dialog, setDialog] = useState<any>({ open: false, type: '', data: {} });
+  const [evaluationOptions, setEvaluationOptions] = useState<any[]>([]);
+  const [evaluationOptionsLoading, setEvaluationOptionsLoading] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<any>(null);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
   const [slideToDelete, setSlideToDelete] = useState<string | null>(null);
+
+  const evaluationAssignmentIds: string[] = dialog.data?.syncToAll !== false
+    && isGroupMode && selectedAgrupacion
+    ? selectedAgrupacion.asignaciones_ids
+    : selectedMateria?.assignmentId ? [selectedMateria.assignmentId] : [];
+  const evaluationAssignmentKey = evaluationAssignmentIds.join('|');
+
+  useEffect(() => {
+    if (!dialog.open || dialog.type !== 'ejercicio' || !evaluationAssignmentKey) {
+      setEvaluationOptions([]);
+      return;
+    }
+    let active = true;
+    setEvaluationOptionsLoading(true);
+    getExerciseEvaluationOptions(
+      evaluationAssignmentIds,
+      dialog.data?.id,
+      dialog.data?.sync_id,
+    ).then((result) => {
+      if (!active) return;
+      const contexts = result.data || [];
+      setEvaluationOptions(contexts);
+      if (result.error) {
+        toast({
+          title: 'No se pudo cargar la evaluación',
+          description: result.error.message,
+          variant: 'destructive',
+        });
+        return;
+      }
+      setDialog((current: any) => {
+        const previous = Array.isArray(current.data.evaluationLinks)
+          ? current.data.evaluationLinks : [];
+        const links = contexts.map((context: any) => {
+          const existing = (result.existing || []).find(
+            (link: any) => link.asignacion_profesor_id === context.assignmentId,
+          );
+          const previousLink = previous.find(
+            (link: any) => link.assignmentId === context.assignmentId,
+          );
+          const periodId = existing?.periodo_evaluacion_id
+            ?? previousLink?.periodId ?? context.periods[0]?.id ?? '';
+          const period = context.periods.find((item: any) => item.id === periodId)
+            ?? context.periods[0];
+          const criterionId = existing?.criterio_evaluacion_id
+            ?? previousLink?.criterionId ?? period?.criteria[0]?.id ?? '';
+          return {
+            assignmentId: context.assignmentId,
+            periodId,
+            criterionId,
+            subcriterionId: existing?.subcriterio_evaluacion_id
+              ?? previousLink?.subcriterionId ?? null,
+          };
+        });
+        return { ...current, data: { ...current.data, evaluationLinks: links } };
+      });
+    }).finally(() => active && setEvaluationOptionsLoading(false));
+    return () => { active = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dialog.open, dialog.type, dialog.data?.id, dialog.data?.sync_id, evaluationAssignmentKey]);
   
   const [previewActivity, setPreviewActivity] = useState<any | null>(null);
 
@@ -1317,6 +1380,21 @@ export default function ProfesorDashboard() {
     if (dialog.type === 'ejercicio' && (!d.fecha_entrega || d.fecha_entrega.trim() === '')) {
       toast({ variant: "destructive", title: "Fecha de entrega requerida", description: "Debes establecer una fecha límite de entrega para la actividad. Este campo es obligatorio." });
       return;
+    }
+    if (dialog.type === 'ejercicio') {
+      const links = Array.isArray(d.evaluationLinks) ? d.evaluationLinks : [];
+      const completos = evaluationAssignmentIds.every((assignmentId) => {
+        const link = links.find((item: any) => item.assignmentId === assignmentId);
+        return Boolean(link?.periodId && link?.criterionId);
+      });
+      if (!completos) {
+        toast({
+          variant: 'destructive',
+          title: 'Evaluación requerida',
+          description: 'Cada grupo debe tener un periodo y criterio de actividades activos.',
+        });
+        return;
+      }
     }
 
     try {
@@ -1787,7 +1865,12 @@ export default function ProfesorDashboard() {
                         setIsGroupMode(true);
                         setSelectedAgrupacion(agr);
                         // Use the agrupacion name as the header, not a single group
-                        setSelectedMateria({ nombre: agr.nombre, id: firstAsig?.materia_id, isAgrupacion: true });
+                        setSelectedMateria({
+                          nombre: agr.nombre,
+                          id: firstAsig?.materia_id,
+                          assignmentId: firstAsig?.id,
+                          isAgrupacion: true,
+                        });
                         // Fetch unidades for ALL materia_ids in the agrupacion
                         const materiaIds = agr.asignaciones_ids
                           .map((aId: string) => asignaciones.find((a: any) => a.id === aId)?.materia_id)
@@ -1816,7 +1899,7 @@ export default function ProfesorDashboard() {
             <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">Grupos Individuales</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {asignaciones.map((asig) => (
-                <Card key={asig.id} onClick={() => { setIsGroupMode(false); setSelectedAgrupacion(null); setSelectedMateria({...asig.materias, id: asig.materia_id}); fetchUnidades(asig.materia_id); setCurrentTab('unidades'); }} className="cursor-pointer hover:shadow-2xl transition-all duration-300 border-2 border-slate-100 hover:border-primary/40 rounded-3xl bg-white">
+                <Card key={asig.id} onClick={() => { setIsGroupMode(false); setSelectedAgrupacion(null); setSelectedMateria({...asig.materias, id: asig.materia_id, assignmentId: asig.id}); fetchUnidades(asig.materia_id); setCurrentTab('unidades'); }} className="cursor-pointer hover:shadow-2xl transition-all duration-300 border-2 border-slate-100 hover:border-primary/40 rounded-3xl bg-white">
                   <div className="h-2 bg-primary/20 rounded-t-[30px]" />
                   <CardHeader className="p-6">
                     <Badge variant="outline" className="text-[9px] font-black bg-primary/5 text-primary border-primary/20 uppercase mb-4">{asig.niveles?.nombre}</Badge>
@@ -2115,6 +2198,7 @@ export default function ProfesorDashboard() {
                 </div>
 
             {dialog.type === 'ejercicio' && (
+              <div className="space-y-5">
               <div className="p-5 rounded-2xl border-2 border-dashed border-amber-300 bg-amber-50/60 space-y-3">
                 <label className="text-[10px] font-black uppercase text-amber-700 tracking-widest flex items-center gap-2">
                   <CalendarClock size={14} className="text-amber-600" />
@@ -2137,6 +2221,86 @@ export default function ProfesorDashboard() {
                     <AlertCircle size={11} /> Este campo es obligatorio para poder guardar la actividad.
                   </p>
                 )}
+              </div>
+
+              <div className="p-5 rounded-2xl border border-primary/20 bg-primary/5 space-y-4">
+                <div>
+                  <label className="text-[10px] font-black uppercase text-primary tracking-widest">
+                    Ubicación en la evaluación *
+                  </label>
+                  <p className="text-[10px] text-slate-500 font-medium mt-1">
+                    La actividad se vincula al periodo y criterio elegidos. En una agrupación se conserva un vínculo independiente por grupo.
+                  </p>
+                </div>
+                {evaluationOptionsLoading ? (
+                  <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
+                    <Loader2 className="w-4 h-4 animate-spin" /> Cargando periodos y criterios…
+                  </div>
+                ) : evaluationOptions.length === 0 ? (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-800">
+                    Esta asignación no tiene un esquema activo con criterio de actividades. Actívalo en Configuración académica antes de publicar.
+                  </div>
+                ) : evaluationOptions.map((context: any) => {
+                  const links = Array.isArray(dialog.data.evaluationLinks)
+                    ? dialog.data.evaluationLinks : [];
+                  const link = links.find((item: any) => item.assignmentId === context.assignmentId) || {};
+                  const period = context.periods.find((item: any) => item.id === link.periodId);
+                  const criterion = period?.criteria.find((item: any) => item.id === link.criterionId);
+                  const updateLink = (changes: Record<string, unknown>) => {
+                    const nextLinks = links.map((item: any) => item.assignmentId === context.assignmentId
+                      ? { ...item, ...changes } : item);
+                    setDialog({ ...dialog, data: { ...dialog.data, evaluationLinks: nextLinks } });
+                  };
+                  return (
+                    <div key={context.assignmentId} className="rounded-xl bg-white border border-slate-200 p-4 space-y-3">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-700">{context.label}</p>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black uppercase text-slate-400">Periodo</label>
+                          <select
+                            className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold"
+                            value={link.periodId || ''}
+                            onChange={(event) => {
+                              const nextPeriod = context.periods.find((item: any) => item.id === event.target.value);
+                              updateLink({
+                                periodId: event.target.value,
+                                criterionId: nextPeriod?.criteria[0]?.id || '',
+                                subcriterionId: null,
+                              });
+                            }}
+                          >
+                            <option value="">Selecciona periodo</option>
+                            {context.periods.map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black uppercase text-slate-400">Criterio</label>
+                          <select
+                            className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold"
+                            value={link.criterionId || ''}
+                            onChange={(event) => updateLink({ criterionId: event.target.value, subcriterionId: null })}
+                          >
+                            <option value="">Selecciona criterio</option>
+                            {(period?.criteria || []).map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                          </select>
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[9px] font-black uppercase text-slate-400">Subcriterio (opcional)</label>
+                          <select
+                            className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold"
+                            value={link.subcriterionId || ''}
+                            onChange={(event) => updateLink({ subcriterionId: event.target.value || null })}
+                            disabled={!criterion?.subcriteria?.length}
+                          >
+                            <option value="">Sin subcriterio</option>
+                            {(criterion?.subcriteria || []).map((item: any) => <option key={item.id} value={item.id}>{item.nombre}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
               </div>
             )}
 

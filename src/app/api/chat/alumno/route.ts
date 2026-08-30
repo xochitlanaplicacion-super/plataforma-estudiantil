@@ -162,7 +162,7 @@ async function buildAlumnoContext(
       
       contexto += `\nESTADO ACADÉMICO DETALLADO:\n`;
       contexto += `- Total de actividades realizadas: ${completados.length}\n`;
-      contexto += `- Promedio general en plataforma: ${promGeneral.toFixed(1)}/10 (o ${(promGeneral * 10).toFixed(1)}/100)\n\n`;
+      contexto += `- Promedio general en plataforma: ${promGeneral.toFixed(1)}/10\n\n`;
       
       contexto += `DESGLOSE POR MATERIA Y EJERCICIOS COMPLETADOS:\n`;
       for (const [materia, stats] of Object.entries(materiasStats)) {
