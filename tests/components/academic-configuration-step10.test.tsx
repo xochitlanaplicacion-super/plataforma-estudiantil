@@ -53,6 +53,7 @@ function baseConfiguration(): AcademicConfigurationDto {
 }
 
 beforeEach(() => {
+  window.localStorage.setItem('academic-criteria-tour-seen-v1', 'true');
   actionMocks.audit.mockResolvedValue({ ok: true, status: 'empty', data: { items: [], page: 1, pageSize: 10, total: 0, totalPages: 0, hasPreviousPage: false, hasNextPage: false } });
 });
 
@@ -145,9 +146,21 @@ describe('Paso 10: interfaz administrativa accesible', () => {
     actionMocks.load.mockResolvedValue({ ok: true, status: 'success', data: baseConfiguration() });
     render(<AcademicSchemesPage audience="teacher" />);
     expect(await screen.findByRole('heading', { name: 'Mis criterios de evaluación' })).toBeVisible();
-    expect(screen.getByLabelText('Mi materia y grupo')).toHaveTextContent('Matemáticas — Primero A');
+    expect(await screen.findByLabelText('Mi materia y grupo')).toHaveTextContent('Matemáticas — Primero A');
     expect(screen.queryByLabelText('Nivel')).not.toBeInTheDocument();
     expect(screen.queryByText('Auditoría académica')).not.toBeInTheDocument();
     expect(actionMocks.audit).not.toHaveBeenCalled();
+  }, 20_000);
+
+  it('mantiene disponible un recorrido guiado con globos y navegación paso a paso', async () => {
+    actionMocks.load.mockResolvedValue({ ok: true, status: 'success', data: baseConfiguration() });
+    const user = userEvent.setup();
+    render(<AcademicSchemesPage audience="teacher" />);
+    await screen.findByRole('heading', { name: 'Mis criterios de evaluación' });
+    await user.click(screen.getByRole('button', { name: 'Iniciar recorrido guiado' }));
+    expect(screen.getByRole('dialog', { name: '1. Elige dónde aplicarás la evaluación' })).toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Siguiente' }));
+    expect(screen.getByRole('dialog', { name: '2. Abre un borrador editable' })).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Abrir tutorial de criterios de evaluación' })).toBeVisible();
   }, 20_000);
 });
