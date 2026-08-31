@@ -117,6 +117,8 @@ import { getEstadoPagoIA } from '@/lib/actions/pagos';
 import Image from "next/image";
 import { ParkourRaceEditor } from '@/components/activities/parkour-race/ParkourRaceEditor';
 import { createParkourRaceContent, normalizeParkourRaceContent, validateParkourRaceContent } from '@/lib/activities/parkour-race';
+import { BackroomsScapeEditor } from '@/components/activities/backrooms-scape/BackroomsScapeEditor';
+import { createBackroomsScapeContent, normalizeBackroomsScapeContent, validateBackroomsScapeContent } from '@/lib/activities/backrooms-scape';
 
 const LOGO_FALLBACK = '/images/logo_placeholder.svg';
 
@@ -124,6 +126,7 @@ const LOGO_FALLBACK = '/images/logo_placeholder.svg';
 // --- CONFIGURACIÓN DE PLANTILLAS ---
 const ACTIVITY_TEMPLATES = [
   { id: 'parkour_race', label: 'Parkour Race', icon: <Gamepad2 size={18} />, color: 'bg-cyan-600', featured: true },
+  { id: 'backrooms_scape', label: 'Backrooms Scape', icon: <Gamepad2 size={18} />, color: 'bg-amber-700', featured: true },
   { id: 'actividad_descriptiva', label: 'Actividad Descriptiva', icon: <FileSearch size={16} />, color: 'bg-slate-700' },
   { id: 'crucigrama', label: 'Crucigrama', icon: <Grid3X3 size={16} />, color: 'bg-rose-600' },
   { id: 'opcion_multiple', label: 'Opción Múltiple', icon: <CheckCircle2 size={16} />, color: 'bg-blue-500' },
@@ -138,6 +141,7 @@ const ACTIVITY_TEMPLATES = [
 const initActivityContent = (type: string) => {
   switch(type) {
     case 'parkour_race': return createParkourRaceContent();
+    case 'backrooms_scape': return createBackroomsScapeContent();
     case 'actividad_descriptiva': return { fileUrl: '', fileName: '' };
     case 'crucigrama': return { words: [''], clues: [''], showWordList: false };
     case 'opcion_multiple': return { items: [{ question: '', options: [{id: '1', text: ''}], correctId: '1', feedback: '' }] };
@@ -334,6 +338,9 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
       if (type === 'crucigrama') {
         endpoint = '/api/exercises/generate-crossword';
         payload.numPalabras = aiNumWords;
+      } else if (type === 'backrooms_scape') {
+        endpoint = '/api/exercises/generate-backrooms-scape';
+        payload.numPreguntas = aiNumWords;
       } else if (type === 'opcion_multiple' || type === 'parkour_race') {
         endpoint = '/api/exercises/generate-quiz';
         payload.numPreguntas = aiNumWords;
@@ -369,7 +376,7 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
         updateContent({ ...content, words: data.words || [], clues: data.clues || [] });
       } else if (type === 'sopa_letras') {
         updateContent({ ...content, words: data.words || [], clues: data.clues || [], sopaFeedback: data.feedback || '' });
-      } else if (type === 'opcion_multiple' || type === 'parkour_race' || type === 'verdadero_falso' || type === 'emparejamiento' || type === 'flashcards') {
+      } else if (type === 'opcion_multiple' || type === 'parkour_race' || type === 'backrooms_scape' || type === 'verdadero_falso' || type === 'emparejamiento' || type === 'flashcards') {
         updateContent({ ...content, items: data.items || [] });
       } else if (type === 'ordenar_secuencia') {
         updateContent({ ...content, items: data.items || [], feedback: data.feedback || '' });
@@ -429,6 +436,7 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
                   {type === 'crucigrama' ? 'Crucigrama IA'
                     : type === 'opcion_multiple' ? 'Opción Múltiple IA'
                     : type === 'parkour_race' ? 'Parkour Race IA'
+                    : type === 'backrooms_scape' ? 'Backrooms Scape IA'
                     : type === 'verdadero_falso' ? 'Verdadero/Falso IA'
                     : type === 'emparejamiento' ? 'Emparejamiento IA'
                     : type === 'completar_espacios' ? 'Completar Espacios IA'
@@ -450,7 +458,7 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
                   className="text-[10px] font-black uppercase tracking-widest text-slate-300"
                 >
                   {type === 'crucigrama' ? 'N° de Palabras'
-                    : type === 'opcion_multiple' || type === 'parkour_race' ? 'N° de Preguntas'
+                    : type === 'opcion_multiple' || type === 'parkour_race' || type === 'backrooms_scape' ? 'N° de Preguntas'
                     : type === 'verdadero_falso' ? 'N° de Enunciados'
                     : type === 'emparejamiento' ? 'N° de Pares'
                     : type === 'completar_espacios' ? 'N° de Palabras Clave'
@@ -538,6 +546,16 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
   if (type === 'parkour_race') {
     return (
       <ParkourRaceEditor
+        content={content}
+        updateContent={updateContent}
+        aiControls={<>{renderAiButton()}{renderAiModal()}</>}
+      />
+    );
+  }
+
+  if (type === 'backrooms_scape') {
+    return (
+      <BackroomsScapeEditor
         content={content}
         updateContent={updateContent}
         aiControls={<>{renderAiButton()}{renderAiModal()}</>}
@@ -1450,6 +1468,15 @@ export default function ProfesorDashboard() {
             return;
           }
           d.contenido = parkourContent;
+        }
+        if (d.tipo === 'backrooms_scape') {
+          const backroomsContent = normalizeBackroomsScapeContent(d.contenido);
+          const validationError = validateBackroomsScapeContent(backroomsContent);
+          if (validationError) {
+            toast({ variant: 'destructive', title: 'Backrooms Scape incompleto', description: validationError });
+            return;
+          }
+          d.contenido = backroomsContent;
         }
         const finalContent = typeof d.contenido === 'string' ? d.contenido : JSON.stringify(d.contenido || {});
         result = await upsertEjercicio({...d, contenido: finalContent, tema_id: selectedTema.id, created_by: user?.id}, isGroupMode && d.syncToAll !== false);

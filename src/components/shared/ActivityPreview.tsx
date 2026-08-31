@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { EntregaAlumno } from './EntregaAlumno';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { ParkourRaceFrame } from '@/components/activities/parkour-race/ParkourRaceFrame';
+import { BackroomsScapeFrame } from '@/components/activities/backrooms-scape/BackroomsScapeFrame';
 
 // --- MOBILE DRAG INSTRUCTIONS POPUP ---
 function MobileDragTip({ type, onDismiss }: { type: string; onDismiss: () => void }) {
@@ -629,6 +630,26 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
   };
 
   const renderContent = () => {
+    if (exercise.tipo === 'backrooms_scape') {
+      return (
+        <div className="h-[calc(100vh-5rem)] min-h-[520px] w-full overflow-hidden bg-[#101416]">
+          <BackroomsScapeFrame
+            exercise={exercise}
+            onClose={onClose}
+            onComplete={onComplete ? (result) => onComplete(result.hits, result.total, [{
+              tipo: 'backrooms_scape',
+              intentos_incorrectos: result.wrongAttempts,
+              tiempo_segundos: result.time,
+              capturas: result.captures,
+              fragmentos: result.fragments,
+              puntos_juego: result.score,
+              codigo_mapa: result.seedCode,
+            }]) : undefined}
+          />
+        </div>
+      );
+    }
+
     if (exercise.tipo === 'parkour_race') {
       return (
         <div className="h-[calc(100vh-5rem)] min-h-[520px] w-full overflow-hidden bg-[#0B1026]">

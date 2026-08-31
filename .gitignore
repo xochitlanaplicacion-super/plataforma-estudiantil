@@ -4,6 +4,8 @@
 /node_modules
 /games/parkour-race/node_modules
 /games/parkour-race/dist
+/games/backrooms-scape/node_modules
+/games/backrooms-scape/dist
 /.pnp
 .pnp.*
 .yarn/*
