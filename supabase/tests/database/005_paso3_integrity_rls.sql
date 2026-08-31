@@ -135,8 +135,8 @@ select throws_like(
     ) select tenant_id, ciclo_escolar_id, asignacion_profesor_id,
       periodo_evaluacion_id, 'Duplicado', 2, created_by
       from public.esquemas_evaluacion where id='1e000000-0000-4000-8000-000000000001'$$,
-  '%esquemas_evaluacion_un_vigente_idx%',
-  'Sólo existe un esquema vigente por asignacion y periodo'
+  '%esquemas_evaluacion_un_borrador_idx%',
+  'Sólo existe un borrador editable por asignacion y periodo'
 );
 
 update public.esquemas_evaluacion

@@ -1,7 +1,7 @@
 begin;
 set local search_path = public, extensions;
 
-select plan(66);
+select plan(67);
 
 select has_table('public', 'periodos_evaluacion', 'Existe public.periodos_evaluacion');
 select has_table('public', 'esquemas_evaluacion', 'Existe public.esquemas_evaluacion');
@@ -48,7 +48,8 @@ select has_fk('public', 'esquemas_evaluacion', 'El esquema tiene FKs tenant-safe
 select has_index('public', 'periodos_evaluacion', 'periodos_evaluacion_no_overlap', 'Existe indice de exclusion contra solapamiento');
 select has_index('public', 'periodos_evaluacion', 'periodos_evaluacion_un_activo_por_ciclo_idx', 'Un solo periodo activo por ciclo');
 select has_index('public', 'periodos_evaluacion', 'periodos_evaluacion_tenant_cycle_state_dates_idx', 'Indice de lectura tenant/ciclo/estado/fechas');
-select has_index('public', 'esquemas_evaluacion', 'esquemas_evaluacion_un_vigente_idx', 'Un solo esquema vigente por asignacion/periodo');
+select has_index('public', 'esquemas_evaluacion', 'esquemas_evaluacion_un_activo_idx', 'Un solo esquema activo por asignacion/periodo');
+select has_index('public', 'esquemas_evaluacion', 'esquemas_evaluacion_un_borrador_idx', 'Un solo borrador editable por asignacion/periodo');
 select has_index('public', 'esquemas_evaluacion', 'esquemas_evaluacion_assignment_idx', 'Indice de esquema por asignacion');
 select has_index('public', 'esquemas_evaluacion', 'esquemas_evaluacion_period_idx', 'Indice de esquema por periodo');
 

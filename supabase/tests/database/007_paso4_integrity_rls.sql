@@ -1,7 +1,7 @@
 begin;
 set local search_path = public, extensions;
 
-select plan(34);
+select plan(36);
 
 insert into public.esquemas_evaluacion (
   id, tenant_id, ciclo_escolar_id, asignacion_profesor_id,
@@ -58,6 +58,8 @@ insert into public.criterios_evaluacion (id,tenant_id,esquema_evaluacion_id,nomb
 select is((select estado from public.activar_esquema_evaluacion('1e000000-0000-4000-8000-000000000100',1)), 'activo', 'Activa atómicamente total exacto 100');
 select throws_like($$select * from public.activar_esquema_evaluacion('1e000000-0000-4000-8000-000000000100',0)$$, '%versión esperada%vigente%', 'Versión concurrente obsoleta se rechaza');
 select is((select version from public.copiar_esquema_evaluacion('1e000000-0000-4000-8000-000000000100',1,'Esquema ponderado v2')), 2, 'Copia histórica crea versión 2');
+select is((select estado from public.esquemas_evaluacion where id='1e000000-0000-4000-8000-000000000100'), 'activo', 'La versión publicada continúa activa mientras se edita la copia');
+select is((select estado from public.esquemas_evaluacion where copiado_desde_id='1e000000-0000-4000-8000-000000000100'), 'borrador', 'La nueva versión permanece como borrador editable');
 select is((select count(*) from public.esquemas_evaluacion where copiado_desde_id='1e000000-0000-4000-8000-000000000100'), 1::bigint, 'Existe una única copia de la fuente');
 select is((select version from public.copiar_esquema_evaluacion('1e000000-0000-4000-8000-000000000100',1,'Esquema ponderado v2')), 2, 'Reintento idéntico es idempotente');
 select is((select count(*) from public.criterios_evaluacion where esquema_evaluacion_id=(select id from public.esquemas_evaluacion where copiado_desde_id='1e000000-0000-4000-8000-000000000100')), 3::bigint, 'La copia conserva los criterios');

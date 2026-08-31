@@ -6,6 +6,7 @@ import { requireTenantSession } from '@/lib/tenant/context';
 import { createClient } from '@supabase/supabase-js';
 import { revalidatePath, unstable_noStore as noStore } from 'next/cache';
 import { parseFechaLocal } from '@/lib/utils';
+import { selectPublishedEvaluationSchemes } from '@/lib/academic/exercise-evaluation-options';
 
 const prepareForUpsert = (data: any) => {
   const cleanData = { ...data };
@@ -487,7 +488,7 @@ export async function getExerciseEvaluationOptions(
 
   const { data: schemes, error: schemeError } = await supabase
     .from('esquemas_evaluacion')
-    .select('id, asignacion_profesor_id, periodo_evaluacion_id, estado')
+    .select('id, asignacion_profesor_id, periodo_evaluacion_id, estado, version')
     .eq('tenant_id', tenantId)
     .in('estado', ['activo', 'borrador'])
     .in('asignacion_profesor_id', uniqueAssignmentIds);
@@ -514,7 +515,7 @@ export async function getExerciseEvaluationOptions(
   const contexts = (assignments || []).map((assignment: any) => ({
     assignmentId: assignment.id,
     label: `${assignment.materias?.nombre || 'Materia'} · ${assignment.grupos?.nombre || 'Grupo'}`,
-    periods: (schemes || []).filter((scheme) => scheme.asignacion_profesor_id === assignment.id)
+    periods: selectPublishedEvaluationSchemes(schemes || [], assignment.id)
       .map((scheme) => {
         const period = (periods || []).find((row) => row.id === scheme.periodo_evaluacion_id);
         return period ? {
