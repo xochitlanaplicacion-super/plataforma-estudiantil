@@ -75,6 +75,39 @@ describe('Paso 10: interfaz administrativa accesible', () => {
     expect(report.violations.filter((violation) => ['critical', 'serious'].includes(violation.impact ?? ''))).toEqual([]);
   }, 20_000);
 
+  it('envía la versión esperada al cambiar atómicamente el periodo activo', async () => {
+    let data = baseConfiguration();
+    data.periods[0].state = 'borrador';
+    actionMocks.load.mockImplementation(async () => ({ ok: true, status: 'success', data }));
+    actionMocks.savePeriod.mockImplementation(async (input: { state: string }) => {
+      data = {
+        ...data,
+        periods: data.periods.map((period) => period.id === ID.period
+          ? { ...period, state: input.state as 'activo', updatedAt: '2026-08-28T10:05:00.000Z' }
+          : period),
+      };
+      return {
+        ok: true,
+        status: 'success',
+        data: { id: ID.period, updatedAt: '2026-08-28T10:05:00.000Z' },
+      };
+    });
+
+    const user = userEvent.setup();
+    render(<AcademicCyclesPeriodsPage />);
+    await screen.findByLabelText('Periodo a editar');
+    await user.selectOptions(screen.getAllByLabelText('Estado')[1], 'activo');
+    await user.click(screen.getByRole('button', { name: 'Guardar periodo' }));
+    await user.click(screen.getByRole('button', { name: 'Confirmar cambio' }));
+
+    await waitFor(() => expect(actionMocks.savePeriod).toHaveBeenCalledWith(expect.objectContaining({
+      id: ID.period,
+      cycleId: ID.cycle,
+      state: 'activo',
+      expectedUpdatedAt: '2026-08-28T10:00:00.000Z',
+    })));
+  }, 20_000);
+
   it('ejecuta borrador → criterio 100% → activación y confirma cada persistencia', async () => {
     let data = baseConfiguration();
     actionMocks.load.mockImplementation(async () => ({ ok: true, status: 'success', data }));

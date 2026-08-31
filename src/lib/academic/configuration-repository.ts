@@ -183,6 +183,22 @@ export class SupabaseAcademicConfigurationRepository {
       if (error) databaseFailure(error);
       return assertMutationRow(data);
     }
+    if (input.state === 'activo') {
+      const { data, error } = await this.client.rpc('activar_periodo_evaluacion', {
+        p_periodo_id: input.id,
+        p_ciclo_id: input.cycleId,
+        p_expected_updated_at: input.expectedUpdatedAt!,
+        p_nombre: input.name,
+        p_orden: input.order,
+        p_fecha_inicio: input.startsOn,
+        p_fecha_fin: input.endsOn,
+        p_color_semantico: input.semanticColor,
+      });
+      if (error) databaseFailure(error);
+      const row = data?.[0];
+      if (!row) throw new AcademicApplicationError('not_found');
+      return { id: row.periodo_id, updatedAt: row.updated_at };
+    }
     const { data, error } = await this.client.from('periodos_evaluacion').update({
       nombre: input.name, orden: input.order, fecha_inicio: input.startsOn,
       fecha_fin: input.endsOn, color_semantico: input.semanticColor, estado: input.state,

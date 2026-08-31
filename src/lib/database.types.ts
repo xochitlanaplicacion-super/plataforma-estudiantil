@@ -4854,6 +4854,24 @@ export type Database = {
       }
     }
     Functions: {
+      activar_periodo_evaluacion: {
+        Args: {
+          p_ciclo_id: string
+          p_color_semantico: string
+          p_expected_updated_at: string
+          p_fecha_fin: string
+          p_fecha_inicio: string
+          p_nombre: string
+          p_orden: number
+          p_periodo_id: string
+        }
+        Returns: {
+          estado: string
+          periodo_anterior_id: string | null
+          periodo_id: string
+          updated_at: string
+        }[]
+      }
       activar_esquema_evaluacion: {
         Args: { expected_scheme_version: number; target_scheme_id: string }
         Returns: {
