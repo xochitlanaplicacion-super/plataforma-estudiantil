@@ -582,13 +582,33 @@ async function configureExerciseEvaluationLinks(
 }
 
 export async function upsertEjercicio(ejercicio: any, isSyncCreation: boolean = false) {
-  const { supabase: supabaseAdmin } = await requireTenantSession();
+  const { supabase: supabaseAdmin, tenantId, user, profile } = await requireTenantSession([
+    'profesor', 'admin', 'superuser',
+  ]);
   const evaluationSelections = Array.isArray(ejercicio.evaluationLinks)
     ? ejercicio.evaluationLinks as ExerciseEvaluationSelection[]
     : [];
   delete ejercicio.evaluationLinks;
   delete ejercicio.syncToAll;
   const cleanData = prepareForUpsert(ejercicio);
+
+  // La autoría se deriva de la sesión, nunca de datos manipulables del cliente.
+  if (!cleanData.id) cleanData.created_by = user.id;
+  if (cleanData.id) {
+    const { data: existing, error: existingError } = await supabaseAdmin
+      .from('ejercicios')
+      .select('id, created_by')
+      .eq('tenant_id', tenantId)
+      .eq('id', cleanData.id)
+      .maybeSingle();
+    if (existingError || !existing) {
+      return { data: null, error: existingError || new Error('La actividad no existe en esta institución') };
+    }
+    if (profile.rol === 'profesor' && existing.created_by !== user.id) {
+      return { data: null, error: new Error('Sólo el profesor creador puede modificar esta actividad') };
+    }
+    delete cleanData.created_by;
+  }
 
   if (isSyncCreation && !cleanData.id && cleanData.tema_id) {
     const { data: temaObj } = await supabaseAdmin.from('temas').select('sync_id').eq('id', cleanData.tema_id).single();
@@ -638,12 +658,14 @@ export async function upsertEjercicio(ejercicio: any, isSyncCreation: boolean = 
 }
 
 export async function deleteEjercicio(id: string, sync_id?: string) {
-  const { supabase: supabaseAdmin, tenantId } = await requireTenantSession([
+  const { supabase: supabaseAdmin, tenantId, user, profile } = await requireTenantSession([
     'profesor', 'admin', 'superuser',
   ]);
   if (sync_id) {
-    const { data, error } = await supabaseAdmin.from('ejercicios').delete()
-      .eq('tenant_id', tenantId).eq('sync_id', sync_id).select('id');
+    let deletion = supabaseAdmin.from('ejercicios').delete()
+      .eq('tenant_id', tenantId).eq('sync_id', sync_id);
+    if (profile.rol === 'profesor') deletion = deletion.eq('created_by', user.id);
+    const { data, error } = await deletion.select('id');
     revalidatePath('/dashboard/profesor');
     return {
       error: error || (!data?.length
@@ -651,8 +673,10 @@ export async function deleteEjercicio(id: string, sync_id?: string) {
         : null),
     };
   }
-  const { data, error } = await supabaseAdmin.from('ejercicios').delete()
-    .eq('tenant_id', tenantId).eq('id', id).select('id');
+  let deletion = supabaseAdmin.from('ejercicios').delete()
+    .eq('tenant_id', tenantId).eq('id', id);
+  if (profile.rol === 'profesor') deletion = deletion.eq('created_by', user.id);
+  const { data, error } = await deletion.select('id');
   revalidatePath('/dashboard/profesor');
   return {
     error: error || (!data?.length

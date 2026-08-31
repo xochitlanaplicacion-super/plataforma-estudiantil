@@ -12,6 +12,19 @@ export default async function RealizarEjercicioPage({ params }: { params: Promis
     redirect('/auth/login');
   }
 
+  // RLS de los vínculos sólo expone al alumno las asignaciones de su
+  // inscripción activa (tenant, ciclo y grupo). La URL directa no basta.
+  const { data: authorizedLink } = await supabase
+    .from('vinculos_evaluacion_ejercicio')
+    .select('ejercicio_id')
+    .eq('ejercicio_id', resolvedParams.id)
+    .eq('activo', true)
+    .maybeSingle();
+
+  if (!authorizedLink) {
+    redirect('/dashboard/alumno/materias');
+  }
+
   // Obtener el ejercicio
   const { data: ejercicio, error } = await supabase
     .from('ejercicios')

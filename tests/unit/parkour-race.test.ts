@@ -1,0 +1,61 @@
+import { describe, expect, it } from 'vitest';
+import {
+  createParkourRaceContent,
+  normalizeParkourRaceContent,
+  parkourRaceGameActivity,
+  validateParkourRaceContent,
+} from '@/lib/activities/parkour-race';
+
+describe('Parkour Race activity contract', () => {
+  it('persists presets and question explanations in the exercise content', () => {
+    const content = normalizeParkourRaceContent({
+      showFeedback: true,
+      settings: { difficulty: 'hard', parkour: 'high', mapSize: 'small', seedMode: 'fixed', fixedSeed: '12345678' },
+      items: [{
+        question: '¿Cuánto es 2 + 2?',
+        options: [
+          { id: '1', text: '3' }, { id: '2', text: '4' },
+          { id: '3', text: '5' }, { id: '4', text: '6' },
+        ],
+        correctId: '2',
+        feedback: 'Dos unidades más dos unidades forman cuatro.',
+      }],
+    });
+
+    expect(content.settings.difficulty).toBe('hard');
+    expect(content.settings.parkour).toBe('high');
+    expect(content.items[0].feedback).toBe('Dos unidades más dos unidades forman cuatro.');
+    expect(validateParkourRaceContent(content)).toBeNull();
+  });
+
+  it('converts the Supabase exercise JSON into the isolated game contract', () => {
+    const content = createParkourRaceContent();
+    content.items[0] = {
+      question: 'Capital de México',
+      options: [
+        { id: 'a', text: 'Monterrey' }, { id: 'b', text: 'Ciudad de México' },
+        { id: 'c', text: 'Puebla' }, { id: 'd', text: 'Mérida' },
+      ],
+      correctId: 'b',
+      feedback: 'La capital del país es Ciudad de México.',
+    };
+
+    const activity = parkourRaceGameActivity({
+      id: 'exercise-id',
+      titulo: 'Geografía en movimiento',
+      contenido: JSON.stringify(content),
+    });
+
+    expect(activity.questions[0]).toMatchObject({
+      prompt: 'Capital de México',
+      correctIndex: 1,
+      feedback: 'La capital del país es Ciudad de México.',
+    });
+    expect(activity.settings.showFeedback).toBe(true);
+  });
+
+  it('rejects incomplete questions before saving', () => {
+    const content = createParkourRaceContent();
+    expect(validateParkourRaceContent(content)).toContain('enunciado');
+  });
+});

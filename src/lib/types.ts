@@ -35,7 +35,7 @@ export interface Ejercicio {
   tema_id: string;
   titulo: string;
   descripcion?: string;
-  tipo: 'opcion_multiple' | 'verdadero_falso' | 'emparejamiento' | 'ordenar_secuencia' | 'completar_espacios' | 'sopa_letras' | 'flashcards' | 'texto';
+  tipo: 'parkour_race' | 'opcion_multiple' | 'verdadero_falso' | 'emparejamiento' | 'ordenar_secuencia' | 'completar_espacios' | 'sopa_letras' | 'flashcards' | 'texto';
   contenido?: any;
   orden: number;
   publicado: boolean;

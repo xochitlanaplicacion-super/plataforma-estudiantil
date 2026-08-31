@@ -54,7 +54,8 @@ import {
   PlusCircle,
   ExternalLink,
   Wand2,
-  BrainCircuit
+  BrainCircuit,
+  Gamepad2
 } from 'lucide-react';
 
 import TrackedVideoPlayer from '@/components/shared/TrackedVideoPlayer';
@@ -114,12 +115,15 @@ import { exportSlidesToPptx } from '@/lib/export-pptx';
 import { ProfesorAIAssistant } from '@/components/shared/ProfesorAIAssistant';
 import { getEstadoPagoIA } from '@/lib/actions/pagos';
 import Image from "next/image";
+import { ParkourRaceEditor } from '@/components/activities/parkour-race/ParkourRaceEditor';
+import { createParkourRaceContent, normalizeParkourRaceContent, validateParkourRaceContent } from '@/lib/activities/parkour-race';
 
 const LOGO_FALLBACK = '/images/logo_placeholder.svg';
 
 
 // --- CONFIGURACIÓN DE PLANTILLAS ---
 const ACTIVITY_TEMPLATES = [
+  { id: 'parkour_race', label: 'Parkour Race', icon: <Gamepad2 size={18} />, color: 'bg-cyan-600', featured: true },
   { id: 'actividad_descriptiva', label: 'Actividad Descriptiva', icon: <FileSearch size={16} />, color: 'bg-slate-700' },
   { id: 'crucigrama', label: 'Crucigrama', icon: <Grid3X3 size={16} />, color: 'bg-rose-600' },
   { id: 'opcion_multiple', label: 'Opción Múltiple', icon: <CheckCircle2 size={16} />, color: 'bg-blue-500' },
@@ -133,6 +137,7 @@ const ACTIVITY_TEMPLATES = [
 
 const initActivityContent = (type: string) => {
   switch(type) {
+    case 'parkour_race': return createParkourRaceContent();
     case 'actividad_descriptiva': return { fileUrl: '', fileName: '' };
     case 'crucigrama': return { words: [''], clues: [''], showWordList: false };
     case 'opcion_multiple': return { items: [{ question: '', options: [{id: '1', text: ''}], correctId: '1', feedback: '' }] };
@@ -329,7 +334,7 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
       if (type === 'crucigrama') {
         endpoint = '/api/exercises/generate-crossword';
         payload.numPalabras = aiNumWords;
-      } else if (type === 'opcion_multiple') {
+      } else if (type === 'opcion_multiple' || type === 'parkour_race') {
         endpoint = '/api/exercises/generate-quiz';
         payload.numPreguntas = aiNumWords;
       } else if (type === 'verdadero_falso') {
@@ -364,7 +369,7 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
         updateContent({ ...content, words: data.words || [], clues: data.clues || [] });
       } else if (type === 'sopa_letras') {
         updateContent({ ...content, words: data.words || [], clues: data.clues || [], sopaFeedback: data.feedback || '' });
-      } else if (type === 'opcion_multiple' || type === 'verdadero_falso' || type === 'emparejamiento' || type === 'flashcards') {
+      } else if (type === 'opcion_multiple' || type === 'parkour_race' || type === 'verdadero_falso' || type === 'emparejamiento' || type === 'flashcards') {
         updateContent({ ...content, items: data.items || [] });
       } else if (type === 'ordenar_secuencia') {
         updateContent({ ...content, items: data.items || [], feedback: data.feedback || '' });
@@ -423,6 +428,7 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
                 <DialogTitle className="text-xl font-black text-white uppercase tracking-wider">
                   {type === 'crucigrama' ? 'Crucigrama IA'
                     : type === 'opcion_multiple' ? 'Opción Múltiple IA'
+                    : type === 'parkour_race' ? 'Parkour Race IA'
                     : type === 'verdadero_falso' ? 'Verdadero/Falso IA'
                     : type === 'emparejamiento' ? 'Emparejamiento IA'
                     : type === 'completar_espacios' ? 'Completar Espacios IA'
@@ -444,7 +450,7 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
                   className="text-[10px] font-black uppercase tracking-widest text-slate-300"
                 >
                   {type === 'crucigrama' ? 'N° de Palabras'
-                    : type === 'opcion_multiple' ? 'N° de Preguntas'
+                    : type === 'opcion_multiple' || type === 'parkour_race' ? 'N° de Preguntas'
                     : type === 'verdadero_falso' ? 'N° de Enunciados'
                     : type === 'emparejamiento' ? 'N° de Pares'
                     : type === 'completar_espacios' ? 'N° de Palabras Clave'
@@ -528,6 +534,16 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
   };
 
   if (!type) return <div className="p-8 text-center opacity-30 italic">Selecciona una plantilla para comenzar.</div>;
+
+  if (type === 'parkour_race') {
+    return (
+      <ParkourRaceEditor
+        content={content}
+        updateContent={updateContent}
+        aiControls={<>{renderAiButton()}{renderAiModal()}</>}
+      />
+    );
+  }
 
   if (type === 'actividad_descriptiva') {
     const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1426,6 +1442,15 @@ export default function ProfesorDashboard() {
       
       if (dialog.type === 'ejercicio') {
         if (!selectedTema?.id) { toast({ variant: "destructive", title: "Error", description: "No hay tema seleccionado." }); return; }
+        if (d.tipo === 'parkour_race') {
+          const parkourContent = normalizeParkourRaceContent(d.contenido);
+          const validationError = validateParkourRaceContent(parkourContent);
+          if (validationError) {
+            toast({ variant: 'destructive', title: 'Parkour Race incompleto', description: validationError });
+            return;
+          }
+          d.contenido = parkourContent;
+        }
         const finalContent = typeof d.contenido === 'string' ? d.contenido : JSON.stringify(d.contenido || {});
         result = await upsertEjercicio({...d, contenido: finalContent, tema_id: selectedTema.id, created_by: user?.id}, isGroupMode && d.syncToAll !== false);
       }

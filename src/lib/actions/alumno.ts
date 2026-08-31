@@ -11,8 +11,9 @@ import {
 } from '@/lib/academic-grading/exercise-results';
 
 export async function getAlumnoDashboardData(userId: string) {
-  const { supabase: supabaseAdmin } = await requireTenantSession();
+  const { supabase: supabaseAdmin, user } = await requireTenantSession(['alumno']);
   try {
+    if (userId !== user.id) throw new Error('No autorizado para consultar otro alumno');
     // 1. Perfil del alumno completo
     const { data: profile, error: profileErr } = await supabaseAdmin
       .from('profiles')
@@ -95,6 +96,15 @@ export async function getAlumnoDashboardData(userId: string) {
         const temaIds = temas?.map(t => t.id) || [];
 
         if (temaIds.length > 0) {
+          // Esta tabla tiene RLS por inscripción/asignación: un alumno sólo
+          // recibe vínculos de su tenant, ciclo y grupo activos.
+          const { data: visibleLinks, error: linksError } = await supabaseAdmin
+            .from('vinculos_evaluacion_ejercicio')
+            .select('ejercicio_id')
+            .eq('activo', true);
+          if (linksError) throw linksError;
+          const visibleExerciseIds = [...new Set((visibleLinks || []).map((link) => link.ejercicio_id))];
+
           // Obtener Recursos (Materiales)
           const { data: recursosRaw } = await supabaseAdmin
             .from('resources')
@@ -112,20 +122,23 @@ export async function getAlumnoDashboardData(userId: string) {
           })) || [];
 
           // Obtener Ejercicios
-          const { data: ejercicios } = await supabaseAdmin
-            .from('ejercicios')
-            .select(`
-              id, titulo, tipo, created_at, tema_id, fecha_entrega,
-              temas (
-                titulo,
-                unidades (
-                  materia_id,
-                  materias (nombre)
+          const { data: ejercicios } = visibleExerciseIds.length > 0
+            ? await supabaseAdmin
+              .from('ejercicios')
+              .select(`
+                id, titulo, tipo, created_at, tema_id, fecha_entrega,
+                temas (
+                  titulo,
+                  unidades (
+                    materia_id,
+                    materias (nombre)
+                  )
                 )
-              )
-            `)
-            .in('tema_id', temaIds)
-            .order('fecha_entrega', { ascending: true });
+              `)
+              .in('tema_id', temaIds)
+              .in('id', visibleExerciseIds)
+              .order('fecha_entrega', { ascending: true })
+            : { data: [] };
 
           ejerciciosPublicados = ejercicios || [];
 
@@ -283,7 +296,8 @@ export async function saveExerciseResult(
 }
 
 export async function getMateriasYTemasParaAlumno(userId: string) {
-  const { supabase: supabaseAdmin } = await requireTenantSession();
+  const { supabase: supabaseAdmin, user } = await requireTenantSession(['alumno']);
+  if (userId !== user.id) return [];
   const { data: profile } = await supabaseAdmin.from("profiles").select("grupo_id").eq("id", userId).single();
   if (!profile?.grupo_id) return [];
 
