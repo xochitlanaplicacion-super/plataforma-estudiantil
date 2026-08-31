@@ -487,9 +487,9 @@ export async function getExerciseEvaluationOptions(
 
   const { data: schemes, error: schemeError } = await supabase
     .from('esquemas_evaluacion')
-    .select('id, asignacion_profesor_id, periodo_evaluacion_id')
+    .select('id, asignacion_profesor_id, periodo_evaluacion_id, estado')
     .eq('tenant_id', tenantId)
-    .eq('estado', 'activo')
+    .in('estado', ['activo', 'borrador'])
     .in('asignacion_profesor_id', uniqueAssignmentIds);
   if (schemeError) return { data: null, existing: [], error: schemeError };
   const schemeIds = (schemes || []).map((row) => row.id);
@@ -498,7 +498,7 @@ export async function getExerciseEvaluationOptions(
   const [{ data: periods, error: periodError }, { data: criteria, error: criterionError }] = await Promise.all([
     periodIds.length > 0
       ? supabase.from('periodos_evaluacion').select('id, nombre, orden, estado')
-        .eq('tenant_id', tenantId).eq('estado', 'activo').in('id', periodIds).order('orden')
+        .eq('tenant_id', tenantId).neq('estado', 'cerrado').in('id', periodIds).order('orden')
       : Promise.resolve({ data: [], error: null }),
     schemeIds.length > 0
       ? supabase.from('criterios_evaluacion')
@@ -521,6 +521,8 @@ export async function getExerciseEvaluationOptions(
           id: period.id,
           name: period.nombre,
           order: period.orden,
+          state: period.estado,
+          schemeState: scheme.estado,
           criteria: (criteria || []).filter((criterion) => criterion.esquema_evaluacion_id === scheme.id)
             .map((criterion: any) => ({
               id: criterion.id,

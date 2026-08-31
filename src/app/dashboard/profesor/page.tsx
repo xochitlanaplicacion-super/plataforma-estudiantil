@@ -1068,11 +1068,11 @@ export default function ProfesorDashboard() {
             (link: any) => link.assignmentId === context.assignmentId,
           );
           const periodId = existing?.periodo_evaluacion_id
-            ?? previousLink?.periodId ?? context.periods[0]?.id ?? '';
+            ?? previousLink?.periodId ?? '';
           const period = context.periods.find((item: any) => item.id === periodId)
-            ?? context.periods[0];
+            ?? null;
           const criterionId = existing?.criterio_evaluacion_id
-            ?? previousLink?.criterionId ?? period?.criteria[0]?.id ?? '';
+            ?? previousLink?.criterionId ?? '';
           return {
             assignmentId: context.assignmentId,
             periodId,
@@ -2300,8 +2300,17 @@ export default function ProfesorDashboard() {
                             }}
                           >
                             <option value="">Selecciona periodo</option>
-                            {context.periods.map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                            {context.periods.map((item: any) => (
+                              <option key={item.id} value={item.id} disabled={item.schemeState !== 'activo'}>
+                                {item.name}{item.schemeState !== 'activo' ? ' — activa primero el esquema' : ''}
+                              </option>
+                            ))}
                           </select>
+                          {context.periods.some((item: any) => item.schemeState !== 'activo') && (
+                            <p className="text-[9px] font-semibold text-amber-700">
+                              Los periodos deshabilitados necesitan que actives su esquema en Mis criterios de evaluación.
+                            </p>
+                          )}
                         </div>
                         <div className="space-y-1">
                           <label className="text-[9px] font-black uppercase text-slate-400">Criterio</label>
