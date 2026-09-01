@@ -59,6 +59,33 @@ function MusicToggle({ compact = false }: { compact?: boolean }) {
   );
 }
 
+function MouseSettings({ className = "" }: { className?: string }) {
+  const mouseCfg = useStore((s) => s.mouseCfg);
+  const setMouseCfg = useStore((s) => s.setMouseCfg);
+  return (
+    <div className={cn("rounded-2xl bg-white/5 p-3 text-left", className)}>
+      <p className="mb-2 flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-widest text-slate-400">
+        <MousePointer2 size={12} /> Ratón
+      </p>
+      <div className="grid grid-cols-2 gap-2">
+        <button type="button" onClick={() => setMouseCfg({ invertX: !mouseCfg.invertX })}
+          className={cn("btn-candy rounded-xl px-3 py-2 text-xs font-extrabold transition", mouseCfg.invertX ? "bg-[#4DD6C1]/80 text-[#06281F]" : "bg-white/10 text-slate-300")}>
+          Invertir X {mouseCfg.invertX ? "ON" : "OFF"}
+        </button>
+        <button type="button" onClick={() => setMouseCfg({ invertY: !mouseCfg.invertY })}
+          className={cn("btn-candy rounded-xl px-3 py-2 text-xs font-extrabold transition", mouseCfg.invertY ? "bg-[#4DD6C1]/80 text-[#06281F]" : "bg-white/10 text-slate-300")}>
+          Invertir Y {mouseCfg.invertY ? "ON" : "OFF"}
+        </button>
+      </div>
+      <label className="mt-2.5 block">
+        <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-slate-500">Sensibilidad ×{mouseCfg.sens.toFixed(1)}</span>
+        <input type="range" min={0.4} max={2.2} step={0.1} value={mouseCfg.sens}
+          onChange={(event) => setMouseCfg({ sens: parseFloat(event.target.value) })} className="w-full accent-[#4DD6C1]" />
+      </label>
+    </div>
+  );
+}
+
 export default function GameScreen() {
   const activity = useStore((s) => s.activity);
   const seed = useStore((s) => s.seed);
@@ -223,8 +250,8 @@ function IntroOverlay() {
   if (playing || !activity) return null;
   void paused;
   return (
-    <div className="absolute inset-0 z-20 grid place-items-center bg-[#0B1026]/72 backdrop-blur-[6px]">
-      <div className="anim-pop-in mx-4 max-w-lg rounded-[28px] border border-white/15 bg-gradient-to-b from-[#171D42] to-[#0E1330] p-8 text-center shadow-2xl">
+    <div className="absolute inset-0 z-20 grid place-items-center overflow-y-auto bg-[#0B1026]/72 py-4 backdrop-blur-[6px]">
+      <div className="anim-pop-in mx-4 max-h-[94vh] max-w-lg overflow-y-auto rounded-[28px] border border-white/15 bg-gradient-to-b from-[#171D42] to-[#0E1330] p-8 text-center shadow-2xl">
         <span className="mb-4 inline-grid h-16 w-16 place-items-center rounded-3xl bg-gradient-to-br from-[#FF6B8A] to-[#8A7CFF] shadow-xl">
           <Play size={30} className="ml-1 text-white" />
         </span>
@@ -247,6 +274,7 @@ function IntroOverlay() {
           ))}
         </div>
         <div className="mt-4">
+          <MouseSettings className="mb-3" />
           <MusicToggle />
         </div>
         <button
@@ -276,8 +304,6 @@ function PauseMenu() {
   const question = useStore((s) => s.question);
   const results = useStore((s) => s.results);
   const seed = useStore((s) => s.seed);
-  const mouseCfg = useStore((s) => s.mouseCfg);
-  const setMouseCfg = useStore((s) => s.setMouseCfg);
   const { setScreen, restartSameMap } = useStore();
   if (!paused || question || results) return null;
   return (
@@ -309,45 +335,7 @@ function PauseMenu() {
             <HomeIcon size={16} /> {window.parent !== window ? "Volver a la plataforma" : "Salir al inicio"}
           </button>
         </div>
-        <div className="mt-4 rounded-2xl bg-white/5 p-3 text-left">
-          <p className="mb-2 flex items-center gap-1.5 text-[11px] font-extrabold uppercase tracking-widest text-slate-400">
-            <MousePointer2 size={12} /> Ratón
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={() => setMouseCfg({ invertY: !mouseCfg.invertY })}
-              className={cn(
-                "btn-candy rounded-xl px-3 py-2 text-xs font-extrabold transition",
-                mouseCfg.invertY ? "bg-[#4DD6C1]/80 text-[#06281F]" : "bg-white/10 text-slate-300"
-              )}
-            >
-              Invertir Y {mouseCfg.invertY ? "ON" : "OFF"}
-            </button>
-            <button
-              onClick={() => setMouseCfg({ invertX: !mouseCfg.invertX })}
-              className={cn(
-                "btn-candy rounded-xl px-3 py-2 text-xs font-extrabold transition",
-                mouseCfg.invertX ? "bg-[#4DD6C1]/80 text-[#06281F]" : "bg-white/10 text-slate-300"
-              )}
-            >
-              Invertir X {mouseCfg.invertX ? "ON" : "OFF"}
-            </button>
-          </div>
-          <label className="mt-2.5 block">
-            <span className="mb-1 block text-[10px] font-bold uppercase tracking-widest text-slate-500">
-              Sensibilidad ×{mouseCfg.sens.toFixed(1)}
-            </span>
-            <input
-              type="range"
-              min={0.4}
-              max={2.2}
-              step={0.1}
-              value={mouseCfg.sens}
-              onChange={(e) => setMouseCfg({ sens: parseFloat(e.target.value) })}
-              className="w-full accent-[#4DD6C1]"
-            />
-          </label>
-        </div>
+        <MouseSettings className="mt-4" />
         <p className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-slate-500">
           <Keyboard size={12} /> Consejo: SHIFT para sprint y R para volver al checkpoint
         </p>

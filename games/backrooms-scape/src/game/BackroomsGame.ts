@@ -37,6 +37,7 @@ import {
 import { shuffleQuestion, type ShuffledQuestion } from "./questions";
 import { seedCode, type PlatformActivity, type PlatformResult } from "../platform";
 import { AudioEngine } from "./audio";
+import { backroomsMusic } from "./music";
 import {
   animateBean,
   animateMarauder,
@@ -52,6 +53,12 @@ import {
 export type GameMode = "menu" | "play" | "question" | "feedback" | "paused" | "dead" | "win";
 export type Difficulty = "facil" | "normal" | "dificil";
 export type BoostId = "sprint" | "shield" | "pulse" | "map";
+
+export interface MouseConfig {
+  invertX: boolean;
+  invertY: boolean;
+  sensitivity: number;
+}
 
 export interface BoostSlot {
   id: BoostId;
@@ -261,6 +268,7 @@ export class BackroomsGame {
   private deathStart = new Vector3();
   private deathCam = new Vector3();
   private deathT = 0;
+  private mouseConfig: MouseConfig = { invertX: true, invertY: true, sensitivity: 1 };
 
   // merodeador
   private mPos = new Vector3();
@@ -435,8 +443,9 @@ export class BackroomsGame {
   private onMouseMove = (e: MouseEvent): void => {
     if (document.pointerLockElement !== this.canvas) return;
     if (this.mode !== "play") return;
-    this.camYaw -= e.movementX * 0.0024;
-    this.camPitch = clamp(this.camPitch + e.movementY * 0.0021, 0.04, 0.95);
+    const { invertX, invertY, sensitivity } = this.mouseConfig;
+    this.camYaw -= e.movementX * 0.0024 * sensitivity * (invertX ? -1 : 1);
+    this.camPitch = clamp(this.camPitch + e.movementY * 0.0021 * sensitivity * (invertY ? -1 : 1), 0.04, 0.95);
   };
   private onLockChange = (): void => {
     if (document.pointerLockElement !== this.canvas && this.mode === "play" && !this.question) {
@@ -822,6 +831,18 @@ export class BackroomsGame {
 
   // --------------------------- API pública ---------------------------
 
+  setMouseConfig(config: MouseConfig): void {
+    this.mouseConfig = {
+      invertX: config.invertX,
+      invertY: config.invertY,
+      sensitivity: clamp(config.sensitivity, 0.4, 2.2),
+    };
+  }
+
+  setMusicMuted(muted: boolean): void {
+    backroomsMusic.setMuted(muted);
+  }
+
   startRun(diff: Difficulty, seed = Math.floor(Math.random() * 1e9)): void {
     this.difficulty = diff;
     this.cfg = {
@@ -870,11 +891,13 @@ export class BackroomsGame {
     this.toast("Encuentra las salas marcadas con luz cian", "info");
     this.toast("¡El Merodeador ya te está buscando!", "bad");
     this.audio.init();
+    backroomsMusic.start(diff);
     this.lock();
     this.emit(true);
   }
 
   toMenu(): void {
+    backroomsMusic.stop();
     this.mode = "menu";
     this.unlock();
     this.menuNext = this.camera.globalPosition.clone();
@@ -884,12 +907,14 @@ export class BackroomsGame {
   pause(): void {
     if (this.mode !== "play") return;
     this.mode = "paused";
+    backroomsMusic.pause();
     this.unlock();
     this.emit(true);
   }
   resume(): void {
     if (this.mode !== "paused") return;
     this.mode = "play";
+    backroomsMusic.resume();
     this.lock();
     this.emit(true);
   }
@@ -950,6 +975,7 @@ export class BackroomsGame {
     if (this.mode !== "question" || !this.question) return;
     const { q, room } = this.question;
     const correct = i === q.correct;
+    backroomsMusic.leaveQuestion();
     if (!this.activity.settings.showFeedback) {
       if (correct) this.onCorrect(room);
       else this.onWrong(room, false);
@@ -991,6 +1017,7 @@ export class BackroomsGame {
 
   dispose(): void {
     this.disposed = true;
+    backroomsMusic.stop();
     window.removeEventListener("keydown", this.onKeyDown);
     window.removeEventListener("keyup", this.onKeyUp);
     window.removeEventListener("mousemove", this.onMouseMove);
@@ -1055,10 +1082,12 @@ export class BackroomsGame {
     this.unlock();
     this.updateRoomVisual(room);
     this.audio.enterRoom();
+    backroomsMusic.enterQuestion();
     this.emit(true);
   }
 
   private onCorrect(room: Room): void {
+    backroomsMusic.leaveQuestion();
     room.state = "done";
     this.question = null;
     this.mode = "play";
@@ -1082,6 +1111,7 @@ export class BackroomsGame {
   }
 
   private onWrong(room: Room, timeout: boolean): void {
+    backroomsMusic.leaveQuestion();
     this.question = null;
     this.mode = "play";
     this.wrongN++;
@@ -1171,6 +1201,7 @@ export class BackroomsGame {
     }
     // muerte
     this.mode = "dead";
+    backroomsMusic.stop();
     this.deathT = 0;
     this.deathStart = this.camera.globalPosition.clone();
     // killcam 3/4 frontal: se ve la cara del monstruo
@@ -1184,6 +1215,7 @@ export class BackroomsGame {
 
   private onWin(): void {
     this.mode = "win";
+    backroomsMusic.stop();
     const bonus = Math.max(0, Math.round(600 - this.runTime * 2));
     this.score += bonus;
     this.stats = {
@@ -1674,6 +1706,7 @@ export class BackroomsGame {
     this.question.left -= dt;
     if (this.question.left <= 0) {
       this.question.left = 0;
+      backroomsMusic.leaveQuestion();
       if (!this.activity.settings.showFeedback) {
         this.onWrong(this.question.room, true);
         return;

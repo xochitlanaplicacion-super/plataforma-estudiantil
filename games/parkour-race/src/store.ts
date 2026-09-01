@@ -9,7 +9,8 @@ export interface MouseCfg {
   sens: number;
 }
 
-const MOUSE_KEY = "islasaber_mouse_v1";
+// v2 corrige la orientación inicial: los dos ejes nacen en modo natural.
+const MOUSE_KEY = "islasaber_mouse_v2";
 const MUSIC_MUTED_KEY = "parkour_race_music_muted_v1";
 
 function loadMusicMuted(): boolean {
@@ -34,7 +35,7 @@ function loadMouseCfg(): MouseCfg {
   } catch {
     /* noop */
   }
-  return { invertX: false, invertY: false, sens: 1 };
+  return { invertX: true, invertY: true, sens: 1 };
 }
 
 export interface Hud {

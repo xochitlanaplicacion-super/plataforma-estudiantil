@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { BackroomsGame, type Difficulty, type Snapshot } from "./game/BackroomsGame";
+import { BackroomsGame, type Difficulty, type MouseConfig, type Snapshot } from "./game/BackroomsGame";
 import GameUI from "./components/GameUI";
+import { loadMusicMuted } from "./game/music";
 import {
   demoActivity,
   normalizeActivity,
@@ -11,6 +12,21 @@ import {
 } from "./platform";
 
 const embedded = new URLSearchParams(window.location.search).get("embed") === "1";
+const MOUSE_KEY = "backrooms_scape_mouse_v1";
+
+function loadMouseConfig(): MouseConfig {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(MOUSE_KEY) || "null");
+    if (parsed) return {
+      invertX: parsed.invertX !== false,
+      invertY: parsed.invertY !== false,
+      sensitivity: Math.max(0.4, Math.min(2.2, Number(parsed.sensitivity) || 1)),
+    };
+  } catch {
+    /* configuración opcional */
+  }
+  return { invertX: true, invertY: true, sensitivity: 1 };
+}
 
 function platformDifficulty(value: PlatformActivity["settings"]["difficulty"]): Difficulty {
   return value === "easy" ? "facil" : value === "hard" ? "dificil" : "normal";
@@ -29,6 +45,26 @@ export default function App() {
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [diff, setDiff] = useState<Difficulty>("normal");
   const [gameVersion, setGameVersion] = useState(0);
+  const [mouseConfig, setMouseConfigState] = useState<MouseConfig>(loadMouseConfig);
+  const [musicMuted, setMusicMutedState] = useState(loadMusicMuted);
+  const mouseConfigRef = useRef(mouseConfig);
+  const musicMutedRef = useRef(musicMuted);
+
+  const updateMouseConfig = useCallback((changes: Partial<MouseConfig>) => {
+    setMouseConfigState((current) => {
+      const next = { ...current, ...changes };
+      mouseConfigRef.current = next;
+      try { localStorage.setItem(MOUSE_KEY, JSON.stringify(next)); } catch { /* opcional */ }
+      gameRef.current?.setMouseConfig(next);
+      return next;
+    });
+  }, []);
+
+  const updateMusicMuted = useCallback((muted: boolean) => {
+    musicMutedRef.current = muted;
+    setMusicMutedState(muted);
+    gameRef.current?.setMusicMuted(muted);
+  }, []);
 
   const initialSeed = useMemo(() => activity ? nextSeed(activity) : 0, [activity, gameVersion]);
 
@@ -64,6 +100,8 @@ export default function App() {
       window.parent.postMessage({ type: "backrooms-scape:complete", payload: result }, window.location.origin);
     };
     const game = new BackroomsGame(canvas, activity, initialSeed, (s) => setSnap({ ...s }), complete);
+    game.setMouseConfig(mouseConfigRef.current);
+    game.setMusicMuted(musicMutedRef.current);
     gameRef.current = game;
     return () => {
       if (gameRef.current === game) gameRef.current = null;
@@ -94,7 +132,9 @@ export default function App() {
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full outline-none" />
       {!activity ? <div className="absolute inset-0 grid place-items-center bg-black text-sm font-bold text-amber-100">Preparando Backrooms Scape…</div> :
         <GameUI snap={snap} game={gameRef.current} diff={diff} setDiff={setDiff} activity={activity}
-          lockDifficulty={embedded} onStart={start} onRestart={restart} onMenu={toMenu} onClose={close} />}
+          lockDifficulty={embedded} mouseConfig={mouseConfig} onMouseConfigChange={updateMouseConfig}
+          musicMuted={musicMuted} onMusicMutedChange={updateMusicMuted}
+          onStart={start} onRestart={restart} onMenu={toMenu} onClose={close} />}
     </div>
   );
 }

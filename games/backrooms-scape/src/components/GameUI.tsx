@@ -22,8 +22,10 @@ import {
   Wind,
   Timer,
   Sparkles,
+  Volume2,
+  VolumeX,
 } from "lucide-react";
-import type { BackroomsGame, Difficulty, BoostId, Snapshot } from "../game/BackroomsGame";
+import type { BackroomsGame, Difficulty, BoostId, MouseConfig, Snapshot } from "../game/BackroomsGame";
 import type { PlatformActivity } from "../platform";
 
 const fmtTime = (s: number): string => {
@@ -320,11 +322,46 @@ const DIFF_LABELS: { id: Difficulty; label: string; desc: string }[] = [
   { id: "dificil", label: "Difícil", desc: "Rápido, implacable" },
 ];
 
+function ControlSettings({ mouseConfig, onMouseConfigChange, musicMuted, onMusicMutedChange }: {
+  mouseConfig: MouseConfig;
+  onMouseConfigChange: (changes: Partial<MouseConfig>) => void;
+  musicMuted: boolean;
+  onMusicMutedChange: (muted: boolean) => void;
+}): ReactNode {
+  return (
+    <div className="pointer-events-auto mt-4 w-full max-w-[430px] rounded-2xl border border-white/15 bg-black/45 p-3 backdrop-blur-md">
+      <div className="grid grid-cols-3 gap-2">
+        <button type="button" className={`btn-ghost !justify-center !px-2 !py-2 text-[11px] ${mouseConfig.invertX ? "!border-cyan-300/70 !text-cyan-200" : ""}`}
+          onClick={() => onMouseConfigChange({ invertX: !mouseConfig.invertX })}>
+          Invertir X {mouseConfig.invertX ? "ON" : "OFF"}
+        </button>
+        <button type="button" className={`btn-ghost !justify-center !px-2 !py-2 text-[11px] ${mouseConfig.invertY ? "!border-cyan-300/70 !text-cyan-200" : ""}`}
+          onClick={() => onMouseConfigChange({ invertY: !mouseConfig.invertY })}>
+          Invertir Y {mouseConfig.invertY ? "ON" : "OFF"}
+        </button>
+        <button type="button" className="btn-ghost !justify-center !px-2 !py-2 text-[11px]"
+          aria-label={musicMuted ? "Activar música" : "Silenciar música"} onClick={() => onMusicMutedChange(!musicMuted)}>
+          {musicMuted ? <VolumeX size={15} /> : <Volume2 size={15} />} {musicMuted ? "OFF" : "ON"}
+        </button>
+      </div>
+      <label className="mt-3 block text-left text-[10px] font-bold uppercase tracking-widest text-white/45">
+        Sensibilidad ×{mouseConfig.sensitivity.toFixed(1)}
+        <input className="mt-1 w-full accent-cyan-300" type="range" min={0.4} max={2.2} step={0.1}
+          value={mouseConfig.sensitivity} onChange={(event) => onMouseConfigChange({ sensitivity: Number(event.target.value) })} />
+      </label>
+    </div>
+  );
+}
+
 function Menu({
   diff,
   setDiff,
   activity,
   lockDifficulty,
+  mouseConfig,
+  onMouseConfigChange,
+  musicMuted,
+  onMusicMutedChange,
   onStart,
   onClose,
 }: {
@@ -332,11 +369,15 @@ function Menu({
   setDiff: (d: Difficulty) => void;
   activity: PlatformActivity;
   lockDifficulty: boolean;
+  mouseConfig: MouseConfig;
+  onMouseConfigChange: (changes: Partial<MouseConfig>) => void;
+  musicMuted: boolean;
+  onMusicMutedChange: (muted: boolean) => void;
   onStart: () => void;
   onClose: () => void;
 }): ReactNode {
   return (
-    <div className="absolute inset-0 z-30 flex flex-col items-center justify-center bg-gradient-to-b from-black/55 via-black/35 to-black/70 px-4">
+    <div className="absolute inset-0 z-30 flex flex-col items-center justify-center overflow-y-auto bg-gradient-to-b from-black/55 via-black/35 to-black/70 px-4 py-5">
       <div className="mb-2 flex items-center gap-2 text-[11px] font-bold tracking-[0.45em] text-amber-200/70">
         <Sparkles size={13} /> NIVEL 0 — LOS BACKROOMS <Sparkles size={13} />
       </div>
@@ -360,7 +401,10 @@ function Menu({
         ))}
       </div>
 
-      <button onClick={onStart} className="btn-main mt-8">
+      <ControlSettings mouseConfig={mouseConfig} onMouseConfigChange={onMouseConfigChange}
+        musicMuted={musicMuted} onMusicMutedChange={onMusicMutedChange} />
+
+      <button onClick={onStart} className="btn-main mt-5">
         <Play size={22} fill="currentColor" />
         ENTRAR A LOS BACKROOMS
       </button>
@@ -382,13 +426,22 @@ function Menu({
 
 // --------------------------- Pausa / Fin ---------------------------
 
-function PauseOverlay({ onResume, onMenu }: { onResume: () => void; onMenu: () => void }): ReactNode {
+function PauseOverlay({ onResume, onMenu, mouseConfig, onMouseConfigChange, musicMuted, onMusicMutedChange }: {
+  onResume: () => void;
+  onMenu: () => void;
+  mouseConfig: MouseConfig;
+  onMouseConfigChange: (changes: Partial<MouseConfig>) => void;
+  musicMuted: boolean;
+  onMusicMutedChange: (muted: boolean) => void;
+}): ReactNode {
   return (
     <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div className="modal-card w-[min(420px,92vw)] text-center">
         <h2 className="title-font mb-1 text-4xl text-amber-300">PAUSA</h2>
         <p className="mb-6 text-xs text-white/50">El Merodeador espera paciente…</p>
-        <button onClick={onResume} className="btn-main mb-3 w-full justify-center">
+        <ControlSettings mouseConfig={mouseConfig} onMouseConfigChange={onMouseConfigChange}
+          musicMuted={musicMuted} onMusicMutedChange={onMusicMutedChange} />
+        <button onClick={onResume} className="btn-main mb-3 mt-4 w-full justify-center">
           <Play size={18} fill="currentColor" /> CONTINUAR
         </button>
         <button onClick={onMenu} className="btn-ghost w-full justify-center">
@@ -463,6 +516,10 @@ export default function GameUI({
   setDiff,
   activity,
   lockDifficulty,
+  mouseConfig,
+  onMouseConfigChange,
+  musicMuted,
+  onMusicMutedChange,
   onStart,
   onRestart,
   onMenu,
@@ -474,6 +531,10 @@ export default function GameUI({
   setDiff: (d: Difficulty) => void;
   activity: PlatformActivity;
   lockDifficulty: boolean;
+  mouseConfig: MouseConfig;
+  onMouseConfigChange: (changes: Partial<MouseConfig>) => void;
+  musicMuted: boolean;
+  onMusicMutedChange: (muted: boolean) => void;
   onStart: () => void;
   onRestart: () => void;
   onMenu: () => void;
@@ -501,7 +562,9 @@ export default function GameUI({
         />
       )}
 
-      {mode === "menu" && <Menu diff={diff} setDiff={setDiff} activity={activity} lockDifficulty={lockDifficulty} onStart={onStart} onClose={onClose} />}
+      {mode === "menu" && <Menu diff={diff} setDiff={setDiff} activity={activity} lockDifficulty={lockDifficulty}
+        mouseConfig={mouseConfig} onMouseConfigChange={onMouseConfigChange}
+        musicMuted={musicMuted} onMusicMutedChange={onMusicMutedChange} onStart={onStart} onClose={onClose} />}
 
       {(mode === "play" || mode === "question" || mode === "feedback" || mode === "paused") && snap && (
         <>
@@ -520,7 +583,9 @@ export default function GameUI({
       )}
 
       {(mode === "question" || mode === "feedback") && snap && <QuestionModal snap={snap} onAnswer={(i) => game?.answer(i)} onContinue={() => game?.continueAfterAnswer()} />}
-      {mode === "paused" && <PauseOverlay onResume={() => game?.resume()} onMenu={onMenu} />}
+      {mode === "paused" && <PauseOverlay onResume={() => game?.resume()} onMenu={onMenu}
+        mouseConfig={mouseConfig} onMouseConfigChange={onMouseConfigChange}
+        musicMuted={musicMuted} onMusicMutedChange={onMusicMutedChange} />}
       {(mode === "dead" || mode === "win") && snap && (
         <EndOverlay snap={snap} onRestart={onRestart} onMenu={onMenu} />
       )}
