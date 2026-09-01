@@ -2,6 +2,7 @@ export type ParkourMapSize = 'small' | 'medium' | 'large' | 'custom';
 export type ParkourDifficulty = 'easy' | 'normal' | 'hard';
 export type ParkourDensity = 'low' | 'medium' | 'high';
 export type ParkourSeedMode = 'unique' | 'fixed' | 'manual';
+export type ParkourQuestionType = 'multiple_choice' | 'true_false';
 
 export interface ParkourRaceOption {
   id: string;
@@ -9,6 +10,7 @@ export interface ParkourRaceOption {
 }
 
 export interface ParkourRaceQuestion {
+  type: ParkourQuestionType;
   question: string;
   options: ParkourRaceOption[];
   correctId: string;
@@ -30,9 +32,13 @@ export interface ParkourRaceContent {
   items: ParkourRaceQuestion[];
 }
 
-const defaultQuestion = (): ParkourRaceQuestion => ({
+const defaultQuestion = (type: ParkourQuestionType = 'multiple_choice'): ParkourRaceQuestion => ({
+  type,
   question: '',
-  options: [
+  options: type === 'true_false' ? [
+    { id: '1', text: 'Verdadero' },
+    { id: '2', text: 'Falso' },
+  ] : [
     { id: '1', text: '' },
     { id: '2', text: '' },
     { id: '3', text: '' },
@@ -41,6 +47,10 @@ const defaultQuestion = (): ParkourRaceQuestion => ({
   correctId: '1',
   feedback: '',
 });
+
+export function createParkourRaceQuestion(type: ParkourQuestionType = 'multiple_choice') {
+  return defaultQuestion(type);
+}
 
 export function createParkourRaceContent(): ParkourRaceContent {
   return {
@@ -69,13 +79,22 @@ export function normalizeParkourRaceContent(input: unknown): ParkourRaceContent 
   const settings = source.settings && typeof source.settings === 'object' ? source.settings : {};
   const items = Array.isArray(source.items) && source.items.length > 0
     ? source.items.map((item: any): ParkourRaceQuestion => {
-      const options = Array.isArray(item?.options) ? item.options.slice(0, 4).map((option: any, index: number) => ({
+      const type: ParkourQuestionType = item?.type === 'true_false' ? 'true_false' : 'multiple_choice';
+      const optionLimit = type === 'true_false' ? 2 : 4;
+      const options = Array.isArray(item?.options) ? item.options.slice(0, optionLimit).map((option: any, index: number) => ({
         id: String(option?.id ?? index + 1),
         text: String(option?.text ?? ''),
       })) : [];
-      while (options.length < 4) options.push({ id: String(options.length + 1), text: '' });
+      if (type === 'true_false') {
+        while (options.length < 2) options.push({ id: String(options.length + 1), text: options.length === 0 ? 'Verdadero' : 'Falso' });
+        options[0].text = 'Verdadero';
+        options[1].text = 'Falso';
+      } else {
+        while (options.length < 4) options.push({ id: String(options.length + 1), text: '' });
+      }
       const requestedCorrectId = String(item?.correctId ?? options[0].id);
       return {
+        type,
         question: String(item?.question ?? ''),
         options,
         correctId: options.some((option: ParkourRaceOption) => option.id === requestedCorrectId)
@@ -115,6 +134,7 @@ export function parkourRaceGameActivity(exercise: any) {
     questions: content.items.map((item, index) => ({
       id: `${exercise?.id || 'preview'}-${index + 1}`,
       prompt: item.question,
+      type: item.type,
       answers: item.options.map((option) => option.text),
       correctIndex: Math.max(0, item.options.findIndex((option) => option.id === item.correctId)),
       feedback: item.feedback,
@@ -127,8 +147,9 @@ export function validateParkourRaceContent(content: ParkourRaceContent): string 
   if (content.items.length === 0) return 'Agrega al menos una pregunta.';
   for (const [index, item] of content.items.entries()) {
     if (!item.question.trim()) return `Escribe el enunciado de la pregunta ${index + 1}.`;
-    if (item.options.length !== 4 || item.options.some((option) => !option.text.trim())) {
-      return `Completa las cuatro respuestas de la pregunta ${index + 1}.`;
+    const requiredOptions = item.type === 'true_false' ? 2 : 4;
+    if (item.options.length !== requiredOptions || item.options.some((option) => !option.text.trim())) {
+      return `Completa las ${requiredOptions === 2 ? 'dos' : 'cuatro'} respuestas de la pregunta ${index + 1}.`;
     }
     if (!item.options.some((option) => option.id === item.correctId)) {
       return `Selecciona la respuesta correcta de la pregunta ${index + 1}.`;

@@ -12,6 +12,7 @@ describe('Parkour Race activity contract', () => {
       showFeedback: true,
       settings: { difficulty: 'hard', parkour: 'high', mapSize: 'small', seedMode: 'fixed', fixedSeed: '12345678' },
       items: [{
+        type: 'multiple_choice',
         question: '¿Cuánto es 2 + 2?',
         options: [
           { id: '1', text: '3' }, { id: '2', text: '4' },
@@ -31,6 +32,7 @@ describe('Parkour Race activity contract', () => {
   it('converts the Supabase exercise JSON into the isolated game contract', () => {
     const content = createParkourRaceContent();
     content.items[0] = {
+      type: 'multiple_choice',
       question: 'Capital de México',
       options: [
         { id: 'a', text: 'Monterrey' }, { id: 'b', text: 'Ciudad de México' },
@@ -57,5 +59,29 @@ describe('Parkour Race activity contract', () => {
   it('rejects incomplete questions before saving', () => {
     const content = createParkourRaceContent();
     expect(validateParkourRaceContent(content)).toContain('enunciado');
+  });
+
+  it('supports true/false stations without converting them into four-option questions', () => {
+    const content = normalizeParkourRaceContent({
+      items: [{
+        type: 'true_false',
+        question: 'La Tierra gira alrededor del Sol.',
+        options: [{ id: '1', text: 'texto alterado' }, { id: '2', text: 'otro texto' }],
+        correctId: '1',
+        feedback: 'El movimiento se llama traslación.',
+      }],
+    });
+    const activity = parkourRaceGameActivity({ id: 'vf', contenido: content });
+
+    expect(content.items[0]).toMatchObject({
+      type: 'true_false',
+      options: [{ id: '1', text: 'Verdadero' }, { id: '2', text: 'Falso' }],
+    });
+    expect(activity.questions[0]).toMatchObject({
+      type: 'true_false',
+      answers: ['Verdadero', 'Falso'],
+      correctIndex: 0,
+    });
+    expect(validateParkourRaceContent(content)).toBeNull();
   });
 });

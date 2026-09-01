@@ -4,8 +4,9 @@
 
 export interface Question {
   id: string;
+  type?: "multiple_choice" | "true_false";
   prompt: string;
-  answers: string[]; // 4 opciones
+  answers: string[];
   correctIndex: number;
   feedback?: string;
 }
@@ -219,13 +220,16 @@ export function validateImported(obj: any): Activity | null {
   const clean: Question[] = [];
   for (const qq of obj.questions) {
     if (!qq || typeof qq.prompt !== "string" || !Array.isArray(qq.answers)) continue;
-    const answers = qq.answers.slice(0, 4).map((s: any) => String(s ?? ""));
-    while (answers.length < 4) answers.push("—");
+    const type = qq.type === "true_false" ? "true_false" : "multiple_choice";
+    const optionCount = type === "true_false" ? 2 : 4;
+    const answers = qq.answers.slice(0, optionCount).map((s: any) => String(s ?? ""));
+    while (answers.length < optionCount) answers.push("—");
     clean.push({
       id: typeof qq.id === "string" ? qq.id : uid(),
+      type,
       prompt: String(qq.prompt),
       answers,
-      correctIndex: clamp(Number(qq.correctIndex) || 0, 0, 3),
+      correctIndex: clamp(Number(qq.correctIndex) || 0, 0, optionCount - 1),
       feedback: typeof qq.feedback === "string" ? qq.feedback : "",
     });
   }
