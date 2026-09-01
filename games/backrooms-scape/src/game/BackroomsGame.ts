@@ -273,6 +273,7 @@ export class BackroomsGame {
   // merodeador
   private mPos = new Vector3();
   private mCell: CellPos = { c: 1, r: 1 };
+  private mLastValidCell: CellPos = { c: 1, r: 1 };
   private mPath: CellPos[] = [];
   private mRetarget = 0;
   private mVel = new Vector3();
@@ -283,6 +284,8 @@ export class BackroomsGame {
   private lastRoar = -10;
   private noDamageUntil = 0;
   private threat = 0;
+  private nearMissReadyAt = 0;
+  private playerTrail: CellPos[] = [];
 
   // boosts
   private boostCounts: Record<BoostId, number> = { sprint: 1, shield: 0, pulse: 0, map: 0 };
@@ -790,6 +793,7 @@ export class BackroomsGame {
       }
     this.mPos = this.cellCenter(best.c, best.r);
     this.mCell = best;
+    this.mLastValidCell = { ...best };
     this.mPath = [];
     this.mar = buildMarauder(this.scene, this.texGrin);
     for (const m of this.mar.meshes) {
@@ -884,6 +888,8 @@ export class BackroomsGame {
     this.shieldUntil = 0;
     this.mapUntil = 0;
     this.noDamageUntil = this.t + 3;
+    this.nearMissReadyAt = this.t + 4;
+    this.playerTrail = [{ ...this.playerCell }];
     this.stunUntil = 0;
     this.flashA = 0;
     this.deathT = 0;
@@ -1181,18 +1187,23 @@ export class BackroomsGame {
 
   private onCaught(): void {
     if (this.t < this.noDamageUntil) return;
+    if (this.t >= this.nearMissReadyAt) {
+      const inDeadEnd = this.openNeighborCount(this.playerCell) <= 1;
+      const grace = inDeadEnd ? 3.6 : 2.4;
+      this.nearMissReadyAt = this.t + 16;
+      this.noDamageUntil = this.t + grace;
+      this.stunUntil = Math.max(this.stunUntil, this.t + 1.15);
+      this.mVel.setAll(0);
+      this.flash("#ffd84d", 0.2);
+      this.toast(inDeadEnd
+        ? "¡Encuentro cercano! Tienes unos segundos para salir del callejón"
+        : "¡Pasó muy cerca! Aprovecha para cambiar de ruta", "info");
+      return;
+    }
     if (this.t < this.shieldUntil) {
       this.shieldUntil = 0;
       this.noDamageUntil = this.t + 3;
-      const dp = this.mPos.subtract(this.pPos);
-      dp.y = 0;
-      dp.normalize();
-      this.mPos = this.pPos.add(dp.scale(9));
-      const mc = this.worldCell(this.mPos.x, this.mPos.z);
-      if (this.solidAt(mc.c, mc.r)) {
-        this.mPos = this.cellCenter(mc.c, mc.r);
-      }
-      this.mPath = [];
+      this.retreatMarauderAlongMaze();
       this.audio.shield();
       this.audio.slam();
       this.flash("#37e0ff", 0.6);
@@ -1490,6 +1501,11 @@ export class BackroomsGame {
     if (stepped) this.audio.step();
 
     this.playerCell = this.worldCell(this.pPos.x, this.pPos.z);
+    const lastTrail = this.playerTrail[this.playerTrail.length - 1];
+    if (!lastTrail || lastTrail.c !== this.playerCell.c || lastTrail.r !== this.playerCell.r) {
+      this.playerTrail.push({ ...this.playerCell });
+      if (this.playerTrail.length > 96) this.playerTrail.shift();
+    }
 
     // Las luces cian se mantienen intactas visualmente, pero sólo calculan
     // iluminación cuando pueden contribuir al cuadro actual.
@@ -1579,41 +1595,116 @@ export class BackroomsGame {
 
   // --------------------------- Merodeador ---------------------------
 
+  private nearestOpenCell(origin: CellPos): CellPos | null {
+    const maze = this.maze;
+    if (!maze) return null;
+    if (!this.solidAt(origin.c, origin.r)) return { ...origin };
+    const maxRadius = Math.max(maze.gw, maze.gh);
+    for (let radius = 1; radius <= maxRadius; radius++) {
+      let best: CellPos | null = null;
+      let bestDistance = Number.POSITIVE_INFINITY;
+      for (let r = Math.max(0, origin.r - radius); r <= Math.min(maze.gh - 1, origin.r + radius); r++) {
+        for (let c = Math.max(0, origin.c - radius); c <= Math.min(maze.gw - 1, origin.c + radius); c++) {
+          if (Math.max(Math.abs(c - origin.c), Math.abs(r - origin.r)) !== radius || this.solidAt(c, r)) continue;
+          const distance = Math.abs(c - origin.c) + Math.abs(r - origin.r);
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            best = { c, r };
+          }
+        }
+      }
+      if (best) return best;
+    }
+    return null;
+  }
+
+  private marauderSegmentIsOpen(from: Vector3, to: Vector3): boolean {
+    const distance = Vector3.Distance(from, to);
+    const samples = Math.max(1, Math.ceil(distance / 0.2));
+    for (let index = 1; index <= samples; index++) {
+      const point = Vector3.Lerp(from, to, index / samples);
+      const cell = this.worldCell(point.x, point.z);
+      if (this.solidAt(cell.c, cell.r)) return false;
+    }
+    return true;
+  }
+
+  private openNeighborCount(cell: CellPos): number {
+    return [
+      { c: cell.c + 1, r: cell.r },
+      { c: cell.c - 1, r: cell.r },
+      { c: cell.c, r: cell.r + 1 },
+      { c: cell.c, r: cell.r - 1 },
+    ].filter((candidate) => !this.solidAt(candidate.c, candidate.r)).length;
+  }
+
+  private retreatMarauderAlongMaze(): void {
+    const maze = this.maze;
+    if (!maze) return;
+    const passable = (c: number, r: number) =>
+      c >= 0 && r >= 0 && c < maze.gw && r < maze.gh && !this.solidAt(c, r);
+    const distances = bfsDistances(maze.solid, this.playerCell, passable);
+    let farthest = this.mCell;
+    let farthestDistance = distances[this.mCell.r]?.[this.mCell.c] ?? -1;
+    for (let r = 0; r < maze.gh; r++) {
+      for (let c = 0; c < maze.gw; c++) {
+        if (passable(c, r) && distances[r][c] > farthestDistance) {
+          farthest = { c, r };
+          farthestDistance = distances[r][c];
+        }
+      }
+    }
+    const retreatPath = bfsPath(maze.solid, this.mCell, farthest, passable);
+    const target = retreatPath[Math.min(2, retreatPath.length - 1)] || this.mLastValidCell;
+    if (!passable(target.c, target.r)) return;
+    this.mPos.copyFrom(this.cellCenter(target.c, target.r));
+    this.mCell = { ...target };
+    this.mLastValidCell = { ...target };
+    this.mPath = [];
+    this.mVel.setAll(0);
+    this.mRetarget = 0;
+  }
+
   private updateMarauder(dt: number): void {
     const maze = this.maze;
     if (!maze || !this.mar) return;
     const t = this.t;
-    this.mCell = this.worldCell(this.mPos.x, this.mPos.z);
+    const observedCell = this.worldCell(this.mPos.x, this.mPos.z);
 
     const passable = (c: number, r: number) =>
-      c >= 0 && r >= 0 && c < maze.gw && r < maze.gh && !maze.solid[r][c] && !this.isRoomCell(c, r);
+      c >= 0 && r >= 0 && c < maze.gw && r < maze.gh && !this.solidAt(c, r);
+
+    // Nunca aceptar una posición sólida. Si un frame, reinicio o empujón deja
+    // al enemigo fuera de la navegación, vuelve a la última celda válida.
+    if (!passable(observedCell.c, observedCell.r)) {
+      const recovery = passable(this.mLastValidCell.c, this.mLastValidCell.r)
+        ? this.mLastValidCell
+        : this.nearestOpenCell(observedCell);
+      if (!recovery) return;
+      this.mCell = { ...recovery };
+      this.mLastValidCell = { ...recovery };
+      this.mPos.copyFrom(this.cellCenter(recovery.c, recovery.r));
+      this.mVel.setAll(0);
+      this.mPath = [];
+      this.mRetarget = 0;
+    } else {
+      this.mCell = observedCell;
+      this.mLastValidCell = { ...observedCell };
+    }
 
     this.mRetarget -= dt;
     if (this.mRetarget <= 0) {
       this.mRetarget = 0.45;
-      const playerPass = passable(this.playerCell.c, this.playerCell.r);
-      if (playerPass) {
-        this.mPath = bfsPath(maze.solid, this.mCell, this.playerCell, passable);
-      } else {
-        // jugador en sala: acampar cerca
-        const room = this.rooms.find(
-          (ro) => ro.cell.c === this.playerCell.c && ro.cell.r === this.playerCell.r
-        );
-        if (room) {
-          const nb: CellPos[] = [
-            { c: room.cell.c + 1, r: room.cell.r },
-            { c: room.cell.c - 1, r: room.cell.r },
-            { c: room.cell.c, r: room.cell.r + 1 },
-            { c: room.cell.c, r: room.cell.r - 1 },
-          ].filter((n) => passable(n.c, n.r));
-          if (nb.length) {
-            const pick = nb[Math.floor(Math.random() * nb.length)];
-            this.mPath = bfsPath(maze.solid, this.mCell, pick, passable);
-          }
-        } else {
-          this.mPath = [];
-        }
-      }
+      // La ruta reciente del jugador sirve como rastro válido. Dentro de una
+      // sala segura se persigue el último punto exterior, nunca se atraviesa
+      // una pared para llegar directamente hasta él.
+      const trailTarget = [...this.playerTrail].reverse().find(
+        (cell) => passable(cell.c, cell.r) && !this.isRoomCell(cell.c, cell.r)
+      );
+      const target = this.playerInSafeCell() ? trailTarget : this.playerCell;
+      this.mPath = target && passable(target.c, target.r)
+        ? bfsPath(maze.solid, this.mCell, target, passable)
+        : [];
     }
 
     // velocidad
@@ -1631,28 +1722,38 @@ export class BackroomsGame {
       const dist = d.length();
       if (dist < 0.3) {
         this.mPath.shift();
+        this.mVel.setAll(0);
       } else {
         d.normalize();
         this.mVel.copyFrom(d.scale(speed));
       }
     } else {
-      // sin camino: ir directo si está en la misma celda
-      const d = this.pPos.subtract(this.mPos);
-      d.y = 0;
-      if (d.length() > 0.2) {
-        d.normalize();
-        this.mVel.copyFrom(d.scale(speed * 0.7));
-      } else this.mVel.setAll(0);
+      // Sin ruta sólo puede acercarse dentro de la misma celda abierta.
+      // Queda prohibida la antigua persecución directa a través de paredes.
+      if (this.mCell.c === this.playerCell.c && this.mCell.r === this.playerCell.r) {
+        const d = this.pPos.subtract(this.mPos);
+        d.y = 0;
+        if (d.length() > 0.2) this.mVel.copyFrom(d.normalize().scale(speed * 0.7));
+        else this.mVel.setAll(0);
+      } else {
+        this.mVel.setAll(0);
+        this.mRetarget = 0;
+      }
     }
 
-    this.mPos.addInPlace(this.mVel.scale(dt));
-    // el merodeador no atraviesa paredes
-    const mc = this.worldCell(this.mPos.x, this.mPos.z);
-    if (this.solidWallOnly(mc.c, mc.r)) {
-      const cc = this.cellCenter(mc.c, mc.r);
-      // re-centrar empujando hacia la última dirección válida
-      this.mPos.x = lerp(this.mPos.x, cc.x, 0.5);
-      this.mPos.z = lerp(this.mPos.z, cc.z, 0.5);
+    const previous = this.mPos.clone();
+    const candidate = this.mPos.add(this.mVel.scale(dt));
+    this.resolveCircle(candidate, 0.5);
+    const candidateCell = this.worldCell(candidate.x, candidate.z);
+    if (passable(candidateCell.c, candidateCell.r) && this.marauderSegmentIsOpen(previous, candidate)) {
+      this.mPos.copyFrom(candidate);
+      this.mCell = candidateCell;
+      this.mLastValidCell = { ...candidateCell };
+    } else {
+      this.mPos.copyFrom(previous);
+      this.mVel.setAll(0);
+      this.mPath = [];
+      this.mRetarget = 0;
     }
     this.mPos.y = 0;
 
@@ -1673,7 +1774,13 @@ export class BackroomsGame {
 
     // ---- amenaza / proximidad
     const distP = Vector3.Distance(new Vector3(this.mPos.x, 0, this.mPos.z), new Vector3(this.pPos.x, 0, this.pPos.z));
-    const raw = clamp(1 - (distP - 1.6) / 17, 0, 1);
+    const sameCell = this.mCell.c === this.playerCell.c && this.mCell.r === this.playerCell.r;
+    const navigationDistance = sameCell
+      ? distP
+      : this.mPath.length > 0
+        ? Vector3.Distance(this.mPos, this.cellCenter(this.mPath[0].c, this.mPath[0].r)) + Math.max(0, this.mPath.length - 1) * CS
+        : 30;
+    const raw = clamp(1 - (navigationDistance - 1.6) / 17, 0, 1);
     this.threat = lerp(this.threat, raw, dt * 4);
 
     // rugido al acercarse
@@ -1689,13 +1796,6 @@ export class BackroomsGame {
 
     // ---- captura
     if (distP < 1.12 && !this.playerInSafeCell()) this.onCaught();
-  }
-
-  private solidWallOnly(c: number, r: number): boolean {
-    const m = this.maze;
-    if (!m) return true;
-    if (c < 0 || r < 0 || c >= m.gw || r >= m.gh) return true;
-    return m.solid[r][c];
   }
 
   // --------------------------- pregunta ---------------------------
