@@ -1,37 +1,12 @@
-import nodemailer from 'nodemailer';
 import { getHorariosFormateados } from '@/lib/actions/horarios';
 import { getInstitucionConfig } from '@/lib/actions/institucion';
 import { getTenantSmtpConfigForService } from '@/lib/email/tenant-smtp';
+import { createSmtpTransporter, smtpErrorMessage } from '@/lib/email/smtp-transport';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 
 // ─── Factory: Crear transporter dinámico desde la BD ──────────────────────────
 // NO hay transporter global. Se crea por cada envío usando los datos SMTP
 // de la tabla configuracion_sistema. Si no hay datos, retorna null.
-
-interface TenantSmtpConfig {
-  smtp_host?: string | null;
-  smtp_port?: number | null;
-  smtp_user?: string | null;
-  smtp_password?: string | null;
-  smtp_from_name?: string | null;
-}
-
-function createSmtpTransporter(smtp: TenantSmtpConfig) {
-  if (!smtp.smtp_user || !smtp.smtp_password) return null;
-
-  const host = smtp.smtp_host || 'smtp.gmail.com';
-  const port = smtp.smtp_port || 465;
-
-  return nodemailer.createTransport({
-    host,
-    port,
-    secure: port === 465,
-    auth: {
-      user: smtp.smtp_user,
-      pass: smtp.smtp_password,
-    },
-  });
-}
 
 const SMTP_NOT_CONFIGURED_ERROR = 'El correo no pudo enviarse porque no se ha configurado el servidor de correo electrónico. Para activarlo, ve a Configuración → Correo Saliente y completa los datos de tu servidor SMTP (correo, contraseña y servidor).';
 
@@ -281,9 +256,9 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
     });
 
     return { success: true, messageId: info.messageId };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error correo:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: smtpErrorMessage(error) };
   }
 }
 
@@ -342,9 +317,9 @@ export async function sendDocumentReminderEmail(data: ReminderEmailData) {
     });
 
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Error enviando recordatorio:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: smtpErrorMessage(error) };
   }
 }
 // (No extra utilities needed)

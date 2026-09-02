@@ -18,7 +18,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useToast } from '@/hooks/use-toast';
 import { useInstitucion } from '@/hooks/use-institucion';
-import { getInstitucionConfigAuth, updateInstitucionConfig, uploadLogo } from '@/lib/actions/institucion';
+import { getInstitucionConfigAuth, testTenantSmtpConnection, updateInstitucionConfig, uploadLogo } from '@/lib/actions/institucion';
 import { getNiveles, upsertNivel } from '@/lib/actions/academic';
 import { HexColorPicker } from 'react-colorful';
 import { InstitucionConfig, NivelNombre, TemaLogin } from '@/lib/types';
@@ -92,6 +92,7 @@ export default function InstitucionPage() {
   const [originalSmtp, setOriginalSmtp] = useState<SmtpSettingsSnapshot | null>(null);
   const [smtp_from_name, setSmtpFromName] = useState('');
   const [showSmtpPassword, setShowSmtpPassword] = useState(false);
+  const [testingSmtp, setTestingSmtp] = useState(false);
   const [proveedorSmtp, setProveedorSmtp] = useState('custom');
 
   const handleProveedorChange = (val: string) => {
@@ -103,6 +104,20 @@ export default function InstitucionPage() {
       setSmtpHost('smtp.office365.com');
       setSmtpPort(587);
     }
+  };
+
+  const handleTestSmtp = async () => {
+    setTestingSmtp(true);
+    const result = await testTenantSmtpConnection({
+      host: smtp_host,
+      port: typeof smtp_port === 'number' ? smtp_port : 465,
+      user: smtp_user,
+      password: smtp_password || undefined,
+    });
+    toast(result.success
+      ? { title: '✅ Conexión correcta', description: 'El servidor aceptó las credenciales de esta institución.' }
+      : { variant: 'destructive', title: 'No se pudo autenticar el correo', description: result.error });
+    setTestingSmtp(false);
   };
 
   const loadAuthenticatedConfig = useCallback(async () => {
@@ -736,6 +751,15 @@ export default function InstitucionPage() {
             <div className="space-y-2 md:col-span-2">
               <Label className="font-bold">Nombre del Remitente</Label>
               <Input value={smtp_from_name} onChange={e => setSmtpFromName(e.target.value)} placeholder="Ej: Servicios Escolares" />
+            </div>
+            <div className="md:col-span-2 flex flex-col items-start gap-2 rounded-xl border bg-muted/30 p-4">
+              <Button type="button" variant="outline" onClick={handleTestSmtp} disabled={testingSmtp || !smtp_user || !smtp_host}>
+                {testingSmtp ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Mail className="mr-2 h-4 w-4" />}
+                Probar conexión SMTP
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                La prueba usa exclusivamente las credenciales de este tenant y no envía ningún mensaje.
+              </p>
             </div>
           </div>
         </CardContent>

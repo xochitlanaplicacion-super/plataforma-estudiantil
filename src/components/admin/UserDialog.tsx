@@ -134,7 +134,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
     try {
       const res = await resendWelcomeEmailAction(user.id);
       if (res.success) {
-        toast({ title: "Correo Enviado", description: "Las credenciales han sido enviadas al alumno." });
+        toast({ title: "Correo enviado", description: "El acceso seguro fue enviado al usuario." });
       } else {
         toast({ variant: "destructive", title: "Error", description: res.error });
       }
@@ -288,8 +288,8 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
       if (result.success) {
         if (result.warning) {
           toast({ 
-            title: user ? "Perfil Actualizado" : "Alumno Inscrito", 
-            description: result.warning,
+            title: user ? "Perfil actualizado; correo pendiente" : "Usuario registrado; correo pendiente",
+            description: `Los datos quedaron guardados correctamente. ${result.warning}`,
             variant: "destructive",
             duration: 8000
           });

@@ -4,6 +4,8 @@ import { revalidatePath, unstable_noStore as noStore } from "next/cache";
 import { InstitucionConfig } from "@/lib/types";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
 import { requireTenantSession, resolveTenantFromHostname } from "@/lib/tenant/context";
+import { getTenantSmtpConfigForService } from "@/lib/email/tenant-smtp";
+import { normalizeSmtpPassword, verifySmtpConfig } from "@/lib/email/smtp-transport";
 
 const DEFAULTS: InstitucionConfig = {
   id: 0,
@@ -171,7 +173,7 @@ export async function updateInstitucionConfig(config: Partial<InstitucionConfig>
       const smtpFromName = config.smtp_from_name !== undefined
         ? config.smtp_from_name.trim()
         : (currentSmtp?.smtp_from_name || '');
-      const password = config.smtp_password || '';
+      const password = normalizeSmtpPassword(smtpHost, config.smtp_password || '');
       const metadataChanged = !currentSmtp
         || smtpHost !== currentSmtp.smtp_host
         || smtpPort !== currentSmtp.smtp_port
@@ -179,6 +181,15 @@ export async function updateInstitucionConfig(config: Partial<InstitucionConfig>
         || smtpFromName !== currentSmtp.smtp_from_name;
 
       if (metadataChanged || password.length > 0) {
+        const currentSecret = password.length > 0
+          ? password
+          : (await getTenantSmtpConfigForService(context.tenantId))?.smtp_password || '';
+        await verifySmtpConfig({
+          smtp_host: smtpHost,
+          smtp_port: smtpPort,
+          smtp_user: smtpUser,
+          smtp_password: currentSecret,
+        });
         const { error: smtpError } = await context.admin.rpc('set_tenant_smtp_for_service', {
           p_tenant_id: context.tenantId,
           p_smtp_host: smtpHost,
@@ -217,6 +228,33 @@ export async function updateInstitucionConfig(config: Partial<InstitucionConfig>
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message };
+  }
+}
+
+export async function testTenantSmtpConnection(input: {
+  host: string;
+  port: number;
+  user: string;
+  password?: string;
+}) {
+  try {
+    const context = await requireTenantSession(['superuser', 'admin']);
+    const current = await getTenantSmtpConfigForService(context.tenantId);
+    const password = input.password
+      ? normalizeSmtpPassword(input.host, input.password)
+      : current?.smtp_password || '';
+    await verifySmtpConfig({
+      smtp_host: input.host,
+      smtp_port: input.port,
+      smtp_user: input.user,
+      smtp_password: password,
+    });
+    return { success: true };
+  } catch (error: unknown) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'No se pudo verificar el correo SMTP.',
+    };
   }
 }
 
