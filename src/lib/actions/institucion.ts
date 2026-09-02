@@ -128,6 +128,7 @@ export async function getInstitucionConfigAuth(): Promise<InstitucionConfig> {
 export async function updateInstitucionConfig(config: Partial<InstitucionConfig>) {
   try {
     const context = await requireTenantSession(['superuser', 'admin']);
+    let smtpPersistedAndVerified = false;
     const updateData: Record<string, any> = { updated_at: new Date().toISOString() };
     const textFields = [
       'nombre_completo', 'nombre_corto', 'siglas', 'slogan', 'direccion', 'sitio_web',
@@ -200,6 +201,19 @@ export async function updateInstitucionConfig(config: Partial<InstitucionConfig>
           p_updated_by: context.user.id,
         });
         if (smtpError) return { success: false, error: smtpError.message };
+
+        // Certificar la copia persistida, no solamente el valor recibido del formulario.
+        // La lectura ocurre exclusivamente en backend mediante service_role + Vault.
+        const persisted = await getTenantSmtpConfigForService(context.tenantId);
+        if (!persisted
+          || persisted.smtp_host !== smtpHost
+          || persisted.smtp_port !== smtpPort
+          || persisted.smtp_user !== smtpUser
+          || persisted.smtp_from_name !== smtpFromName) {
+          return { success: false, error: 'El servidor no pudo confirmar que la configuración SMTP quedó guardada.' };
+        }
+        await verifySmtpConfig(persisted);
+        smtpPersistedAndVerified = true;
       }
     }
 
@@ -225,7 +239,7 @@ export async function updateInstitucionConfig(config: Partial<InstitucionConfig>
     revalidatePath('/', 'layout');
     revalidatePath('/dashboard/admin/institucion');
     revalidatePath('/preregistro');
-    return { success: true };
+    return { success: true, smtpPersistedAndVerified };
   } catch (error: any) {
     return { success: false, error: error.message };
   }

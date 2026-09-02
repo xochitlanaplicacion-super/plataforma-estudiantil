@@ -93,6 +93,7 @@ export default function InstitucionPage() {
   const [smtp_from_name, setSmtpFromName] = useState('');
   const [showSmtpPassword, setShowSmtpPassword] = useState(false);
   const [testingSmtp, setTestingSmtp] = useState(false);
+  const smtpPasswordInputRef = useRef<HTMLInputElement>(null);
   const [proveedorSmtp, setProveedorSmtp] = useState('custom');
 
   const handleProveedorChange = (val: string) => {
@@ -108,11 +109,12 @@ export default function InstitucionPage() {
 
   const handleTestSmtp = async () => {
     setTestingSmtp(true);
+    const passwordInInput = smtpPasswordInputRef.current?.value || smtp_password;
     const result = await testTenantSmtpConnection({
       host: smtp_host,
       port: typeof smtp_port === 'number' ? smtp_port : 465,
       user: smtp_user,
-      password: smtp_password || undefined,
+      password: passwordInInput || undefined,
     });
     toast(result.success
       ? { title: '✅ Conexión correcta', description: 'El servidor aceptó las credenciales de esta institución.' }
@@ -327,6 +329,7 @@ export default function InstitucionPage() {
       }
     }
     setSaving(true);
+    const passwordInInput = smtpPasswordInputRef.current?.value || smtp_password;
     const smtpSubmission = buildSmtpSubmission(
       originalSmtp,
       {
@@ -335,7 +338,7 @@ export default function InstitucionPage() {
         user: smtp_user,
         fromName: smtp_from_name,
       },
-      smtp_password
+      passwordInInput
     );
     const result = await updateInstitucionConfig({
       nombre_completo, nombre_corto, siglas, codigo_matricula: codigo_matricula, slogan, direccion: direccion || undefined,
@@ -354,7 +357,12 @@ export default function InstitucionPage() {
     }
 
     if (result.success && !errorNiveles) {
-      toast({ title: "✅ Configuración Guardada", description: "Los cambios se reflejarán en toda la plataforma." });
+      toast({
+        title: "✅ Configuración guardada",
+        description: result.smtpPersistedAndVerified
+          ? "La contraseña quedó almacenada en Vault y la copia persistida fue verificada con el servidor SMTP."
+          : "Los cambios se reflejarán en toda la plataforma.",
+      });
       if (smtpSubmission?.smtp_password) setSmtpPasswordConfigured(true);
       setSmtpPassword('');
       refreshPublicConfig();
@@ -725,11 +733,12 @@ export default function InstitucionPage() {
               <div className="flex items-center justify-between gap-2">
                 <Label className="font-bold">Nueva contraseña (App Password)</Label>
                 <Badge variant={smtpPasswordConfigured ? "default" : "outline"}>
-                  {smtpPasswordConfigured ? 'Contraseña configurada' : 'Sin contraseña'}
+                  {smtpPasswordConfigured ? 'Guardada en Vault (oculta)' : 'Sin contraseña'}
                 </Badge>
               </div>
               <div className="relative">
                 <Input
+                  ref={smtpPasswordInputRef}
                   type={showSmtpPassword ? "text" : "password"}
                   name="smtp-new-app-password"
                   autoComplete="new-password"
@@ -737,6 +746,7 @@ export default function InstitucionPage() {
                   data-lpignore="true"
                   value={smtp_password}
                   onChange={e => setSmtpPassword(e.target.value)}
+                  onInput={e => setSmtpPassword(e.currentTarget.value)}
                   placeholder={smtpPasswordConfigured ? 'Dejar vacío para conservar la actual' : 'Contraseña de aplicación'}
                   className="pr-10"
                 />
@@ -745,7 +755,7 @@ export default function InstitucionPage() {
                 </Button>
               </div>
               <p className="text-xs text-muted-foreground mt-1">
-                El secreto actual nunca se muestra. Déjalo vacío para conservarlo o escribe uno nuevo para reemplazarlo.
+                El secreto guardado nunca vuelve al navegador. Por eso el campo aparece vacío al recargar. Déjalo vacío para conservarlo o escribe uno nuevo para reemplazarlo.
               </p>
             </div>
             <div className="space-y-2 md:col-span-2">
@@ -758,7 +768,7 @@ export default function InstitucionPage() {
                 Probar conexión SMTP
               </Button>
               <p className="text-xs text-muted-foreground">
-                La prueba usa exclusivamente las credenciales de este tenant y no envía ningún mensaje.
+                Con una contraseña escrita prueba ese valor sin guardarlo. Con el campo vacío prueba la copia ya almacenada en Vault para este tenant. No envía ningún mensaje.
               </p>
             </div>
           </div>
