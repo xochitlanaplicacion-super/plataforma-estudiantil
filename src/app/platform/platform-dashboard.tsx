@@ -23,6 +23,32 @@ import { useToast } from '@/hooks/use-toast';
 
 type Props = { initialData: { tenants: any[]; audit: any[] } };
 
+const darkOutlineButton = 'border-slate-500 bg-slate-800 text-slate-100 shadow-sm hover:border-emerald-400 hover:bg-slate-700 hover:text-white disabled:border-slate-700 disabled:bg-slate-900 disabled:text-slate-500 disabled:opacity-100';
+const darkPrimaryButton = 'bg-emerald-500 font-semibold text-slate-950 shadow-sm hover:bg-emerald-400 disabled:bg-emerald-950 disabled:text-emerald-300 disabled:opacity-100';
+const darkGhostButton = 'text-slate-100 hover:bg-white/10 hover:text-white disabled:text-slate-600 disabled:opacity-100';
+const darkDestructiveButton = 'bg-red-500 font-semibold text-white hover:bg-red-400 disabled:bg-red-950 disabled:text-red-300 disabled:opacity-100';
+const fallbackTimezones = [
+  'America/Mexico_City', 'America/Cancun', 'America/Chihuahua', 'America/Hermosillo',
+  'America/Mazatlan', 'America/Matamoros', 'America/Merida', 'America/Monterrey',
+  'America/Tijuana', 'America/Bogota', 'America/Lima', 'America/New_York',
+  'America/Los_Angeles', 'America/Argentina/Buenos_Aires', 'America/Santiago',
+  'Europe/Madrid', 'UTC',
+];
+
+function getTimezoneCatalog(current: string) {
+  const intl = Intl as typeof Intl & { supportedValuesOf?: (key: 'timeZone') => string[] };
+  const detected = typeof intl.supportedValuesOf === 'function' ? intl.supportedValuesOf('timeZone') : fallbackTimezones;
+  return [...new Set([current, ...fallbackTimezones, ...detected])].sort((a, b) => a.localeCompare(b));
+}
+
+function timezonePreview(timezone: string) {
+  try {
+    return new Intl.DateTimeFormat('es-MX', { timeZone: timezone, dateStyle: 'medium', timeStyle: 'medium' }).format(new Date());
+  } catch {
+    return 'Zona horaria no válida';
+  }
+}
+
 export function PlatformDashboard({ initialData }: Props) {
   const router = useRouter();
   const { toast } = useToast();
@@ -58,10 +84,10 @@ export function PlatformDashboard({ initialData }: Props) {
             <div className="flex items-center gap-2 text-emerald-400"><ShieldCheck className="h-5 w-5" /><span className="text-xs font-bold uppercase tracking-[0.24em]">Superduperuser</span></div>
             <h1 className="mt-1 text-2xl font-bold">Administración de la plataforma</h1>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => router.refresh()} disabled={pending}><RefreshCw className="mr-2 h-4 w-4" />Actualizar</Button>
-            <Button onClick={() => setShowCreate((value) => !value)}><Plus className="mr-2 h-4 w-4" />Nueva escuela</Button>
-            <Button variant="destructive" onClick={signOut}><LogOut className="mr-2 h-4 w-4" />Cerrar sesión</Button>
+          <div className="flex flex-wrap justify-end gap-2">
+            <Button variant="outline" className={darkOutlineButton} onClick={() => router.refresh()} disabled={pending}><RefreshCw className="mr-2 h-4 w-4" />Actualizar</Button>
+            <Button className={darkPrimaryButton} onClick={() => setShowCreate((value) => !value)}><Plus className="mr-2 h-4 w-4" />Nueva escuela</Button>
+            <Button variant="destructive" className={darkDestructiveButton} onClick={signOut}><LogOut className="mr-2 h-4 w-4" />Cerrar sesión</Button>
           </div>
         </div>
       </header>
@@ -131,7 +157,7 @@ function CreateTenantForm({ pending, onSubmit }: { pending: boolean; onSubmit: (
       <Field label="Contraseña de aplicación" name="smtpPassword" type="password" />
       <Field label="Nombre del remitente" name="smtpFromName" />
     </div>
-    <Button className="mt-5" disabled={pending} type="submit">{pending ? 'Aprovisionando…' : 'Crear tenant y primer superusuario'}</Button>
+    <Button className={`mt-5 ${darkPrimaryButton}`} disabled={pending} type="submit">{pending ? 'Aprovisionando…' : 'Crear tenant y primer superusuario'}</Button>
   </form>;
 }
 
@@ -148,6 +174,7 @@ function TenantCard({ tenant, pending, run }: any) {
   const feature = Array.isArray(tenant.tenant_features) ? tenant.tenant_features[0] : tenant.tenant_features;
   const [primaryFilter, setPrimaryFilter] = useState(Boolean(feature?.primary_filter_enabled));
   const [filterTimezone, setFilterTimezone] = useState(feature?.timezone || 'America/Mexico_City');
+  const timezoneCatalog = getTimezoneCatalog(filterTimezone);
   const [serviceForm, setServiceForm] = useState({
     estado: service.estado || 'SI',
     fechaInicio: service.fecha_inicio || '',
@@ -172,8 +199,8 @@ function TenantCard({ tenant, pending, run }: any) {
     <div className="flex flex-wrap items-start justify-between gap-4">
       <div><div className="flex items-center gap-3"><h3 className="text-xl font-bold">{tenant.nombre}</h3><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${tenant.estado === 'activo' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-300'}`}>{tenant.estado}</span></div><p className="mt-1 font-mono text-xs text-slate-500">{tenant.slug} · {tenant.id}</p></div>
       <div className="flex gap-2">
-        <Button variant="outline" size="sm" disabled={pending} onClick={() => run(() => recordSupportAccess(tenant.id), 'Modo soporte registrado en auditoría')}>Modo soporte</Button>
-        {tenant.estado === 'activo' ? <Button variant="destructive" size="sm" disabled={pending} onClick={() => run(() => updateTenantStatus(tenant.id, 'suspendido'), 'Institución suspendida')}>Suspender</Button> : <Button size="sm" disabled={pending} onClick={() => run(() => updateTenantStatus(tenant.id, 'activo'), 'Institución reactivada')}>Reactivar</Button>}
+        <Button variant="outline" className={darkOutlineButton} size="sm" disabled={pending} onClick={() => run(() => recordSupportAccess(tenant.id), 'Modo soporte registrado en auditoría')}>Modo soporte</Button>
+        {tenant.estado === 'activo' ? <Button variant="destructive" className={darkDestructiveButton} size="sm" disabled={pending} onClick={() => run(() => updateTenantStatus(tenant.id, 'suspendido'), 'Institución suspendida')}>Suspender</Button> : <Button className={darkPrimaryButton} size="sm" disabled={pending} onClick={() => run(() => updateTenantStatus(tenant.id, 'activo'), 'Institución reactivada')}>Reactivar</Button>}
       </div>
     </div>
     <div className="mt-5 grid gap-3 sm:grid-cols-4"><SmallStat label="Usuarios" value={tenant.counts.users} /><SmallStat label="Profesores" value={tenant.counts.professors} /><SmallStat label="Alumnos" value={tenant.counts.students} /><SmallStat label="Tokens IA" value={tenant.aiTokens.toLocaleString('es-MX')} /></div>
@@ -200,18 +227,24 @@ function TenantCard({ tenant, pending, run }: any) {
           }} />
           <p className="mt-2 text-xs text-slate-400">Habilita el rol Encargado de Filtro, padrón cooperativo y bitácora de retardos para este tenant.</p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
-            <div className="flex-1 space-y-1"><Label htmlFor={`filter-timezone-${tenant.id}`}>Zona horaria</Label><Input id={`filter-timezone-${tenant.id}`} value={filterTimezone} onChange={(event) => setFilterTimezone(event.target.value)} className="border-white/10 bg-slate-900" placeholder="America/Mexico_City" /></div>
-            <Button type="button" variant="outline" size="sm" disabled={pending} onClick={() => run(() => updateTenantPrimaryFilter(tenant.id, primaryFilter, filterTimezone), 'Configuración de filtro guardada')}>Guardar zona</Button>
+            <div className="flex-1 space-y-1">
+              <Label htmlFor={`filter-timezone-${tenant.id}`}>Zona horaria</Label>
+              <select id={`filter-timezone-${tenant.id}`} value={filterTimezone} onChange={(event) => setFilterTimezone(event.target.value)} className="flex h-10 w-full rounded-md border border-white/15 bg-slate-900 px-3 text-sm text-slate-100 focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-400/30">
+                {timezoneCatalog.map((timezone) => <option key={timezone} value={timezone}>{timezone.replaceAll('_', ' ')}</option>)}
+              </select>
+              <p className="text-xs text-emerald-300">Hora actual: {timezonePreview(filterTimezone)}</p>
+            </div>
+            <Button type="button" variant="outline" className={darkOutlineButton} size="sm" disabled={pending} onClick={() => run(() => updateTenantPrimaryFilter(tenant.id, primaryFilter, filterTimezone), 'Configuración de filtro guardada')}>Guardar zona</Button>
           </div>
         </div>
         <div className="space-y-2"><Label>Mensaje de bloqueo</Label><Textarea name="mensajeBloqueo" value={serviceForm.mensajeBloqueo} onChange={(event) => setServiceForm((current) => ({ ...current, mensajeBloqueo: event.target.value }))} className="border-white/10 bg-slate-900" /></div>
-        <Button size="sm" type="submit" disabled={pending}><Save className="mr-2 h-4 w-4" />{pending ? 'Guardando…' : 'Guardar permanentemente'}</Button>
+        <Button className={darkPrimaryButton} size="sm" type="submit" disabled={pending}><Save className="mr-2 h-4 w-4" />{pending ? 'Guardando…' : 'Guardar permanentemente'}</Button>
       </form>
       <div className="rounded-xl border border-white/10 bg-black/10 p-4">
         <h4 className="mb-4 flex items-center gap-2 font-semibold"><Globe2 className="h-4 w-4 text-emerald-400" />Dominios</h4>
         <div className="space-y-3">{tenant.tenant_domains?.map((domain: any) => <DomainEditor key={domain.id} tenantId={tenant.id} domain={domain} pending={pending} run={run} />)}</div>
         <p className="mt-4 text-xs leading-relaxed text-amber-300/80">El dominio queda guardado aquí de inmediato. Para que una dirección nueva abra la plataforma, también debe estar agregada al mismo proyecto en Vercel y apuntar por DNS a Vercel.</p>
-        <form className="mt-4 flex gap-2" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); run(() => addTenantDomain(tenant.id, String(form.get('hostname'))), 'Dominio alterno agregado'); event.currentTarget.reset(); }}><Input name="hostname" placeholder="dominio-alterno.com" className="border-white/10 bg-slate-900" required /><Button type="submit" size="sm" variant="outline" disabled={pending}>Agregar alterno</Button></form>
+        <form className="mt-4 flex gap-2" onSubmit={(event) => { event.preventDefault(); const form = new FormData(event.currentTarget); run(() => addTenantDomain(tenant.id, String(form.get('hostname'))), 'Dominio alterno agregado'); event.currentTarget.reset(); }}><Input name="hostname" placeholder="dominio-alterno.com" className="border-white/10 bg-slate-900" required /><Button type="submit" size="sm" variant="outline" className={darkOutlineButton} disabled={pending}>Agregar alterno</Button></form>
       </div>
     </div>
   </article>;
@@ -229,12 +262,12 @@ function DomainEditor({ tenantId, domain, pending, run }: any) {
     </div>
     <div className="flex gap-2">
       <Input value={hostname} onChange={(event) => setHostname(event.target.value)} className="border-white/10 bg-slate-900 font-mono" aria-label="Dominio de la institución" />
-      <Button type="button" size="sm" disabled={pending || unchanged || !hostname.trim()} onClick={() => run(
+      <Button type="button" className={darkPrimaryButton} size="sm" disabled={pending || unchanged || !hostname.trim()} onClick={() => run(
         () => updateTenantDomain(tenantId, domain.id, hostname),
         'Dominio actualizado permanentemente',
         (result: any) => setHostname(result.hostname)
       )}><Save className="mr-2 h-4 w-4" />Guardar</Button>
-      {!domain.es_principal && <Button type="button" size="sm" variant="ghost" disabled={pending} onClick={() => run(() => setPrimaryTenantDomain(tenantId, domain.id), 'Dominio principal actualizado')}>Hacer principal</Button>}
+      {!domain.es_principal && <Button type="button" size="sm" variant="ghost" className={darkGhostButton} disabled={pending} onClick={() => run(() => setPrimaryTenantDomain(tenantId, domain.id), 'Dominio principal actualizado')}>Hacer principal</Button>}
     </div>
   </div>;
 }
