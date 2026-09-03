@@ -25,4 +25,25 @@ describe('Control de Filtro multitenant', () => {
     expect(sql).toContain('insert into public.tenant_features');
     expect(sql).toContain('insert into public.filter_alert_settings');
   });
+
+  it('las salidas anticipadas conservan instantáneas académicas e idempotencia por tenant', () => {
+    const sql = readFileSync('supabase/migrations/20260903044227_filter_early_departures.sql', 'utf8');
+    expect(sql).toContain('unique (tenant_id, client_request_id)');
+    expect(sql).toContain('filter_early_departure_student_tenant_fk foreign key (student_id, tenant_id)');
+    expect(sql).toContain('identity_and_notification_confirmed boolean not null');
+    expect(sql).toContain('revoke all on public.filter_early_departures from anon, authenticated');
+    expect(sql).toContain('private.has_filter_access(tenant_id)');
+  });
+
+  it('el asistente preserva textos y fotos localmente y sólo limpia tras confirmación', () => {
+    const component = readFileSync('src/components/filter/FilterEarlyDepartureWizard.tsx', 'utf8');
+    const storage = readFileSync('src/lib/filter-early-departure-draft.ts', 'utf8');
+    expect(component).toContain("status: 'queued'");
+    expect(component).toContain('Confirmo que se verificó la identidad');
+    expect(component).toContain('await clearEarlyDepartureDraft(draftScope)');
+    expect(storage).toContain('identificationEvidence: PersistedFile | null');
+    expect(storage).toContain('pickupPersonPhoto: PersistedFile | null');
+    expect(storage).toContain('finalHandoverPhoto: PersistedFile | null');
+    expect(storage).toContain('early-departure:${scope}');
+  });
 });

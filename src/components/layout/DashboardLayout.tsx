@@ -48,7 +48,8 @@ import {
   Scale,
   NotebookTabs,
   TimerReset,
-  BellRing
+  BellRing,
+  DoorOpen
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -233,6 +234,7 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
     encargado_filtro: [
       { group: "Control de Filtro", items: [
         { icon: TimerReset, label: 'Bitácora de retardos', href: '/dashboard/filtro/retardos' },
+        { icon: DoorOpen, label: 'Salidas anticipadas', href: '/dashboard/filtro/salidas' },
         { icon: Users, label: 'Carga de alumnos', href: '/dashboard/filtro/alumnos' },
         { icon: BellRing, label: 'Alertas', href: '/dashboard/filtro/alertas' },
       ]},
@@ -241,6 +243,7 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
 
   const filterMenu = { group: "Control de Filtro", items: [
     { icon: TimerReset, label: 'Bitácora de retardos', href: '/dashboard/filtro/retardos' },
+    { icon: DoorOpen, label: 'Salidas anticipadas', href: '/dashboard/filtro/salidas' },
     { icon: Users, label: 'Carga de alumnos', href: '/dashboard/filtro/alumnos' },
     { icon: BellRing, label: 'Alertas', href: '/dashboard/filtro/alertas' },
   ]};
