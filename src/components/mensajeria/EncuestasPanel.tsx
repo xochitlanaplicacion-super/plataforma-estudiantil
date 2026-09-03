@@ -31,7 +31,7 @@ import {
 } from '@/lib/actions/encuestas';
 
 interface ContextoEncuestas {
-  rol: 'superuser' | 'admin' | 'profesor' | 'alumno';
+  rol: 'superuser' | 'admin' | 'profesor' | 'alumno' | 'encargado_filtro';
   niveles: NivelEncuesta[];
   carreras: CarreraEncuesta[];
   grados: GradoEncuesta[];

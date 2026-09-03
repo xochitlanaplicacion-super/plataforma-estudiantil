@@ -19,7 +19,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('rol, nombre, apellidos, estatus, foto_perfil')
+    .select('rol, nombre, apellidos, estatus, foto_perfil, tenant_id')
     .eq('id', user.id)
     .single();
 
@@ -28,7 +28,10 @@ export default async function Layout({ children }: { children: React.ReactNode }
   }
 
   const userName = `${profile.nombre} ${profile.apellidos}`.trim() || user.email || 'Usuario';
-  const pagoIA = await getEstadoPagoIA();
+  const pagoIA = profile.rol === 'encargado_filtro' ? false : await getEstadoPagoIA();
+  const { data: filterFeature } = ['superuser', 'admin', 'encargado_filtro'].includes(profile.rol)
+    ? await supabase.from('tenant_features').select('primary_filter_enabled').eq('tenant_id', profile.tenant_id).maybeSingle()
+    : { data: null };
 
   return (
     <>
@@ -37,6 +40,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
         userName={userName}
         userId={user.id}
         userAvatar={profile.foto_perfil}
+        filterEnabled={Boolean(filterFeature?.primary_filter_enabled)}
       >
         {children}
       </DashboardLayout>

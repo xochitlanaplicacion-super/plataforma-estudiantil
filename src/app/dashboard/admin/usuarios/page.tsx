@@ -16,6 +16,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { deleteUserAccount, updateUserProfile } from '@/lib/actions/users';
 import { getAsignacionesProfesor } from '@/lib/actions/academic';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { getFilterFeatureStatus } from '@/lib/actions/filter-control';
 
 export default function UsuariosManagement() {
   const { toast } = useToast();
@@ -26,6 +27,7 @@ export default function UsuariosManagement() {
   const [roleFilter, setRoleFilter] = useState<string>('todos');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [filterFeatureEnabled, setFilterFeatureEnabled] = useState(false);
   
   // Estado para IDs de profesores con carga académica
   const [assignedProfIds, setAssignedProfIds] = useState<string[]>([]);
@@ -48,10 +50,12 @@ export default function UsuariosManagement() {
       const hoy = new Date().toISOString().split('T')[0];
       
       // Consultar perfiles y asignaciones (Server Action para bypass RLS si es necesario)
-      const [profilesRes, assignmentsRes] = await Promise.all([
-        supabase.from('profiles').select('*'),
-        getAsignacionesProfesor()
+      const [profilesRes, assignmentsRes, filterRes] = await Promise.all([
+        supabase.from('profiles').select('*, filter_staff_profiles(is_general)'),
+        getAsignacionesProfesor(),
+        getFilterFeatureStatus(),
       ]);
+      setFilterFeatureEnabled(Boolean(filterRes.success && filterRes.enabled));
 
       if (assignmentsRes.data) {
         const ids = assignmentsRes.data.map((a: any) => a.profesor_id);
@@ -59,7 +63,10 @@ export default function UsuariosManagement() {
       }
 
       if (profilesRes.data) {
-        const rawUsers = profilesRes.data as User[];
+        const rawUsers = profilesRes.data.map((row: any) => ({
+          ...row,
+          encargado_general: Boolean(Array.isArray(row.filter_staff_profiles) ? row.filter_staff_profiles[0]?.is_general : row.filter_staff_profiles?.is_general),
+        })) as User[];
         
         // LÓGICA DE SINCRONIZACIÓN SILENCIOSA DE ESTADOS
         for (const user of rawUsers) {
@@ -133,7 +140,7 @@ export default function UsuariosManagement() {
       if (a.estatus === 'inactivo' && b.estatus !== 'inactivo') return 1;
       if (a.estatus !== 'inactivo' && b.estatus === 'inactivo') return -1;
 
-      const roleOrder = { superuser: 0, admin: 1, profesor: 2, alumno: 3 };
+      const roleOrder: Record<string, number> = { superuser: 0, admin: 1, encargado_filtro: 2, profesor: 3, alumno: 4 };
       const roleA = roleOrder[a.rol] ?? 99;
       const roleB = roleOrder[b.rol] ?? 99;
 
@@ -194,6 +201,7 @@ export default function UsuariosManagement() {
                   <SelectItem value="superuser">Superusuarios</SelectItem>
                   <SelectItem value="admin">Administrativos</SelectItem>
                   <SelectItem value="profesor">Profesores</SelectItem>
+                  {filterFeatureEnabled && <SelectItem value="encargado_filtro">Encargados de filtro</SelectItem>}
                   <SelectItem value="alumno">Alumnos</SelectItem>
                 </SelectContent>
               </Select>

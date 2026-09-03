@@ -54,6 +54,7 @@ export async function sendWelcomeEmail(data: WelcomeEmailData) {
       profesor: '👨‍🏫 Profesor',
       admin: '🛡️ Administrador',
       superuser: '⚙️ Super Administrador',
+      encargado_filtro: '📋 Encargado de Filtro',
     };
 
     const rolLabel = rolTexto[data.rol] || data.rol;

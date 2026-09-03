@@ -39,6 +39,7 @@ export async function getPlatformDashboard() {
       id, slug, nombre, estado, initial_superuser_id, created_at, updated_at,
       tenant_domains(id, hostname, es_principal, estado),
       pago_de_servicios(estado, fecha_inicio, duracion_dias, ia_habilitada, bloquear_acceso_usuarios, mensaje_bloqueo),
+      tenant_features(primary_filter_enabled, timezone, updated_at),
       tenant_provisioning(estado, error_message, updated_at)
     `).order('created_at', { ascending: true }),
     admin.from('platform_audit').select('id, tenant_id, accion, detalles, created_at, actor_user_id')
@@ -219,6 +220,27 @@ export async function updateTenantStatus(tenantId: string, estado: 'activo' | 's
     revalidatePath('/platform');
     return { success: true };
   } catch (error: any) { return { success: false, error: error.message }; }
+}
+
+export async function updateTenantPrimaryFilter(tenantId: string, enabled: boolean, timezone = 'America/Mexico_City') {
+  try {
+    const context = await requirePlatformAdmin();
+    const { data: tenant } = await context.admin.from('tenants').select('id').eq('id', tenantId).single();
+    if (!tenant) throw new Error('Institución no encontrada');
+    try { Intl.DateTimeFormat('es-MX', { timeZone: timezone }).format(new Date()); }
+    catch { throw new Error('La zona horaria no es válida. Usa un identificador como America/Mexico_City.'); }
+    const { error } = await context.admin.from('tenant_features').upsert({
+      tenant_id: tenantId,
+      primary_filter_enabled: enabled,
+      timezone,
+      updated_at: new Date().toISOString(),
+      updated_by: context.user.id,
+    });
+    if (error) throw error;
+    await audit(context.admin, context.user.id, tenantId, enabled ? 'feature.primary_filter.enabled' : 'feature.primary_filter.disabled');
+    revalidatePath('/platform');
+    return { success: true };
+  } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'No se pudo actualizar el servicio.' }; }
 }
 
 export async function updateTenantService(tenantId: string, input: {

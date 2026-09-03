@@ -1,5 +1,5 @@
 
-export type UserRole = 'superuser' | 'admin' | 'profesor' | 'alumno';
+export type UserRole = 'superuser' | 'admin' | 'profesor' | 'alumno' | 'encargado_filtro';
 export type UserEstatus = 'activo' | 'inactivo' | 'suspendido';
 
 export interface User {
@@ -26,6 +26,7 @@ export interface User {
   doc_ine?: boolean;
   created_at?: string;
   updated_at?: string;
+  encargado_general?: boolean;
   carreras?: { nombre: string };
   groups?: { nombre: string; turno: string };
 }

@@ -12,8 +12,8 @@ const emptyToNull = (value: any) => {
 function assertManageableRole(actor: TenantRole, requested: unknown) {
   const role = requested as TenantRole;
   const allowed: TenantRole[] = actor === 'superuser'
-    ? ['superuser', 'admin', 'profesor', 'alumno']
-    : ['profesor', 'alumno'];
+    ? ['superuser', 'admin', 'profesor', 'alumno', 'encargado_filtro']
+    : ['profesor', 'alumno', 'encargado_filtro'];
   if (!allowed.includes(role)) throw new Error('No tienes permiso para asignar ese rol');
   return role;
 }
@@ -46,6 +46,10 @@ export async function createUserWithProfile(userData: any, aspiranteId?: string)
   try {
     const context = await requireTenantSession(['superuser', 'admin']);
     const role = assertManageableRole(context.profile.rol, userData.rol);
+    if (role === 'encargado_filtro') {
+      const { data: feature } = await context.admin.from('tenant_features').select('primary_filter_enabled').eq('tenant_id', context.tenantId).maybeSingle();
+      if (!feature?.primary_filter_enabled) throw new Error('Activa Control de Filtro para crear este rol.');
+    }
     const email = String(userData.email || '').toLowerCase().trim();
     const curp = String(userData.curp || '').toUpperCase().trim();
     if (!email || !curp || !userData.password) throw new Error('Correo, CURP y contraseña son obligatorios');
@@ -106,6 +110,12 @@ export async function createUserWithProfile(userData: any, aspiranteId?: string)
     };
     const { error: profileError } = await context.admin.from('profiles').upsert(profileData, { onConflict: 'id' });
     if (profileError) throw new Error(`Error en Perfil: ${profileError.message}`);
+    if (role === 'encargado_filtro') {
+      const { error: staffError } = await context.admin.from('filter_staff_profiles').upsert({
+        user_id: createdUserId, tenant_id: context.tenantId, is_general: Boolean(userData.encargado_general),
+      });
+      if (staffError) throw staffError;
+    }
 
     if (aspiranteId) {
       await context.admin.from('aspirantes').update({ estatus: 'inscrito' })
@@ -150,6 +160,10 @@ export async function updateUserProfile(id: string, userData: any) {
     if (currentError || !currentProfile) throw new Error('Usuario no encontrado en esta institución');
 
     const role = assertManageableRole(context.profile.rol, userData.rol || currentProfile.rol);
+    if (role === 'encargado_filtro') {
+      const { data: feature } = await context.admin.from('tenant_features').select('primary_filter_enabled').eq('tenant_id', context.tenantId).maybeSingle();
+      if (!feature?.primary_filter_enabled) throw new Error('Control de Filtro no está activo.');
+    }
     const incomingEmail = String(userData.email || currentProfile.email).toLowerCase().trim();
     if (incomingEmail !== currentProfile.email) {
       const { data: existing } = await context.admin.from('profiles').select('id')
@@ -195,6 +209,14 @@ export async function updateUserProfile(id: string, userData: any) {
     const { error } = await context.admin.from('profiles').update(updateData)
       .eq('tenant_id', context.tenantId).eq('id', id);
     if (error) throw error;
+    if (role === 'encargado_filtro') {
+      const { error: staffError } = await context.admin.from('filter_staff_profiles').upsert({
+        user_id: id, tenant_id: context.tenantId, is_general: Boolean(userData.encargado_general),
+      });
+      if (staffError) throw staffError;
+    } else if (currentProfile.rol === 'encargado_filtro') {
+      await context.admin.from('filter_staff_profiles').delete().eq('tenant_id', context.tenantId).eq('user_id', id);
+    }
 
     const isReactivated = currentProfile.estatus === 'inactivo' && status === 'activo';
     const isExpiring = currentProfile.estatus === 'activo' && status === 'inactivo';

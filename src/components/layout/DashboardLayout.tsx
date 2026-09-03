@@ -46,7 +46,9 @@ import {
   IdCard,
   CalendarRange,
   Scale,
-  NotebookTabs
+  NotebookTabs,
+  TimerReset,
+  BellRing
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -64,6 +66,7 @@ interface DashboardLayoutProps {
   userName: string;
   userId: string;
   userAvatar?: string | null;
+  filterEnabled?: boolean;
 }
 
 function SidebarNav({ activeMenus, pathname, hasUnreadClases }: { activeMenus: any[], pathname: string, hasUnreadClases: boolean }) {
@@ -114,7 +117,7 @@ function SidebarNav({ activeMenus, pathname, hasUnreadClases }: { activeMenus: a
   );
 }
 
-export function DashboardLayout({ children, userRole, userName, userId, userAvatar }: DashboardLayoutProps) {
+export function DashboardLayout({ children, userRole, userName, userId, userAvatar, filterEnabled = false }: DashboardLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
@@ -227,9 +230,24 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
         { icon: Mail, label: 'Mensajes Administración', href: '/dashboard/alumno/mensajes' },
       ]}
     ],
+    encargado_filtro: [
+      { group: "Control de Filtro", items: [
+        { icon: TimerReset, label: 'Bitácora de retardos', href: '/dashboard/filtro/retardos' },
+        { icon: Users, label: 'Carga de alumnos', href: '/dashboard/filtro/alumnos' },
+        { icon: BellRing, label: 'Alertas', href: '/dashboard/filtro/alertas' },
+      ]},
+    ],
   };
 
-  const activeMenus = menuItems[userRole] || [];
+  const filterMenu = { group: "Control de Filtro", items: [
+    { icon: TimerReset, label: 'Bitácora de retardos', href: '/dashboard/filtro/retardos' },
+    { icon: Users, label: 'Carga de alumnos', href: '/dashboard/filtro/alumnos' },
+    { icon: BellRing, label: 'Alertas', href: '/dashboard/filtro/alertas' },
+  ]};
+  const baseMenus = menuItems[userRole] || [];
+  const activeMenus = filterEnabled && (userRole === 'superuser' || userRole === 'admin')
+    ? [...baseMenus, filterMenu]
+    : baseMenus;
 
   return (
     <SidebarProvider>
@@ -283,7 +301,7 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
           </main>
         </div>
       </SidebarInset>
-      <GlobalChatNotification userId={userId} userRole={userRole} />
+      {userRole !== 'encargado_filtro' && <GlobalChatNotification userId={userId} userRole={userRole} />}
     </SidebarProvider>
   );
 }

@@ -7,7 +7,7 @@ import { getHostnameCandidates, normalizeHostname } from '@/lib/tenant/hostname'
 
 export { normalizeHostname } from '@/lib/tenant/hostname';
 
-export type TenantRole = 'superuser' | 'admin' | 'profesor' | 'alumno';
+export type TenantRole = 'superuser' | 'admin' | 'profesor' | 'alumno' | 'encargado_filtro';
 
 export interface TenantRecord {
   id: string;
@@ -105,6 +105,11 @@ export async function requireTenantSession(allowedRoles?: TenantRole[]) {
 
   if (profileError || !profile?.tenant_id) throw new Error('Perfil sin institución asignada');
   if (profile.estatus !== 'activo') throw new Error('Usuario inactivo');
+  // El rol dedicado no hereda por omisión ninguna acción histórica. Sus únicas
+  // acciones permitidas deben declararlo explícitamente mediante allowedRoles.
+  if (profile.rol === 'encargado_filtro' && !allowedRoles) {
+    throw new Error('Este perfil sólo puede usar el módulo Control de Filtro');
+  }
   if (allowedRoles && !allowedRoles.includes(profile.rol as TenantRole)) {
     throw new Error('No autorizado');
   }

@@ -10,6 +10,7 @@ import {
   setPrimaryTenantDomain,
   updateTenantDomain,
   updateTenantService,
+  updateTenantPrimaryFilter,
   updateTenantStatus,
 } from '@/lib/actions/platform';
 import { createClient } from '@/lib/supabase/client';
@@ -144,6 +145,9 @@ function TenantCard({ tenant, pending, run }: any) {
     : (tenant.pago_de_servicios || {});
   const [ai, setAi] = useState(service.ia_habilitada ?? true);
   const [block, setBlock] = useState(service.bloquear_acceso_usuarios ?? false);
+  const feature = Array.isArray(tenant.tenant_features) ? tenant.tenant_features[0] : tenant.tenant_features;
+  const [primaryFilter, setPrimaryFilter] = useState(Boolean(feature?.primary_filter_enabled));
+  const [filterTimezone, setFilterTimezone] = useState(feature?.timezone || 'America/Mexico_City');
   const [serviceForm, setServiceForm] = useState({
     estado: service.estado || 'SI',
     fechaInicio: service.fecha_inicio || '',
@@ -154,13 +158,15 @@ function TenantCard({ tenant, pending, run }: any) {
   useEffect(() => {
     setAi(service.ia_habilitada ?? true);
     setBlock(service.bloquear_acceso_usuarios ?? false);
+    setPrimaryFilter(Boolean(feature?.primary_filter_enabled));
+    setFilterTimezone(feature?.timezone || 'America/Mexico_City');
     setServiceForm({
       estado: service.estado || 'SI',
       fechaInicio: service.fecha_inicio || '',
       duracionDias: Number(service.duracion_dias || 30),
       mensajeBloqueo: service.mensaje_bloqueo || '',
     });
-  }, [service.estado, service.fecha_inicio, service.duracion_dias, service.ia_habilitada, service.bloquear_acceso_usuarios, service.mensaje_bloqueo]);
+  }, [service.estado, service.fecha_inicio, service.duracion_dias, service.ia_habilitada, service.bloquear_acceso_usuarios, service.mensaje_bloqueo, feature?.primary_filter_enabled, feature?.timezone]);
 
   return <article className="rounded-2xl border border-white/10 bg-white/5 p-6">
     <div className="flex flex-wrap items-start justify-between gap-4">
@@ -187,6 +193,17 @@ function TenantCard({ tenant, pending, run }: any) {
         <div className="grid grid-cols-3 gap-3"><div className="space-y-2"><Label>Estado</Label><select name="estado" value={serviceForm.estado} onChange={(event) => setServiceForm((current) => ({ ...current, estado: event.target.value }))} className="flex h-10 w-full rounded-md border border-white/10 bg-slate-900 px-3 text-sm"><option value="SI">Activo</option><option value="NO">Suspendido</option></select></div><Field label="Inicio" name="fechaInicio" type="date" value={serviceForm.fechaInicio} onChange={(event: any) => setServiceForm((current) => ({ ...current, fechaInicio: event.target.value }))} /><Field label="Días" name="duracionDias" type="number" min="1" max="3660" value={serviceForm.duracionDias} onChange={(event: any) => setServiceForm((current) => ({ ...current, duracionDias: Number(event.target.value) }))} /></div>
         <Toggle label="Interfaz y consumo de IA" checked={ai} onCheckedChange={setAi} />
         <Toggle label="Bloquear login de profesores y alumnos al vencer/apagar" checked={block} onCheckedChange={setBlock} />
+        <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-3">
+          <Toggle label="Control de Filtro Escuela Primaria" checked={primaryFilter} onCheckedChange={(checked: boolean) => {
+            setPrimaryFilter(checked);
+            run(() => updateTenantPrimaryFilter(tenant.id, checked, filterTimezone), checked ? 'Control de Filtro activado' : 'Control de Filtro desactivado');
+          }} />
+          <p className="mt-2 text-xs text-slate-400">Habilita el rol Encargado de Filtro, padrón cooperativo y bitácora de retardos para este tenant.</p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+            <div className="flex-1 space-y-1"><Label htmlFor={`filter-timezone-${tenant.id}`}>Zona horaria</Label><Input id={`filter-timezone-${tenant.id}`} value={filterTimezone} onChange={(event) => setFilterTimezone(event.target.value)} className="border-white/10 bg-slate-900" placeholder="America/Mexico_City" /></div>
+            <Button type="button" variant="outline" size="sm" disabled={pending} onClick={() => run(() => updateTenantPrimaryFilter(tenant.id, primaryFilter, filterTimezone), 'Configuración de filtro guardada')}>Guardar zona</Button>
+          </div>
+        </div>
         <div className="space-y-2"><Label>Mensaje de bloqueo</Label><Textarea name="mensajeBloqueo" value={serviceForm.mensajeBloqueo} onChange={(event) => setServiceForm((current) => ({ ...current, mensajeBloqueo: event.target.value }))} className="border-white/10 bg-slate-900" /></div>
         <Button size="sm" type="submit" disabled={pending}><Save className="mr-2 h-4 w-4" />{pending ? 'Guardando…' : 'Guardar permanentemente'}</Button>
       </form>

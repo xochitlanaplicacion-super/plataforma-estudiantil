@@ -97,6 +97,7 @@ export default function LoginPage() {
     let destination = '/dashboard/alumno';
     if (rol === 'superuser' || rol === 'admin') destination = '/dashboard/admin';
     if (rol === 'profesor') destination = '/dashboard/profesor';
+    if (rol === 'encargado_filtro') destination = '/dashboard/filtro/retardos';
     
     router.push(destination);
     router.refresh();

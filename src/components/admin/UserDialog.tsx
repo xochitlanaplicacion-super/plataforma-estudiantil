@@ -17,6 +17,7 @@ import { Loader2, AlertCircle, RefreshCw, Eye, EyeOff, Sparkles, Mail, ShieldAle
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { createUserWithProfile, updateUserProfile, resendWelcomeEmailAction } from '@/lib/actions/users';
 import { getPublicCareers, getPublicLevels } from '@/lib/actions/aspirantes';
+import { getFilterFeatureStatus } from '@/lib/actions/filter-control';
 import { createClient } from '@/lib/supabase/client';
 import { useInstitucion } from '@/hooks/use-institucion';
 
@@ -25,7 +26,8 @@ const userSchema = z.object({
   apellidos: z.string().min(2, "Los apellidos son obligatorios"),
   email: z.string().email("Email inválido"),
   curp: z.string().min(10, "CURP incompleta").max(18, "Máximo 18 caracteres"),
-  rol: z.enum(['superuser', 'admin', 'profesor', 'alumno']),
+  rol: z.enum(['superuser', 'admin', 'profesor', 'alumno', 'encargado_filtro']),
+  encargado_general: z.boolean().default(false),
   estatus: z.enum(['activo', 'inactivo', 'suspendido']),
   telefono: z.string().optional().or(z.literal('')),
   matricula: z.string().optional().or(z.literal('')),
@@ -76,6 +78,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
   const [showPassword, setShowPassword] = useState(true);
   const [allCareers, setAllCareers] = useState<any[]>([]);
   const [allLevels, setAllLevels] = useState<any[]>([]);
+  const [filterFeatureEnabled, setFilterFeatureEnabled] = useState(false);
   const { config: inst } = useInstitucion();
 
   const form = useForm<UserFormValues>({
@@ -100,6 +103,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
       doc_certificado_estudios: false,
       doc_curp: false,
       doc_ine: false,
+      encargado_general: false,
     },
   });
 
@@ -183,12 +187,14 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
 
   useEffect(() => {
     async function loadData() {
-      const [careersRes, levelsRes] = await Promise.all([
+      const [careersRes, levelsRes, filterRes] = await Promise.all([
         getPublicCareers(),
         getPublicLevels(),
+        getFilterFeatureStatus(),
       ]);
       if (careersRes.success && careersRes.data) setAllCareers(careersRes.data);
       if (levelsRes.success && levelsRes.data) setAllLevels(levelsRes.data);
+      setFilterFeatureEnabled(Boolean(filterRes.success && filterRes.enabled));
     }
     loadData();
   }, []);
@@ -227,6 +233,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
           doc_certificado_estudios: !!user.doc_certificado_estudios,
           doc_curp: !!user.doc_curp,
           doc_ine: !!user.doc_ine,
+          encargado_general: Boolean((user as User & { encargado_general?: boolean }).encargado_general),
         });
       } else if (prefillAspirante) {
         setShowPassword(true);
@@ -258,6 +265,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
           doc_certificado_estudios: false,
           doc_curp: false,
           doc_ine: false,
+          encargado_general: false,
         });
         generatePassword();
         if (resolvedNivelId) generateMatricula(resolvedNivelId);
@@ -268,6 +276,7 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
           telefono: '', matricula: '', numero_empleado: '', fecha_expiracion: '',
           fecha_nacimiento: '', nivel_estudios: '', carrera_id: '', password: '', genero: '',
           doc_acta_nacimiento: false, doc_certificado_estudios: false, doc_curp: false, doc_ine: false,
+          encargado_general: false,
         });
         generatePassword();
       }
@@ -452,10 +461,20 @@ export function UserDialog({ user, prefillAspirante, open, onOpenChange, onSucce
                       <SelectItem value="alumno">Alumno</SelectItem>
                       <SelectItem value="profesor">Profesor</SelectItem>
                       <SelectItem value="admin">Administrador</SelectItem>
+                      {filterFeatureEnabled && <SelectItem value="encargado_filtro">Encargado de Filtro</SelectItem>}
                     </SelectContent>
                   </Select>
                 </FormItem>
               )} />
+
+              {form.watch('rol') === 'encargado_filtro' && (
+                <FormField control={form.control} name="encargado_general" render={({ field }) => (
+                  <FormItem className="flex items-center gap-3 rounded-lg border bg-muted/30 p-3 space-y-0">
+                    <FormControl><Checkbox checked={field.value} onCheckedChange={field.onChange} /></FormControl>
+                    <div><FormLabel>Encargado general</FormLabel><p className="text-xs text-muted-foreground">Exigirá el nombre real de quien captura cada evento.</p></div>
+                  </FormItem>
+                )} />
+              )}
 
               <FormField control={form.control} name="fecha_expiracion" render={({ field }) => (
                 <FormItem>

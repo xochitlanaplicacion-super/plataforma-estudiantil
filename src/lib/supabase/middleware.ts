@@ -151,5 +151,30 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
+  if (profile.rol === 'encargado_filtro') {
+    const { data: feature } = await supabase.from('tenant_features').select('primary_filter_enabled')
+      .eq('tenant_id', profile.tenant_id).maybeSingle();
+    if (!feature?.primary_filter_enabled) {
+      const url = request.nextUrl.clone(); url.pathname = '/expired'; url.searchParams.set('reason', 'feature');
+      return NextResponse.redirect(url);
+    }
+    if (!pathname.startsWith('/dashboard/filtro')) {
+      const url = request.nextUrl.clone(); url.pathname = '/dashboard/filtro/retardos';
+      return NextResponse.redirect(url);
+    }
+  } else if (pathname.startsWith('/dashboard/filtro')) {
+    if (!['superuser', 'admin'].includes(profile.rol)) {
+      const url = request.nextUrl.clone();
+      url.pathname = profile.rol === 'profesor' ? '/dashboard/profesor' : '/dashboard/alumno';
+      return NextResponse.redirect(url);
+    }
+    const { data: feature } = await supabase.from('tenant_features').select('primary_filter_enabled')
+      .eq('tenant_id', profile.tenant_id).maybeSingle();
+    if (!feature?.primary_filter_enabled) {
+      const url = request.nextUrl.clone(); url.pathname = '/dashboard/admin';
+      return NextResponse.redirect(url);
+    }
+  }
+
   return supabaseResponse;
 }
