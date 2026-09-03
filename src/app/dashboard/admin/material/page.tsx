@@ -266,7 +266,7 @@ export default function MaterialDeApoyoPage() {
         }
       });
       
-      xhr.addEventListener('error', () => reject(new Error('Error de conexión o permisos en Supabase')));
+      xhr.addEventListener('error', () => reject(new Error('Error de conexión o permisos en el almacenamiento institucional')));
       
       // We must construct the FormData as Supabase Storage Expects
       const formData = new FormData();

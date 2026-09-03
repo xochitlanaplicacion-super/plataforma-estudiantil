@@ -59,7 +59,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Permitir siempre acceso a login, página de expiración, PREREGISTRO y endpoints de mantenimiento (cron)
-  if (pathname === '/' || pathname === '/expired' || pathname === '/preregistro' || pathname.startsWith('/api/cron/')) {
+  if (pathname === '/' || pathname === '/expired' || pathname === '/preregistro' || pathname.startsWith('/registro-familia/') || pathname.startsWith('/api/cron/')) {
     return supabaseResponse;
   }
 

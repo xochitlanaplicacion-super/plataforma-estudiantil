@@ -1,6 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { createHash, randomBytes } from 'node:crypto';
 import { requireTenantSession } from '@/lib/tenant/context';
 import { FILTER_REASONS, normalizeFilterName } from '@/lib/filter-control';
 
@@ -10,9 +11,22 @@ const EARLY_NOTIFICATION_METHODS = ['whatsapp', 'llamada', 'sms', 'presencial', 
 const EARLY_REASONS = ['cita_medica', 'malestar', 'asunto_familiar', 'salida_autorizada', 'cambio_transporte', 'otro'] as const;
 const IMAGE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
 const EVIDENCE_MIME_TYPES = [...IMAGE_MIME_TYPES, 'application/pdf'];
+const EXTRAORDINARY_CONTEXTS = ['horario_escolar', 'fin_jornada', 'emergencia', 'otro'] as const;
+const EXTRAORDINARY_RELATIONSHIPS = ['familiar', 'persona_confianza', 'transportista', 'personal_medico', 'autoridad', 'otro'] as const;
+const EXTRAORDINARY_ID_TYPES = ['ine', 'pasaporte', 'licencia', 'cedula', 'institucional', 'otro'] as const;
+const EXTRAORDINARY_AUTH_METHODS = ['llamada', 'videollamada', 'whatsapp', 'correo', 'documento', 'presencial'] as const;
+const EXTRAORDINARY_STATUSES = ['entregado', 'rechazado', 'cancelado'] as const;
 
 async function requireFilterAccess() {
   const context = await requireTenantSession([...FILTER_ROLES]);
+  const { data: feature } = await context.admin.from('tenant_features').select('primary_filter_enabled')
+    .eq('tenant_id', context.tenantId).maybeSingle();
+  if (!feature?.primary_filter_enabled) throw new Error('El servicio Control de Filtro no está activo para esta institución.');
+  return context;
+}
+
+async function requireFilterManager() {
+  const context = await requireTenantSession(['superuser', 'admin']);
   const { data: feature } = await context.admin.from('tenant_features').select('primary_filter_enabled')
     .eq('tenant_id', context.tenantId).maybeSingle();
   if (!feature?.primary_filter_enabled) throw new Error('El servicio Control de Filtro no está activo para esta institución.');
@@ -49,15 +63,16 @@ export async function getFilterFeatureStatus() {
 
 export async function getFilterDashboardData() {
   const context = await requireFilterAccess();
-  const [{ data: levels }, { data: groups }, students, { data: settings }, { data: staff }, { data: recent }] = await Promise.all([
+  const [{ data: levels }, { data: groups }, students, { data: settings }, { data: staff }, { data: recent }, { data: contacts }] = await Promise.all([
     context.admin.from('filter_levels').select('*').eq('tenant_id', context.tenantId).order('sort_order').order('name'),
     context.admin.from('filter_groups').select('*').eq('tenant_id', context.tenantId).order('sort_order').order('grade_name').order('group_name'),
     getAllActiveFilterStudents(context),
     context.admin.from('filter_alert_settings').select('*').eq('tenant_id', context.tenantId).maybeSingle(),
     context.admin.from('filter_staff_profiles').select('is_general').eq('tenant_id', context.tenantId).eq('user_id', context.user.id).maybeSingle(),
     context.admin.from('filter_late_entries').select('*, filter_students(full_name), profiles:registered_by_user_id(nombre,apellidos)').eq('tenant_id', context.tenantId).order('arrived_at', { ascending: false }).limit(100),
+    context.admin.from('filter_guardian_contacts').select('id,student_id,full_name,relationship,phone,email,verification_status,active').eq('tenant_id', context.tenantId).eq('active', true).order('full_name'),
   ]);
-  return { levels: levels || [], groups: groups || [], students, settings, isGeneral: Boolean(staff?.is_general), actorName: `${context.profile.nombre} ${context.profile.apellidos}`.trim(), recent: recent || [] };
+  return { levels: levels || [], groups: groups || [], students, settings, contacts: contacts || [], canManageGuardians: ['superuser','admin'].includes(String(context.profile.rol)), isGeneral: Boolean(staff?.is_general), actorName: `${context.profile.nombre} ${context.profile.apellidos}`.trim(), recent: recent || [] };
 }
 
 export async function getEarlyDepartureDashboardData() {
@@ -77,6 +92,91 @@ export async function getEarlyDepartureDashboardData() {
     actorName: `${context.profile.nombre} ${context.profile.apellidos}`.trim(),
     recent: recent || [],
   };
+}
+
+export async function getExtraordinaryDashboardData() {
+  const context = await requireFilterAccess();
+  const [{ data: levels }, { data: groups }, students, { data: contacts }, { data: staff }, { data: recent }, { data: earlyDepartures }] = await Promise.all([
+    context.admin.from('filter_levels').select('*').eq('tenant_id', context.tenantId).order('sort_order').order('name'),
+    context.admin.from('filter_groups').select('*').eq('tenant_id', context.tenantId).order('sort_order').order('grade_name').order('group_name'),
+    getAllActiveFilterStudents(context),
+    context.admin.from('filter_guardian_contacts').select('id,student_id,full_name,relationship,phone,email,verification_status')
+      .eq('tenant_id', context.tenantId).eq('active', true).eq('verification_status', 'verified').order('full_name'),
+    context.admin.from('filter_staff_profiles').select('is_general').eq('tenant_id', context.tenantId).eq('user_id', context.user.id).maybeSingle(),
+    context.admin.from('filter_extraordinary_handoffs').select('*').eq('tenant_id', context.tenantId).order('registered_at', { ascending: false }).limit(100),
+    context.admin.from('filter_early_departures').select('id,student_id,student_name,departed_at').eq('tenant_id', context.tenantId).order('departed_at', { ascending: false }).limit(500),
+  ]);
+  return {
+    tenantId: context.tenantId, actorUserId: context.user.id,
+    levels: levels || [], groups: groups || [], students, contacts: contacts || [], recent: recent || [], earlyDepartures: earlyDepartures || [],
+    isGeneral: Boolean(staff?.is_general), actorName: `${context.profile.nombre} ${context.profile.apellidos}`.trim(),
+    canManageGuardians: ['superuser', 'admin'].includes(String(context.profile.rol)),
+  };
+}
+
+export async function createFamilyRegistrationInvite(studentId: string) {
+  try {
+    const context = await requireFilterManager();
+    const { data: student } = await context.admin.from('filter_students').select('id').eq('id', studentId).eq('tenant_id', context.tenantId).eq('active', true).single();
+    if (!student) throw new Error('El alumno no pertenece al padrón activo de esta institución.');
+    const token = randomBytes(32).toString('base64url');
+    const tokenHash = createHash('sha256').update(token).digest('hex');
+    await context.admin.from('filter_family_invites').update({ active: false, revoked_at: new Date().toISOString() }).eq('tenant_id', context.tenantId).eq('student_id', student.id).eq('active', true);
+    const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+    const { data, error } = await context.admin.from('filter_family_invites').insert({ tenant_id: context.tenantId, student_id: student.id, token_hash: tokenHash, expires_at: expiresAt, created_by: context.user.id }).select('id').single();
+    if (error) throw error;
+    await audit(context, 'family_invite.created', 'family_invite', data.id, { studentId: student.id, expiresAt });
+    return { success: true, path: `/registro-familia/${token}`, expiresAt };
+  } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'No se pudo crear el enlace.' }; }
+}
+
+export async function getFilterFamiliesData() {
+  const context = await requireFilterAccess();
+  const [students, { data: groups }, { data: levels }, { data: registrations }, { data: contacts }, { data: people }] = await Promise.all([
+    getAllActiveFilterStudents(context),
+    context.admin.from('filter_groups').select('*').eq('tenant_id', context.tenantId),
+    context.admin.from('filter_levels').select('*').eq('tenant_id', context.tenantId),
+    context.admin.from('filter_family_registrations').select('*').eq('tenant_id', context.tenantId).order('created_at', { ascending: false }).limit(1000),
+    context.admin.from('filter_guardian_contacts').select('*').eq('tenant_id', context.tenantId).eq('active', true),
+    context.admin.from('filter_registration_pickup_people').select('*').eq('tenant_id', context.tenantId).eq('active', true),
+  ]);
+  const paths = [...new Set([...(registrations || []).flatMap((row: any) => [row.face_photo_path,row.identification_front_path,row.identification_back_path,row.signature_path]), ...(people || []).flatMap((row: any) => [row.face_photo_path,row.identification_path])].filter(Boolean))];
+  const signed = paths.length ? await context.admin.storage.from('filtro-evidencias').createSignedUrls(paths, 600) : { data: [], error: null };
+  if (signed.error) throw signed.error;
+  return { students, groups: groups || [], levels: levels || [], registrations: registrations || [], contacts: contacts || [], people: people || [], canManage: true, canIssueInvites: ['superuser','admin'].includes(String(context.profile.rol)), urls: Object.fromEntries((signed.data || []).map((item: any) => [item.path, item.signedUrl])) };
+}
+
+export async function reviewFamilyRegistration(input: { registrationId: string; status: 'approved' | 'rejected' | 'duplicate'; notes?: string; studentId?: string }) {
+  try {
+    const context = await requireFilterAccess();
+    const { data: registration } = await context.admin.from('filter_family_registrations').select('id,student_id').eq('id', input.registrationId).eq('tenant_id', context.tenantId).single();
+    if (!registration) throw new Error('Solicitud no encontrada.');
+    let studentId = registration.student_id;
+    if (input.studentId) {
+      const { data: student } = await context.admin.from('filter_students').select('id').eq('id', input.studentId).eq('tenant_id', context.tenantId).eq('active', true).single();
+      if (!student) throw new Error('El alumno destino no pertenece a este tenant.');
+      studentId = student.id;
+    }
+    const { error } = await (context.admin as any).rpc('review_filter_family_registration', {
+      target_tenant_id: context.tenantId, target_registration_id: registration.id, target_student_id: studentId,
+      target_status: input.status, target_notes: input.notes?.trim().slice(0, 2000) || '', actor_id: context.user.id,
+      actor_name: `${context.profile.nombre} ${context.profile.apellidos}`.trim(),
+    });
+    if (error) throw error;
+    revalidatePath('/dashboard/filtro/familias');
+    return { success: true };
+  } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'No se pudo revisar la solicitud.' }; }
+}
+
+export async function getFilterReportsData() {
+  const context = await requireFilterAccess();
+  const [{ data: early }, { data: extraordinary }, { data: institution }] = await Promise.all([
+    context.admin.from('filter_early_departures').select('*').eq('tenant_id', context.tenantId).order('registered_at', { ascending: false }).limit(1000),
+    context.admin.from('filter_extraordinary_handoffs').select('*').eq('tenant_id', context.tenantId).order('registered_at', { ascending: false }).limit(1000),
+    context.admin.from('configuracion_sistema').select('nombre_completo,nombre_corto,logo_url,color_primario,direccion,telefono_contacto,correo_contacto')
+      .eq('tenant_id', context.tenantId).maybeSingle(),
+  ]);
+  return { tenantId: context.tenantId, early: early || [], extraordinary: extraordinary || [], institution: institution || {}, actorName: `${context.profile.nombre} ${context.profile.apellidos}`.trim() };
 }
 
 export async function upsertFilterStructure(input: { levelName: string; gradeName: string; groupName: string }) {
@@ -105,6 +205,28 @@ export async function addFilterStudents(input: { groupId: string; names: string[
     await audit(context, 'students.imported', 'student', undefined, { groupId: group.id, count: data?.length || 0 });
     revalidatePath('/dashboard/filtro/alumnos'); return { success: true, count: data?.length || 0 };
   } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'No se pudieron cargar alumnos.' }; }
+}
+
+export async function addFilterGuardianContact(input: { studentId: string; fullName: string; relationship: string; phone?: string; email?: string }) {
+  try {
+    const context = await requireFilterManager();
+    const fullName = input.fullName.trim(); const phone = input.phone?.trim() || null; const email = input.email?.trim().toLowerCase() || null;
+    if (fullName.length < 2) throw new Error('El nombre del contacto es obligatorio.');
+    if (!['madre', 'padre', 'tutor'].includes(input.relationship)) throw new Error('El parentesco no es válido.');
+    if (!phone && !email) throw new Error('Registra al menos un teléfono o correo oficial.');
+    const { data: student } = await context.admin.from('filter_students').select('id').eq('tenant_id', context.tenantId).eq('id', input.studentId).eq('active', true).single();
+    if (!student) throw new Error('Alumno no encontrado en esta institución.');
+    const now = new Date().toISOString();
+    const { data, error } = await context.admin.from('filter_guardian_contacts').insert({
+      tenant_id: context.tenantId, student_id: student.id, full_name: fullName, relationship: input.relationship,
+      phone, email, source: 'staff', verification_status: 'verified', verified_at: now, verified_by: context.user.id,
+      created_by: context.user.id, updated_by: context.user.id, updated_at: now,
+    }).select('id').single();
+    if (error) throw error;
+    await audit(context, 'guardian_contact.created', 'guardian_contact', data.id, { studentId: student.id, relationship: input.relationship, hasPhone: Boolean(phone), hasEmail: Boolean(email) });
+    revalidatePath('/dashboard/filtro/alumnos'); revalidatePath('/dashboard/filtro/entregas-extraordinarias');
+    return { success: true, id: data.id };
+  } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'No se pudo guardar el contacto oficial.' }; }
 }
 
 export async function deleteFilterStudents(ids: string[]) {
@@ -284,11 +406,13 @@ export async function createEarlyDeparture(formData: FormData) {
     const identificationFile = validatedUpload(formData, 'identificationEvidence', 'La identificación presentada', EVIDENCE_MIME_TYPES);
     const pickupPhoto = validatedUpload(formData, 'pickupPersonPhoto', 'La foto de la persona que retira', IMAGE_MIME_TYPES);
     const handoverPhoto = validatedUpload(formData, 'finalHandoverPhoto', 'La foto final del adulto y el alumno', IMAGE_MIME_TYPES);
+    const pickupSignature = validatedUpload(formData, 'pickupSignature', 'La firma de la persona que retira', ['image/png']);
     const basePath = `${context.tenantId}/salidas/${clientRequestId}`;
     const uploads = [
       { file: identificationFile, path: `${basePath}/identificacion.${extensionForFile(identificationFile)}` },
       { file: pickupPhoto, path: `${basePath}/persona.${extensionForFile(pickupPhoto)}` },
       { file: handoverPhoto, path: `${basePath}/entrega.${extensionForFile(handoverPhoto)}` },
+      { file: pickupSignature, path: `${basePath}/firma.png` },
     ];
     const uploadedPaths: string[] = [];
     for (const upload of uploads) {
@@ -325,6 +449,7 @@ export async function createEarlyDeparture(formData: FormData) {
       registered_by_user_id: context.user.id,
       reporter_name: reporterName,
       final_handover_photo_path: uploads[2].path,
+      pickup_signature_path: uploads[3].path,
       identity_and_notification_confirmed: true,
     }).select('id').single();
     if (error) {
@@ -354,6 +479,173 @@ export async function createEarlyDeparture(formData: FormData) {
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'No se pudo guardar la salida anticipada.' };
   }
+}
+
+function maskedContact(contact: { phone?: string | null; email?: string | null }) {
+  if (contact.phone) {
+    const digits = contact.phone.replace(/\D/g, '');
+    return `Teléfono terminado en ${digits.slice(-4).padStart(4, '•')}`;
+  }
+  const [user, domain] = String(contact.email || '').split('@');
+  return `${user?.slice(0, 2) || ''}•••@${domain || 'correo registrado'}`;
+}
+
+export async function createExtraordinaryHandoff(formData: FormData) {
+  try {
+    const context = await requireFilterAccess();
+    const clientRequestId = String(formData.get('clientRequestId') || '');
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clientRequestId)) throw new Error('El identificador del borrador no es válido.');
+    const { data: previous } = await context.admin.from('filter_extraordinary_handoffs').select('id').eq('tenant_id', context.tenantId).eq('client_request_id', clientRequestId).maybeSingle();
+    if (previous) return { success: true, duplicate: true, id: previous.id };
+
+    const studentId = String(formData.get('studentId') || '');
+    const { data: student } = await context.admin.from('filter_students').select('id,full_name,group_id').eq('tenant_id', context.tenantId).eq('id', studentId).eq('active', true).single();
+    if (!student) throw new Error('El alumno no existe o no está activo en esta institución.');
+    const { data: group } = await context.admin.from('filter_groups').select('id,level_id,grade_name,group_name').eq('tenant_id', context.tenantId).eq('id', student.group_id).single();
+    if (!group) throw new Error('No se encontró el grupo actual del alumno.');
+    const { data: level } = await context.admin.from('filter_levels').select('name').eq('tenant_id', context.tenantId).eq('id', group.level_id).single();
+    if (!level) throw new Error('No se encontró el nivel actual del alumno.');
+    const guardianContactId = String(formData.get('guardianContactId') || '');
+    const { data: guardian } = await context.admin.from('filter_guardian_contacts').select('id,full_name,relationship,phone,email')
+      .eq('tenant_id', context.tenantId).eq('student_id', student.id).eq('id', guardianContactId).eq('active', true).eq('verification_status', 'verified').single();
+    if (!guardian) throw new Error('Selecciona un contacto oficial verificado del alumno.');
+
+    const deliveryContext = String(formData.get('deliveryContext') || '') as typeof EXTRAORDINARY_CONTEXTS[number];
+    const pickupRelationship = String(formData.get('pickupRelationship') || '') as typeof EXTRAORDINARY_RELATIONSHIPS[number];
+    const identificationType = String(formData.get('identificationType') || '') as typeof EXTRAORDINARY_ID_TYPES[number];
+    const authorizationMethod = String(formData.get('authorizationMethod') || '') as typeof EXTRAORDINARY_AUTH_METHODS[number];
+    const status = String(formData.get('status') || '') as typeof EXTRAORDINARY_STATUSES[number];
+    if (!EXTRAORDINARY_CONTEXTS.includes(deliveryContext)) throw new Error('El contexto de entrega no es válido.');
+    if (!EXTRAORDINARY_RELATIONSHIPS.includes(pickupRelationship)) throw new Error('La relación de quien retira no es válida.');
+    if (!EXTRAORDINARY_ID_TYPES.includes(identificationType)) throw new Error('El tipo de identificación no es válido.');
+    if (!EXTRAORDINARY_AUTH_METHODS.includes(authorizationMethod)) throw new Error('El método de autorización no es válido.');
+    if (!EXTRAORDINARY_STATUSES.includes(status)) throw new Error('La resolución no es válida.');
+
+    const deliveryContextOther = deliveryContext === 'otro' ? requiredFormText(formData, 'deliveryContextOther', 'El contexto', 120) : null;
+    const pickupRelationshipOther = pickupRelationship === 'otro' ? requiredFormText(formData, 'pickupRelationshipOther', 'La relación', 120) : null;
+    const identificationTypeOther = identificationType === 'otro' ? requiredFormText(formData, 'identificationTypeOther', 'El tipo de identificación', 120) : null;
+    const delivered = status === 'entregado';
+    const adultConfirmed = String(formData.get('adultConfirmed')) === 'true';
+    const identityMatches = String(formData.get('identityMatches')) === 'true';
+    const noVisibleImpairment = String(formData.get('noVisibleImpairment')) === 'true';
+    const institutionApproved = String(formData.get('institutionApproved')) === 'true';
+    const protocolConfirmed = String(formData.get('protocolConfirmed')) === 'true';
+    const identityStatus = String(formData.get('identityStatus') || '');
+    const consentStatus = String(formData.get('consentStatus') || '');
+    if (!['coincide', 'no_coincide', 'no_verificable'].includes(identityStatus)) throw new Error('Selecciona el resultado de identidad.');
+    if (!['confirmado', 'rechazado', 'sin_respuesta'].includes(consentStatus)) throw new Error('Selecciona el resultado del consentimiento.');
+    if (delivered && (!adultConfirmed || !identityMatches || !noVisibleImpairment || !institutionApproved || !protocolConfirmed || identityStatus !== 'coincide' || consentStatus !== 'confirmado')) {
+      throw new Error('No se puede entregar: faltan validaciones obligatorias de identidad, consentimiento o aprobación.');
+    }
+
+    const { data: feature } = await context.admin.from('tenant_features').select('timezone').eq('tenant_id', context.tenantId).single();
+    const timezone = feature?.timezone || 'America/Mexico_City';
+    const automaticTime = String(formData.get('automaticTime') || 'true') === 'true';
+    const departedAt = delivered ? (automaticTime ? new Date().toISOString() : tenantLocalDateTimeToIso(String(formData.get('departedAt') || ''), timezone)) : null;
+    const authorizationAutomaticTime = String(formData.get('authorizationAutomaticTime') || 'true') === 'true';
+    const authorizedAt = authorizationAutomaticTime ? new Date().toISOString() : tenantLocalDateTimeToIso(String(formData.get('authorizedAt') || ''), timezone);
+    const expiresInput = String(formData.get('authorizationExpiresAt') || '');
+    const authorizationExpiresAt = expiresInput ? tenantLocalDateTimeToIso(expiresInput, timezone) : null;
+    if (authorizationExpiresAt && authorizationExpiresAt <= authorizedAt) throw new Error('La vigencia debe ser posterior a la autorización.');
+    const linkedEarlyDepartureId = String(formData.get('linkedEarlyDepartureId') || '') || null;
+    if (linkedEarlyDepartureId) {
+      const { data: linked } = await context.admin.from('filter_early_departures').select('id').eq('tenant_id', context.tenantId).eq('student_id', student.id).eq('id', linkedEarlyDepartureId).single();
+      if (!linked) throw new Error('La salida anticipada vinculada no corresponde al alumno.');
+    }
+    const { data: staff } = await context.admin.from('filter_staff_profiles').select('is_general').eq('tenant_id', context.tenantId).eq('user_id', context.user.id).maybeSingle();
+    const actorName = `${context.profile.nombre} ${context.profile.apellidos}`.trim();
+    const reporterName = staff?.is_general ? requiredFormText(formData, 'reporterName', 'El nombre de quien registra', 180) : actorName;
+
+    const identificationFront = validatedUpload(formData, 'identificationFront', 'El frente de la identificación', EVIDENCE_MIME_TYPES);
+    const identificationBackValue = formData.get('identificationBack');
+    const identificationBack = identificationBackValue instanceof File && identificationBackValue.size > 0
+      ? validatedUpload(formData, 'identificationBack', 'El reverso de la identificación', EVIDENCE_MIME_TYPES) : null;
+    const personPhoto = validatedUpload(formData, 'pickupPersonPhoto', 'La fotografía de la persona', IMAGE_MIME_TYPES);
+    const authorizationEvidence = validatedUpload(formData, 'authorizationEvidence', 'La evidencia de autorización', EVIDENCE_MIME_TYPES);
+    const vehicleValue = formData.get('vehiclePhoto');
+    const vehiclePhoto = vehicleValue instanceof File && vehicleValue.size > 0 ? validatedUpload(formData, 'vehiclePhoto', 'La fotografía del vehículo', IMAGE_MIME_TYPES) : null;
+    const finalPhoto = delivered ? validatedUpload(formData, 'finalHandoverPhoto', 'La fotografía final de entrega', IMAGE_MIME_TYPES) : null;
+    const signature = delivered ? validatedUpload(formData, 'pickupSignature', 'La firma de quien recibe', ['image/png']) : null;
+    const basePath = `${context.tenantId}/entregas-extraordinarias/${clientRequestId}`;
+    const uploads = [
+      { key: 'identificationFront', file: identificationFront, path: `${basePath}/identificacion-frente.${extensionForFile(identificationFront)}` },
+      ...(identificationBack ? [{ key: 'identificationBack', file: identificationBack, path: `${basePath}/identificacion-reverso.${extensionForFile(identificationBack)}` }] : []),
+      { key: 'pickupPersonPhoto', file: personPhoto, path: `${basePath}/persona.${extensionForFile(personPhoto)}` },
+      { key: 'authorizationEvidence', file: authorizationEvidence, path: `${basePath}/autorizacion.${extensionForFile(authorizationEvidence)}` },
+      ...(vehiclePhoto ? [{ key: 'vehiclePhoto', file: vehiclePhoto, path: `${basePath}/vehiculo.${extensionForFile(vehiclePhoto)}` }] : []),
+      ...(finalPhoto ? [{ key: 'finalHandoverPhoto', file: finalPhoto, path: `${basePath}/entrega.${extensionForFile(finalPhoto)}` }] : []),
+      ...(signature ? [{ key: 'pickupSignature', file: signature, path: `${basePath}/firma.png` }] : []),
+    ];
+    const paths = new Map<string, string>();
+    for (const upload of uploads) {
+      const { error } = await context.admin.storage.from('filtro-evidencias').upload(upload.path, upload.file, { upsert: true, contentType: upload.file.type });
+      if (error) { if (paths.size) await context.admin.storage.from('filtro-evidencias').remove([...paths.values()]); throw new Error(`No se pudo guardar ${upload.file.name}: ${error.message}`); }
+      paths.set(upload.key, upload.path);
+    }
+
+    const { data: entry, error } = await context.admin.from('filter_extraordinary_handoffs').insert({
+      tenant_id: context.tenantId, client_request_id: clientRequestId, student_id: student.id, guardian_contact_id: guardian.id,
+      linked_early_departure_id: linkedEarlyDepartureId, student_name: student.full_name, level_name: level.name,
+      grade_name: group.grade_name, group_name: group.group_name, departed_at: departedAt,
+      delivery_context: deliveryContext, delivery_context_other: deliveryContextOther,
+      delivery_reason: requiredFormText(formData, 'deliveryReason', 'El motivo de la entrega', 1000),
+      pickup_person_name: requiredFormText(formData, 'pickupPersonName', 'El nombre de la persona', 220),
+      pickup_person_phone: String(formData.get('pickupPersonPhone') || '').trim() || null,
+      pickup_relationship: pickupRelationship, pickup_relationship_other: pickupRelationshipOther,
+      adult_confirmed: adultConfirmed, identification_type: identificationType, identification_type_other: identificationTypeOther,
+      identification_reference: requiredFormText(formData, 'identificationReference', 'La referencia de identificación', 12),
+      identification_front_path: paths.get('identificationFront'), identification_back_path: paths.get('identificationBack') || null,
+      pickup_person_photo_path: paths.get('pickupPersonPhoto'), vehicle_description: String(formData.get('vehicleDescription') || '').trim().slice(0, 500) || null,
+      vehicle_photo_path: paths.get('vehiclePhoto') || null, identity_matches: identityMatches, no_visible_impairment: noVisibleImpairment,
+      authorizer_name: guardian.full_name, authorizer_relationship: guardian.relationship, authorizer_channel_snapshot: maskedContact(guardian),
+      authorization_method: authorizationMethod, authorized_at: authorizedAt, authorization_expires_at: authorizationExpiresAt,
+      authorization_statement: requiredFormText(formData, 'authorizationStatement', 'La declaración de autorización', 2000),
+      authorization_evidence_path: paths.get('authorizationEvidence'), authorization_verifier_name: requiredFormText(formData, 'authorizationVerifierName', 'El personal que verificó', 220),
+      one_time_code: String(formData.get('oneTimeCode') || '').trim().slice(0, 12) || null,
+      identity_status: identityStatus, consent_status: consentStatus, validator_name: requiredFormText(formData, 'validatorName', 'El personal que valida', 220),
+      witness_name: requiredFormText(formData, 'witnessName', 'El segundo responsable o testigo', 220),
+      approver_name: delivered ? requiredFormText(formData, 'approverName', 'El responsable que aprueba', 220) : String(formData.get('approverName') || '').trim() || null,
+      institution_approved: institutionApproved, status,
+      resolution_reason: delivered ? null : requiredFormText(formData, 'resolutionReason', 'El motivo de la resolución', 1000),
+      delivering_teacher_name: delivered ? requiredFormText(formData, 'deliveringTeacherName', 'El docente que entrega', 220) : null,
+      reporter_name: reporterName, registered_by_user_id: context.user.id,
+      final_handover_photo_path: paths.get('finalHandoverPhoto') || null, pickup_signature_path: paths.get('pickupSignature') || null,
+      final_observations: String(formData.get('finalObservations') || '').trim().slice(0, 4000) || null, protocol_confirmed: protocolConfirmed,
+    }).select('id').single();
+    if (error) {
+      if (error.code === '23505') {
+        const { data: duplicate } = await context.admin.from('filter_extraordinary_handoffs').select('id').eq('tenant_id', context.tenantId).eq('client_request_id', clientRequestId).single();
+        if (duplicate) return { success: true, duplicate: true, id: duplicate.id };
+      }
+      await context.admin.storage.from('filtro-evidencias').remove([...paths.values()]); throw error;
+    }
+    await context.admin.from('filter_reporters').upsert({ tenant_id: context.tenantId, name: reporterName, normalized_name: normalizeFilterName(reporterName), last_used_at: new Date().toISOString(), created_by: context.user.id }, { onConflict: 'tenant_id,normalized_name' });
+    await audit(context, 'extraordinary_handoff.created', 'extraordinary_handoff', entry.id, { studentId: student.id, guardianContactId: guardian.id, status, deliveryContext, hasVehiclePhoto: Boolean(vehiclePhoto) });
+    revalidatePath('/dashboard/filtro/entregas-extraordinarias'); revalidatePath('/dashboard/filtro/reportes');
+    return { success: true, duplicate: false, id: entry.id };
+  } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'No se pudo guardar la entrega extraordinaria.' }; }
+}
+
+export async function getFilterReportPackets(selection: Array<{ type: 'early' | 'extraordinary'; id: string }>) {
+  try {
+    const context = await requireFilterAccess();
+    const safe = selection.filter((item) => ['early', 'extraordinary'].includes(item.type) && /^[0-9a-f-]{36}$/i.test(item.id)).slice(0, 100);
+    if (!safe.length) throw new Error('Selecciona al menos un reporte.');
+    const earlyIds = safe.filter((item) => item.type === 'early').map((item) => item.id);
+    const extraordinaryIds = safe.filter((item) => item.type === 'extraordinary').map((item) => item.id);
+    const [{ data: early }, { data: extraordinary }, { data: institution }] = await Promise.all([
+      earlyIds.length ? context.admin.from('filter_early_departures').select('*').eq('tenant_id', context.tenantId).in('id', earlyIds) : Promise.resolve({ data: [] }),
+      extraordinaryIds.length ? context.admin.from('filter_extraordinary_handoffs').select('*').eq('tenant_id', context.tenantId).in('id', extraordinaryIds) : Promise.resolve({ data: [] }),
+      context.admin.from('configuracion_sistema').select('nombre_completo,nombre_corto,logo_url,color_primario,direccion,telefono_contacto,correo_contacto').eq('tenant_id', context.tenantId).maybeSingle(),
+    ]);
+    const pathKeys = ['identification_evidence_path','pickup_person_photo_path','final_handover_photo_path','pickup_signature_path','identification_front_path','identification_back_path','vehicle_photo_path','authorization_evidence_path'];
+    const paths = [...new Set([...(early || []), ...(extraordinary || [])].flatMap((row: any) => pathKeys.map((key) => row[key]).filter(Boolean)))];
+    const signed = paths.length ? await context.admin.storage.from('filtro-evidencias').createSignedUrls(paths, 600) : { data: [], error: null };
+    if (signed.error) throw signed.error;
+    const urls = Object.fromEntries((signed.data || []).map((item: any) => [item.path, item.signedUrl]));
+    await audit(context, 'filter_reports.exported', 'filter_report', undefined, { count: safe.length, ids: safe });
+    return { success: true, early: early || [], extraordinary: extraordinary || [], institution: institution || {}, urls };
+  } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'No se pudieron preparar los reportes.' }; }
 }
 
 export async function updateFilterAlertSettings(input: { enabled: boolean; threshold: number; windowUnit: string; windowValue: number }) {

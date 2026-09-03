@@ -49,7 +49,10 @@ import {
   NotebookTabs,
   TimerReset,
   BellRing,
-  DoorOpen
+  DoorOpen,
+  ShieldCheck,
+  ContactRound,
+  Files
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -235,6 +238,9 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
       { group: "Control de Filtro", items: [
         { icon: TimerReset, label: 'Bitácora de retardos', href: '/dashboard/filtro/retardos' },
         { icon: DoorOpen, label: 'Salidas anticipadas', href: '/dashboard/filtro/salidas' },
+        { icon: ShieldCheck, label: 'Entregas extraordinarias', href: '/dashboard/filtro/entregas-extraordinarias' },
+        { icon: ContactRound, label: 'Familias autorizadas', href: '/dashboard/filtro/familias' },
+        { icon: Files, label: 'Reportes de entregas', href: '/dashboard/filtro/reportes' },
         { icon: Users, label: 'Carga de alumnos', href: '/dashboard/filtro/alumnos' },
         { icon: BellRing, label: 'Alertas', href: '/dashboard/filtro/alertas' },
       ]},
@@ -244,6 +250,9 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
   const filterMenu = { group: "Control de Filtro", items: [
     { icon: TimerReset, label: 'Bitácora de retardos', href: '/dashboard/filtro/retardos' },
     { icon: DoorOpen, label: 'Salidas anticipadas', href: '/dashboard/filtro/salidas' },
+    { icon: ShieldCheck, label: 'Entregas extraordinarias', href: '/dashboard/filtro/entregas-extraordinarias' },
+    { icon: ContactRound, label: 'Familias autorizadas', href: '/dashboard/filtro/familias' },
+    { icon: Files, label: 'Reportes de entregas', href: '/dashboard/filtro/reportes' },
     { icon: Users, label: 'Carga de alumnos', href: '/dashboard/filtro/alumnos' },
     { icon: BellRing, label: 'Alertas', href: '/dashboard/filtro/alertas' },
   ]};

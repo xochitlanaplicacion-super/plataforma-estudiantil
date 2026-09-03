@@ -16,6 +16,27 @@ export type EarlyDepartureDraft = {
   identificationEvidence: PersistedFile | null;
   pickupPersonPhoto: PersistedFile | null;
   finalHandoverPhoto: PersistedFile | null;
+  pickupSignature?: PersistedFile | null;
+};
+
+export type ExtraordinaryHandoffDraft = {
+  version: 1;
+  clientRequestId: string;
+  step: number;
+  status: 'draft' | 'queued';
+  updatedAt: string;
+  values: Record<string, string | boolean>;
+  student: Record<string, unknown> | null;
+  files: Record<string, PersistedFile | null>;
+};
+
+export type FamilyRegistrationDraft = {
+  version: 1;
+  clientRequestId: string;
+  values: Record<string, string | boolean>;
+  people: Array<Record<string, string>>;
+  files: Record<string, PersistedFile | null>;
+  updatedAt: string;
 };
 
 const DATABASE_NAME = 'control-filtro-offline';
@@ -24,6 +45,15 @@ let writeQueue: Promise<unknown> = Promise.resolve();
 function draftKey(scope: string) {
   if (!scope || scope.length > 160) throw new Error('El ámbito local del borrador no es válido.');
   return `early-departure:${scope}`;
+}
+
+function extraordinaryDraftKey(scope: string) {
+  if (!scope || scope.length > 160) throw new Error('El ámbito local del borrador no es válido.');
+  return `extraordinary-handoff:${scope}`;
+}
+function familyDraftKey(scope: string) {
+  if (!scope || scope.length > 180) throw new Error('El enlace local no es válido.');
+  return `family-registration:${scope}`;
 }
 
 function openDatabase(): Promise<IDBDatabase> {
@@ -72,4 +102,33 @@ export function clearEarlyDepartureDraft(scope: string) {
   const write = writeQueue.catch(() => undefined).then(() => transact<undefined>('readwrite', (store) => store.delete(draftKey(scope))));
   writeQueue = write;
   return write;
+}
+
+
+export function getExtraordinaryHandoffDraft(scope: string) {
+  return writeQueue.catch(() => undefined).then(() => transact<ExtraordinaryHandoffDraft | undefined>('readonly', (store) => store.get(extraordinaryDraftKey(scope))));
+}
+
+export function saveExtraordinaryHandoffDraft(scope: string, draft: ExtraordinaryHandoffDraft) {
+  const write = writeQueue.catch(() => undefined).then(() => transact<IDBValidKey>('readwrite', (store) => store.put(draft, extraordinaryDraftKey(scope))));
+  writeQueue = write;
+  return write;
+}
+
+export function clearExtraordinaryHandoffDraft(scope: string) {
+  const write = writeQueue.catch(() => undefined).then(() => transact<undefined>('readwrite', (store) => store.delete(extraordinaryDraftKey(scope))));
+  writeQueue = write;
+  return write;
+}
+
+export function getFamilyRegistrationDraft(scope: string) {
+  return writeQueue.catch(() => undefined).then(() => transact<FamilyRegistrationDraft | undefined>('readonly', (store) => store.get(familyDraftKey(scope))));
+}
+export function saveFamilyRegistrationDraft(scope: string, draft: FamilyRegistrationDraft) {
+  const write = writeQueue.catch(() => undefined).then(() => transact<IDBValidKey>('readwrite', (store) => store.put(draft, familyDraftKey(scope))));
+  writeQueue = write; return write;
+}
+export function clearFamilyRegistrationDraft(scope: string) {
+  const write = writeQueue.catch(() => undefined).then(() => transact<undefined>('readwrite', (store) => store.delete(familyDraftKey(scope))));
+  writeQueue = write; return write;
 }
