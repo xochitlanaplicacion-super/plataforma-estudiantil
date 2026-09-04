@@ -1,7 +1,7 @@
 import { FilterEarlyDepartureWizard } from '@/components/filter/FilterEarlyDepartureWizard';
-import { getEarlyDepartureDashboardData, getFilterCurrentTime } from '@/lib/actions/filter-control';
+import { getEarlyDepartureDashboardData } from '@/lib/actions/filter-control';
 
 export default async function FilterEarlyDeparturesPage() {
-  const [data, clock] = await Promise.all([getEarlyDepartureDashboardData(), getFilterCurrentTime()]);
-  return <FilterEarlyDepartureWizard initialData={data} initialClock={clock} />;
+  const data = await getEarlyDepartureDashboardData();
+  return <FilterEarlyDepartureWizard initialData={data} initialClock={data.clock} />;
 }

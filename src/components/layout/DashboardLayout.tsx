@@ -131,6 +131,14 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
   const [hasUnreadClases, setHasUnreadClases] = useState(false);
 
   useEffect(() => {
+    if (!filterEnabled || !['encargado_filtro', 'superuser', 'admin'].includes(userRole)) return;
+    [
+      '/dashboard/filtro/retardos', '/dashboard/filtro/salidas', '/dashboard/filtro/entregas-extraordinarias',
+      '/dashboard/filtro/familias', '/dashboard/filtro/reportes', '/dashboard/filtro/alumnos', '/dashboard/filtro/alertas',
+    ].forEach((href) => router.prefetch(href));
+  }, [filterEnabled, userRole, router]);
+
+  useEffect(() => {
     const savedTheme = localStorage.getItem('ez-theme');
     if (savedTheme) setTheme(savedTheme);
     setFormattedDate(new Date().toLocaleDateString('es-MX', { weekday: 'long', day: 'numeric', month: 'long' }));
@@ -309,7 +317,7 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
              </div>
           </header>
           <main className="flex-1 overflow-y-auto overflow-x-hidden p-6 md:p-10">
-            <div className="max-w-full mx-auto animate-in fade-in slide-in-from-bottom-2 duration-700">{children}</div>
+            <div className={cn("max-w-full mx-auto animate-in fade-in slide-in-from-bottom-2", userRole === 'encargado_filtro' ? 'duration-150' : 'duration-700')}>{children}</div>
           </main>
         </div>
       </SidebarInset>

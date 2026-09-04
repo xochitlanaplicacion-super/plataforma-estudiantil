@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
+import { filePreviewDataUrl, normalizeEvidenceFile } from '@/lib/mobile-evidence';
 
 type Guide = 'none' | 'adult' | 'adult-child';
 
@@ -29,21 +30,23 @@ export function FilterEvidenceCapture({
   const [cameraLoading, setCameraLoading] = useState(false);
   const [facing, setFacing] = useState<'user' | 'environment'>('environment');
   const [stream, setStream] = useState<MediaStream | null>(null);
+  const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
-    if (!file || !file.type.startsWith('image/')) return setPreview(null);
-    const url = URL.createObjectURL(file); setPreview(url);
-    return () => URL.revokeObjectURL(url);
+    let active = true;
+    if (!file || !file.type.startsWith('image/')) { setPreview(null); return; }
+    void filePreviewDataUrl(file).then((url) => { if (active) setPreview(url); }).catch(() => { if (active) setPreview(null); });
+    return () => { active = false; };
   }, [file]);
   useEffect(() => { if (videoRef.current && stream) videoRef.current.srcObject = stream; }, [stream, cameraOpen]);
   useEffect(() => () => stream?.getTracks().forEach((track) => track.stop()), [stream]);
 
-  const choose = (selected?: File) => {
+  const choose = async (selected?: File) => {
     if (!selected) return;
-    const types = allowPdf ? ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'] : ['image/jpeg', 'image/png', 'image/webp'];
-    if (selected.size > 10 * 1024 * 1024) return toast({ variant: 'destructive', title: 'Archivo demasiado grande', description: 'El máximo es 10 MB.' });
-    if (!types.includes(selected.type)) return toast({ variant: 'destructive', title: 'Formato no permitido', description: allowPdf ? 'Usa JPG, PNG, WebP o PDF.' : 'Usa una imagen JPG, PNG o WebP.' });
-    onChange(selected);
+    setProcessing(true);
+    try { onChange(await normalizeEvidenceFile(selected, allowPdf)); }
+    catch (error) { toast({ variant: 'destructive', title: 'No se pudo preparar el archivo', description: error instanceof Error ? error.message : 'Selecciona otro archivo.' }); }
+    finally { setProcessing(false); if (inputRef.current) inputRef.current.value = ''; }
   };
   const stopCamera = () => {
     stream?.getTracks().forEach((track) => track.stop()); setStream(null); setCameraOpen(false);
@@ -52,7 +55,7 @@ export function FilterEvidenceCapture({
     if (!navigator.mediaDevices?.getUserMedia) return toast({ variant: 'destructive', title: 'Cámara no disponible', description: 'Puedes elegir una imagen desde los archivos del dispositivo.' });
     stream?.getTracks().forEach((track) => track.stop()); setStream(null); setFacing(nextFacing); setCameraOpen(true); setCameraLoading(true);
     try {
-      setStream(await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: nextFacing }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false }));
+      setStream(await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: nextFacing }, width: { ideal: 1280 }, height: { ideal: 960 } }, audio: false }));
     } catch {
       setCameraOpen(false); toast({ variant: 'destructive', title: 'No se pudo abrir la cámara', description: 'Revisa el permiso del navegador o elige una foto existente.' });
     } finally { setCameraLoading(false); }
@@ -63,18 +66,18 @@ export function FilterEvidenceCapture({
     canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
     if (!blob) return toast({ variant: 'destructive', title: 'No se pudo capturar la fotografía' });
-    choose(new File([blob], `foto-${Date.now()}.jpg`, { type: 'image/jpeg' })); stopCamera();
+    await choose(new File([blob], `foto-${Date.now()}.jpg`, { type: 'image/jpeg' })); stopCamera();
   };
 
   return <div className="space-y-2">
     <Label htmlFor={id}>{label}{required ? ' *' : ''}</Label>
-    <input ref={inputRef} id={id} className="hidden" type="file" accept={allowPdf ? 'image/jpeg,image/png,image/webp,application/pdf' : 'image/jpeg,image/png,image/webp'} onChange={(event) => choose(event.target.files?.[0])} />
+    <input ref={inputRef} id={id} className="hidden" type="file" accept={allowPdf ? 'image/*,application/pdf' : 'image/*'} onChange={(event) => void choose(event.target.files?.[0])} />
     <div className="grid gap-2 sm:grid-cols-2">
-      <Button type="button" variant="outline" onClick={() => inputRef.current?.click()}><Upload className="mr-2 h-4 w-4" />Elegir archivo</Button>
-      <Button type="button" onClick={() => startCamera('environment')}><Camera className="mr-2 h-4 w-4" />Tomar foto</Button>
+      <Button type="button" variant="outline" disabled={processing} onClick={() => inputRef.current?.click()}><Upload className="mr-2 h-4 w-4" />{processing ? 'Optimizando…' : 'Elegir archivo'}</Button>
+      <Button type="button" disabled={processing} onClick={() => startCamera('environment')}><Camera className="mr-2 h-4 w-4" />Tomar foto</Button>
     </div>
     {file && <div className="flex items-center gap-3 rounded-lg border border-primary/20 bg-primary/5 p-3">
-      {preview ? <div className="h-16 w-16 shrink-0 rounded-md bg-cover bg-center" role="img" aria-label="Vista previa" style={{ backgroundImage: `url(${preview})` }} /> : <FileText className="h-8 w-8 text-primary" />}
+      {preview ? <img src={preview} className="h-16 w-16 shrink-0 rounded-md object-cover" alt="Vista previa de la evidencia" /> : <FileText className="h-8 w-8 text-primary" />}
       <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold">{file.name}</p><p className="text-xs text-muted-foreground">{(file.size / 1024 / 1024).toFixed(2)} MB · protegido en este dispositivo</p></div>
       <Button type="button" variant="ghost" size="icon" onClick={() => { onChange(null); if (inputRef.current) inputRef.current.value = ''; }} aria-label={`Quitar ${label}`}><Trash2 className="h-4 w-4" /></Button>
     </div>}

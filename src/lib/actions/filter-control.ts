@@ -19,10 +19,15 @@ const EXTRAORDINARY_STATUSES = ['entregado', 'rechazado', 'cancelado'] as const;
 
 async function requireFilterAccess() {
   const context = await requireTenantSession([...FILTER_ROLES]);
-  const { data: feature } = await context.admin.from('tenant_features').select('primary_filter_enabled')
+  const { data: feature } = await context.admin.from('tenant_features').select('primary_filter_enabled,timezone')
     .eq('tenant_id', context.tenantId).maybeSingle();
   if (!feature?.primary_filter_enabled) throw new Error('El servicio Control de Filtro no está activo para esta institución.');
-  return context;
+  return { ...context, filterTimezone: feature.timezone || 'America/Mexico_City' };
+}
+
+function filterClock(timezone: string) {
+  const now = new Date();
+  return { success: true as const, iso: now.toISOString(), timezone, display: new Intl.DateTimeFormat('es-MX', { timeZone: timezone, dateStyle: 'full', timeStyle: 'medium' }).format(now) };
 }
 
 async function requireFilterManager() {
@@ -33,7 +38,7 @@ async function requireFilterManager() {
   return context;
 }
 
-async function audit(context: Awaited<ReturnType<typeof requireFilterAccess>>, action: string, entityType: string, entityId?: string, details: Record<string, unknown> = {}) {
+async function audit(context: Awaited<ReturnType<typeof requireTenantSession>>, action: string, entityType: string, entityId?: string, details: Record<string, unknown> = {}) {
   const { error } = await context.admin.from('filter_audit_log').insert({
     tenant_id: context.tenantId, actor_user_id: context.user.id,
     actor_name: `${context.profile.nombre} ${context.profile.apellidos}`.trim(),
@@ -42,7 +47,7 @@ async function audit(context: Awaited<ReturnType<typeof requireFilterAccess>>, a
   if (error) throw new Error(`No se pudo registrar la auditoría: ${error.message}`);
 }
 
-async function getAllActiveFilterStudents(context: Awaited<ReturnType<typeof requireFilterAccess>>) {
+async function getAllActiveFilterStudents(context: Awaited<ReturnType<typeof requireTenantSession>>) {
   const rows: any[] = []; const pageSize = 1000;
   for (let from = 0; from < 100_000; from += pageSize) {
     const { data, error } = await context.admin.from('filter_students').select('*').eq('tenant_id', context.tenantId).eq('active', true).order('full_name').range(from, from + pageSize - 1);
@@ -72,7 +77,7 @@ export async function getFilterDashboardData() {
     context.admin.from('filter_late_entries').select('*, filter_students(full_name), profiles:registered_by_user_id(nombre,apellidos)').eq('tenant_id', context.tenantId).order('arrived_at', { ascending: false }).limit(100),
     context.admin.from('filter_guardian_contacts').select('id,student_id,full_name,relationship,phone,email,verification_status,active').eq('tenant_id', context.tenantId).eq('active', true).order('full_name'),
   ]);
-  return { levels: levels || [], groups: groups || [], students, settings, contacts: contacts || [], canManageGuardians: ['superuser','admin'].includes(String(context.profile.rol)), isGeneral: Boolean(staff?.is_general), actorName: `${context.profile.nombre} ${context.profile.apellidos}`.trim(), recent: recent || [] };
+  return { levels: levels || [], groups: groups || [], students, settings, contacts: contacts || [], tenantId: context.tenantId, actorUserId: context.user.id, clock: filterClock(context.filterTimezone), canManageGuardians: ['superuser','admin'].includes(String(context.profile.rol)), isGeneral: Boolean(staff?.is_general), actorName: `${context.profile.nombre} ${context.profile.apellidos}`.trim(), recent: recent || [] };
 }
 
 export async function getEarlyDepartureDashboardData() {
@@ -88,6 +93,7 @@ export async function getEarlyDepartureDashboardData() {
     levels: levels || [], groups: groups || [], students,
     tenantId: context.tenantId,
     actorUserId: context.user.id,
+    clock: filterClock(context.filterTimezone),
     isGeneral: Boolean(staff?.is_general),
     actorName: `${context.profile.nombre} ${context.profile.apellidos}`.trim(),
     recent: recent || [],
@@ -107,7 +113,7 @@ export async function getExtraordinaryDashboardData() {
     context.admin.from('filter_early_departures').select('id,student_id,student_name,departed_at').eq('tenant_id', context.tenantId).order('departed_at', { ascending: false }).limit(500),
   ]);
   return {
-    tenantId: context.tenantId, actorUserId: context.user.id,
+    tenantId: context.tenantId, actorUserId: context.user.id, clock: filterClock(context.filterTimezone),
     levels: levels || [], groups: groups || [], students, contacts: contacts || [], recent: recent || [], earlyDepartures: earlyDepartures || [],
     isGeneral: Boolean(staff?.is_general), actorName: `${context.profile.nombre} ${context.profile.apellidos}`.trim(),
     canManageGuardians: ['superuser', 'admin'].includes(String(context.profile.rol)),
@@ -305,6 +311,13 @@ export async function getStudentLateAlert(studentId: string) {
 export async function createLateEntry(formData: FormData) {
   try {
     const context = await requireFilterAccess();
+    const clientRequestId = String(formData.get('clientRequestId') || '');
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clientRequestId)) throw new Error('El identificador local no es válido. Recarga la pantalla.');
+    const { data: previousAudit } = await context.admin.from('filter_audit_log').select('entity_id').eq('tenant_id', context.tenantId).eq('action', 'late_entry.created').contains('details', { clientRequestId }).order('created_at', { ascending: false }).limit(1).maybeSingle();
+    if (previousAudit?.entity_id) return { success: true, duplicate: true, id: previousAudit.entity_id };
+    const previousRequest = await context.admin.from('filter_late_entries').select('id').eq('tenant_id', context.tenantId).eq('client_request_id', clientRequestId).maybeSingle();
+    const supportsRequestId = !previousRequest.error;
+    if (previousRequest.data) return { success: true, duplicate: true, id: previousRequest.data.id };
     const studentId = String(formData.get('studentId') || '');
     const automaticTime = String(formData.get('automaticTime') || 'true') === 'true';
     const { data: feature } = await context.admin.from('tenant_features').select('timezone').eq('tenant_id', context.tenantId).single();
@@ -321,17 +334,25 @@ export async function createLateEntry(formData: FormData) {
     if (!student) throw new Error('Alumno no encontrado.');
     let evidencePath: string | null = null; const file = formData.get('evidence');
     if (file instanceof File && file.size > 0) {
-      if (file.size > 10 * 1024 * 1024 || !['image/jpeg','image/png','image/webp','application/pdf'].includes(file.type)) throw new Error('La evidencia debe ser imagen o PDF de hasta 10 MB.');
-      const ext = file.name.split('.').pop()?.toLowerCase() || 'bin'; evidencePath = `${context.tenantId}/${studentId}/${crypto.randomUUID()}.${ext}`;
-      const { error } = await context.admin.storage.from('filtro-evidencias').upload(evidencePath, file, { upsert: false, contentType: file.type }); if (error) throw error;
+      const limit = 1_500_000;
+      if (file.size > limit || !['image/jpeg','image/png','image/webp','application/pdf'].includes(file.type)) throw new Error('La evidencia no tiene un formato o tamaño compatible. Vuelve a seleccionarla.');
+      const ext = file.name.split('.').pop()?.toLowerCase() || 'bin'; evidencePath = `${context.tenantId}/retardos/${clientRequestId}/evidencia.${ext}`;
+      const { error } = await context.admin.storage.from('filtro-evidencias').upload(evidencePath, file, { upsert: true, contentType: file.type }); if (error) throw new Error(`No se pudo guardar la evidencia: ${error.message}`);
     }
-    const { data: entry, error } = await context.admin.from('filter_late_entries').insert({ tenant_id: context.tenantId, student_id: studentId, arrived_at: arrivedAt, reason_code: reasonCode, reason_detail: reasonDetail || null, evidence_path: evidencePath, registered_by_user_id: context.user.id, reporter_name: reporterName }).select('id').single();
+    const baseEntry = { tenant_id: context.tenantId, student_id: studentId, arrived_at: arrivedAt, reason_code: reasonCode, reason_detail: reasonDetail || null, evidence_path: evidencePath, registered_by_user_id: context.user.id, reporter_name: reporterName };
+    let insertResult = await context.admin.from('filter_late_entries').insert(supportsRequestId ? { ...baseEntry, client_request_id: clientRequestId } : baseEntry).select('id').single();
+    if (insertResult.error && ['42703', 'PGRST204'].includes(insertResult.error.code || '')) insertResult = await context.admin.from('filter_late_entries').insert(baseEntry).select('id').single();
+    const { data: entry, error } = insertResult;
     if (error) {
+      if (error.code === '23505') {
+        const { data: duplicate } = await context.admin.from('filter_late_entries').select('id').eq('tenant_id', context.tenantId).eq('client_request_id', clientRequestId).single();
+        if (duplicate) return { success: true, duplicate: true, id: duplicate.id };
+      }
       if (evidencePath) await context.admin.storage.from('filtro-evidencias').remove([evidencePath]);
       throw error;
     }
     await context.admin.from('filter_reporters').upsert({ tenant_id: context.tenantId, name: reporterName, normalized_name: normalizeFilterName(reporterName), last_used_at: new Date().toISOString(), created_by: context.user.id }, { onConflict: 'tenant_id,normalized_name' });
-    await audit(context, 'late_entry.created', 'late_entry', entry.id, { studentId, reporterName, reasonCode, hasEvidence: Boolean(evidencePath) });
+    await audit(context, 'late_entry.created', 'late_entry', entry.id, { clientRequestId, studentId, reporterName, reasonCode, hasEvidence: Boolean(evidencePath) });
     revalidatePath('/dashboard/filtro/retardos'); return { success: true };
   } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'No se pudo guardar el retardo.' }; }
 }
@@ -346,7 +367,8 @@ function requiredFormText(formData: FormData, key: string, label: string, maxLen
 function validatedUpload(formData: FormData, key: string, label: string, allowedTypes: string[]) {
   const value = formData.get(key);
   if (!(value instanceof File) || value.size < 1) throw new Error(`${label} es obligatoria.`);
-  if (value.size > 10 * 1024 * 1024) throw new Error(`${label} no puede superar 10 MB.`);
+  const limit = 1_500_000;
+  if (value.size > limit) throw new Error(`${label} supera el tamaño optimizado permitido. Vuelve a seleccionarla.`);
   if (!allowedTypes.includes(value.type)) throw new Error(`${label} tiene un formato no permitido.`);
   return value;
 }

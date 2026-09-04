@@ -39,6 +39,23 @@ export type FamilyRegistrationDraft = {
   updatedAt: string;
 };
 
+export type LateEntryDraft = {
+  version: 1;
+  clientRequestId: string;
+  status: 'draft' | 'queued';
+  updatedAt: string;
+  student: Record<string, unknown> | null;
+  values: {
+    studentQuery: string;
+    reason: string;
+    reasonDetail: string;
+    automaticTime: boolean;
+    arrivedAt: string;
+    reporter: string;
+  };
+  evidence: PersistedFile | null;
+};
+
 const DATABASE_NAME = 'control-filtro-offline';
 const STORE_NAME = 'drafts';
 let writeQueue: Promise<unknown> = Promise.resolve();
@@ -54,6 +71,10 @@ function extraordinaryDraftKey(scope: string) {
 function familyDraftKey(scope: string) {
   if (!scope || scope.length > 180) throw new Error('El enlace local no es válido.');
   return `family-registration:${scope}`;
+}
+function lateDraftKey(scope: string) {
+  if (!scope || scope.length > 180) throw new Error('El ámbito local del retardo no es válido.');
+  return `late-entry:${scope}`;
 }
 
 function openDatabase(): Promise<IDBDatabase> {
@@ -130,5 +151,17 @@ export function saveFamilyRegistrationDraft(scope: string, draft: FamilyRegistra
 }
 export function clearFamilyRegistrationDraft(scope: string) {
   const write = writeQueue.catch(() => undefined).then(() => transact<undefined>('readwrite', (store) => store.delete(familyDraftKey(scope))));
+  writeQueue = write; return write;
+}
+
+export function getLateEntryDraft(scope: string) {
+  return writeQueue.catch(() => undefined).then(() => transact<LateEntryDraft | undefined>('readonly', (store) => store.get(lateDraftKey(scope))));
+}
+export function saveLateEntryDraft(scope: string, draft: LateEntryDraft) {
+  const write = writeQueue.catch(() => undefined).then(() => transact<IDBValidKey>('readwrite', (store) => store.put(draft, lateDraftKey(scope))));
+  writeQueue = write; return write;
+}
+export function clearLateEntryDraft(scope: string) {
+  const write = writeQueue.catch(() => undefined).then(() => transact<undefined>('readwrite', (store) => store.delete(lateDraftKey(scope))));
   writeQueue = write; return write;
 }

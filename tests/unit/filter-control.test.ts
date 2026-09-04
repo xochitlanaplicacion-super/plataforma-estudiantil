@@ -46,4 +46,26 @@ describe('Control de Filtro multitenant', () => {
     expect(storage).toContain('finalHandoverPhoto: PersistedFile | null');
     expect(storage).toContain('early-departure:${scope}');
   });
+
+  it('retardos conserva el borrador del iPad y evita duplicados por tenant', () => {
+    const component = readFileSync('src/components/filter/FilterLateLog.tsx', 'utf8');
+    const storage = readFileSync('src/lib/filter-early-departure-draft.ts', 'utf8');
+    const migration = readFileSync('supabase/migrations/20260904045312_filter_late_entry_idempotency.sql', 'utf8');
+    expect(component).toContain('saveLateEntryDraft');
+    expect(component).toContain("draftStatus === 'queued'");
+    expect(component).toContain('clientRequestId');
+    expect(storage).toContain('late-entry:${scope}');
+    expect(migration).toContain('filter_late_entries_tenant_request_uidx');
+    expect(migration).toContain('(tenant_id, client_request_id)');
+  });
+
+  it('normaliza imágenes móviles y el PDF usa identidad y evidencias lado a lado', () => {
+    const mobile = readFileSync('src/lib/mobile-evidence.ts', 'utf8');
+    const report = readFileSync('src/components/filter/FilterReports.tsx', 'utf8');
+    expect(mobile).toContain("canvas.toBlob(resolve, 'image/jpeg'");
+    expect(mobile).toContain("'heic', 'heif'");
+    expect(report).toContain('institution.logo_url');
+    expect(report).toContain("const x=i===0?12:107");
+    expect(report).toContain('Firma de la persona que recibe al alumno');
+  });
 });
