@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -79,20 +79,21 @@ export default function AsignacionProfesores() {
   const [selGrupos, setSelGrupos] = useState<string[]>([]);
   const [replacing, setReplacing] = useState(false);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     const [asig, prof, niv] = await Promise.all([
       getAsignacionesProfesor(),
       getProfesores(),
       getNiveles()
     ]);
-    if (asig.data) setAsignaciones(asig.data);
+    if (asig.error) toast({ variant: 'destructive', title: 'No se pudo cargar la carga académica', description: asig.error.message || 'Actualiza la pantalla e inténtalo nuevamente.' });
+    setAsignaciones(asig.data || []);
     if (prof.data) setProfesores(prof.data);
     if (niv.data) setCatalogos((prev: any) => ({ ...prev, niveles: niv.data }));
     setLoading(false);
-  };
+  }, [toast]);
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   // Agrupar asignaciones por profesor para la interfaz
   const groupedData = useMemo(() => {

@@ -158,13 +158,13 @@ export function FilterEarlyDepartureWizard({ initialData, initialClock }: { init
     setValues({ ...EMPTY_VALUES, reporterName: initialData.isGeneral ? '' : initialData.actorName }); setStudent(null);
     setIdentificationEvidence(null); setPickupPersonPhoto(null); setFinalHandoverPhoto(null); setPickupSignature(null); setResetProgress(0); setResetOpen(false);
   }, [draftScope, initialData.actorName, initialData.isGeneral]);
-  const sendDraft = useCallback(async (draft: EarlyDepartureDraft, automatic = false) => {
+  const sendDraft = useCallback(async (draft: EarlyDepartureDraft) => {
     if (syncRunning.current) return; syncRunning.current = true; setSaving(true);
     try {
       const result = await createEarlyDeparture(formDataFromDraft(draft));
       if (!result.success) {
         setDraftStatus('queued'); await saveEarlyDepartureDraft(draftScope, { ...draft, status: 'queued', updatedAt: new Date().toISOString() });
-        toast({ variant: 'destructive', title: automatic ? 'La sincronización sigue pendiente' : 'No se pudo guardar todavía', description: `${result.error} El contenido y las fotos permanecen protegidos en este dispositivo.` });
+        toast({ variant: 'destructive', title: 'No se pudo guardar todavía', description: `${result.error} El contenido y las fotos permanecen protegidos. Corrige lo indicado y pulsa Guardar para reintentar.` });
         return;
       }
       await clearEarlyDepartureDraft(draftScope);
@@ -173,17 +173,13 @@ export function FilterEarlyDepartureWizard({ initialData, initialClock }: { init
     } catch {
       const queued = { ...draft, status: 'queued' as const, updatedAt: new Date().toISOString() }; setDraftStatus('queued');
       try { await saveEarlyDepartureDraft(draftScope, queued); } catch { setStorageSafe(false); }
-      toast({ variant: 'destructive', title: 'Sin conexión con el servidor', description: 'El registro quedó en cola y se enviará automáticamente al recuperar internet.' });
+      toast({ variant: 'destructive', title: 'Sin conexión con el servidor', description: 'El registro permanece protegido. Cuando vuelva internet, pulsa Guardar para reintentar.' });
     } finally { syncRunning.current = false; setSaving(false); }
   }, [draftScope, resetForm, router, toast]);
-  useEffect(() => {
-    if (!hydrated || !online || draftStatus !== 'queued' || !requestId || syncRunning.current) return;
-    void getEarlyDepartureDraft(draftScope).then((draft) => { if (draft?.status === 'queued') return sendDraft(draft, true); });
-  }, [draftScope, draftStatus, hydrated, online, requestId, sendDraft]);
   const save = async () => {
     const error = validationError(4); if (error) return toast({ variant: 'destructive', title: 'No se puede finalizar', description: error });
     const draft = makeDraft(online ? 'draft' : 'queued'); await saveEarlyDepartureDraft(draftScope, draft).catch(() => setStorageSafe(false));
-    if (!online) { setDraftStatus('queued'); return toast({ title: 'Guardado en cola sin conexión', description: 'Se enviará automáticamente cuando el dispositivo recupere internet.' }); }
+    if (!online) { setDraftStatus('queued'); return toast({ title: 'Borrador protegido sin conexión', description: 'No se enviará automáticamente. Pulsa Guardar cuando el dispositivo recupere internet.' }); }
     await sendDraft(draft);
   };
   const openEvidence = async (path: string) => { const result = await getFilterEvidenceUrl(path); if (result.success && result.url) window.open(result.url, '_blank', 'noopener,noreferrer'); else toast({ variant: 'destructive', title: 'No se pudo abrir', description: result.error }); };
@@ -192,7 +188,7 @@ export function FilterEarlyDepartureWizard({ initialData, initialClock }: { init
 
   return <div className="space-y-6">
     <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start"><div><h1 className="flex items-center gap-2 text-2xl font-bold text-primary sm:text-3xl"><DoorOpen />Bitácora de salidas anticipadas</h1><p className="text-muted-foreground">Entrega segura, guiada y auditable dentro de esta institución.</p></div><Button variant="outline" onClick={() => setResetOpen(true)}><RefreshCcw className="mr-2 h-4 w-4" />Reiniciar proceso</Button></div>
-    <Alert variant={!storageSafe ? 'destructive' : 'default'}>{online ? <Signal className="h-4 w-4" /> : <SignalZero className="h-4 w-4" />}<AlertTitle>{!storageSafe ? 'El almacenamiento local no está disponible' : draftStatus === 'queued' ? 'Pendiente de sincronización' : online ? 'Borrador protegido' : 'Modo sin conexión'}</AlertTitle><AlertDescription>{!storageSafe ? 'No cierres ni recargues esta página hasta guardar. Revisa que el navegador permita almacenamiento del sitio.' : draftStatus === 'queued' ? 'No borres los datos del navegador. El sistema reintentará automáticamente cuando haya conexión.' : `Textos y fotos se conservan en este dispositivo${savedAt ? ` · última copia ${new Date(savedAt).toLocaleTimeString('es-MX')}` : ''}.`}</AlertDescription></Alert>
+    <Alert variant={!storageSafe ? 'destructive' : 'default'}>{online ? <Signal className="h-4 w-4" /> : <SignalZero className="h-4 w-4" />}<AlertTitle>{!storageSafe ? 'El almacenamiento local no está disponible' : draftStatus === 'queued' ? 'Guardado pendiente y protegido' : online ? 'Borrador protegido' : 'Modo sin conexión'}</AlertTitle><AlertDescription>{!storageSafe ? 'No cierres ni recargues esta página hasta guardar. Revisa que el navegador permita almacenamiento del sitio.' : draftStatus === 'queued' ? 'Se recuperaron los datos y las fotos. Nada se enviará hasta que pulses Guardar.' : `Textos y fotos se conservan en este dispositivo${savedAt ? ` · última copia ${new Date(savedAt).toLocaleTimeString('es-MX')}` : ''}.`}</AlertDescription></Alert>
     <Card><CardHeader><div className="flex items-center justify-between gap-3"><div><CardTitle>Paso {step + 1} de {STEPS.length}: {STEPS[step]}</CardTitle><CardDescription>Completa los datos señalados para habilitar el siguiente paso.</CardDescription></div><Badge variant="outline">{Math.round(((step + 1) / STEPS.length) * 100)}%</Badge></div><Progress value={((step + 1) / STEPS.length) * 100} /><div className="hidden grid-cols-5 gap-2 pt-2 md:grid">{STEPS.map((title, index) => <div key={title} className={`text-center text-xs ${index <= step ? 'font-semibold text-primary' : 'text-muted-foreground'}`}>{index + 1}. {title}</div>)}</div></CardHeader>
       <CardContent className="space-y-6">
         <Alert className="border-primary/30 bg-primary/5"><BadgeCheck className="h-4 w-4" /><AlertTitle>Guía activa</AlertTitle><AlertDescription>{[

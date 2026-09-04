@@ -840,20 +840,22 @@ export async function deleteResourceRecord(id: string, sync_id?: string) {
 
 // --- PROFESORES ---
 export async function getProfesores() {
-  const { supabase: supabaseAdmin } = await requireTenantSession();
+  const { supabase: supabaseAdmin, tenantId } = await requireTenantSession();
   const { data, error } = await supabaseAdmin
     .from('profiles')
     .select('id, nombre, apellidos, email')
+    .eq('tenant_id', tenantId)
     .eq('rol', 'profesor')
     .order('nombre');
   return { data, error };
 }
 
 export async function getAsignacionesProfesor() {
-  const { supabase: supabaseAdmin } = await requireTenantSession(['superuser', 'admin']);
+  const { supabase: supabaseAdmin, tenantId } = await requireTenantSession(['superuser', 'admin']);
   const { data, error } = await supabaseAdmin
     .from('asignaciones_profesor')
-    .select('*, profiles:profesor_id(nombre, apellidos), niveles(nombre), carreras(nombre), materias(nombre), grupos(nombre, grados(nombre)), ciclos_escolares(nombre, estado)')
+    .select('*, profiles:profiles!asignaciones_profesor_profesor_tenant_fkey(nombre, apellidos), niveles(nombre), carreras(nombre), materias(nombre), grupos(nombre, grados(nombre)), ciclos_escolares(nombre, estado)')
+    .eq('tenant_id', tenantId)
     .order('created_at', { ascending: false });
   return { data, error };
 }

@@ -59,6 +59,19 @@ describe('Control de Filtro multitenant', () => {
     expect(migration).toContain('(tenant_id, client_request_id)');
   });
 
+  it('restaura sin enviar y permite reiniciar retardos mediante deslizador', () => {
+    const late = readFileSync('src/components/filter/FilterLateLog.tsx', 'utf8');
+    const early = readFileSync('src/components/filter/FilterEarlyDepartureWizard.tsx', 'utf8');
+    const extraordinary = readFileSync('src/components/filter/FilterExtraordinaryWizard.tsx', 'utf8');
+    expect(late).toContain('Desliza hasta el final para confirmar');
+    expect(late).toContain('Nada se enviará hasta que pulses Guardar');
+    expect(early).toContain('Nada se enviará hasta que pulses Guardar');
+    expect(extraordinary).toContain('Nada se enviará hasta que pulses Guardar');
+    expect(late).not.toContain('draftStatus === \'queued\' && student?.id && !sending');
+    expect(early).not.toContain('sendDraft(draft, true)');
+    expect(extraordinary).not.toContain('send(draft, true)');
+  });
+
   it('normaliza imágenes móviles y el PDF usa identidad y evidencias lado a lado', () => {
     const mobile = readFileSync('src/lib/mobile-evidence.ts', 'utf8');
     const report = readFileSync('src/components/filter/FilterReports.tsx', 'utf8');
