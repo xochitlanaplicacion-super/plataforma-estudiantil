@@ -3,6 +3,7 @@ export type PersistedFile = {
   name: string;
   type: string;
   lastModified: number;
+  size?: number;
 };
 
 export type EarlyDepartureDraft = {
@@ -59,6 +60,7 @@ export type LateEntryDraft = {
 const DATABASE_NAME = 'control-filtro-offline';
 const STORE_NAME = 'drafts';
 let writeQueue: Promise<unknown> = Promise.resolve();
+const persistedFileCache = new WeakMap<File, PersistedFile>();
 function draftKey(scope: string) {
   if (!scope || scope.length > 160) throw new Error('El ámbito local del borrador no es válido.');
   return `early-departure:${scope}`;
@@ -94,19 +96,69 @@ async function transact<T>(mode: IDBTransactionMode, operation: (store: IDBObjec
   return new Promise<T>((resolve, reject) => {
     const transaction = database.transaction(STORE_NAME, mode);
     const request = operation(transaction.objectStore(STORE_NAME));
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error || new Error('No se pudo guardar el borrador.'));
-    transaction.oncomplete = () => database.close();
-    transaction.onerror = () => reject(transaction.error || new Error('Falló el almacenamiento local.'));
+    let result: T;
+    let settled = false;
+    const fail = (error: DOMException | null, fallback: string) => {
+      if (settled) return;
+      settled = true;
+      database.close();
+      reject(error || new Error(fallback));
+    };
+    request.onsuccess = () => { result = request.result; };
+    request.onerror = () => fail(request.error, 'No se pudo guardar el borrador.');
+    transaction.oncomplete = () => {
+      if (settled) return;
+      settled = true;
+      database.close();
+      resolve(result);
+    };
+    transaction.onerror = () => fail(transaction.error, 'Falló el almacenamiento local.');
+    transaction.onabort = () => fail(transaction.error, 'El navegador canceló el guardado local.');
   });
 }
 
 export function persistFile(file: File | null): PersistedFile | null {
-  return file ? { blob: file, name: file.name, type: file.type, lastModified: file.lastModified } : null;
+  if (!file) return null;
+  const cached = persistedFileCache.get(file);
+  if (cached) return cached;
+  const persisted = { blob: file.slice(0, file.size, file.type), name: file.name, type: file.type, lastModified: file.lastModified, size: file.size };
+  persistedFileCache.set(file, persisted);
+  return persisted;
 }
 
 export function restoreFile(file: PersistedFile | null): File | null {
-  return file ? new File([file.blob], file.name, { type: file.type, lastModified: file.lastModified }) : null;
+  if (!file || !(file.blob instanceof Blob) || file.blob.size < 1) return null;
+  if (typeof file.size === 'number' && file.size !== file.blob.size) return null;
+  const type = file.type || file.blob.type;
+  if (!type || !file.name) return null;
+  return new File([file.blob], file.name, { type, lastModified: file.lastModified || Date.now() });
+}
+
+/**
+ * Materializa los bytes antes de volver a construir el archivo. Safari/iPadOS
+ * puede conservar un Blob respaldado por IndexedDB cuyo descriptor parece
+ * válido, pero que falla al adjuntarse directamente a FormData. Leer el
+ * ArrayBuffer aquí obliga al navegador a comprobar y copiar todos los bytes.
+ */
+export async function restoreFileForUpload(file: PersistedFile | null): Promise<File | null> {
+  if (!file || !(file.blob instanceof Blob) || file.blob.size < 1) return null;
+  if (typeof file.size === 'number' && file.size !== file.blob.size) return null;
+  const type = file.type || file.blob.type;
+  if (!type || !file.name) return null;
+  try {
+    const bytes = typeof file.blob.arrayBuffer === 'function'
+      ? await file.blob.arrayBuffer()
+      : await new Promise<ArrayBuffer>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => reader.result instanceof ArrayBuffer ? resolve(reader.result) : reject(new Error('El archivo local no pudo leerse.'));
+        reader.onerror = () => reject(reader.error || new Error('El archivo local no pudo leerse.'));
+        reader.readAsArrayBuffer(file.blob);
+      });
+    if (bytes.byteLength !== file.blob.size || (typeof file.size === 'number' && bytes.byteLength !== file.size)) return null;
+    return new File([bytes], file.name, { type, lastModified: file.lastModified || Date.now() });
+  } catch {
+    return null;
+  }
 }
 
 export function getEarlyDepartureDraft(scope: string) {

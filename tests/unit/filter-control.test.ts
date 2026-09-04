@@ -70,6 +70,38 @@ describe('Control de Filtro multitenant', () => {
     expect(late).not.toContain('draftStatus === \'queued\' && student?.id && !sending');
     expect(early).not.toContain('sendDraft(draft, true)');
     expect(extraordinary).not.toContain('send(draft, true)');
+    expect(late).toContain('evidenceRecoveryIssue');
+    expect(late).toContain('el navegador no confirmó el almacenamiento local');
+    expect(early).toContain('recoveryFileIssues');
+  });
+
+  it('aplica por tenant la política de contacto verificado y conserva su instantánea histórica', () => {
+    const migration = readFileSync('supabase/migrations/20260904063022_configurable_verified_guardian_contacts.sql', 'utf8');
+    const actions = readFileSync('src/lib/actions/filter-control.ts', 'utf8');
+    const alerts = readFileSync('src/components/filter/FilterAlerts.tsx', 'utf8');
+    const wizard = readFileSync('src/components/filter/FilterExtraordinaryWizard.tsx', 'utf8');
+    expect(migration).toContain('require_verified_guardian_contact boolean not null default true');
+    expect(migration).toContain('alter column guardian_contact_id drop not null');
+    expect(migration).toContain('not verified_guardian_contact_required or guardian_contact_id is not null');
+    expect(actions).toContain(".select('require_verified_guardian_contact')");
+    expect(actions).toContain(".eq('tenant_id', context.tenantId)");
+    expect(actions).toContain('guardian_contact_id: guardian?.id || null');
+    expect(actions).toContain('entryPayload.verified_guardian_contact_required = requireVerifiedGuardianContact');
+    expect(alerts).toContain('Exigir contacto oficial verificado');
+    expect(wizard).toContain('Autorización manual permitida por el plantel');
+  });
+
+  it('confirma el commit local y amortigua la persistencia de archivos pesados', () => {
+    const storage = readFileSync('src/lib/filter-early-departure-draft.ts', 'utf8');
+    const extraordinary = readFileSync('src/components/filter/FilterExtraordinaryWizard.tsx', 'utf8');
+    expect(storage).toContain('transaction.oncomplete = () =>');
+    expect(storage).toContain('resolve(result)');
+    expect(storage).toContain('size: file.size');
+    expect(storage).toContain('file.size !== file.blob.size');
+    expect(storage).toContain('persistedFileCache.get(file)');
+    expect(extraordinary).toContain('persistTimer.current = setTimeout');
+    expect(extraordinary).toContain('se reconstruyeron y están listos para revisión');
+    expect(extraordinary).toContain('el navegador no confirmó una copia local');
   });
 
   it('normaliza imágenes móviles y el PDF usa identidad y evidencias lado a lado', () => {

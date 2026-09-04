@@ -1,11 +1,11 @@
 'use client';
 
-import { FormEvent, useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertTriangle, CheckCircle2, Clock3, CloudOff, FileText, Plus, RefreshCcw, Search, TimerReset, Trash2, UserRoundPlus } from 'lucide-react';
 import { addFilterStudents, createLateEntry, getFilterEvidenceUrl, getStudentLateAlert, searchFilterReporters, searchFilterStudents } from '@/lib/actions/filter-control';
 import { FILTER_REASONS } from '@/lib/filter-control';
-import { clearLateEntryDraft, getLateEntryDraft, persistFile, restoreFile, saveLateEntryDraft } from '@/lib/filter-early-departure-draft';
+import { clearLateEntryDraft, getLateEntryDraft, LateEntryDraft, PersistedFile, persistFile, restoreFileForUpload, saveLateEntryDraft } from '@/lib/filter-early-departure-draft';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -29,48 +29,83 @@ export function FilterLateLog({ initialData, initialClock }: { initialData: any;
   const [reporter, setReporter] = useState(initialData.isGeneral ? '' : initialData.actorName); const [reporterResults, setReporterResults] = useState<any[]>([]);
   const [addOpen, setAddOpen] = useState(false); const [newName, setNewName] = useState(''); const [newGroup, setNewGroup] = useState(initialData.groups[0]?.id || '');
   const [clockNow, setClockNow] = useState(() => initialClock.iso ? new Date(initialClock.iso) : new Date()); const [evidence, setEvidence] = useState<File | null>(null);
-  const [requestId, setRequestId] = useState(''); const [hydrated, setHydrated] = useState(false); const [storageSafe, setStorageSafe] = useState(true); const [draftStatus, setDraftStatus] = useState<'draft'|'queued'>('draft'); const [savedAt, setSavedAt] = useState(''); const [online, setOnline] = useState(true); const [sending, setSending] = useState(false);
+  const [requestId, setRequestId] = useState(''); const [hydrated, setHydrated] = useState(false); const [draftReadFailed, setDraftReadFailed] = useState(false); const [draftReadAttempt, setDraftReadAttempt] = useState(0); const [storageSafe, setStorageSafe] = useState(true); const [draftStatus, setDraftStatus] = useState<'draft'|'queued'>('draft'); const [savedAt, setSavedAt] = useState(''); const [online, setOnline] = useState(true); const [sending, setSending] = useState(false);
   const [resetOpen, setResetOpen] = useState(false); const [resetProgress, setResetProgress] = useState(0);
+  const [evidenceRecoveryIssue, setEvidenceRecoveryIssue] = useState(false);
+  const preservedUnrestoredEvidence = useRef<PersistedFile | null>(null);
+  const sendLock = useRef(false);
+  const latestDraftState = useRef<{ requestId: string; status: 'draft' | 'queued'; student: any; studentQuery: string; reason: string; reasonDetail: string; automaticTime: boolean; arrivedAt: string; reporter: string; evidence: File | null } | null>(null);
 
   useEffect(() => { const timer = setInterval(() => setClockNow((current) => new Date(current.getTime() + 1000)), 1000); return () => clearInterval(timer); }, []);
   useEffect(() => { setOnline(navigator.onLine); const up = () => setOnline(true); const down = () => setOnline(false); window.addEventListener('online', up); window.addEventListener('offline', down); return () => { window.removeEventListener('online', up); window.removeEventListener('offline', down); }; }, []);
   useEffect(() => {
-    void getLateEntryDraft(scope).then((draft) => {
+    setHydrated(false);
+    void getLateEntryDraft(scope).then(async (draft) => {
+      setDraftReadFailed(false);
       if (draft) {
         setRequestId(draft.clientRequestId); setDraftStatus(draft.status); setStudent(draft.student); setStudentQuery(draft.values.studentQuery);
-        setReason(draft.values.reason); setReasonDetail(draft.values.reasonDetail); setAutomaticTime(draft.values.automaticTime); setArrivedAt(draft.values.arrivedAt); setReporter(draft.values.reporter); setEvidence(restoreFile(draft.evidence)); setSavedAt(draft.updatedAt);
+        const restoredEvidence = await restoreFileForUpload(draft.evidence);
+        setReason(draft.values.reason); setReasonDetail(draft.values.reasonDetail); setAutomaticTime(draft.values.automaticTime); setArrivedAt(draft.values.arrivedAt); setReporter(draft.values.reporter); setEvidence(restoredEvidence); setSavedAt(draft.updatedAt);
+        if (draft.evidence && !restoredEvidence) { preservedUnrestoredEvidence.current = draft.evidence; setEvidenceRecoveryIssue(true); }
         if (draft.student?.id) void getStudentLateAlert(String(draft.student.id)).then(setLateAlert);
       } else setRequestId(crypto.randomUUID());
-    }).catch(() => setStorageSafe(false)).finally(() => setHydrated(true));
+    }).catch(() => { setDraftReadFailed(true); setStorageSafe(false); }).finally(() => setHydrated(true));
+  }, [draftReadAttempt, scope]);
+  const currentDraft = useCallback((status: 'draft'|'queued' = draftStatus): LateEntryDraft => ({ version: 1, clientRequestId: requestId, status, updatedAt: new Date().toISOString(), student, values: { studentQuery, reason, reasonDetail, automaticTime, arrivedAt, reporter }, evidence: evidence ? persistFile(evidence) : preservedUnrestoredEvidence.current }), [requestId, draftStatus, student, studentQuery, reason, reasonDetail, automaticTime, arrivedAt, reporter, evidence]);
+  latestDraftState.current = hydrated && requestId ? { requestId, status: draftStatus, student, studentQuery, reason, reasonDetail, automaticTime, arrivedAt, reporter, evidence } : null;
+  useEffect(() => { if (!hydrated || !requestId) return; const timer = setTimeout(() => { void saveLateEntryDraft(scope, currentDraft()).then(() => { setStorageSafe(true); setSavedAt(new Date().toISOString()); }).catch(() => setStorageSafe(false)); }, 350); return () => clearTimeout(timer); }, [hydrated, requestId, scope, currentDraft]);
+  useEffect(() => () => {
+    const current = latestDraftState.current;
+    if (current) void saveLateEntryDraft(scope, { version: 1, clientRequestId: current.requestId, status: current.status, updatedAt: new Date().toISOString(), student: current.student, values: { studentQuery: current.studentQuery, reason: current.reason, reasonDetail: current.reasonDetail, automaticTime: current.automaticTime, arrivedAt: current.arrivedAt, reporter: current.reporter }, evidence: current.evidence ? persistFile(current.evidence) : preservedUnrestoredEvidence.current }).catch(() => undefined);
   }, [scope]);
-  const currentDraft = useCallback((status: 'draft'|'queued' = draftStatus) => ({ version: 1 as const, clientRequestId: requestId, status, updatedAt: new Date().toISOString(), student, values: { studentQuery, reason, reasonDetail, automaticTime, arrivedAt, reporter }, evidence: persistFile(evidence) }), [requestId, draftStatus, student, studentQuery, reason, reasonDetail, automaticTime, arrivedAt, reporter, evidence]);
-  useEffect(() => { if (!hydrated || !requestId) return; const timer = setTimeout(() => { void saveLateEntryDraft(scope, currentDraft()).then(() => { setStorageSafe(true); setSavedAt(new Date().toISOString()); }).catch(() => setStorageSafe(false)); }, 120); return () => clearTimeout(timer); }, [hydrated, requestId, scope, currentDraft]);
   useEffect(() => { const preserve = () => { if (hydrated && requestId) void saveLateEntryDraft(scope, currentDraft()); }; const visibility = () => { if (document.visibilityState === 'hidden') preserve(); }; window.addEventListener('pagehide', preserve); document.addEventListener('visibilitychange', visibility); return () => { window.removeEventListener('pagehide', preserve); document.removeEventListener('visibilitychange', visibility); }; }, [hydrated, requestId, scope, currentDraft]);
   useEffect(() => { const timer = setTimeout(async () => { if (studentQuery.trim().length < 2 || student?.full_name === studentQuery) return setStudentResults([]); const result = await searchFilterStudents(studentQuery); if (result.success) setStudentResults(result.data); }, 250); return () => clearTimeout(timer); }, [studentQuery, student]);
   useEffect(() => { if (!initialData.isGeneral) return; const timer = setTimeout(async () => { if (reporter.trim().length < 1) return setReporterResults([]); const result = await searchFilterReporters(reporter); if (result.success) setReporterResults(result.data); }, 250); return () => clearTimeout(timer); }, [reporter, initialData.isGeneral]);
 
   const chooseStudent = async (selected: any) => { setStudent(selected); setStudentQuery(selected.full_name); setStudentResults([]); setLateAlert(await getStudentLateAlert(selected.id)); };
-  const resetForm = useCallback(async () => { await clearLateEntryDraft(scope); setStudent(null); setStudentQuery(''); setStudentResults([]); setLateAlert(null); setReason('trafico'); setReasonDetail(''); setAutomaticTime(true); setArrivedAt(''); setEvidence(null); setDraftStatus('draft'); setSavedAt(''); setRequestId(crypto.randomUUID()); setResetProgress(0); setResetOpen(false); if (initialData.isGeneral) setReporter(''); }, [scope, initialData.isGeneral]);
-  const resetAfterSuccess = useCallback(async () => { await resetForm(); router.refresh(); }, [resetForm, router]);
+  const setEvidenceFile = (file: File | null) => { preservedUnrestoredEvidence.current = null; setEvidenceRecoveryIssue(false); setEvidence(file); };
+  const resetState = useCallback(() => { latestDraftState.current = null; preservedUnrestoredEvidence.current = null; setStudent(null); setStudentQuery(''); setStudentResults([]); setLateAlert(null); setReason('trafico'); setReasonDetail(''); setAutomaticTime(true); setArrivedAt(''); setEvidence(null); setEvidenceRecoveryIssue(false); setDraftStatus('draft'); setSavedAt(''); setRequestId(crypto.randomUUID()); setResetProgress(0); setResetOpen(false); if (initialData.isGeneral) setReporter(''); }, [initialData.isGeneral]);
+  const resetForm = useCallback(async () => {
+    try { await clearLateEntryDraft(scope); resetState(); }
+    catch { setStorageSafe(false); toast({ variant: 'destructive', title: 'No se pudo reiniciar', description: 'La copia local no se eliminó. Revisa el almacenamiento del navegador y vuelve a intentarlo.' }); }
+  }, [resetState, scope, toast]);
   const send = useCallback(async () => {
-    if (!student?.id || !requestId || sending) return;
-    if (!navigator.onLine) { setDraftStatus('queued'); await saveLateEntryDraft(scope, currentDraft('queued')).catch(() => setStorageSafe(false)); toast({ title: 'Registro protegido sin conexión', description: 'No se enviará automáticamente. Pulsa Guardar cuando vuelva internet.' }); return; }
-    setSending(true);
+    if (!student?.id || !requestId || sendLock.current) return;
+    if (evidenceRecoveryIssue) { toast({ variant: 'destructive', title: 'Revisa la evidencia recuperada', description: 'Vuelve a seleccionarla o descártala expresamente antes de guardar.' }); return; }
+    const draft = currentDraft(navigator.onLine ? 'draft' : 'queued');
+    sendLock.current = true; setSending(true);
+    let locallyCommitted = false;
+    try { await saveLateEntryDraft(scope, draft); locallyCommitted = true; setStorageSafe(true); setSavedAt(new Date().toISOString()); }
+    catch { setStorageSafe(false); }
+    if (!navigator.onLine) {
+      setDraftStatus('queued');
+      toast(locallyCommitted
+        ? { title: 'Registro protegido sin conexión', description: 'No se enviará automáticamente. Pulsa Guardar cuando vuelva internet.' }
+        : { variant: 'destructive', title: 'No se pudo proteger el registro', description: 'El navegador no confirmó el guardado local. Los datos siguen en pantalla: no cierres esta pestaña.' });
+      sendLock.current = false; setSending(false);
+      return;
+    }
     try {
       const form = new FormData(); form.set('clientRequestId', requestId); form.set('studentId', String(student.id)); form.set('automaticTime', String(automaticTime)); form.set('arrivedAt', arrivedAt); form.set('reasonCode', reason); form.set('reasonDetail', reasonDetail); form.set('reporterName', reporter); if (evidence) form.set('evidence', evidence);
       const result = await createLateEntry(form);
-      if (!result.success) { setDraftStatus('draft'); toast({ variant: 'destructive', title: 'No se guardó el retardo', description: `${result.error} El borrador y su evidencia siguen protegidos en este dispositivo.` }); return; }
-      toast({ title: result.duplicate ? 'El retardo ya estaba guardado' : 'Retardo registrado y auditado' }); await resetAfterSuccess();
-    } catch { setDraftStatus('queued'); await saveLateEntryDraft(scope, currentDraft('queued')).catch(() => setStorageSafe(false)); toast({ title: 'Envío pendiente', description: 'La conexión se interrumpió; no se perdió nada. Pulsa Guardar para reintentar.' }); }
-    finally { setSending(false); }
-  }, [student, requestId, sending, scope, currentDraft, automaticTime, arrivedAt, reason, reasonDetail, reporter, evidence, toast, resetAfterSuccess]);
+      if (!result.success) { setDraftStatus('queued'); const queuedCommitted = await saveLateEntryDraft(scope, { ...draft, status: 'queued', updatedAt: new Date().toISOString() }).then(() => true).catch(() => false); const protectedLocally = queuedCommitted || locallyCommitted; toast({ variant: 'destructive', title: 'No se guardó el retardo', description: protectedLocally ? `${result.error} La copia local confirmada permanece disponible; pulsa Guardar para reintentar.` : `${result.error} El navegador no confirmó una copia local: no cierres esta pestaña.` }); return; }
+      latestDraftState.current = null;
+      const localCopyRemoved = await clearLateEntryDraft(scope).then(() => true).catch(() => false);
+      resetState();
+      toast({ title: result.duplicate ? 'El retardo ya estaba guardado' : 'Retardo registrado y auditado', description: localCopyRemoved ? 'La base de datos confirmó el registro y se retiró la copia temporal.' : 'La base de datos confirmó el registro. El navegador no pudo retirar la copia temporal, pero no se volverá a enviar automáticamente.' });
+      router.refresh();
+    } catch { setDraftStatus('queued'); const queuedCommitted = await saveLateEntryDraft(scope, { ...draft, status: 'queued', updatedAt: new Date().toISOString() }).then(() => true).catch(() => false); const protectedLocally = queuedCommitted || locallyCommitted; if (!protectedLocally) setStorageSafe(false); toast({ variant: 'destructive', title: 'Envío pendiente', description: protectedLocally ? 'La conexión se interrumpió. La copia local confirmada permanece disponible; pulsa Guardar para reintentar.' : 'La conexión falló y el navegador no confirmó el almacenamiento local. Los datos siguen en pantalla; no cierres esta pestaña.' }); }
+    finally { sendLock.current = false; setSending(false); }
+  }, [student, requestId, evidenceRecoveryIssue, scope, currentDraft, automaticTime, arrivedAt, reason, reasonDetail, reporter, evidence, toast, resetState, router]);
   const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); void send(); };
   const addStudent = () => startTransition(async () => { const result = await addFilterStudents({ groupId: newGroup, names: [newName] }); if (!result.success) toast({ variant: 'destructive', title: 'No se agregó', description: result.error }); else { toast({ title: 'Alumno agregado' }); setAddOpen(false); setNewName(''); router.refresh(); } });
   const openEvidence = async (path: string) => { const result = await getFilterEvidenceUrl(path); if (result.success && result.url) window.open(result.url, '_blank', 'noopener,noreferrer'); else toast({ variant: 'destructive', title: 'No se pudo abrir', description: result.error }); };
   const groupLabel = (group: any) => { const level = initialData.levels.find((item: any) => item.id === group.level_id); return `${level?.name || 'Nivel'} · ${group.grade_name} · ${group.group_name}`; };
 
-  return <div className="space-y-6">
-    <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start"><div><h1 className="flex items-center gap-2 text-3xl font-bold text-primary"><TimerReset />Bitácora de retardos</h1><p className="text-muted-foreground">Registro móvil y de escritorio, atribuido y aislado para esta institución.</p></div><Button type="button" variant="outline" onClick={() => setResetOpen(true)}><RefreshCcw className="mr-2 h-4 w-4" />Reiniciar proceso</Button></div>
+  if (!hydrated) return <Card><CardContent className="flex min-h-64 items-center justify-center">Recuperando el registro guardado en este dispositivo…</CardContent></Card>;
+  if (draftReadFailed) return <Card className="mx-auto max-w-2xl"><CardHeader><CardTitle>No fue posible leer la copia local</CardTitle><CardDescription>Por seguridad no se inició ni sobrescribió ningún registro. Tus datos anteriores permanecen intactos en este dispositivo.</CardDescription></CardHeader><CardContent className="space-y-4"><Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>Recuperación detenida</AlertTitle><AlertDescription>Verifica que el navegador permita almacenamiento para este sitio. En Safari evita la navegación privada y vuelve a intentarlo.</AlertDescription></Alert><Button onClick={() => { setStorageSafe(true); setDraftReadAttempt((current) => current + 1); }}>Reintentar recuperación</Button></CardContent></Card>;
+  return <div className={`space-y-6 ${sending ? 'pointer-events-none' : ''}`} aria-busy={sending}>
+    <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start"><div><h1 className="flex items-center gap-2 text-3xl font-bold text-primary"><TimerReset />Bitácora de retardos</h1><p className="text-muted-foreground">Registro móvil y de escritorio, atribuido y aislado para esta institución.</p></div><Button type="button" variant="outline" disabled={sending} onClick={() => setResetOpen(true)}><RefreshCcw className="mr-2 h-4 w-4" />Reiniciar proceso</Button></div>
     <Alert variant={!storageSafe ? 'destructive' : 'default'}>{!online ? <CloudOff className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}<AlertTitle>{!storageSafe ? 'El navegador bloqueó el almacenamiento local' : draftStatus === 'queued' ? 'Guardado pendiente y protegido' : 'Borrador protegido en este dispositivo'}</AlertTitle><AlertDescription>{!storageSafe ? 'No cierres esta pestaña hasta guardar. En Safari, evita la navegación privada y permite almacenamiento del sitio.' : draftStatus === 'queued' ? 'Se recuperaron los datos y la evidencia. Nada se enviará hasta que pulses Guardar.' : !online ? 'Puedes continuar y conservar el borrador; el sistema esperará a que tú decidas enviarlo.' : savedAt ? `Guardado localmente ${new Date(savedAt).toLocaleTimeString('es-MX')}. Puedes recargar, bloquear o cerrar y volver a esta pantalla.` : 'Los datos y la evidencia se conservan automáticamente.'}</AlertDescription></Alert>
     <div className="grid gap-6 xl:grid-cols-3">
       <Card className="xl:col-span-2"><CardHeader><CardTitle>Nuevo registro</CardTitle><CardDescription>Busca al alumno incluso por nombre o cualquiera de sus apellidos.</CardDescription></CardHeader><CardContent><form onSubmit={submit} className="space-y-5">
@@ -79,7 +114,8 @@ export function FilterLateLog({ initialData, initialClock }: { initialData: any;
         {lateAlert?.success && <Alert variant={lateAlert.alert ? 'destructive' : 'default'}><AlertTriangle className="h-4 w-4" /><AlertTitle>{lateAlert.count} retardo(s) en el periodo configurado</AlertTitle><AlertDescription>{lateAlert.alert ? `Alerta activa: se alcanzó el límite de ${lateAlert.settings?.threshold}.` : `Aún no alcanza el umbral de ${lateAlert.settings?.threshold || 3}.`}</AlertDescription></Alert>}
         <div className="grid gap-4 md:grid-cols-2"><div className="space-y-2"><div className="flex items-center justify-between"><Label>Hora de llegada *</Label><div className="flex items-center gap-2 text-xs"><span>Automática</span><Switch checked={automaticTime} onCheckedChange={setAutomaticTime} /></div></div>{automaticTime ? <div className="flex min-h-10 items-center gap-2 rounded-md border bg-muted/30 px-3 text-sm"><Clock3 className="h-4 w-4 text-primary" />{initialClock.success ? new Intl.DateTimeFormat('es-MX', { timeZone: initialClock.timezone, dateStyle: 'medium', timeStyle: 'medium' }).format(clockNow) : 'Hora del servidor al guardar'}</div> : <Input value={arrivedAt} onChange={(event) => setArrivedAt(event.target.value)} type="datetime-local" required />}{initialClock.timezone && <p className="text-xs text-muted-foreground">Zona: {initialClock.timezone}</p>}</div><div><Label>Motivo *</Label><Select value={reason} onValueChange={setReason}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{FILTER_REASONS.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectContent></Select></div></div>
         <div><Label>{reason === 'otro' ? 'Especifica el motivo *' : 'Detalles del motivo (opcional)'}</Label><Textarea value={reasonDetail} onChange={(event) => setReasonDetail(event.target.value)} required={reason === 'otro'} rows={3} placeholder="Describe información útil del retardo" /></div>
-        <FilterEvidenceCapture label="Foto o comprobante" help="Fotografía optimizada para iPad o PDF de hasta 1.5 MB. Se conserva en este dispositivo hasta confirmar el registro." file={evidence} onChange={setEvidence} allowPdf required={false} />
+        {evidenceRecoveryIssue && <Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>La evidencia local no pudo reconstruirse</AlertTitle><AlertDescription>Los demás datos sí se recuperaron. Vuelve a tomar o elegir la evidencia; si deseas continuar sin ella, descártala expresamente.</AlertDescription><Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => setEvidenceFile(null)}>Descartar evidencia dañada</Button></Alert>}
+        <FilterEvidenceCapture label="Foto o comprobante" help="Fotografía optimizada para iPad o PDF de hasta 1.5 MB. Se conserva en este dispositivo hasta confirmar el registro." file={evidence} onChange={setEvidenceFile} allowPdf required={false} />
         <div className="relative"><Label>Nombre de quien registra {initialData.isGeneral ? '*' : ''}</Label><Input value={reporter} onChange={(e) => setReporter(e.target.value)} disabled={!initialData.isGeneral} autoComplete="off" required={initialData.isGeneral} />{reporterResults.length > 0 && <div className="absolute z-30 mt-1 w-full rounded-md border bg-popover p-1 shadow-xl">{reporterResults.map((item) => <button type="button" key={item.id} onClick={() => { setReporter(item.name); setReporterResults([]); }} className="block w-full rounded px-3 py-2 text-left text-sm hover:bg-muted">{item.name}</button>)}</div>}</div>
         <Button type="submit" size="lg" disabled={!hydrated || sending || !student || (initialData.isGeneral && reporter.trim().length < 2)}>{sending ? 'Guardando…' : draftStatus === 'queued' && online ? 'Reintentar guardado' : !online ? 'Conservar borrador' : 'Guardar retardo'}</Button>
       </form></CardContent></Card>

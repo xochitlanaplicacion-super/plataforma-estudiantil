@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertCircle, ArrowLeft, ArrowRight, BadgeCheck, CheckCircle2, CircleEllipsis, Clock3, DoorOpen, FileText, MessageCircle, MessageSquareText, Phone, Plus, RefreshCcw, Search, ShieldCheck, Signal, SignalZero, Trash2, UserRoundPlus, UsersRound } from 'lucide-react';
 import { addFilterStudents, createEarlyDeparture, getFilterEvidenceUrl, searchFilterReporters, searchFilterStudents } from '@/lib/actions/filter-control';
-import { clearEarlyDepartureDraft, EarlyDepartureDraft, getEarlyDepartureDraft, persistFile, restoreFile, saveEarlyDepartureDraft } from '@/lib/filter-early-departure-draft';
+import { clearEarlyDepartureDraft, EarlyDepartureDraft, getEarlyDepartureDraft, PersistedFile, persistFile, restoreFileForUpload, saveEarlyDepartureDraft } from '@/lib/filter-early-departure-draft';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
@@ -45,6 +45,8 @@ const EMPTY_VALUES: Record<string, string | boolean> = {
   notifiedParty: '', notifiedStaffName: '', notificationMethod: '', notificationMethodOther: '', departureReason: '',
   departureReasonOther: '', description: '', deliveringTeacherName: '', reporterName: '', confirmed: false,
 };
+type EarlyFileKey = 'identificationEvidence' | 'pickupPersonPhoto' | 'finalHandoverPhoto' | 'pickupSignature';
+const EARLY_FILE_LABELS: Record<EarlyFileKey, string> = { identificationEvidence: 'identificación', pickupPersonPhoto: 'foto de la persona', finalHandoverPhoto: 'foto final', pickupSignature: 'firma' };
 
 export function FilterEarlyDepartureWizard({ initialData, initialClock }: { initialData: any; initialClock: any }) {
   const router = useRouter(); const { toast } = useToast();
@@ -57,13 +59,16 @@ export function FilterEarlyDepartureWizard({ initialData, initialClock }: { init
   const [pickupPersonPhoto, setPickupPersonPhoto] = useState<File | null>(null);
   const [finalHandoverPhoto, setFinalHandoverPhoto] = useState<File | null>(null);
   const [pickupSignature, setPickupSignature] = useState<File | null>(null);
-  const [hydrated, setHydrated] = useState(false); const [storageSafe, setStorageSafe] = useState(true);
+  const [hydrated, setHydrated] = useState(false); const [draftReadFailed, setDraftReadFailed] = useState(false); const [draftReadAttempt, setDraftReadAttempt] = useState(0); const [storageSafe, setStorageSafe] = useState(true);
+  const [recoveryFileIssues, setRecoveryFileIssues] = useState<EarlyFileKey[]>([]);
   const [draftStatus, setDraftStatus] = useState<'draft' | 'queued'>('draft');
   const [online, setOnline] = useState(true); const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<string | null>(null); const [clock, setClock] = useState(() => new Date(initialClock.iso || Date.now()));
   const [addOpen, setAddOpen] = useState(false); const [newName, setNewName] = useState(''); const [newGroup, setNewGroup] = useState(initialData.groups[0]?.id || '');
   const [resetOpen, setResetOpen] = useState(false); const [resetProgress, setResetProgress] = useState(0);
-  const syncRunning = useRef(false);
+  const syncRunning = useRef(false); const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestDraftState = useRef<{ requestId: string; step: number; status: 'draft' | 'queued'; values: Record<string, string | boolean>; student: any; identificationEvidence: File | null; pickupPersonPhoto: File | null; finalHandoverPhoto: File | null; pickupSignature: File | null } | null>(null);
+  const preservedUnrestoredFiles = useRef<Partial<Record<EarlyFileKey, PersistedFile>>>({});
 
   const setValue = (key: string, value: string | boolean) => setValues((current) => ({ ...current, [key]: value }));
   const selectedGroup = useMemo(() => initialData.groups.find((item: any) => item.id === student?.group_id), [initialData.groups, student]);
@@ -72,8 +77,12 @@ export function FilterEarlyDepartureWizard({ initialData, initialClock }: { init
 
   const makeDraft = useCallback((status = draftStatus): EarlyDepartureDraft => ({
     version: 1, clientRequestId: requestId, step, status, updatedAt: new Date().toISOString(), values, student,
-    identificationEvidence: persistFile(identificationEvidence), pickupPersonPhoto: persistFile(pickupPersonPhoto), finalHandoverPhoto: persistFile(finalHandoverPhoto), pickupSignature: persistFile(pickupSignature),
+    identificationEvidence: identificationEvidence ? persistFile(identificationEvidence) : preservedUnrestoredFiles.current.identificationEvidence || null,
+    pickupPersonPhoto: pickupPersonPhoto ? persistFile(pickupPersonPhoto) : preservedUnrestoredFiles.current.pickupPersonPhoto || null,
+    finalHandoverPhoto: finalHandoverPhoto ? persistFile(finalHandoverPhoto) : preservedUnrestoredFiles.current.finalHandoverPhoto || null,
+    pickupSignature: pickupSignature ? persistFile(pickupSignature) : preservedUnrestoredFiles.current.pickupSignature || null,
   }), [draftStatus, finalHandoverPhoto, identificationEvidence, pickupPersonPhoto, pickupSignature, requestId, step, student, values]);
+  latestDraftState.current = hydrated && requestId ? { requestId, step, status: draftStatus, values, student, identificationEvidence, pickupPersonPhoto, finalHandoverPhoto, pickupSignature } : null;
 
   useEffect(() => {
     setOnline(navigator.onLine);
@@ -83,22 +92,55 @@ export function FilterEarlyDepartureWizard({ initialData, initialClock }: { init
   }, []);
   useEffect(() => { const timer = setInterval(() => setClock((current) => new Date(current.getTime() + 1000)), 1000); return () => clearInterval(timer); }, []);
   useEffect(() => {
-    getEarlyDepartureDraft(draftScope).then((draft) => {
+    setHydrated(false);
+    getEarlyDepartureDraft(draftScope).then(async (draft) => {
+      setDraftReadFailed(false);
       if (draft?.version === 1 && draft.clientRequestId) {
         setRequestId(draft.clientRequestId); setStep(Math.min(Math.max(draft.step, 0), 4)); setDraftStatus(draft.status);
         setValues({ ...EMPTY_VALUES, reporterName: initialData.isGeneral ? '' : initialData.actorName, ...draft.values }); setStudent(draft.student);
-        setIdentificationEvidence(restoreFile(draft.identificationEvidence)); setPickupPersonPhoto(restoreFile(draft.pickupPersonPhoto)); setFinalHandoverPhoto(restoreFile(draft.finalHandoverPhoto)); setPickupSignature(restoreFile(draft.pickupSignature || null));
-        toast({ title: draft.status === 'queued' ? 'Registro pendiente recuperado' : 'Borrador recuperado', description: 'También se restauraron las fotografías guardadas en este dispositivo.' });
+        const [identificationEvidence, pickupPersonPhoto, finalHandoverPhoto, pickupSignature] = await Promise.all([
+          restoreFileForUpload(draft.identificationEvidence), restoreFileForUpload(draft.pickupPersonPhoto),
+          restoreFileForUpload(draft.finalHandoverPhoto), restoreFileForUpload(draft.pickupSignature || null),
+        ]);
+        const restored = { identificationEvidence, pickupPersonPhoto, finalHandoverPhoto, pickupSignature };
+        const persisted: Partial<Record<EarlyFileKey, PersistedFile | null>> = { identificationEvidence: draft.identificationEvidence, pickupPersonPhoto: draft.pickupPersonPhoto, finalHandoverPhoto: draft.finalHandoverPhoto, pickupSignature: draft.pickupSignature || null };
+        const damaged = (Object.keys(restored) as EarlyFileKey[]).filter((key) => persisted[key] && !restored[key]);
+        preservedUnrestoredFiles.current = Object.fromEntries(damaged.map((key) => [key, persisted[key]]));
+        setIdentificationEvidence(restored.identificationEvidence); setPickupPersonPhoto(restored.pickupPersonPhoto); setFinalHandoverPhoto(restored.finalHandoverPhoto); setPickupSignature(restored.pickupSignature);
+        setRecoveryFileIssues(damaged);
+        toast(damaged.length
+          ? { variant: 'destructive', title: 'Borrador recuperado parcialmente', description: `Vuelve a capturar: ${damaged.map((key) => EARLY_FILE_LABELS[key]).join(', ')}.` }
+          : { title: draft.status === 'queued' ? 'Registro pendiente recuperado' : 'Borrador recuperado', description: 'Los datos y fotografías se reconstruyeron y están listos para revisión.' });
       } else setRequestId(crypto.randomUUID());
-    }).catch(() => { setRequestId(crypto.randomUUID()); setStorageSafe(false); }).finally(() => setHydrated(true));
-  }, [draftScope, initialData.actorName, initialData.isGeneral, toast]);
+    }).catch(() => { setDraftReadFailed(true); setStorageSafe(false); }).finally(() => setHydrated(true));
+  }, [draftReadAttempt, draftScope, initialData.actorName, initialData.isGeneral, toast]);
   useEffect(() => {
     if (!hydrated || !requestId) return;
-    void saveEarlyDepartureDraft(draftScope, makeDraft()).then(() => setSavedAt(new Date().toISOString())).catch(() => setStorageSafe(false));
+    if (persistTimer.current) clearTimeout(persistTimer.current);
+    persistTimer.current = setTimeout(() => {
+      void saveEarlyDepartureDraft(draftScope, makeDraft()).then(() => { setStorageSafe(true); setSavedAt(new Date().toISOString()); }).catch(() => setStorageSafe(false));
+    }, 350);
+    return () => { if (persistTimer.current) clearTimeout(persistTimer.current); };
   }, [draftScope, hydrated, makeDraft, requestId]);
+  useEffect(() => () => {
+    const current = latestDraftState.current;
+    if (current) {
+      const draft: EarlyDepartureDraft = {
+        version: 1, clientRequestId: current.requestId, step: current.step, status: current.status,
+        updatedAt: new Date().toISOString(), values: current.values, student: current.student,
+        identificationEvidence: persistFile(current.identificationEvidence), pickupPersonPhoto: persistFile(current.pickupPersonPhoto),
+        finalHandoverPhoto: persistFile(current.finalHandoverPhoto), pickupSignature: persistFile(current.pickupSignature),
+      };
+      if (!draft.identificationEvidence) draft.identificationEvidence = preservedUnrestoredFiles.current.identificationEvidence || null;
+      if (!draft.pickupPersonPhoto) draft.pickupPersonPhoto = preservedUnrestoredFiles.current.pickupPersonPhoto || null;
+      if (!draft.finalHandoverPhoto) draft.finalHandoverPhoto = preservedUnrestoredFiles.current.finalHandoverPhoto || null;
+      if (!draft.pickupSignature) draft.pickupSignature = preservedUnrestoredFiles.current.pickupSignature || null;
+      void saveEarlyDepartureDraft(draftScope, draft).catch(() => undefined);
+    }
+  }, [draftScope]);
   useEffect(() => {
     if (!hydrated) return;
-    const persistNow = () => { void saveEarlyDepartureDraft(draftScope, makeDraft()).catch(() => setStorageSafe(false)); };
+    const persistNow = () => { if (persistTimer.current) clearTimeout(persistTimer.current); void saveEarlyDepartureDraft(draftScope, makeDraft()).catch(() => setStorageSafe(false)); };
     const onVisibility = () => { if (document.visibilityState === 'hidden') persistNow(); };
     window.addEventListener('pagehide', persistNow); document.addEventListener('visibilitychange', onVisibility);
     return () => { window.removeEventListener('pagehide', persistNow); document.removeEventListener('visibilitychange', onVisibility); };
@@ -134,11 +176,20 @@ export function FilterEarlyDepartureWizard({ initialData, initialClock }: { init
     if (targetStep === 3 && initialData.isGeneral && String(values.reporterName).trim().length < 2) return 'Escribe el nombre del personal de guardia que registra.';
     if (targetStep === 3 && !finalHandoverPhoto) return 'Toma la foto final de la persona que retira junto con el alumno.';
     if (targetStep === 3 && !pickupSignature) return 'Solicita la firma de la persona que retira al alumno.';
+    if (targetStep === 4 && recoveryFileIssues.length) return `Vuelve a capturar los archivos que no pudieron recuperarse: ${recoveryFileIssues.map((key) => EARLY_FILE_LABELS[key]).join(', ')}.`;
     if (targetStep === 4 && values.confirmed !== true) return 'Marca la confirmación obligatoria para finalizar.';
     return null;
   };
   const next = () => { const error = validationError(); if (error) return toast({ variant: 'destructive', title: 'Completa este paso', description: error }); setStep((current) => Math.min(current + 1, 4)); };
   const chooseStudent = (selected: any) => { const canonical = initialData.students.find((item: any) => item.id === selected.id) || selected; setStudent(canonical); setValue('studentQuery', canonical.full_name); setStudentResults([]); };
+  const replaceFile = (key: EarlyFileKey, file: File | null) => {
+    delete preservedUnrestoredFiles.current[key];
+    setRecoveryFileIssues((current) => current.filter((item) => item !== key));
+    if (key === 'identificationEvidence') setIdentificationEvidence(file);
+    if (key === 'pickupPersonPhoto') setPickupPersonPhoto(file);
+    if (key === 'finalHandoverPhoto') setFinalHandoverPhoto(file);
+    if (key === 'pickupSignature') setPickupSignature(file);
+  };
   const addStudent = async () => {
     const result = await addFilterStudents({ groupId: newGroup, names: [newName] });
     if (!result.success) return toast({ variant: 'destructive', title: 'No se agregó el alumno', description: result.error });
@@ -146,49 +197,75 @@ export function FilterEarlyDepartureWizard({ initialData, initialClock }: { init
     setAddOpen(false); setNewName(''); toast({ title: 'Alumno agregado al padrón' }); router.refresh();
   };
 
-  const formDataFromDraft = (draft: EarlyDepartureDraft) => {
+  const formDataFromDraft = async (draft: EarlyDepartureDraft) => {
     const data = new FormData(); data.set('clientRequestId', draft.clientRequestId); data.set('studentId', String((draft.student as any)?.id || ''));
     Object.entries(draft.values).forEach(([key, value]) => data.set(key, String(value)));
-    const identification = restoreFile(draft.identificationEvidence); const pickup = restoreFile(draft.pickupPersonPhoto); const handover = restoreFile(draft.finalHandoverPhoto); const signature = restoreFile(draft.pickupSignature || null);
+    const [identification, pickup, handover, signature] = await Promise.all([restoreFileForUpload(draft.identificationEvidence), restoreFileForUpload(draft.pickupPersonPhoto), restoreFileForUpload(draft.finalHandoverPhoto), restoreFileForUpload(draft.pickupSignature || null)]);
     if (identification) data.set('identificationEvidence', identification); if (pickup) data.set('pickupPersonPhoto', pickup); if (handover) data.set('finalHandoverPhoto', handover); if (signature) data.set('pickupSignature', signature);
     return data;
   };
-  const resetForm = useCallback(async () => {
-    await clearEarlyDepartureDraft(draftScope); setRequestId(crypto.randomUUID()); setStep(0); setDraftStatus('draft');
+  const resetState = useCallback(() => {
+    if (persistTimer.current) clearTimeout(persistTimer.current); latestDraftState.current = null; preservedUnrestoredFiles.current = {};
+    setRequestId(crypto.randomUUID()); setStep(0); setDraftStatus('draft');
     setValues({ ...EMPTY_VALUES, reporterName: initialData.isGeneral ? '' : initialData.actorName }); setStudent(null);
-    setIdentificationEvidence(null); setPickupPersonPhoto(null); setFinalHandoverPhoto(null); setPickupSignature(null); setResetProgress(0); setResetOpen(false);
-  }, [draftScope, initialData.actorName, initialData.isGeneral]);
-  const sendDraft = useCallback(async (draft: EarlyDepartureDraft) => {
-    if (syncRunning.current) return; syncRunning.current = true; setSaving(true);
+    setIdentificationEvidence(null); setPickupPersonPhoto(null); setFinalHandoverPhoto(null); setPickupSignature(null); setRecoveryFileIssues([]); setResetProgress(0); setResetOpen(false);
+  }, [initialData.actorName, initialData.isGeneral]);
+  const resetForm = useCallback(async () => {
+    if (persistTimer.current) clearTimeout(persistTimer.current);
+    try { await clearEarlyDepartureDraft(draftScope); resetState(); }
+    catch { setStorageSafe(false); toast({ variant: 'destructive', title: 'No se pudo reiniciar', description: 'La copia local no se eliminó. Revisa el almacenamiento del navegador y vuelve a intentarlo.' }); }
+  }, [draftScope, resetState, toast]);
+  const sendDraft = useCallback(async (draft: EarlyDepartureDraft, wasLocallyCommitted: boolean) => {
+    const preserveForRetry = async () => {
+      const queued = { ...draft, status: 'queued' as const, updatedAt: new Date().toISOString() };
+      setDraftStatus('queued');
+      try { await saveEarlyDepartureDraft(draftScope, queued); setStorageSafe(true); return true; }
+      catch { setStorageSafe(false); return wasLocallyCommitted; }
+    };
     try {
-      const result = await createEarlyDeparture(formDataFromDraft(draft));
+      const result = await createEarlyDeparture(await formDataFromDraft(draft));
       if (!result.success) {
-        setDraftStatus('queued'); await saveEarlyDepartureDraft(draftScope, { ...draft, status: 'queued', updatedAt: new Date().toISOString() });
-        toast({ variant: 'destructive', title: 'No se pudo guardar todavía', description: `${result.error} El contenido y las fotos permanecen protegidos. Corrige lo indicado y pulsa Guardar para reintentar.` });
+        const protectedLocally = await preserveForRetry();
+        toast({ variant: 'destructive', title: 'No se pudo guardar todavía', description: protectedLocally ? `${result.error} La copia local confirmada permanece disponible; corrige lo indicado y pulsa Guardar.` : `${result.error} Los datos siguen en pantalla, pero el navegador no confirmó una copia local: no cierres esta pestaña.` });
         return;
       }
-      await clearEarlyDepartureDraft(draftScope);
-      toast({ title: result.duplicate ? 'La salida ya estaba registrada' : 'Salida anticipada guardada y auditada', description: 'La base de datos confirmó el registro; el borrador local ya puede retirarse.' });
-      await resetForm(); router.refresh();
-    } catch {
-      const queued = { ...draft, status: 'queued' as const, updatedAt: new Date().toISOString() }; setDraftStatus('queued');
-      try { await saveEarlyDepartureDraft(draftScope, queued); } catch { setStorageSafe(false); }
-      toast({ variant: 'destructive', title: 'Sin conexión con el servidor', description: 'El registro permanece protegido. Cuando vuelva internet, pulsa Guardar para reintentar.' });
+      latestDraftState.current = null;
+      if (persistTimer.current) clearTimeout(persistTimer.current);
+      const localCopyRemoved = await clearEarlyDepartureDraft(draftScope).then(() => true).catch(() => false);
+      resetState();
+      toast({ title: result.duplicate ? 'La salida ya estaba registrada' : 'Salida anticipada guardada y auditada', description: localCopyRemoved ? 'La base de datos confirmó el registro y se retiró la copia temporal.' : 'La base de datos confirmó el registro. El navegador no pudo retirar la copia temporal, pero no se volverá a enviar automáticamente.' });
+      router.refresh();
+    } catch (error) {
+      const protectedLocally = await preserveForRetry();
+      toast({ variant: 'destructive', title: 'Sin conexión con el servidor', description: protectedLocally ? `${error instanceof Error ? error.message : 'La conexión se interrumpió.'} La copia local confirmada permanece disponible; pulsa Guardar para reintentar.` : 'La conexión falló y el navegador no confirmó el almacenamiento local. Los datos siguen en pantalla; no cierres esta pestaña.' });
     } finally { syncRunning.current = false; setSaving(false); }
-  }, [draftScope, resetForm, router, toast]);
+  }, [draftScope, resetState, router, toast]);
   const save = async () => {
+    if (syncRunning.current) return;
     const error = validationError(4); if (error) return toast({ variant: 'destructive', title: 'No se puede finalizar', description: error });
-    const draft = makeDraft(online ? 'draft' : 'queued'); await saveEarlyDepartureDraft(draftScope, draft).catch(() => setStorageSafe(false));
-    if (!online) { setDraftStatus('queued'); return toast({ title: 'Borrador protegido sin conexión', description: 'No se enviará automáticamente. Pulsa Guardar cuando el dispositivo recupere internet.' }); }
-    await sendDraft(draft);
+    const draft = makeDraft(online ? 'draft' : 'queued');
+    syncRunning.current = true; setSaving(true);
+    if (persistTimer.current) clearTimeout(persistTimer.current);
+    let locallyCommitted = false;
+    try { await saveEarlyDepartureDraft(draftScope, draft); locallyCommitted = true; setStorageSafe(true); setSavedAt(new Date().toISOString()); }
+    catch { setStorageSafe(false); }
+    if (!online) {
+      setDraftStatus('queued');
+      syncRunning.current = false; setSaving(false);
+      return toast(locallyCommitted
+        ? { title: 'Borrador protegido sin conexión', description: 'No se enviará automáticamente. Pulsa Guardar cuando el dispositivo recupere internet.' }
+        : { variant: 'destructive', title: 'No se pudo proteger el borrador', description: 'El navegador no confirmó el guardado local. Los datos siguen en pantalla: no cierres esta pestaña.' });
+    }
+    await sendDraft(draft, locallyCommitted);
   };
   const openEvidence = async (path: string) => { const result = await getFilterEvidenceUrl(path); if (result.success && result.url) window.open(result.url, '_blank', 'noopener,noreferrer'); else toast({ variant: 'destructive', title: 'No se pudo abrir', description: result.error }); };
 
   if (!hydrated) return <Card><CardContent className="flex min-h-64 items-center justify-center">Recuperando el proceso guardado en este dispositivo…</CardContent></Card>;
+  if (draftReadFailed) return <Card className="mx-auto max-w-2xl"><CardHeader><CardTitle>No fue posible leer la copia local</CardTitle><CardDescription>Por seguridad no se inició ni sobrescribió ningún proceso. Tus datos anteriores permanecen intactos en este dispositivo.</CardDescription></CardHeader><CardContent className="space-y-4"><Alert variant="destructive"><AlertCircle className="h-4 w-4" /><AlertTitle>Recuperación detenida</AlertTitle><AlertDescription>Verifica que el navegador permita almacenamiento para este sitio. En Safari evita la navegación privada y vuelve a intentarlo.</AlertDescription></Alert><Button onClick={() => { setStorageSafe(true); setDraftReadAttempt((current) => current + 1); }}>Reintentar recuperación</Button></CardContent></Card>;
 
-  return <div className="space-y-6">
-    <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start"><div><h1 className="flex items-center gap-2 text-2xl font-bold text-primary sm:text-3xl"><DoorOpen />Bitácora de salidas anticipadas</h1><p className="text-muted-foreground">Entrega segura, guiada y auditable dentro de esta institución.</p></div><Button variant="outline" onClick={() => setResetOpen(true)}><RefreshCcw className="mr-2 h-4 w-4" />Reiniciar proceso</Button></div>
-    <Alert variant={!storageSafe ? 'destructive' : 'default'}>{online ? <Signal className="h-4 w-4" /> : <SignalZero className="h-4 w-4" />}<AlertTitle>{!storageSafe ? 'El almacenamiento local no está disponible' : draftStatus === 'queued' ? 'Guardado pendiente y protegido' : online ? 'Borrador protegido' : 'Modo sin conexión'}</AlertTitle><AlertDescription>{!storageSafe ? 'No cierres ni recargues esta página hasta guardar. Revisa que el navegador permita almacenamiento del sitio.' : draftStatus === 'queued' ? 'Se recuperaron los datos y las fotos. Nada se enviará hasta que pulses Guardar.' : `Textos y fotos se conservan en este dispositivo${savedAt ? ` · última copia ${new Date(savedAt).toLocaleTimeString('es-MX')}` : ''}.`}</AlertDescription></Alert>
+  return <div className={`space-y-6 ${saving ? 'pointer-events-none' : ''}`} aria-busy={saving}>
+    <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start"><div><h1 className="flex items-center gap-2 text-2xl font-bold text-primary sm:text-3xl"><DoorOpen />Bitácora de salidas anticipadas</h1><p className="text-muted-foreground">Entrega segura, guiada y auditable dentro de esta institución.</p></div><Button variant="outline" disabled={saving} onClick={() => setResetOpen(true)}><RefreshCcw className="mr-2 h-4 w-4" />Reiniciar proceso</Button></div>
+    <Alert variant={!storageSafe || recoveryFileIssues.length ? 'destructive' : 'default'}>{online ? <Signal className="h-4 w-4" /> : <SignalZero className="h-4 w-4" />}<AlertTitle>{recoveryFileIssues.length ? 'Revisa los archivos recuperados' : !storageSafe ? 'El almacenamiento local no está disponible' : draftStatus === 'queued' ? 'Guardado pendiente y protegido' : online ? 'Borrador protegido' : 'Modo sin conexión'}</AlertTitle><AlertDescription>{recoveryFileIssues.length ? `Los demás datos sí se recuperaron. Vuelve a capturar: ${recoveryFileIssues.map((key) => EARLY_FILE_LABELS[key]).join(', ')}.` : !storageSafe ? 'No cierres ni recargues esta página hasta guardar. Revisa que el navegador permita almacenamiento del sitio.' : draftStatus === 'queued' ? 'Se recuperaron los datos y las fotos. Nada se enviará hasta que pulses Guardar.' : `Textos y fotos se conservan en este dispositivo${savedAt ? ` · última copia ${new Date(savedAt).toLocaleTimeString('es-MX')}` : ''}.`}</AlertDescription></Alert>
     <Card><CardHeader><div className="flex items-center justify-between gap-3"><div><CardTitle>Paso {step + 1} de {STEPS.length}: {STEPS[step]}</CardTitle><CardDescription>Completa los datos señalados para habilitar el siguiente paso.</CardDescription></div><Badge variant="outline">{Math.round(((step + 1) / STEPS.length) * 100)}%</Badge></div><Progress value={((step + 1) / STEPS.length) * 100} /><div className="hidden grid-cols-5 gap-2 pt-2 md:grid">{STEPS.map((title, index) => <div key={title} className={`text-center text-xs ${index <= step ? 'font-semibold text-primary' : 'text-muted-foreground'}`}>{index + 1}. {title}</div>)}</div></CardHeader>
       <CardContent className="space-y-6">
         <Alert className="border-primary/30 bg-primary/5"><BadgeCheck className="h-4 w-4" /><AlertTitle>Guía activa</AlertTitle><AlertDescription>{[
@@ -200,9 +277,9 @@ export function FilterEarlyDepartureWizard({ initialData, initialClock }: { init
         ][step]}</AlertDescription></Alert>
 
         {step === 0 && <StepStudent values={values} setValue={setValue} student={student} studentResults={studentResults} chooseStudent={chooseStudent} setStudent={setStudent} setAddOpen={setAddOpen} group={selectedGroup} level={selectedLevel} clock={clock} initialClock={initialClock} />}
-        {step === 1 && <div className="space-y-5"><div className="grid gap-4 md:grid-cols-2"><div><Label>Nombre completo de la persona que retira *</Label><Input value={String(values.pickupPersonName)} onChange={(e) => setValue('pickupPersonName', e.target.value)} autoComplete="name" /></div><div><Label>Parentesco *</Label><Select value={String(values.relationship)} onValueChange={(value) => setValue('relationship', value)}><SelectTrigger><SelectValue placeholder="Selecciona parentesco" /></SelectTrigger><SelectContent>{RELATIONSHIPS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div></div>{values.relationship === 'otro' && <div><Label>Especifica el parentesco *</Label><Input value={String(values.relationshipOther)} onChange={(e) => setValue('relationshipOther', e.target.value)} /></div>}<FilterEvidenceCapture label="Identificación presentada" help="Fotografía legible o PDF de la identificación. La cámara trasera se abre por defecto." file={identificationEvidence} onChange={setIdentificationEvidence} allowPdf /><FilterEvidenceCapture label="Foto de la persona que retira" help="Centra el rostro y cuerpo dentro de la silueta; puedes cambiar a cámara frontal." file={pickupPersonPhoto} onChange={setPickupPersonPhoto} guide="adult" /></div>}
+        {step === 1 && <div className="space-y-5"><div className="grid gap-4 md:grid-cols-2"><div><Label>Nombre completo de la persona que retira *</Label><Input value={String(values.pickupPersonName)} onChange={(e) => setValue('pickupPersonName', e.target.value)} autoComplete="name" /></div><div><Label>Parentesco *</Label><Select value={String(values.relationship)} onValueChange={(value) => setValue('relationship', value)}><SelectTrigger><SelectValue placeholder="Selecciona parentesco" /></SelectTrigger><SelectContent>{RELATIONSHIPS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div></div>{values.relationship === 'otro' && <div><Label>Especifica el parentesco *</Label><Input value={String(values.relationshipOther)} onChange={(e) => setValue('relationshipOther', e.target.value)} /></div>}<FilterEvidenceCapture label="Identificación presentada" help="Fotografía legible o PDF de la identificación. La cámara trasera se abre por defecto." file={identificationEvidence} onChange={(file) => replaceFile('identificationEvidence', file)} allowPdf /><FilterEvidenceCapture label="Foto de la persona que retira" help="Centra el rostro y cuerpo dentro de la silueta; puedes cambiar a cámara frontal." file={pickupPersonPhoto} onChange={(file) => replaceFile('pickupPersonPhoto', file)} guide="adult" /></div>}
         {step === 2 && <div className="space-y-5"><div className="grid gap-4 md:grid-cols-2"><div><Label>¿A quién se notificó? *</Label><Select value={String(values.notifiedParty)} onValueChange={(value) => setValue('notifiedParty', value)}><SelectTrigger><SelectValue placeholder="Selecciona una persona" /></SelectTrigger><SelectContent><SelectItem value="madre">Madre</SelectItem><SelectItem value="padre">Padre</SelectItem><SelectItem value="tutor">Tutor(a)</SelectItem></SelectContent></Select></div><div><Label>Nombre del personal notificado *</Label><Input value={String(values.notifiedStaffName)} onChange={(e) => setValue('notifiedStaffName', e.target.value)} /><p className="mt-1 text-xs text-muted-foreground">Profesor de grupo o personal del plantel al que se avisó del retiro.</p></div></div><div><Label>Medio de notificación *</Label><div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">{METHODS.map((method) => <button type="button" key={method.value} onClick={() => setValue('notificationMethod', method.value)} className={`flex min-h-20 flex-col items-center justify-center gap-2 rounded-xl border p-3 text-sm transition ${values.notificationMethod === method.value ? 'border-primary bg-primary text-primary-foreground' : 'bg-card hover:bg-muted'}`}><method.icon className="h-5 w-5" />{method.label}</button>)}</div></div>{values.notificationMethod === 'otro' && <div><Label>Especifica el medio *</Label><Input value={String(values.notificationMethodOther)} onChange={(e) => setValue('notificationMethodOther', e.target.value)} /></div>}<div><Label>Motivo de retiro o salida *</Label><Select value={String(values.departureReason)} onValueChange={(value) => setValue('departureReason', value)}><SelectTrigger><SelectValue placeholder="Selecciona el motivo" /></SelectTrigger><SelectContent>{REASONS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div>{values.departureReason === 'otro' && <div><Label>Especifica el motivo *</Label><Input value={String(values.departureReasonOther)} onChange={(e) => setValue('departureReasonOther', e.target.value)} /></div>}<div><Label>Descripción y observaciones</Label><Textarea rows={5} value={String(values.description)} onChange={(e) => setValue('description', e.target.value)} placeholder="Agrega detalles útiles sobre la autorización, condición del alumno o entrega." /></div></div>}
-        {step === 3 && <div className="space-y-5"><div className="grid gap-4 md:grid-cols-2"><div><Label>Nombre del docente que entrega al alumno *</Label><Input value={String(values.deliveringTeacherName)} onChange={(e) => setValue('deliveringTeacherName', e.target.value)} /></div><div className="relative"><Label>Nombre del docente de guardia que registra *</Label><Input value={String(values.reporterName)} disabled={!initialData.isGeneral} onChange={(e) => setValue('reporterName', e.target.value)} autoComplete="off" />{reporterResults.length > 0 && <div className="absolute z-30 mt-1 w-full rounded-md border bg-popover p-1 shadow-xl">{reporterResults.map((item) => <button type="button" key={item.id} onClick={() => { setValue('reporterName', item.name); setReporterResults([]); }} className="block w-full rounded px-3 py-2 text-left text-sm hover:bg-muted">{item.name}</button>)}</div>}<p className="mt-1 text-xs text-muted-foreground">{initialData.isGeneral ? 'Obligatorio para Encargado general; se conservará para futuras búsquedas.' : 'Se obtiene de la cuenta autenticada.'}</p></div></div><div className="rounded-xl border bg-muted/30 p-4"><p className="text-sm font-semibold">Hora de salida</p><p className="mt-1 flex items-center gap-2 text-sm"><Clock3 className="h-4 w-4 text-primary" />{values.automaticTime ? `Se fijará al pulsar Guardar · ${new Intl.DateTimeFormat('es-MX', { timeZone: initialClock.timezone, dateStyle: 'medium', timeStyle: 'medium' }).format(clock)}` : String(values.departedAt)}</p></div><FilterEvidenceCapture label="Foto final: persona que retira y alumno juntos" help="Ambos deben quedar visibles dentro de las siluetas. Esta evidencia es obligatoria para confirmar la entrega." file={finalHandoverPhoto} onChange={setFinalHandoverPhoto} guide="adult-child" /><FilterSignaturePad label="Firma de la persona que retira" help="Firma dentro del recuadro con el dedo, lápiz digital o mouse." file={pickupSignature} onChange={setPickupSignature} /></div>}
+        {step === 3 && <div className="space-y-5"><div className="grid gap-4 md:grid-cols-2"><div><Label>Nombre del docente que entrega al alumno *</Label><Input value={String(values.deliveringTeacherName)} onChange={(e) => setValue('deliveringTeacherName', e.target.value)} /></div><div className="relative"><Label>Nombre del docente de guardia que registra *</Label><Input value={String(values.reporterName)} disabled={!initialData.isGeneral} onChange={(e) => setValue('reporterName', e.target.value)} autoComplete="off" />{reporterResults.length > 0 && <div className="absolute z-30 mt-1 w-full rounded-md border bg-popover p-1 shadow-xl">{reporterResults.map((item) => <button type="button" key={item.id} onClick={() => { setValue('reporterName', item.name); setReporterResults([]); }} className="block w-full rounded px-3 py-2 text-left text-sm hover:bg-muted">{item.name}</button>)}</div>}<p className="mt-1 text-xs text-muted-foreground">{initialData.isGeneral ? 'Obligatorio para Encargado general; se conservará para futuras búsquedas.' : 'Se obtiene de la cuenta autenticada.'}</p></div></div><div className="rounded-xl border bg-muted/30 p-4"><p className="text-sm font-semibold">Hora de salida</p><p className="mt-1 flex items-center gap-2 text-sm"><Clock3 className="h-4 w-4 text-primary" />{values.automaticTime ? `Se fijará al pulsar Guardar · ${new Intl.DateTimeFormat('es-MX', { timeZone: initialClock.timezone, dateStyle: 'medium', timeStyle: 'medium' }).format(clock)}` : String(values.departedAt)}</p></div><FilterEvidenceCapture label="Foto final: persona que retira y alumno juntos" help="Ambos deben quedar visibles dentro de las siluetas. Esta evidencia es obligatoria para confirmar la entrega." file={finalHandoverPhoto} onChange={(file) => replaceFile('finalHandoverPhoto', file)} guide="adult-child" /><FilterSignaturePad label="Firma de la persona que retira" help="Firma dentro del recuadro con el dedo, lápiz digital o mouse." file={pickupSignature} onChange={(file) => replaceFile('pickupSignature', file)} /></div>}
         {step === 4 && <div className="space-y-5"><div className="rounded-xl border bg-muted/30 p-5"><h3 className="font-semibold">Resumen de entrega</h3><dl className="mt-4 grid gap-3 text-sm sm:grid-cols-2"><Summary label="Alumno" value={student?.full_name} /><Summary label="Ubicación" value={`${selectedLevel?.name || ''} · ${selectedGroup?.grade_name || ''} · Grupo ${selectedGroup?.group_name || ''}`} /><Summary label="Persona que retira" value={String(values.pickupPersonName)} /><Summary label="Docente que entrega" value={String(values.deliveringTeacherName)} /><Summary label="Personal que registra" value={String(values.reporterName)} /><Summary label="Evidencias" value="Identificación, retrato, entrega conjunta y firma listas" /></dl></div><label className="flex cursor-pointer items-start gap-3 rounded-xl border-2 border-primary/30 bg-primary/5 p-5"><Checkbox checked={values.confirmed === true} onCheckedChange={(checked) => setValue('confirmed', checked === true)} className="mt-1" /><span><span className="font-semibold">Confirmación obligatoria</span><span className="mt-1 block text-sm text-muted-foreground">Confirmo que se verificó la identidad de la persona que retira al alumno y que se realizó la notificación correspondiente al padre, madre o tutor, conforme al procedimiento del plantel.</span></span></label>{draftStatus === 'queued' && <Alert><AlertCircle className="h-4 w-4" /><AlertTitle>Este registro ya está en cola</AlertTitle><AlertDescription>Puedes volver a pulsar Guardar para reintentar sin crear un duplicado.</AlertDescription></Alert>}</div>}
 
         <div className="flex flex-col-reverse justify-between gap-2 border-t pt-5 sm:flex-row"><Button variant="outline" disabled={step === 0 || saving} onClick={() => setStep((current) => Math.max(current - 1, 0))}><ArrowLeft className="mr-2 h-4 w-4" />Anterior</Button>{step < 4 ? <Button onClick={next}>Siguiente<ArrowRight className="ml-2 h-4 w-4" /></Button> : <Button size="lg" disabled={saving || values.confirmed !== true} onClick={save}><ShieldCheck className="mr-2 h-5 w-5" />{saving ? 'Guardando y verificando…' : online ? 'Guardar salida anticipada' : 'Guardar para sincronizar'}</Button>}</div>

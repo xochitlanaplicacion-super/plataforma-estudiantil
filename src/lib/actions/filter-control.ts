@@ -17,6 +17,14 @@ const EXTRAORDINARY_ID_TYPES = ['ine', 'pasaporte', 'licencia', 'cedula', 'insti
 const EXTRAORDINARY_AUTH_METHODS = ['llamada', 'videollamada', 'whatsapp', 'correo', 'documento', 'presencial'] as const;
 const EXTRAORDINARY_STATUSES = ['entregado', 'rechazado', 'cancelado'] as const;
 
+function isMissingSchemaColumn(error: { code?: string; message?: string } | null) {
+  return Boolean(error && ['42703', 'PGRST204'].includes(String(error.code)));
+}
+
+function isMissingSchemaRoutine(error: { code?: string; message?: string } | null) {
+  return Boolean(error && ['42883', 'PGRST202'].includes(String(error.code)));
+}
+
 async function requireFilterAccess() {
   const context = await requireTenantSession([...FILTER_ROLES]);
   const { data: feature } = await context.admin.from('tenant_features').select('primary_filter_enabled,timezone')
@@ -102,7 +110,7 @@ export async function getEarlyDepartureDashboardData() {
 
 export async function getExtraordinaryDashboardData() {
   const context = await requireFilterAccess();
-  const [{ data: levels }, { data: groups }, students, { data: contacts }, { data: staff }, { data: recent }, { data: earlyDepartures }] = await Promise.all([
+  const [{ data: levels }, { data: groups }, students, { data: contacts }, { data: staff }, { data: recent }, { data: earlyDepartures }, settingsResult] = await Promise.all([
     context.admin.from('filter_levels').select('*').eq('tenant_id', context.tenantId).order('sort_order').order('name'),
     context.admin.from('filter_groups').select('*').eq('tenant_id', context.tenantId).order('sort_order').order('grade_name').order('group_name'),
     getAllActiveFilterStudents(context),
@@ -111,12 +119,18 @@ export async function getExtraordinaryDashboardData() {
     context.admin.from('filter_staff_profiles').select('is_general').eq('tenant_id', context.tenantId).eq('user_id', context.user.id).maybeSingle(),
     context.admin.from('filter_extraordinary_handoffs').select('*').eq('tenant_id', context.tenantId).order('registered_at', { ascending: false }).limit(100),
     context.admin.from('filter_early_departures').select('id,student_id,student_name,departed_at').eq('tenant_id', context.tenantId).order('departed_at', { ascending: false }).limit(500),
+    context.admin.from('filter_alert_settings').select('require_verified_guardian_contact').eq('tenant_id', context.tenantId).maybeSingle(),
   ]);
+  const guardianPolicyError = settingsResult.error && !isMissingSchemaColumn(settingsResult.error)
+    ? 'No fue posible consultar la política institucional. Reintenta antes de iniciar una entrega.'
+    : null;
   return {
     tenantId: context.tenantId, actorUserId: context.user.id, clock: filterClock(context.filterTimezone),
     levels: levels || [], groups: groups || [], students, contacts: contacts || [], recent: recent || [], earlyDepartures: earlyDepartures || [],
     isGeneral: Boolean(staff?.is_general), actorName: `${context.profile.nombre} ${context.profile.apellidos}`.trim(),
     canManageGuardians: ['superuser', 'admin'].includes(String(context.profile.rol)),
+    requireVerifiedGuardianContact: settingsResult.data?.require_verified_guardian_contact !== false,
+    guardianPolicyError,
   };
 }
 
@@ -317,7 +331,10 @@ export async function createLateEntry(formData: FormData) {
     if (previousAudit?.entity_id) return { success: true, duplicate: true, id: previousAudit.entity_id };
     const previousRequest = await context.admin.from('filter_late_entries').select('id').eq('tenant_id', context.tenantId).eq('client_request_id', clientRequestId).maybeSingle();
     const supportsRequestId = !previousRequest.error;
-    if (previousRequest.data) return { success: true, duplicate: true, id: previousRequest.data.id };
+    if (previousRequest.data) {
+      await audit(context, 'late_entry.created', 'late_entry', previousRequest.data.id, { clientRequestId, recoveredFromIdempotentRetry: true });
+      return { success: true, duplicate: true, id: previousRequest.data.id };
+    }
     const studentId = String(formData.get('studentId') || '');
     const automaticTime = String(formData.get('automaticTime') || 'true') === 'true';
     const { data: feature } = await context.admin.from('tenant_features').select('timezone').eq('tenant_id', context.tenantId).single();
@@ -346,7 +363,11 @@ export async function createLateEntry(formData: FormData) {
     if (error) {
       if (error.code === '23505') {
         const { data: duplicate } = await context.admin.from('filter_late_entries').select('id').eq('tenant_id', context.tenantId).eq('client_request_id', clientRequestId).single();
-        if (duplicate) return { success: true, duplicate: true, id: duplicate.id };
+        if (duplicate) {
+          const { data: duplicateAudit } = await context.admin.from('filter_audit_log').select('id').eq('tenant_id', context.tenantId).eq('action', 'late_entry.created').eq('entity_id', duplicate.id).maybeSingle();
+          if (!duplicateAudit) await audit(context, 'late_entry.created', 'late_entry', duplicate.id, { clientRequestId, recoveredFromIdempotentRetry: true });
+          return { success: true, duplicate: true, id: duplicate.id };
+        }
       }
       if (evidencePath) await context.admin.storage.from('filtro-evidencias').remove([evidencePath]);
       throw error;
@@ -518,7 +539,11 @@ export async function createExtraordinaryHandoff(formData: FormData) {
     const clientRequestId = String(formData.get('clientRequestId') || '');
     if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clientRequestId)) throw new Error('El identificador del borrador no es válido.');
     const { data: previous } = await context.admin.from('filter_extraordinary_handoffs').select('id').eq('tenant_id', context.tenantId).eq('client_request_id', clientRequestId).maybeSingle();
-    if (previous) return { success: true, duplicate: true, id: previous.id };
+    if (previous) {
+      const { data: previousAudit } = await context.admin.from('filter_audit_log').select('id').eq('tenant_id', context.tenantId).eq('action', 'extraordinary_handoff.created').eq('entity_id', previous.id).maybeSingle();
+      if (!previousAudit) await audit(context, 'extraordinary_handoff.created', 'extraordinary_handoff', previous.id, { clientRequestId, recoveredFromIdempotentRetry: true });
+      return { success: true, duplicate: true, id: previous.id };
+    }
 
     const studentId = String(formData.get('studentId') || '');
     const { data: student } = await context.admin.from('filter_students').select('id,full_name,group_id').eq('tenant_id', context.tenantId).eq('id', studentId).eq('active', true).single();
@@ -527,10 +552,24 @@ export async function createExtraordinaryHandoff(formData: FormData) {
     if (!group) throw new Error('No se encontró el grupo actual del alumno.');
     const { data: level } = await context.admin.from('filter_levels').select('name').eq('tenant_id', context.tenantId).eq('id', group.level_id).single();
     if (!level) throw new Error('No se encontró el nivel actual del alumno.');
+    const { data: handoffPolicy, error: handoffPolicyError } = await context.admin
+      .from('filter_alert_settings')
+      .select('require_verified_guardian_contact')
+      .eq('tenant_id', context.tenantId)
+      .maybeSingle();
+    if (handoffPolicyError && !isMissingSchemaColumn(handoffPolicyError)) throw new Error('No se pudo comprobar la política institucional de entregas.');
+    const verifiedGuardianPolicyAvailable = !handoffPolicyError;
+    const requireVerifiedGuardianContact = handoffPolicy?.require_verified_guardian_contact !== false;
     const guardianContactId = String(formData.get('guardianContactId') || '');
-    const { data: guardian } = await context.admin.from('filter_guardian_contacts').select('id,full_name,relationship,phone,email')
-      .eq('tenant_id', context.tenantId).eq('student_id', student.id).eq('id', guardianContactId).eq('active', true).eq('verification_status', 'verified').single();
-    if (!guardian) throw new Error('Selecciona un contacto oficial verificado del alumno.');
+    let guardian: { id: string; full_name: string; relationship: string; phone: string | null; email: string | null } | null = null;
+    if (guardianContactId) {
+      const { data } = await context.admin.from('filter_guardian_contacts').select('id,full_name,relationship,phone,email')
+        .eq('tenant_id', context.tenantId).eq('student_id', student.id).eq('id', guardianContactId).eq('active', true).eq('verification_status', 'verified').maybeSingle();
+      guardian = data;
+      if (!guardian) throw new Error('El contacto seleccionado no es un contacto verificado de este alumno e institución.');
+    } else if (requireVerifiedGuardianContact) {
+      throw new Error('Selecciona un contacto oficial verificado del alumno.');
+    }
 
     const deliveryContext = String(formData.get('deliveryContext') || '') as typeof EXTRAORDINARY_CONTEXTS[number];
     const pickupRelationship = String(formData.get('pickupRelationship') || '') as typeof EXTRAORDINARY_RELATIONSHIPS[number];
@@ -542,6 +581,20 @@ export async function createExtraordinaryHandoff(formData: FormData) {
     if (!EXTRAORDINARY_ID_TYPES.includes(identificationType)) throw new Error('El tipo de identificación no es válido.');
     if (!EXTRAORDINARY_AUTH_METHODS.includes(authorizationMethod)) throw new Error('El método de autorización no es válido.');
     if (!EXTRAORDINARY_STATUSES.includes(status)) throw new Error('La resolución no es válida.');
+
+    const manualAuthorizerRelationship = String(formData.get('manualAuthorizerRelationship') || '');
+    if (!guardian && !['madre', 'padre', 'tutor'].includes(manualAuthorizerRelationship)) {
+      throw new Error('Selecciona el parentesco de quien autorizó manualmente.');
+    }
+    const authorizerName = guardian?.full_name || requiredFormText(formData, 'manualAuthorizerName', 'El nombre de quien autoriza', 220);
+    const authorizerRelationship = guardian?.relationship || manualAuthorizerRelationship;
+    const manualAuthorizerContact = String(formData.get('manualAuthorizerContact') || '').trim().slice(0, 180);
+    if (!guardian && ['llamada', 'videollamada', 'whatsapp', 'correo'].includes(authorizationMethod) && manualAuthorizerContact.length < 5) {
+      throw new Error('Registra el teléfono, correo o referencia utilizada para confirmar la autorización.');
+    }
+    const authorizerChannelSnapshot = guardian
+      ? maskedContact(guardian)
+      : (manualAuthorizerContact ? `Referencia declarada: ${manualAuthorizerContact}` : 'Sin contacto oficial verificado; autorizado por política institucional');
 
     const deliveryContextOther = deliveryContext === 'otro' ? requiredFormText(formData, 'deliveryContextOther', 'El contexto', 120) : null;
     const pickupRelationshipOther = pickupRelationship === 'otro' ? requiredFormText(formData, 'pickupRelationshipOther', 'La relación', 120) : null;
@@ -605,8 +658,8 @@ export async function createExtraordinaryHandoff(formData: FormData) {
       paths.set(upload.key, upload.path);
     }
 
-    const { data: entry, error } = await context.admin.from('filter_extraordinary_handoffs').insert({
-      tenant_id: context.tenantId, client_request_id: clientRequestId, student_id: student.id, guardian_contact_id: guardian.id,
+    const entryPayload: Record<string, unknown> = {
+      tenant_id: context.tenantId, client_request_id: clientRequestId, student_id: student.id, guardian_contact_id: guardian?.id || null,
       linked_early_departure_id: linkedEarlyDepartureId, student_name: student.full_name, level_name: level.name,
       grade_name: group.grade_name, group_name: group.group_name, departed_at: departedAt,
       delivery_context: deliveryContext, delivery_context_other: deliveryContextOther,
@@ -619,7 +672,7 @@ export async function createExtraordinaryHandoff(formData: FormData) {
       identification_front_path: paths.get('identificationFront'), identification_back_path: paths.get('identificationBack') || null,
       pickup_person_photo_path: paths.get('pickupPersonPhoto'), vehicle_description: String(formData.get('vehicleDescription') || '').trim().slice(0, 500) || null,
       vehicle_photo_path: paths.get('vehiclePhoto') || null, identity_matches: identityMatches, no_visible_impairment: noVisibleImpairment,
-      authorizer_name: guardian.full_name, authorizer_relationship: guardian.relationship, authorizer_channel_snapshot: maskedContact(guardian),
+      authorizer_name: authorizerName, authorizer_relationship: authorizerRelationship, authorizer_channel_snapshot: authorizerChannelSnapshot,
       authorization_method: authorizationMethod, authorized_at: authorizedAt, authorization_expires_at: authorizationExpiresAt,
       authorization_statement: requiredFormText(formData, 'authorizationStatement', 'La declaración de autorización', 2000),
       authorization_evidence_path: paths.get('authorizationEvidence'), authorization_verifier_name: requiredFormText(formData, 'authorizationVerifierName', 'El personal que verificó', 220),
@@ -633,16 +686,22 @@ export async function createExtraordinaryHandoff(formData: FormData) {
       reporter_name: reporterName, registered_by_user_id: context.user.id,
       final_handover_photo_path: paths.get('finalHandoverPhoto') || null, pickup_signature_path: paths.get('pickupSignature') || null,
       final_observations: String(formData.get('finalObservations') || '').trim().slice(0, 4000) || null, protocol_confirmed: protocolConfirmed,
-    }).select('id').single();
+    };
+    if (verifiedGuardianPolicyAvailable) entryPayload.verified_guardian_contact_required = requireVerifiedGuardianContact;
+    const { data: entry, error } = await context.admin.from('filter_extraordinary_handoffs').insert(entryPayload).select('id').single();
     if (error) {
       if (error.code === '23505') {
         const { data: duplicate } = await context.admin.from('filter_extraordinary_handoffs').select('id').eq('tenant_id', context.tenantId).eq('client_request_id', clientRequestId).single();
-        if (duplicate) return { success: true, duplicate: true, id: duplicate.id };
+        if (duplicate) {
+          const { data: duplicateAudit } = await context.admin.from('filter_audit_log').select('id').eq('tenant_id', context.tenantId).eq('action', 'extraordinary_handoff.created').eq('entity_id', duplicate.id).maybeSingle();
+          if (!duplicateAudit) await audit(context, 'extraordinary_handoff.created', 'extraordinary_handoff', duplicate.id, { clientRequestId, recoveredFromIdempotentRetry: true });
+          return { success: true, duplicate: true, id: duplicate.id };
+        }
       }
       await context.admin.storage.from('filtro-evidencias').remove([...paths.values()]); throw error;
     }
     await context.admin.from('filter_reporters').upsert({ tenant_id: context.tenantId, name: reporterName, normalized_name: normalizeFilterName(reporterName), last_used_at: new Date().toISOString(), created_by: context.user.id }, { onConflict: 'tenant_id,normalized_name' });
-    await audit(context, 'extraordinary_handoff.created', 'extraordinary_handoff', entry.id, { studentId: student.id, guardianContactId: guardian.id, status, deliveryContext, hasVehiclePhoto: Boolean(vehiclePhoto) });
+    await audit(context, 'extraordinary_handoff.created', 'extraordinary_handoff', entry.id, { studentId: student.id, guardianContactId: guardian?.id || null, requireVerifiedGuardianContact, status, deliveryContext, hasVehiclePhoto: Boolean(vehiclePhoto) });
     revalidatePath('/dashboard/filtro/entregas-extraordinarias'); revalidatePath('/dashboard/filtro/reportes');
     return { success: true, duplicate: false, id: entry.id };
   } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'No se pudo guardar la entrega extraordinaria.' }; }
@@ -670,12 +729,51 @@ export async function getFilterReportPackets(selection: Array<{ type: 'early' | 
   } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'No se pudieron preparar los reportes.' }; }
 }
 
-export async function updateFilterAlertSettings(input: { enabled: boolean; threshold: number; windowUnit: string; windowValue: number }) {
+export async function updateFilterAlertSettings(input: { enabled: boolean; threshold: number; windowUnit: string; windowValue: number; requireVerifiedGuardianContact: boolean }) {
   try {
     const context = await requireFilterAccess();
-    const { error } = await context.admin.from('filter_alert_settings').upsert({ tenant_id: context.tenantId, enabled: input.enabled, threshold: input.threshold, window_unit: input.windowUnit, window_value: input.windowValue, updated_at: new Date().toISOString(), updated_by: context.user.id }); if (error) throw error;
-    await audit(context, 'alert_settings.updated', 'settings', context.tenantId, input);
-    revalidatePath('/dashboard/filtro/alertas'); return { success: true };
+    if (typeof input.enabled !== 'boolean' || typeof input.requireVerifiedGuardianContact !== 'boolean') throw new Error('Las políticas recibidas no son válidas.');
+    if (!['days', 'months', 'years', 'global'].includes(input.windowUnit)) throw new Error('El periodo seleccionado no es válido.');
+    if (!Number.isInteger(input.threshold) || input.threshold < 1 || input.threshold > 100) throw new Error('El umbral debe estar entre 1 y 100.');
+    if (!Number.isInteger(input.windowValue) || input.windowValue < 1 || input.windowValue > 100) throw new Error('La cantidad del periodo debe estar entre 1 y 100.');
+    const { error: transactionalError } = await (context.admin as any).rpc('update_filter_alert_settings_atomic', {
+      target_tenant_id: context.tenantId,
+      actor_id: context.user.id,
+      setting_enabled: input.enabled,
+      setting_threshold: input.threshold,
+      setting_window_unit: input.windowUnit,
+      setting_window_value: input.windowValue,
+      setting_require_verified_guardian_contact: input.requireVerifiedGuardianContact,
+    });
+
+    if (!transactionalError) {
+      revalidatePath('/dashboard/filtro/alertas');
+      revalidatePath('/dashboard/filtro/entregas-extraordinarias');
+      return { success: true, verifiedGuardianPolicyAvailable: true };
+    }
+    if (!isMissingSchemaRoutine(transactionalError)) throw transactionalError;
+
+    // Compatibilidad temporal: permite desplegar la aplicación antes de la
+    // migración, conserva la regla segura anterior y no muestra el switch.
+    const compatibleUpdate = {
+      tenant_id: context.tenantId,
+      enabled: input.enabled,
+      threshold: input.threshold,
+      window_unit: input.windowUnit,
+      window_value: input.windowValue,
+      updated_at: new Date().toISOString(),
+      updated_by: context.user.id,
+    };
+    const { error: compatibleError } = await context.admin.from('filter_alert_settings').upsert(compatibleUpdate);
+    if (compatibleError) throw compatibleError;
+    revalidatePath('/dashboard/filtro/alertas');
+    revalidatePath('/dashboard/filtro/entregas-extraordinarias');
+    try {
+      await audit(context, 'alert_settings.updated', 'settings', context.tenantId, { enabled: input.enabled, threshold: input.threshold, windowUnit: input.windowUnit, windowValue: input.windowValue, verifiedGuardianPolicyAvailable: false });
+      return { success: true, verifiedGuardianPolicyAvailable: false };
+    } catch {
+      return { success: true, verifiedGuardianPolicyAvailable: false, warning: 'La configuración de retardos sí quedó guardada, pero no fue posible confirmar su registro de auditoría.' };
+    }
   } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'No se pudo guardar.' }; }
 }
 
