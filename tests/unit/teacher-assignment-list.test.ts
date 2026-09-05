@@ -14,6 +14,8 @@ describe('Listado administrativo de carga docente', () => {
     expect(actions).toContain('materias!asignaciones_profesor_materia_tenant_fkey(id, nombre, clave)');
     expect(actions).toContain('profiles!asignaciones_profesor_profesor_tenant_fkey(nombre, apellidos)');
     expect(actions).toMatch(/export async function getAlumnoDashboardData[\s\S]*?\.from\('asignaciones_profesor'\)[\s\S]*?\.eq\('tenant_id', tenantId\)[\s\S]*?\.eq\('grupo_id', profile\.grupo_id\)/);
+    expect(actions).toMatch(/\.from\('vinculos_evaluacion_ejercicio'\)[\s\S]*?\.eq\('tenant_id', tenantId\)[\s\S]*?\.in\('asignacion_profesor_id', asignacionIds\)/);
+    expect(actions).toMatch(/\.from\('resultados_ejercicios'\)[\s\S]*?\.eq\('tenant_id', tenantId\)[\s\S]*?\.eq\('alumno_id', userId\)/);
     expect(actions).toMatch(/export async function getMateriasYTemasParaAlumno[\s\S]*?materias!asignaciones_profesor_materia_tenant_fkey[\s\S]*?\.eq\("tenant_id", tenantId\)/);
     expect(actions).not.toContain('profiles!asignaciones_profesor_profesor_id_fkey');
   });

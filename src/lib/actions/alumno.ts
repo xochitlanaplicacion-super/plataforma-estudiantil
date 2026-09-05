@@ -67,11 +67,11 @@ export async function getGameLeaderboard(ejercicioId: string): Promise<GameLeade
 }
 
 export async function getAlumnoDashboardData(userId: string) {
-  const { supabase: supabaseAdmin, tenantId, user } = await requireTenantSession(['alumno']);
+  const { admin: db, tenantId, user } = await requireTenantSession(['alumno']);
   try {
     if (userId !== user.id) throw new Error('No autorizado para consultar otro alumno');
     // 1. Perfil del alumno completo
-    const { data: profile, error: profileErr } = await supabaseAdmin
+    const { data: profile, error: profileErr } = await db
       .from('profiles')
       .select(`
         id, nombre, apellidos, estatus, matricula, grupo_id, carrera_id,
@@ -85,6 +85,7 @@ export async function getAlumnoDashboardData(userId: string) {
         )
       `)
       .eq('id', userId)
+      .eq('tenant_id', tenantId)
       .single();
 
     if (profileErr || !profile) {
@@ -100,9 +101,10 @@ export async function getAlumnoDashboardData(userId: string) {
     }
 
     // 2. MATERIAS ASIGNADAS AL GRUPO
-    const { data: asignaciones, error: asigErr } = await supabaseAdmin
+    const { data: asignaciones, error: asigErr } = await db
       .from('asignaciones_profesor')
       .select(`
+        id,
         materia_id,
         profesor_id,
         grupo_id,
@@ -126,6 +128,7 @@ export async function getAlumnoDashboardData(userId: string) {
     })) || [];
 
     const materiaIds = materiasAsignadas.map(m => m.id).filter(Boolean);
+    const asignacionIds = (asignaciones || []).map((asignacion) => asignacion.id);
 
     // 3. OBTENER ESTRUCTURA COMPLETA (Unidades, Temas, Recursos y Ejercicios)
     let todasLasUnidades: any[] = [];
@@ -133,9 +136,10 @@ export async function getAlumnoDashboardData(userId: string) {
 
     if (materiaIds.length > 0) {
       // Obtener Unidades
-      const { data: unidades } = await supabaseAdmin
+      const { data: unidades } = await db
         .from('unidades')
         .select('*')
+        .eq('tenant_id', tenantId)
         .in('materia_id', materiaIds)
         .eq('activo', true)
         .order('orden');
@@ -144,28 +148,32 @@ export async function getAlumnoDashboardData(userId: string) {
 
       if (unidadIds.length > 0) {
         // Obtener Temas
-        const { data: temas } = await supabaseAdmin
+        const { data: temas } = await db
           .from('temas')
           .select('*')
+          .eq('tenant_id', tenantId)
           .in('unidad_id', unidadIds)
           .order('orden');
 
         const temaIds = temas?.map(t => t.id) || [];
 
         if (temaIds.length > 0) {
-          // Esta tabla tiene RLS por inscripción/asignación: un alumno sólo
-          // recibe vínculos de su tenant, ciclo y grupo activos.
-          const { data: visibleLinks, error: linksError } = await supabaseAdmin
+          // Proyección autorizada del servidor: sólo vínculos del tenant y de
+          // las asignaciones exactas del grupo del alumno autenticado.
+          const { data: visibleLinks, error: linksError } = await db
             .from('vinculos_evaluacion_ejercicio')
             .select('ejercicio_id')
+            .eq('tenant_id', tenantId)
+            .in('asignacion_profesor_id', asignacionIds)
             .eq('activo', true);
           if (linksError) throw linksError;
           const visibleExerciseIds = [...new Set((visibleLinks || []).map((link) => link.ejercicio_id))];
 
           // Obtener Recursos (Materiales)
-          const { data: recursosRaw } = await supabaseAdmin
+          const { data: recursosRaw } = await db
             .from('resources')
             .select('*')
+            .eq('tenant_id', tenantId)
             .in('tema_id', temaIds);
 
           // Mapear campos de la BD (titulo, archivo_url, tipo) a los esperados por el frontend (nombre, url, tipo)
@@ -180,7 +188,7 @@ export async function getAlumnoDashboardData(userId: string) {
 
           // Obtener Ejercicios
           const { data: ejercicios } = visibleExerciseIds.length > 0
-            ? await supabaseAdmin
+            ? await db
               .from('ejercicios')
               .select(`
                 id, titulo, tipo, created_at, tema_id, fecha_entrega,
@@ -192,6 +200,7 @@ export async function getAlumnoDashboardData(userId: string) {
                   )
                 )
               `)
+              .eq('tenant_id', tenantId)
               .in('tema_id', temaIds)
               .in('id', visibleExerciseIds)
               .order('fecha_entrega', { ascending: true })
@@ -200,9 +209,10 @@ export async function getAlumnoDashboardData(userId: string) {
           ejerciciosPublicados = ejercicios || [];
 
           // Obtener Presentaciones (Diapositivas)
-          const { data: slidesRaw } = await supabaseAdmin
+          const { data: slidesRaw } = await db
             .from('slides')
             .select('*')
+            .eq('tenant_id', tenantId)
             .in('tema_id', temaIds)
             .order('orden');
           
@@ -222,9 +232,10 @@ export async function getAlumnoDashboardData(userId: string) {
       }
     }
 
-    const hechos = (await supabaseAdmin
+    const hechos = (await db
       .from('resultados_ejercicios')
       .select('ejercicio_id, calificacion, aciertos, total_preguntas, bloqueado')
+      .eq('tenant_id', tenantId)
       .eq('alumno_id', userId)).data || [];
 
     const hechosMap = new Map(hechos.map(h => [h.ejercicio_id, h]));
@@ -254,9 +265,10 @@ export async function getAlumnoDashboardData(userId: string) {
     // Obtener fechas de evaluación del grupo del alumno
     let fechasEvaluacion: Record<string, string> = {};
     try {
-      const { data: fechasData } = await supabaseAdmin
+      const { data: fechasData } = await db
         .from('fechas_evaluacion')
         .select('materia_id, fecha_evaluacion')
+        .eq('tenant_id', tenantId)
         .eq('grupo_id', profile.grupo_id);
 
       if (fechasData) {
@@ -278,9 +290,10 @@ export async function getAlumnoDashboardData(userId: string) {
     }
 
     // Obtener progreso de videos
-    const { data: videoProgressRaw } = await supabaseAdmin
+    const { data: videoProgressRaw } = await db
       .from('video_progreso_alumno')
       .select('*')
+      .eq('tenant_id', tenantId)
       .eq('alumno_id', userId);
     
     const videoProgress = videoProgressRaw || [];
@@ -355,12 +368,17 @@ export async function saveExerciseResult(
 }
 
 export async function getMateriasYTemasParaAlumno(userId: string) {
-  const { supabase: supabaseAdmin, tenantId, user } = await requireTenantSession(['alumno']);
+  const { admin: db, tenantId, user } = await requireTenantSession(['alumno']);
   if (userId !== user.id) return [];
-  const { data: profile } = await supabaseAdmin.from("profiles").select("grupo_id").eq("id", userId).single();
+  const { data: profile } = await db
+    .from("profiles")
+    .select("grupo_id")
+    .eq("tenant_id", tenantId)
+    .eq("id", userId)
+    .single();
   if (!profile?.grupo_id) return [];
 
-  const { data: asig } = await supabaseAdmin
+  const { data: asig } = await db
     .from("asignaciones_profesor")
     .select(`
       materia_id,
