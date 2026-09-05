@@ -16,6 +16,7 @@ import { generateCourse, GeneratedCourse } from "./generator";
 import { Player, PlayerInput } from "./player";
 import { sfx } from "./sfx";
 import { gameMusic } from "./music";
+import { hasTouchControls, installTouchControls } from '../../../shared/touch-controls';
 
 const BODY_PALETTES: [string, string][] = [
   ["#FF6B8A", "#D84F74"],
@@ -42,6 +43,9 @@ export class AdventureGame {
   private callbacks: AdventureCallbacks;
 
   private keys = new Set<string>();
+  private removeTouch: () => void = () => {};
+  private mobileFrameCount = 0;
+  private mobileScale = 1;
   private camYaw = 0;
   private camPitch = 0.42;
   private locked = false;
@@ -72,6 +76,7 @@ export class AdventureGame {
       (navigator.hardwareConcurrency ?? 8) <= 4 ? "low" : "high";
 
     this.engine = new Engine(canvas, true, { powerPreference: "high-performance" }, true);
+    if (hasTouchControls()) this.engine.setHardwareScalingLevel(1);
     this.scene = new Scene(this.engine);
     this.scene.collisionsEnabled = true;
 
@@ -153,6 +158,18 @@ export class AdventureGame {
     canvas.addEventListener("click", this.onCanvasClick);
     window.addEventListener("beforeunload", this.beforeUnload);
     window.addEventListener("resize", this.onResize);
+    this.removeTouch = installTouchControls({
+      id: 'parkour-race', canvas,
+      playing: () => !this.isSuspended(), paused: () => useStore.getState().paused,
+      pause: () => { if (!this.isSuspended()) { useStore.getState().setPaused(true); gameMusic.pause(); } },
+      key: (code, down) => down ? this.onKeyDown(new KeyboardEvent('keydown', { code })) : this.onKeyUp(new KeyboardEvent('keyup', { code })),
+      look: (x, y) => {
+        const cfg = useStore.getState().mouseCfg;
+        this.camYaw -= x * 0.0027 * cfg.sens * (cfg.invertX ? -1 : 1);
+        this.camPitch = Math.max(-0.2, Math.min(1.15, this.camPitch + y * 0.0027 * cfg.sens * (cfg.invertY ? 1 : -1)));
+      },
+      actions: [{code:'Space',label:'Saltar'}, {code:'ShiftLeft',label:'Correr'}, {code:'KeyE',label:'Interactuar'}, {code:'KeyR',label:'Regresar'}],
+    });
 
     // Asegurar tamaño correcto del canvas tras el primer layout
     requestAnimationFrame(() => {
@@ -165,9 +182,18 @@ export class AdventureGame {
     );
 
     this.engine.runRenderLoop(() => {
-      if (this.disposed) return;
+      if (this.disposed || document.hidden) return;
       try {
         this.tick();
+        if (hasTouchControls() && ++this.mobileFrameCount % 180 === 0) {
+          const fps = this.engine.getFps();
+          const next = fps < 32 ? Math.min(1.6, this.mobileScale + 0.1)
+            : fps > 55 ? Math.max(1, this.mobileScale - 0.1) : this.mobileScale;
+          if (next !== this.mobileScale) {
+            this.mobileScale = next;
+            this.engine.setHardwareScalingLevel(next);
+          }
+        }
         this.scene.render();
       } catch (err) {
         if (!this.tickErrorLogged) {
@@ -188,6 +214,11 @@ export class AdventureGame {
   /* ================== API pública para la UI ================== */
 
   requestLock(): void {
+    if (hasTouchControls()) {
+      useStore.getState().setPaused(false);
+      gameMusic.resume(this.seed, useStore.getState().musicMuted);
+      return;
+    }
     try {
       this.canvas.requestPointerLock();
     } catch {
@@ -248,6 +279,7 @@ export class AdventureGame {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.removeTouch();
     window.removeEventListener("keydown", this.onKeyDown);
     window.removeEventListener("keyup", this.onKeyUp);
     document.removeEventListener("mousemove", this.onMouseMove);

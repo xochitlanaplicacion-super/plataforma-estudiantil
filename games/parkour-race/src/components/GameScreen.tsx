@@ -308,7 +308,7 @@ function PauseMenu() {
   if (!paused || question || results) return null;
   return (
     <div className="absolute inset-0 z-20 grid place-items-center bg-[#0B1026]/70 backdrop-blur-[6px]">
-      <div className="anim-pop-in mx-4 w-full max-w-sm rounded-[28px] border border-white/15 bg-gradient-to-b from-[#171D42] to-[#0E1330] p-7 text-center shadow-2xl">
+      <div className="anim-pop-in mx-4 max-h-[90%] overflow-y-auto w-full max-w-sm rounded-[28px] border border-white/15 bg-gradient-to-b from-[#171D42] to-[#0E1330] p-7 text-center shadow-2xl">
         <span className="mb-3 inline-grid h-14 w-14 place-items-center rounded-2xl bg-white/10">
           <Pause size={26} className="text-[#FFB84D]" />
         </span>
@@ -336,6 +336,7 @@ function PauseMenu() {
           </button>
         </div>
         <MouseSettings className="mt-4" />
+        {navigator.maxTouchPoints > 0 && <button className="mt-3 w-full rounded-xl bg-white/10 p-3 font-bold" onClick={() => window.dispatchEvent(new Event('touch-settings:parkour-race'))}>Ajustar controles táctiles</button>}
         <p className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-slate-500">
           <Keyboard size={12} /> Consejo: SHIFT para sprint y R para volver al checkpoint
         </p>

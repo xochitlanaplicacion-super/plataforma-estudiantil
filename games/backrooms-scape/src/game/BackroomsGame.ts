@@ -2,6 +2,7 @@
 // Backrooms Scape — núcleo del juego (Babylon.js)
 // ------------------------------------------------------------------
 import "@babylonjs/core/Engines/Extensions/engine.dynamicTexture";
+import { hasTouchControls, installTouchControls } from '../../../shared/touch-controls';
 import "@babylonjs/core/Engines/Extensions/engine.multiRender";
 import "@babylonjs/core/Meshes/instancedMesh";
 import "@babylonjs/core/Culling/ray";
@@ -294,6 +295,7 @@ export class BackroomsGame {
   private mapUntil = 0;
 
   private keys = new Set<string>();
+  private removeTouch: () => void = () => {};
   private flicker = 1;
   private emitAcc = 0;
   private performanceAcc = 0;
@@ -407,11 +409,23 @@ export class BackroomsGame {
     this.canvas.addEventListener("click", this.onCanvasClick);
     window.addEventListener("resize", this.onResize);
 
+    this.removeTouch = installTouchControls({
+      id: 'backrooms-scape', canvas,
+      playing: () => this.mode === 'play', paused: () => this.mode === 'paused',
+      pause: () => this.pause(),
+      key: (code, down) => down ? this.onKeyDown(new KeyboardEvent('keydown', { code })) : this.onKeyUp(new KeyboardEvent('keyup', { code })),
+      look: (x, y) => {
+        const cfg = this.mouseConfig;
+        this.camYaw -= x * 0.0024 * cfg.sensitivity * (cfg.invertX ? -1 : 1);
+        this.camPitch = clamp(this.camPitch + y * 0.0021 * cfg.sensitivity * (cfg.invertY ? -1 : 1), 0.04, 0.95);
+      },
+      actions: [{code:'Space',label:'Saltar'}, {code:'ShiftLeft',label:'Correr'}, {code:'Digit1',label:'Impulso'}, {code:'Digit2',label:'Escudo'}, {code:'Digit3',label:'Pulso'}, {code:'Digit4',label:'Mapa'}],
+    });
     this.buildLevel(seed);
     this.spawnEntities(false);
 
     this.engine.runRenderLoop(() => {
-      if (this.disposed) return;
+      if (this.disposed || document.hidden) return;
       try {
         const dt = Math.min(0.05, this.engine.getDeltaTime() / 1000);
         this.update(dt);
@@ -462,6 +476,7 @@ export class BackroomsGame {
   private onResize = (): void => this.engine.resize();
 
   private lock(): void {
+    if (hasTouchControls()) return;
     try {
       this.canvas.requestPointerLock();
     } catch {
@@ -1022,6 +1037,7 @@ export class BackroomsGame {
   }
 
   dispose(): void {
+    this.removeTouch();
     this.disposed = true;
     backroomsMusic.stop();
     window.removeEventListener("keydown", this.onKeyDown);

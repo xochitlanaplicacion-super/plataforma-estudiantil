@@ -436,9 +436,10 @@ function PauseOverlay({ onResume, onMenu, mouseConfig, onMouseConfigChange, musi
 }): ReactNode {
   return (
     <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="modal-card w-[min(420px,92vw)] text-center">
+      <div className="modal-card max-h-[90%] overflow-y-auto w-[min(420px,92vw)] text-center">
         <h2 className="title-font mb-1 text-4xl text-amber-300">PAUSA</h2>
         <p className="mb-6 text-xs text-white/50">El Merodeador espera paciente…</p>
+        {navigator.maxTouchPoints > 0 && <button className="btn-ghost w-full justify-center" onClick={() => window.dispatchEvent(new Event('touch-settings:backrooms-scape'))}>Ajustar controles táctiles</button>}
         <ControlSettings mouseConfig={mouseConfig} onMouseConfigChange={onMouseConfigChange}
           musicMuted={musicMuted} onMusicMutedChange={onMusicMutedChange} />
         <button onClick={onResume} className="btn-main mb-3 mt-4 w-full justify-center">
@@ -573,7 +574,7 @@ export default function GameUI({
         </>
       )}
 
-      {mode === "play" && !locked && (
+      {mode === "play" && !locked && navigator.maxTouchPoints === 0 && (
         <div className="absolute bottom-24 left-1/2 -translate-x-1/2">
           <div className="chip animate-pulse">
             <MousePointerClick size={13} className="text-amber-300" />
