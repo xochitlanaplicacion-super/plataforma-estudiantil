@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { parkourRaceGameActivity } from '@/lib/activities/parkour-race';
+import type { GameLeaderboard } from '@/lib/game-leaderboard';
 
 export interface ParkourRaceResult {
   hits: number;
@@ -15,12 +16,14 @@ export interface ParkourRaceResult {
 
 export function ParkourRaceFrame({
   exercise,
+  leaderboard,
   onComplete,
   onClose,
   className = '',
 }: {
   exercise: any;
-  onComplete?: (result: ParkourRaceResult) => void;
+  leaderboard?: GameLeaderboard | null;
+  onComplete?: (result: ParkourRaceResult) => Promise<GameLeaderboard | null | undefined> | GameLeaderboard | null | undefined;
   onClose?: () => void;
   className?: string;
 }) {
@@ -30,16 +33,18 @@ export function ParkourRaceFrame({
   const sendActivity = useCallback(() => {
     iframeRef.current?.contentWindow?.postMessage({
       type: 'parkour-race:load',
-      payload: { activity },
+      payload: { activity, leaderboard },
     }, window.location.origin);
-  }, [activity]);
+  }, [activity, leaderboard]);
 
   useEffect(() => {
     const receive = (event: MessageEvent) => {
       if (event.origin !== window.location.origin || event.source !== iframeRef.current?.contentWindow) return;
       if (event.data?.type === 'parkour-race:ready') sendActivity();
       if (event.data?.type === 'parkour-race:complete' && onComplete) {
-        onComplete(event.data.payload as ParkourRaceResult);
+        void Promise.resolve(onComplete(event.data.payload as ParkourRaceResult)).then((updated) => {
+          if (updated) iframeRef.current?.contentWindow?.postMessage({ type: 'parkour-race:leaderboard', payload: updated }, window.location.origin);
+        });
       }
       if (event.data?.type === 'parkour-race:close' && onClose) onClose();
     };

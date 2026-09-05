@@ -24,9 +24,12 @@ import {
   Sparkles,
   Volume2,
   VolumeX,
+  Crown,
+  Medal,
 } from "lucide-react";
 import type { BackroomsGame, Difficulty, BoostId, MouseConfig, Snapshot } from "../game/BackroomsGame";
 import type { PlatformActivity } from "../platform";
+import { leaderboardTime, rankedEntries, type GameLeaderboard, type LeaderboardCategory } from "../../../shared/leaderboard";
 
 const fmtTime = (s: number): string => {
   const m = Math.floor(s / 60);
@@ -35,6 +38,45 @@ const fmtTime = (s: number): string => {
 };
 
 const clamp01 = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+
+const BOARD_TABS: { id: LeaderboardCategory; label: string }[] = [
+  { id: 'overall', label: 'General' }, { id: 'accuracy', label: 'Calificación' },
+  { id: 'score', label: 'Puntos' }, { id: 'time', label: 'Tiempo' },
+  { id: 'penalties', label: 'Capturas' },
+];
+
+function LeaderboardPanel({ leaderboard }: { leaderboard: GameLeaderboard | null }): ReactNode {
+  const [category, setCategory] = useState<LeaderboardCategory>('overall');
+  if (!leaderboard) return null;
+  const ranked = rankedEntries(leaderboard, category);
+  const currentIndex = ranked.findIndex((entry) => entry.isCurrentStudent);
+  const rows = ranked.slice(0, 5).map((entry, index) => ({ entry, rank: index + 1 }));
+  if (currentIndex >= 5) rows.push({ entry: ranked[currentIndex], rank: currentIndex + 1 });
+  return (
+    <section className="pointer-events-auto mt-5 w-full max-w-[620px] shrink-0 overflow-hidden rounded-2xl border border-cyan-300/20 bg-black/70 text-left shadow-[0_0_45px_rgba(34,211,238,.10)] backdrop-blur-md">
+      <div className="flex items-center justify-between border-b border-cyan-300/10 bg-gradient-to-r from-cyan-400/10 via-amber-300/5 to-transparent px-4 py-3">
+        <div className="flex items-center gap-2"><Crown size={19} className="text-amber-300 drop-shadow-[0_0_10px_rgba(252,211,77,.65)]" /><div><h3 className="text-sm font-black tracking-wider text-amber-200">ARCHIVO DE SOBREVIVIENTES</h3><p className="text-[9px] font-bold uppercase tracking-[.16em] text-cyan-200/60">Marcas de esta actividad y tu grupo</p></div></div>
+        <span className="rounded border border-cyan-300/15 bg-cyan-300/5 px-2 py-1 font-mono text-[9px] text-cyan-100/70">{leaderboard.participantCount} REGISTROS</span>
+      </div>
+      <div className="flex gap-1 overflow-x-auto px-3 py-2">
+        {BOARD_TABS.map((tab) => <button key={tab.id} type="button" onClick={() => setCategory(tab.id)} className={`whitespace-nowrap rounded px-2.5 py-1.5 text-[9px] font-bold uppercase tracking-wider ${category === tab.id ? 'border border-cyan-200/50 bg-cyan-300/15 text-cyan-100' : 'border border-white/5 bg-white/[.03] text-white/35'}`}>{tab.label}</button>)}
+      </div>
+      {rows.length === 0 ? <p className="px-4 py-6 text-center text-xs text-white/40">Todavía no hay sobrevivientes registrados. Tu marca puede ser la primera.</p> : (
+        <div className="max-h-[250px] space-y-1 overflow-y-auto px-3 pb-3">
+          {rows.map(({ entry, rank }) => (
+            <div key={`${entry.name}-${rank}`} className={`grid grid-cols-[32px_minmax(0,1fr)_auto] items-center gap-2 rounded-lg border px-2 py-2 ${entry.isCurrentStudent ? 'border-cyan-300/60 bg-cyan-300/10' : rank === 1 ? 'border-amber-300/30 bg-amber-300/[.06]' : 'border-white/5 bg-white/[.025]'}`}>
+              <span className={`grid h-8 w-8 place-items-center rounded font-mono text-xs font-bold ${rank === 1 ? 'bg-amber-300 text-black' : rank <= 3 ? 'bg-cyan-300/10 text-cyan-200' : 'bg-white/5 text-white/35'}`}>{rank === 1 ? <Crown size={16} /> : rank <= 3 ? <Medal size={15} /> : rank}</span>
+              <div className="min-w-0"><p className="truncate text-[11px] font-bold uppercase tracking-wide text-white/90">{entry.name}{entry.isCurrentStudent ? ' · TÚ' : ''}</p><p className="font-mono text-[8px] text-white/30">{entry.hits}/{entry.total} ACIERTOS · {entry.attempts} INTENTO{entry.attempts === 1 ? '' : 'S'}</p></div>
+              <div className="grid grid-cols-4 gap-1 text-center">
+                {[[`${entry.accuracy}%`,'Nota'],[String(entry.score),'Pts'],[leaderboardTime(entry.time),'Tiempo'],[String(entry.penalties),'Capt.']].map(([value,label]) => <span key={label} className="min-w-11 rounded border border-white/5 bg-black/30 px-1 py-1"><b className="block font-mono text-[9px] text-white/85">{value}</b><small className="block text-[6px] uppercase tracking-wide text-white/25">{label}</small></span>)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
 
 // --------------------------- Vignette ---------------------------
 
@@ -364,6 +406,7 @@ function Menu({
   onMusicMutedChange,
   onStart,
   onClose,
+  leaderboard,
 }: {
   diff: Difficulty;
   setDiff: (d: Difficulty) => void;
@@ -375,6 +418,7 @@ function Menu({
   onMusicMutedChange: (muted: boolean) => void;
   onStart: () => void;
   onClose: () => void;
+  leaderboard: GameLeaderboard | null;
 }): ReactNode {
   return (
     <div className="absolute inset-0 z-30 flex flex-col items-center justify-center overflow-y-auto bg-gradient-to-b from-black/55 via-black/35 to-black/70 px-4 py-5">
@@ -387,6 +431,7 @@ function Menu({
       </h1>
       <p className="mt-3 text-xs font-bold uppercase tracking-[0.18em] text-cyan-300">{activity.subject} · {activity.title}</p>
       <p className="mt-3 max-w-xl text-center text-sm leading-relaxed text-white/60">{activity.instructions}</p>
+      <LeaderboardPanel leaderboard={leaderboard} />
 
       <div className="mt-7 flex gap-2">
         {DIFF_LABELS.filter((d) => !lockDifficulty || d.id === diff).map((d) => (
@@ -457,10 +502,12 @@ function EndOverlay({
   snap,
   onRestart,
   onMenu,
+  leaderboard,
 }: {
   snap: Snapshot;
   onRestart: () => void;
   onMenu: () => void;
+  leaderboard: GameLeaderboard | null;
 }): ReactNode {
   const win = snap.mode === "win";
   const st = snap.stats;
@@ -474,8 +521,8 @@ function EndOverlay({
     ["Mejor racha", `x${st.bestStreak}`],
   ];
   return (
-    <div className={`absolute inset-0 z-30 flex items-center justify-center backdrop-blur-sm ${win ? "bg-black/55" : "bg-red-950/40"}`}>
-      <div className="modal-card w-[min(480px,92vw)] text-center">
+    <div className={`absolute inset-0 z-30 flex items-center justify-center overflow-y-auto py-4 backdrop-blur-sm ${win ? "bg-black/55" : "bg-red-950/40"}`}>
+      <div className="modal-card max-h-[94vh] w-[min(620px,92vw)] overflow-y-auto text-center">
         <div className="mb-2 flex justify-center">
           {win ? (
             <Trophy size={54} className="text-amber-300 drop-shadow-[0_0_25px_rgba(252,211,77,0.7)]" />
@@ -497,6 +544,7 @@ function EndOverlay({
             </div>
           ))}
         </div>
+        <LeaderboardPanel leaderboard={leaderboard} />
         <button onClick={onRestart} className="btn-main mb-3 w-full justify-center">
           <RotateCcw size={18} /> {win ? "JUGAR OTRA VEZ" : "REINTENTAR"}
         </button>
@@ -516,6 +564,7 @@ export default function GameUI({
   diff,
   setDiff,
   activity,
+  leaderboard,
   lockDifficulty,
   mouseConfig,
   onMouseConfigChange,
@@ -531,6 +580,7 @@ export default function GameUI({
   diff: Difficulty;
   setDiff: (d: Difficulty) => void;
   activity: PlatformActivity;
+  leaderboard: GameLeaderboard | null;
   lockDifficulty: boolean;
   mouseConfig: MouseConfig;
   onMouseConfigChange: (changes: Partial<MouseConfig>) => void;
@@ -564,6 +614,7 @@ export default function GameUI({
       )}
 
       {mode === "menu" && <Menu diff={diff} setDiff={setDiff} activity={activity} lockDifficulty={lockDifficulty}
+        leaderboard={leaderboard}
         mouseConfig={mouseConfig} onMouseConfigChange={onMouseConfigChange}
         musicMuted={musicMuted} onMusicMutedChange={onMusicMutedChange} onStart={onStart} onClose={onClose} />}
 
@@ -588,7 +639,7 @@ export default function GameUI({
         mouseConfig={mouseConfig} onMouseConfigChange={onMouseConfigChange}
         musicMuted={musicMuted} onMusicMutedChange={onMusicMutedChange} />}
       {(mode === "dead" || mode === "win") && snap && (
-        <EndOverlay snap={snap} onRestart={onRestart} onMenu={onMenu} />
+        <EndOverlay snap={snap} onRestart={onRestart} onMenu={onMenu} leaderboard={leaderboard} />
       )}
     </div>
   );

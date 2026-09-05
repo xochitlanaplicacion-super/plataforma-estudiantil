@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { backroomsScapeGameActivity } from '@/lib/activities/backrooms-scape';
+import type { GameLeaderboard } from '@/lib/game-leaderboard';
 
 export interface BackroomsScapeResult {
   hits: number;
@@ -14,9 +15,10 @@ export interface BackroomsScapeResult {
   fragments: number;
 }
 
-export function BackroomsScapeFrame({ exercise, onComplete, onClose, className = '' }: {
+export function BackroomsScapeFrame({ exercise, leaderboard, onComplete, onClose, className = '' }: {
   exercise: any;
-  onComplete?: (result: BackroomsScapeResult) => void;
+  leaderboard?: GameLeaderboard | null;
+  onComplete?: (result: BackroomsScapeResult) => Promise<GameLeaderboard | null | undefined> | GameLeaderboard | null | undefined;
   onClose?: () => void;
   className?: string;
 }) {
@@ -24,15 +26,20 @@ export function BackroomsScapeFrame({ exercise, onComplete, onClose, className =
   const activity = useMemo(() => backroomsScapeGameActivity(exercise), [exercise]);
   const sendActivity = useCallback(() => {
     iframeRef.current?.contentWindow?.postMessage({
-      type: 'backrooms-scape:load', payload: { activity },
+      type: 'backrooms-scape:load',
+      payload: { activity, leaderboard },
     }, window.location.origin);
-  }, [activity]);
+  }, [activity, leaderboard]);
 
   useEffect(() => {
     const receive = (event: MessageEvent) => {
       if (event.origin !== window.location.origin || event.source !== iframeRef.current?.contentWindow) return;
       if (event.data?.type === 'backrooms-scape:ready') sendActivity();
-      if (event.data?.type === 'backrooms-scape:complete') onComplete?.(event.data.payload as BackroomsScapeResult);
+      if (event.data?.type === 'backrooms-scape:complete' && onComplete) {
+        void Promise.resolve(onComplete(event.data.payload as BackroomsScapeResult)).then((updated) => {
+          if (updated) iframeRef.current?.contentWindow?.postMessage({ type: 'backrooms-scape:leaderboard', payload: updated }, window.location.origin);
+        });
+      }
       if (event.data?.type === 'backrooms-scape:close') onClose?.();
     };
     window.addEventListener('message', receive);

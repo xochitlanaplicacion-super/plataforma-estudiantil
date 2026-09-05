@@ -14,6 +14,8 @@ import {
   Pencil,
   Volume2,
   VolumeX,
+  Crown,
+  Medal,
 } from "lucide-react";
 import { useStore, gameRef } from "../store";
 import { AdventureGame } from "../game/game";
@@ -21,6 +23,7 @@ import { fmtTime, randomSeed, seedCode } from "../lib/core";
 import { cn } from "../utils/cn";
 import { sfx } from "../game/sfx";
 import { gameMusic } from "../game/music";
+import { leaderboardTime, rankedEntries, type LeaderboardCategory } from "../../../shared/leaderboard";
 
 function leaveGame(fallback: () => void) {
   if (window.parent !== window) {
@@ -56,6 +59,49 @@ function MusicToggle({ compact = false }: { compact?: boolean }) {
       {muted ? <VolumeX size={18} className="text-slate-300" /> : <Volume2 size={18} className="text-[#7BE3D1]" />}
       {!compact && <span>{muted ? "Música desactivada" : "Música activada"}</span>}
     </button>
+  );
+}
+
+const BOARD_TABS: { id: LeaderboardCategory; label: string }[] = [
+  { id: 'overall', label: 'General' }, { id: 'accuracy', label: 'Calificación' },
+  { id: 'score', label: 'Puntos' }, { id: 'time', label: 'Tiempo' },
+  { id: 'penalties', label: 'Caídas' },
+];
+
+function LeaderboardPanel() {
+  const leaderboard = useStore((s) => s.leaderboard);
+  const [category, setCategory] = useState<LeaderboardCategory>('overall');
+  if (!leaderboard) return null;
+  const ranked = rankedEntries(leaderboard, category);
+  const currentIndex = ranked.findIndex((entry) => entry.isCurrentStudent);
+  const rows = ranked.slice(0, 5).map((entry, index) => ({ entry, rank: index + 1 }));
+  if (currentIndex >= 5) rows.push({ entry: ranked[currentIndex], rank: currentIndex + 1 });
+  return (
+    <section className="mt-5 overflow-hidden rounded-[24px] border border-[#7BE3D1]/30 bg-[#090E29]/85 text-left shadow-[0_18px_55px_rgba(93,185,255,.16)]">
+      <div className="flex items-center justify-between bg-gradient-to-r from-[#FF4D8D]/20 via-[#8A7CFF]/20 to-[#4DD6C1]/20 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Crown size={20} className="text-[#FFD166] drop-shadow-[0_0_8px_rgba(255,209,102,.7)]" />
+          <div><h3 className="font-display text-sm font-extrabold uppercase tracking-wider text-white">Salón de campeones</h3><p className="text-[10px] font-semibold text-[#7BE3D1]">Mejores marcas de esta actividad y tu grupo</p></div>
+        </div>
+        <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-[10px] font-bold text-slate-300">{leaderboard.participantCount} jugadores</span>
+      </div>
+      <div className="flex gap-1 overflow-x-auto px-3 py-2">
+        {BOARD_TABS.map((tab) => <button key={tab.id} type="button" onClick={() => setCategory(tab.id)} className={cn('whitespace-nowrap rounded-full px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wide', category === tab.id ? 'bg-gradient-to-r from-[#FF6B8A] to-[#8A7CFF] text-white shadow-lg' : 'bg-white/5 text-slate-400')}>{tab.label}</button>)}
+      </div>
+      {rows.length === 0 ? <p className="px-4 py-6 text-center text-xs font-semibold text-slate-400">Sé el primero de tu salón en completar esta carrera.</p> : (
+        <div className="max-h-[250px] space-y-1.5 overflow-y-auto px-3 pb-3">
+          {rows.map(({ entry, rank }) => (
+            <div key={`${entry.name}-${rank}`} className={cn('grid grid-cols-[34px_minmax(0,1fr)_auto] items-center gap-2 rounded-xl border px-2.5 py-2', entry.isCurrentStudent ? 'border-[#4DD6C1]/70 bg-[#4DD6C1]/12' : rank === 1 ? 'border-[#FFD166]/40 bg-[#FFD166]/8' : 'border-white/5 bg-white/[.035]')}>
+              <span className={cn('font-display grid h-8 w-8 place-items-center rounded-lg text-sm font-black', rank === 1 ? 'bg-[#FFD166] text-[#3A2103]' : rank <= 3 ? 'bg-[#8A7CFF]/25 text-[#C9C2FF]' : 'bg-white/5 text-slate-400')}>{rank === 1 ? <Crown size={17} /> : rank <= 3 ? <Medal size={16} /> : rank}</span>
+              <div className="min-w-0"><p className="truncate text-xs font-extrabold text-white">{entry.name}{entry.isCurrentStudent ? ' · TÚ' : ''}</p><p className="text-[9px] font-semibold uppercase tracking-wider text-slate-500">{entry.hits}/{entry.total} correctas · {entry.attempts} intento{entry.attempts === 1 ? '' : 's'}</p></div>
+              <div className="grid grid-cols-4 gap-1 text-center">
+                {[[`${entry.accuracy}%`,'Nota'],[String(entry.score),'Pts'],[leaderboardTime(entry.time),'Tiempo'],[String(entry.penalties),'Caídas']].map(([value,label]) => <span key={label} className="min-w-11 rounded-lg bg-black/20 px-1.5 py-1"><b className="block text-[10px] text-white">{value}</b><small className="block text-[7px] uppercase text-slate-500">{label}</small></span>)}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -277,6 +323,7 @@ function IntroOverlay() {
           <MouseSettings className="mb-3" />
           <MusicToggle />
         </div>
+        <LeaderboardPanel />
         <button
           onClick={() => {
             sfx.ui();
@@ -287,7 +334,7 @@ function IntroOverlay() {
           ¡Haz clic para jugar!
         </button>
         <p className="mt-4 rounded-xl border border-[#FFB84D]/30 bg-[#FFB84D]/10 px-3 py-2 text-[12px] font-semibold text-[#FFD9A0]">
-          💡 ¿Salto corto? Si rozas el borde de una plataforma, tu personaje se agarrará y trepará solo.
+          ¿Salto corto? Si rozas el borde de una plataforma, tu personaje se agarrará y trepará solo.
         </p>
         <p className="mt-3 flex items-center justify-center gap-1.5 text-[11px] text-slate-400">
           <MousePointer2 size={12} /> El ratón se capturará para controlar la cámara · ESC para pausar
@@ -477,8 +524,8 @@ function ResultsScreen() {
   const embedded = window.parent !== window;
   if (!results) return null;
   return (
-    <div className="absolute inset-0 z-30 grid place-items-center bg-[#0B1026]/55 backdrop-blur-[3px]">
-      <div className="anim-pop-in mx-4 w-full max-w-xl rounded-[30px] border border-[#FFD166]/30 bg-gradient-to-b from-[#1D2450] to-[#0E1330] p-8 text-center shadow-2xl">
+    <div className="absolute inset-0 z-30 grid place-items-center overflow-y-auto bg-[#0B1026]/55 py-4 backdrop-blur-[3px]">
+      <div className="anim-pop-in mx-4 max-h-[94vh] w-full max-w-2xl overflow-y-auto rounded-[30px] border border-[#FFD166]/30 bg-gradient-to-b from-[#1D2450] to-[#0E1330] p-8 text-center shadow-2xl">
         <span className="anim-bob mb-2 inline-grid h-20 w-20 place-items-center rounded-full bg-gradient-to-br from-[#FFD166] to-[#FF8A5C] shadow-2xl shadow-[#FFD166]/30">
           <Trophy size={38} className="text-[#3A2103]" />
         </span>
@@ -505,6 +552,7 @@ function ResultsScreen() {
           <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Código de mapa</span>
           <span className="font-mono text-base font-extrabold tracking-[0.3em] text-[#7BE3D1]">#{results.seedCode}</span>
         </div>
+        <LeaderboardPanel />
 
         <div className="mt-6 grid gap-2">
           <button

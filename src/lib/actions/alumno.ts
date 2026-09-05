@@ -9,9 +9,65 @@ import {
   parseExerciseResultResponse,
   validateAutomaticAttempt,
 } from '@/lib/academic-grading/exercise-results';
+import {
+  buildGameLeaderboard,
+  type GameLeaderboard,
+  type RankedGameType,
+} from '@/lib/game-leaderboard';
+
+async function loadGameLeaderboard(
+  context: Awaited<ReturnType<typeof requireTenantSession>>,
+  ejercicioId: string,
+): Promise<GameLeaderboard | null> {
+  const { admin, profile, tenantId, supabase, user } = context;
+  if (!profile.grupo_id) return null;
+
+  // La misma política que autoriza abrir el ejercicio debe autorizar la tabla.
+  const { data: visibleLink } = await supabase
+    .from('vinculos_evaluacion_ejercicio')
+    .select('ejercicio_id')
+    .eq('ejercicio_id', ejercicioId)
+    .eq('activo', true)
+    .limit(1)
+    .maybeSingle();
+  if (!visibleLink) return null;
+
+  const { data: exercise } = await admin
+    .from('ejercicios')
+    .select('id, tipo')
+    .eq('id', ejercicioId)
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+  if (!exercise || !['parkour_race', 'backrooms_scape'].includes(exercise.tipo || '')) return null;
+
+  const { data: students, error: studentsError } = await admin
+    .from('profiles')
+    .select('id, nombre, apellidos')
+    .eq('tenant_id', tenantId)
+    .eq('grupo_id', profile.grupo_id)
+    .eq('rol', 'alumno')
+    .eq('estatus', 'activo');
+  if (studentsError || !students?.length) return buildGameLeaderboard(exercise.tipo as RankedGameType, [], [], user.id);
+
+  const studentIds = students.map((student) => student.id);
+  const { data: results, error: resultsError } = await admin
+    .from('resultados_ejercicios')
+    .select('alumno_id, historico_intentos')
+    .eq('tenant_id', tenantId)
+    .eq('ejercicio_id', ejercicioId)
+    .in('alumno_id', studentIds);
+  if (resultsError) return null;
+
+  return buildGameLeaderboard(exercise.tipo as RankedGameType, students, results || [], user.id);
+}
+
+export async function getGameLeaderboard(ejercicioId: string): Promise<GameLeaderboard | null> {
+  const context = await requireTenantSession(['alumno']);
+  return loadGameLeaderboard(context, ejercicioId);
+}
 
 export async function getAlumnoDashboardData(userId: string) {
-  const { supabase: supabaseAdmin, user } = await requireTenantSession(['alumno']);
+  const { supabase: supabaseAdmin, tenantId, user } = await requireTenantSession(['alumno']);
   try {
     if (userId !== user.id) throw new Error('No autorizado para consultar otro alumno');
     // 1. Perfil del alumno completo
@@ -50,9 +106,10 @@ export async function getAlumnoDashboardData(userId: string) {
         materia_id,
         profesor_id,
         grupo_id,
-        materias (id, nombre, clave),
-        profiles!asignaciones_profesor_profesor_id_fkey(nombre, apellidos)
+        materias!asignaciones_profesor_materia_tenant_fkey(id, nombre, clave),
+        profiles!asignaciones_profesor_profesor_tenant_fkey(nombre, apellidos)
       `)
+      .eq('tenant_id', tenantId)
       .eq('grupo_id', profile.grupo_id)
       .eq('activo', true);
 
@@ -251,7 +308,8 @@ export async function saveExerciseResult(
   calificacionIntento: number,
   detallesErrores?: any
 ) {
-  const { supabase } = await requireTenantSession(['alumno']);
+  const context = await requireTenantSession(['alumno']);
+  const { supabase } = context;
   try {
     validateAutomaticAttempt({ hits: aciertos, total, rawPercentage: calificacionIntento });
   } catch (error) {
@@ -289,6 +347,7 @@ export async function saveExerciseResult(
         intentos: response.attempts,
         bloqueado: response.blocked ?? response.status === 'locked',
       },
+      leaderboard: response.saved ? await loadGameLeaderboard(context, ejercicioId) : null,
     };
   } catch {
     return { error: 'La base de datos devolvió una respuesta académica inválida.' };
@@ -296,7 +355,7 @@ export async function saveExerciseResult(
 }
 
 export async function getMateriasYTemasParaAlumno(userId: string) {
-  const { supabase: supabaseAdmin, user } = await requireTenantSession(['alumno']);
+  const { supabase: supabaseAdmin, tenantId, user } = await requireTenantSession(['alumno']);
   if (userId !== user.id) return [];
   const { data: profile } = await supabaseAdmin.from("profiles").select("grupo_id").eq("id", userId).single();
   if (!profile?.grupo_id) return [];
@@ -305,7 +364,7 @@ export async function getMateriasYTemasParaAlumno(userId: string) {
     .from("asignaciones_profesor")
     .select(`
       materia_id,
-      materias (
+      materias!asignaciones_profesor_materia_tenant_fkey (
         id, nombre,
         unidades (
           id, titulo,
@@ -317,6 +376,7 @@ export async function getMateriasYTemasParaAlumno(userId: string) {
         )
       )
     `)
+    .eq("tenant_id", tenantId)
     .eq("grupo_id", profile.grupo_id)
     .eq("activo", true);
     

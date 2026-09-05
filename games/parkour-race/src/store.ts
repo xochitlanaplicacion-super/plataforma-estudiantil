@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { Activity, Question, Results } from "./lib/core";
+import type { GameLeaderboard } from "../../shared/leaderboard";
 
 export type Screen = "home" | "editor" | "game";
 
@@ -59,6 +60,7 @@ interface GameStore {
   question: { index: number; total: number } | null; // pregunta abierta
   questionFeedback: "idle" | "wrong" | "correct";
   results: Results | null;
+  leaderboard: GameLeaderboard | null;
   paused: boolean;
   debug: boolean;
   respawnFlash: number; // contador para fade
@@ -81,6 +83,7 @@ interface GameStore {
   closeQuestion: () => void;
   setQuestionFeedback: (f: "idle" | "wrong" | "correct") => void;
   setResults: (r: Results) => void;
+  setLeaderboard: (leaderboard: GameLeaderboard | null) => void;
   setPaused: (b: boolean) => void;
   toggleDebug: () => void;
   flashRespawn: () => void;
@@ -100,6 +103,7 @@ export const useStore = create<GameStore>((set) => ({
   question: null,
   questionFeedback: "idle",
   results: null,
+  leaderboard: null,
   paused: false,
   debug: false,
   respawnFlash: 0,
@@ -171,6 +175,7 @@ export const useStore = create<GameStore>((set) => ({
   closeQuestion: () => set({ question: null, questionFeedback: "idle" }),
   setQuestionFeedback: (f) => set({ questionFeedback: f }),
   setResults: (r) => set({ results: r, playing: false }),
+  setLeaderboard: (leaderboard) => set({ leaderboard }),
   setPaused: (b) => set({ paused: b }),
   toggleDebug: () => set((st) => ({ debug: !st.debug })),
   flashRespawn: () => set((st) => ({ respawnFlash: st.respawnFlash + 1 })),

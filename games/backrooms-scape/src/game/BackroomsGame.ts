@@ -419,7 +419,7 @@ export class BackroomsGame {
         this.camYaw -= x * 0.0024 * cfg.sensitivity * (cfg.invertX ? -1 : 1);
         this.camPitch = clamp(this.camPitch + y * 0.0021 * cfg.sensitivity * (cfg.invertY ? -1 : 1), 0.04, 0.95);
       },
-      actions: [{code:'Space',label:'Saltar'}, {code:'ShiftLeft',label:'Correr'}, {code:'Digit1',label:'Impulso'}, {code:'Digit2',label:'Escudo'}, {code:'Digit3',label:'Pulso'}, {code:'Digit4',label:'Mapa'}],
+      actions: [{code:'Space',label:'Saltar'}, {code:'ShiftLeft',label:'SHIFT'}, {code:'Digit1',label:'Impulso'}, {code:'Digit2',label:'Escudo'}, {code:'Digit3',label:'Pulso'}, {code:'Digit4',label:'Mapa'}],
     });
     this.buildLevel(seed);
     this.spawnEntities(false);

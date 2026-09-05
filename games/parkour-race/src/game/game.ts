@@ -168,7 +168,7 @@ export class AdventureGame {
         this.camYaw -= x * 0.0027 * cfg.sens * (cfg.invertX ? -1 : 1);
         this.camPitch = Math.max(-0.2, Math.min(1.15, this.camPitch + y * 0.0027 * cfg.sens * (cfg.invertY ? 1 : -1)));
       },
-      actions: [{code:'Space',label:'Saltar'}, {code:'ShiftLeft',label:'Correr'}, {code:'KeyE',label:'Interactuar'}, {code:'KeyR',label:'Regresar'}],
+      actions: [{code:'Space',label:'Saltar'}, {code:'ShiftLeft',label:'SHIFT'}, {code:'KeyE',label:'Interactuar'}, {code:'KeyR',label:'Regresar'}],
     });
 
     // Asegurar tamaño correcto del canvas tras el primer layout

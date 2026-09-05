@@ -5,6 +5,8 @@ existentes de cada juego. No altera preguntas, resultados ni permisos del tenant
 
 - Se habilita en dispositivos con `navigator.maxTouchPoints > 0`.
 - Movimiento, cámara y acciones admiten punteros independientes.
+- El botón `PAUSA` permanece visible durante la partida y abre el menú desde
+  el que se entra a la personalización. `SHIFT` activa el sprint táctil.
 - Desde pausa se ajustan tamaño, opacidad y posiciones arrastrando los botones.
 - Las preferencias son locales al navegador y al juego (`game-touch-v1:<id>`).
   No se sincronizan entre dispositivos. Si el almacenamiento está bloqueado,

@@ -4,6 +4,7 @@ import { useStore } from "./store";
 import Home from "./components/Home";
 import Editor from "./components/Editor";
 import GameScreen from "./components/GameScreen";
+import { isGameLeaderboard } from "../../shared/leaderboard";
 
 export default function App() {
   const screen = useStore((s) => s.screen);
@@ -14,7 +15,13 @@ export default function App() {
   useEffect(() => {
     if (!embedded) return;
     const receive = (event: MessageEvent) => {
-      if (event.origin !== window.location.origin || event.data?.type !== "parkour-race:load") return;
+      if (event.origin !== window.location.origin || event.source !== window.parent) return;
+      if (event.data?.type === "parkour-race:leaderboard") {
+        const board = event.data?.payload;
+        if (isGameLeaderboard(board) && board.gameType === 'parkour_race') useStore.getState().setLeaderboard(board);
+        return;
+      }
+      if (event.data?.type !== "parkour-race:load") return;
       const loaded = validateImported(event.data?.payload?.activity);
       if (!loaded) {
         window.parent.postMessage({ type: "parkour-race:error", payload: { message: "Preset de actividad inválido" } }, window.location.origin);
@@ -22,6 +29,8 @@ export default function App() {
       }
       const configuredSeed = parseInt(loaded.settings.fixedSeed.replace(/\D/g, ""), 10);
       const seed = loaded.settings.seedMode === "unique" || !configuredSeed ? randomSeed() : configuredSeed;
+      const board = event.data?.payload?.leaderboard;
+      useStore.getState().setLeaderboard(isGameLeaderboard(board) && board.gameType === 'parkour_race' ? board : null);
       useStore.getState().startGame(loaded, seed);
     };
     window.addEventListener("message", receive);

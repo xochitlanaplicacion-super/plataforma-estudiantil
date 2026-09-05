@@ -14,6 +14,7 @@ import { EntregaAlumno } from './EntregaAlumno';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { ParkourRaceFrame } from '@/components/activities/parkour-race/ParkourRaceFrame';
 import { BackroomsScapeFrame } from '@/components/activities/backrooms-scape/BackroomsScapeFrame';
+import type { GameLeaderboard } from '@/lib/game-leaderboard';
 
 // --- MOBILE DRAG INSTRUCTIONS POPUP ---
 function MobileDragTip({ type, onDismiss }: { type: string; onDismiss: () => void }) {
@@ -244,12 +245,13 @@ function generateCrossword(inputs: WordInput[]): CrosswordData {
   };
 }
 
-export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistente, isPreview }: { 
+export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistente, isPreview, gameLeaderboard }: {
   exercise: any; 
   onClose: () => void; 
-  onComplete?: (score: number, total: number, detallesErrores?: any[]) => void;
+  onComplete?: (score: number, total: number, detallesErrores?: any[]) => Promise<GameLeaderboard | null | undefined> | GameLeaderboard | null | undefined;
   entregaExistente?: any;
   isPreview?: boolean;
+  gameLeaderboard?: GameLeaderboard | null;
 }) => {
   const { config: inst } = useInstitucion();
   const [currentStep, setCurrentStep] = useState(0);
@@ -635,6 +637,7 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
         <div className="h-[calc(100vh-5rem)] min-h-[520px] w-full overflow-hidden bg-[#101416]">
           <BackroomsScapeFrame
             exercise={exercise}
+            leaderboard={gameLeaderboard}
             onClose={onClose}
             onComplete={onComplete ? (result) => onComplete(result.hits, result.total, [{
               tipo: 'backrooms_scape',
@@ -655,6 +658,7 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
         <div className="h-[calc(100vh-5rem)] min-h-[520px] w-full overflow-hidden bg-[#0B1026]">
           <ParkourRaceFrame
             exercise={exercise}
+            leaderboard={gameLeaderboard}
             onClose={onClose}
             onComplete={onComplete ? (result) => onComplete(result.hits, result.total, [{
               tipo: 'parkour_race',

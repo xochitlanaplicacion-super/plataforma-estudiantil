@@ -46,6 +46,14 @@ describe('touch preferences and lifecycle', () => {
     expect(key).not.toHaveBeenCalled();
     dispose();
   });
+  it('offers a visible pause control while playing', () => {
+    const { host, dispose } = mount(false);
+    const pause = host.querySelector('[aria-label="Pausar juego"]') as HTMLButtonElement;
+    expect(pause).toBeTruthy();
+    expect(pause.hidden).toBe(false);
+    pause.click();
+    dispose();
+  });
   it('saves preferences and restores them after reopening the game', () => {
     const first = mount();
     const slider = first.host.querySelector('input')!;

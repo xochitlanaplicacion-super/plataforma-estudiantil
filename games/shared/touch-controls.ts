@@ -119,9 +119,11 @@ export function installTouchControls(options: Options): () => void {
   const reset = edit.cloneNode(false) as HTMLButtonElement; reset.textContent = 'Restablecer posiciones';
   reset.onclick = () => { preferences.positions = {}; position(); persist(); };
   settings.append(edit, reset, status); root.append(settings);
-  const gear = makeButton('Ajustes'); gear.style.cssText += 'top:8px;left:8px;width:64px;height:48px;border-radius:12px;';
-  gear.onclick = () => { release(); options.pause(); settings.style.display = settings.style.display === 'none' ? 'block' : 'none'; editing = false; position(); };
-  root.append(gear);
+  const pauseButton = makeButton('PAUSA');
+  pauseButton.setAttribute('aria-label', 'Pausar juego');
+  pauseButton.style.cssText += 'top:8px;left:50%;transform:translateX(-50%);width:86px;height:46px;border-radius:13px;background:rgba(15,23,42,.88);border-color:rgba(255,255,255,.82);font-size:11px;letter-spacing:.12em;box-shadow:0 8px 24px rgba(0,0,0,.35);';
+  pauseButton.onclick = () => { release(); options.pause(); editing = false; position(); };
+  root.append(pauseButton);
   const openSettings = () => { release(); options.pause(); settings.style.display = 'block'; editing = false; position(); };
   window.addEventListener(`touch-settings:${options.id}`, openSettings);
   let lookPointer: number | null = null, lastX = 0, lastY = 0;
@@ -151,7 +153,7 @@ export function installTouchControls(options: Options): () => void {
     const playing = options.playing(), paused = options.paused();
     if (!playing && wasPlaying) release();
     wasPlaying = playing;
-    gear.hidden = !playing && !paused;
+    pauseButton.hidden = !playing;
     if (!paused) {
       settings.style.display = 'none';
       if (editing) { editing = false; edit.textContent = 'Mover botones'; position(); }

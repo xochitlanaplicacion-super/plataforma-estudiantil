@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BackroomsGame, type Difficulty, type MouseConfig, type Snapshot } from "./game/BackroomsGame";
 import GameUI from "./components/GameUI";
 import { loadMusicMuted } from "./game/music";
+import { isGameLeaderboard, type GameLeaderboard } from "../../shared/leaderboard";
 import {
   demoActivity,
   normalizeActivity,
@@ -47,6 +48,7 @@ export default function App() {
   const [gameVersion, setGameVersion] = useState(0);
   const [mouseConfig, setMouseConfigState] = useState<MouseConfig>(loadMouseConfig);
   const [musicMuted, setMusicMutedState] = useState(loadMusicMuted);
+  const [leaderboard, setLeaderboard] = useState<GameLeaderboard | null>(null);
   const mouseConfigRef = useRef(mouseConfig);
   const musicMutedRef = useRef(musicMuted);
 
@@ -72,6 +74,11 @@ export default function App() {
     if (!embedded) return;
     const receive = (event: MessageEvent) => {
       if (event.origin !== window.location.origin || event.source !== window.parent) return;
+      if (event.data?.type === "backrooms-scape:leaderboard") {
+        const board = event.data?.payload;
+        if (isGameLeaderboard(board) && board.gameType === 'backrooms_scape') setLeaderboard(board);
+        return;
+      }
       if (event.data?.type !== "backrooms-scape:load") return;
       const loaded = normalizeActivity(event.data?.payload?.activity);
       if (!loaded) {
@@ -82,6 +89,8 @@ export default function App() {
       if (loadedActivityKey.current === loadKey) return;
       loadedActivityKey.current = loadKey;
       completionSent.current = false;
+      const board = event.data?.payload?.leaderboard;
+      setLeaderboard(isGameLeaderboard(board) && board.gameType === 'backrooms_scape' ? board : null);
       setDiff(platformDifficulty(loaded.settings.difficulty));
       setActivity(loaded);
       setGameVersion((value) => value + 1);
@@ -132,6 +141,7 @@ export default function App() {
       <canvas ref={canvasRef} className="absolute inset-0 h-full w-full outline-none" />
       {!activity ? <div className="absolute inset-0 grid place-items-center bg-black text-sm font-bold text-amber-100">Preparando Backrooms Scape…</div> :
         <GameUI snap={snap} game={gameRef.current} diff={diff} setDiff={setDiff} activity={activity}
+          leaderboard={leaderboard}
           lockDifficulty={embedded} mouseConfig={mouseConfig} onMouseConfigChange={updateMouseConfig}
           musicMuted={musicMuted} onMusicMutedChange={updateMusicMuted}
           onStart={start} onRestart={restart} onMenu={toMenu} onClose={close} />}

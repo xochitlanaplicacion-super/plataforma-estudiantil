@@ -2,6 +2,7 @@ import React from 'react';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { redirect } from 'next/navigation';
 import ClientStudentPlayer from './ClientStudentPlayer';
+import { getGameLeaderboard } from '@/lib/actions/alumno';
 
 export default async function RealizarEjercicioPage({ params }: { params: Promise<{ id: string }> }) {
   const resolvedParams = await params;
@@ -48,5 +49,9 @@ export default async function RealizarEjercicioPage({ params }: { params: Promis
     entregaExistente = entrega;
   }
 
-  return <ClientStudentPlayer exercise={ejercicio} entregaExistente={entregaExistente} />;
+  const leaderboard = ['parkour_race', 'backrooms_scape'].includes(ejercicio.tipo || '')
+    ? await getGameLeaderboard(ejercicio.id)
+    : null;
+
+  return <ClientStudentPlayer exercise={ejercicio} entregaExistente={entregaExistente} initialLeaderboard={leaderboard} />;
 }

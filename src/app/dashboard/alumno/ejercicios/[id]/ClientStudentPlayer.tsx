@@ -6,6 +6,7 @@ import { ActivityPreview } from '@/components/shared/ActivityPreview';
 import { saveExerciseResult } from '@/lib/actions/alumno';
 import { useToast } from '@/hooks/use-toast';
 import confetti from 'canvas-confetti';
+import type { GameLeaderboard } from '@/lib/game-leaderboard';
 
 interface EntregaExistente {
   archivo_nombre?: string | null;
@@ -18,19 +19,22 @@ interface EntregaExistente {
 
 export default function ClientStudentPlayer({ 
   exercise, 
-  entregaExistente 
+  entregaExistente,
+  initialLeaderboard,
 }: { 
   exercise: any; 
   entregaExistente?: EntregaExistente | null;
+  initialLeaderboard?: GameLeaderboard | null;
 }) {
   const router = useRouter();
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [hasProcessed, setHasProcessed] = useState(false);
   const [finalScore, setFinalScore] = useState<number | null>(null);
+  const [leaderboard, setLeaderboard] = useState<GameLeaderboard | null>(initialLeaderboard || null);
 
   const handleComplete = async (score: number, total: number, detallesErrores?: any[]) => {
-    if (hasProcessed) return;
+    if (hasProcessed) return leaderboard;
     try {
       setHasProcessed(true);
       setSaving(true);
@@ -45,6 +49,7 @@ export default function ClientStudentPlayer({
           variant: "destructive"
         });
         setHasProcessed(false);
+        return leaderboard;
       } else if (res.isExpired) {
         toast({
           title: 'Ejercicio de práctica',
@@ -60,9 +65,13 @@ export default function ClientStudentPlayer({
           variant: "default"
         });
       }
+      const updatedLeaderboard = 'leaderboard' in res ? res.leaderboard : null;
+      if (updatedLeaderboard) setLeaderboard(updatedLeaderboard);
+      return updatedLeaderboard || leaderboard;
     } catch (e) {
       console.error(e);
       setHasProcessed(false);
+      return leaderboard;
     } finally {
       setSaving(false);
     }
@@ -82,6 +91,7 @@ export default function ClientStudentPlayer({
         onClose={handleClose} 
         onComplete={handleComplete}
         entregaExistente={entregaExistente}
+        gameLeaderboard={leaderboard}
       />
       {saving && (
         <div className="absolute inset-0 z-[200] bg-white/70 backdrop-blur-sm flex items-center justify-center">
