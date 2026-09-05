@@ -634,7 +634,7 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
   const renderContent = () => {
     if (exercise.tipo === 'backrooms_scape') {
       return (
-        <div className="h-[calc(100vh-5rem)] min-h-[520px] w-full overflow-hidden bg-[#101416]">
+        <div className="h-full min-h-0 w-full overflow-hidden bg-[#101416]">
           <BackroomsScapeFrame
             exercise={exercise}
             leaderboard={gameLeaderboard}
@@ -655,7 +655,7 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
 
     if (exercise.tipo === 'parkour_race') {
       return (
-        <div className="h-[calc(100vh-5rem)] min-h-[520px] w-full overflow-hidden bg-[#0B1026]">
+        <div className="h-full min-h-0 w-full overflow-hidden bg-[#0B1026]">
           <ParkourRaceFrame
             exercise={exercise}
             leaderboard={gameLeaderboard}
@@ -1195,6 +1195,20 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
 
     return <div className="p-20 text-center opacity-20 italic">Vista previa no disponible.</div>;
   };
+
+  if (exercise.tipo === 'parkour_race' || exercise.tipo === 'backrooms_scape') {
+    return (
+      <div className="fixed inset-0 z-[100] flex h-[100dvh] flex-col overflow-hidden bg-slate-950">
+        <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/15 px-3 py-2 text-white" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>
+          <span className="min-w-0 truncate text-sm font-bold">{isPreview ? 'Vista previa · ' : ''}{exercise.titulo || 'Actividad de juego'}</span>
+          <Button className="shrink-0 border border-white/40 bg-white/10 text-white hover:bg-white/20" onClick={onClose}>
+            <X size={18} className="mr-2" />{isPreview ? 'Cerrar vista previa' : 'Cerrar juego'}
+          </Button>
+        </header>
+        <main className="min-h-0 flex-1 overflow-hidden">{renderContent()}</main>
+      </div>
+    );
+  }
 
   return (
     <div className="fixed inset-0 z-[100] bg-white flex flex-col overflow-hidden animate-in fade-in duration-300">

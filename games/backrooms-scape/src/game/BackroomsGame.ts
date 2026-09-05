@@ -1339,6 +1339,7 @@ export class BackroomsGame {
     if (this.panelMat) this.panelMat.emissiveIntensity = 1.7 * this.flicker;
     this.hemi.intensity = 1.18 * (0.94 + 0.06 * this.flicker);
 
+    if (this.mode !== 'play') this.keys.clear();
     switch (this.mode) {
       case "menu":
         this.updateMenuCam(dt);

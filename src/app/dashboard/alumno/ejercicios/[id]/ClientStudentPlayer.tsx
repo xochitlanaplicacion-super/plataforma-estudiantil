@@ -1,6 +1,7 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { ActivityPreview } from '@/components/shared/ActivityPreview';
 import { saveExerciseResult } from '@/lib/actions/alumno';
@@ -27,6 +28,13 @@ export default function ClientStudentPlayer({
   initialLeaderboard?: GameLeaderboard | null;
 }) {
   const router = useRouter();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    setMounted(true);
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = previous; };
+  }, []);
   const { toast } = useToast();
   const [saving, setSaving] = useState(false);
   const [hasProcessed, setHasProcessed] = useState(false);
@@ -81,10 +89,11 @@ export default function ClientStudentPlayer({
     if (hasProcessed) {
       router.refresh();
     }
-    router.back();
+    router.push('/dashboard/alumno/materias');
   };
 
-  return (
+  if (!mounted) return null;
+  return createPortal(
     <div className="fixed inset-0 z-[100] bg-slate-50 overflow-hidden flex flex-col">
       <ActivityPreview 
         exercise={exercise} 
@@ -101,6 +110,6 @@ export default function ClientStudentPlayer({
           </div>
         </div>
       )}
-    </div>
+    </div>, document.body
   );
 }

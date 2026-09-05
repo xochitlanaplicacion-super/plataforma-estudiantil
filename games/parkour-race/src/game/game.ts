@@ -431,6 +431,7 @@ export class AdventureGame {
     const dt = Math.min(0.05, this.engine.getDeltaTime() / 1000);
     const store = useStore.getState();
     const suspended = this.isSuspended();
+    if (suspended) this.keys.clear();
 
     if (!suspended) {
       this.t += dt;

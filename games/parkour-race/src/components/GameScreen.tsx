@@ -383,7 +383,7 @@ function PauseMenu() {
           </button>
         </div>
         <MouseSettings className="mt-4" />
-        {navigator.maxTouchPoints > 0 && <button className="mt-3 w-full rounded-xl bg-white/10 p-3 font-bold" onClick={() => window.dispatchEvent(new Event('touch-settings:parkour-race'))}>Ajustar controles táctiles</button>}
+        {navigator.maxTouchPoints > 0 && <button className="mt-3 w-full rounded-xl border-2 border-[#7BE3D1] bg-[#4DD6C1] p-4 font-extrabold text-[#06281F] shadow-lg" onClick={() => window.dispatchEvent(new Event('touch-settings:parkour-race'))}>Ajustar controles táctiles · Tamaño y posición</button>}
         <p className="mt-4 flex items-center justify-center gap-1.5 text-[11px] text-slate-500">
           <Keyboard size={12} /> Consejo: SHIFT para sprint y R para volver al checkpoint
         </p>

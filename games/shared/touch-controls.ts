@@ -42,7 +42,12 @@ export function installTouchControls(options: Options): () => void {
     for (const code of before) if (!after.has(code)) options.key(code, false);
     for (const code of after) if (!before.has(code)) options.key(code, true);
   };
-  const release = () => { for (const id of [...held.keys()]) updateKeys(id, []); };
+  const resetPointers: (() => void)[] = [];
+  const endPointers: ((event: PointerEvent) => void)[] = [];
+  const release = () => {
+    for (const id of [...held.keys()]) updateKeys(id, []);
+    for (const reset of resetPointers) reset();
+  };
   const controls: { node: HTMLButtonElement; id: string; x: number; y: number }[] = [];
   const position = () => {
     const { width, height } = root.getBoundingClientRect();
@@ -74,6 +79,11 @@ export function installTouchControls(options: Options): () => void {
     const control = { node, id: action.code, x: index === 0 ? 0.15 : 0.92 - ((index - 1) % 3) * 0.13, y: index === 0 ? 0.78 : 0.8 - Math.floor((index - 1) / 3) * 0.19 };
     controls.push(control); root.append(node);
     let activePointer: number | null = null;
+    resetPointers.push(() => {
+      const pointer = activePointer;
+      activePointer = null;
+      if (pointer !== null && node.hasPointerCapture?.(pointer)) node.releasePointerCapture(pointer);
+    });
     const move = (event: PointerEvent) => {
       if (event.pointerId !== activePointer) return;
       event.preventDefault();
@@ -82,7 +92,7 @@ export function installTouchControls(options: Options): () => void {
         preferences.positions[action.code] = { x: (event.clientX - box.left) / box.width, y: (event.clientY - box.top) / box.height };
         position(); return;
       }
-      if (!options.playing()) return;
+      if (!options.playing()) { release(); return; }
       if (action.code !== 'move') { updateKeys(event.pointerId, [action.code]); return; }
       const rect = node.getBoundingClientRect();
       const x = (event.clientX - rect.left - rect.width / 2) / (rect.width / 2);
@@ -100,6 +110,7 @@ export function installTouchControls(options: Options): () => void {
       if (editing) persist();
     };
     node.addEventListener('pointerup', end); node.addEventListener('pointercancel', end); node.addEventListener('lostpointercapture', end);
+    endPointers.push(end);
   });
   const settings = document.createElement('div');
   settings.style.cssText = 'position:absolute;top:64px;left:12px;right:12px;max-width:340px;max-height:45%;overflow:auto;pointer-events:auto;background:#101827;color:white;padding:16px;border:1px solid #64748b;border-radius:16px;font:14px system-ui;display:none;';
@@ -127,6 +138,11 @@ export function installTouchControls(options: Options): () => void {
   const openSettings = () => { release(); options.pause(); settings.style.display = 'block'; editing = false; position(); };
   window.addEventListener(`touch-settings:${options.id}`, openSettings);
   let lookPointer: number | null = null, lastX = 0, lastY = 0;
+  resetPointers.push(() => {
+    const pointer = lookPointer;
+    lookPointer = null;
+    if (pointer !== null && options.canvas.hasPointerCapture?.(pointer)) options.canvas.releasePointerCapture(pointer);
+  });
   const down = (event: PointerEvent) => {
     if (!options.playing() || lookPointer !== null || (event.pointerType === 'mouse' && event.button !== 0)) return;
     event.preventDefault(); lookPointer = event.pointerId; lastX = event.clientX; lastY = event.clientY;
@@ -147,12 +163,18 @@ export function installTouchControls(options: Options): () => void {
   options.canvas.addEventListener('pointercancel', up);
   options.canvas.addEventListener('lostpointercapture', up);
   window.addEventListener('blur', blur); document.addEventListener('visibilitychange', visibility);
+  // A question overlay may receive the release instead of the hidden joystick.
+  const endAnywhere = (event: PointerEvent) => {
+    updateKeys(event.pointerId, []);
+    for (const end of endPointers) end(event);
+    up(event);
+  };
+  window.addEventListener('pointerup', endAnywhere, true);
+  window.addEventListener('pointercancel', endAnywhere, true);
   const observer = new ResizeObserver(position); observer.observe(root);
-  let wasPlaying = false;
   const timer = window.setInterval(() => {
     const playing = options.playing(), paused = options.paused();
-    if (!playing && wasPlaying) release();
-    wasPlaying = playing;
+    if (!playing && !editing) release();
     pauseButton.hidden = !playing;
     if (!paused) {
       settings.style.display = 'none';
@@ -167,6 +189,8 @@ export function installTouchControls(options: Options): () => void {
     options.canvas.removeEventListener('pointerdown', down); options.canvas.removeEventListener('pointermove', look);
     options.canvas.removeEventListener('pointerup', up); options.canvas.removeEventListener('pointercancel', up); options.canvas.removeEventListener('lostpointercapture', up);
     window.removeEventListener('blur', blur); document.removeEventListener('visibilitychange', visibility);
+    window.removeEventListener('pointerup', endAnywhere, true);
+    window.removeEventListener('pointercancel', endAnywhere, true);
     window.removeEventListener(`touch-settings:${options.id}`, openSettings);
   };
 }

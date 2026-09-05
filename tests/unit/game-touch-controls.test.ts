@@ -13,10 +13,30 @@ function mount(initiallyPaused = true) {
   const key = vi.fn();
   const dispose = installTouchControls({ id: 'test', canvas, playing: () => !paused, paused: () => paused,
     pause: () => { paused = true; }, key, look: vi.fn(), actions: [{ code: 'Space', label: 'Saltar' }] });
-  return { host, canvas, dispose, key };
+  return { host, canvas, dispose, key, setPaused: (value: boolean) => { paused = value; } };
 }
 
 describe('touch preferences and lifecycle', () => {
+  it('requires a fresh touch after a question closes and releases outside the control', () => {
+    vi.useFakeTimers();
+    const { host, key, dispose, setPaused } = mount(false);
+    const button = host.querySelector('[aria-label="Saltar"]') as HTMLButtonElement;
+    button.setPointerCapture = vi.fn();
+    const event = (type: string, pointerId = 4) => Object.assign(new Event(type, { cancelable: true }), { pointerId, clientX: 100, clientY: 100 });
+    button.dispatchEvent(event('pointerdown'));
+    setPaused(true);
+    vi.advanceTimersByTime(100);
+    expect(key).toHaveBeenLastCalledWith('Space', false);
+    setPaused(false);
+    key.mockClear();
+    button.dispatchEvent(event('pointermove'));
+    expect(key).not.toHaveBeenCalled();
+    button.dispatchEvent(event('pointerdown', 5));
+    expect(key).toHaveBeenLastCalledWith('Space', true);
+    window.dispatchEvent(event('pointerup', 5));
+    expect(key).toHaveBeenLastCalledWith('Space', false);
+    dispose();
+  });
   it('releases a held action after pointer cancellation or device blur', () => {
     const { host, key, dispose } = mount(false);
     const button = host.querySelector('[aria-label="Saltar"]') as HTMLButtonElement;

@@ -484,7 +484,7 @@ function PauseOverlay({ onResume, onMenu, mouseConfig, onMouseConfigChange, musi
       <div className="modal-card max-h-[90%] overflow-y-auto w-[min(420px,92vw)] text-center">
         <h2 className="title-font mb-1 text-4xl text-amber-300">PAUSA</h2>
         <p className="mb-6 text-xs text-white/50">El Merodeador espera paciente…</p>
-        {navigator.maxTouchPoints > 0 && <button className="btn-ghost w-full justify-center" onClick={() => window.dispatchEvent(new Event('touch-settings:backrooms-scape'))}>Ajustar controles táctiles</button>}
+        {navigator.maxTouchPoints > 0 && <button className="w-full rounded-xl border-2 border-cyan-200 bg-cyan-300 p-4 font-extrabold text-slate-950 shadow-[0_0_24px_rgba(34,211,238,.3)]" onClick={() => window.dispatchEvent(new Event('touch-settings:backrooms-scape'))}>Ajustar controles táctiles · Tamaño y posición</button>}
         <ControlSettings mouseConfig={mouseConfig} onMouseConfigChange={onMouseConfigChange}
           musicMuted={musicMuted} onMusicMutedChange={onMusicMutedChange} />
         <button onClick={onResume} className="btn-main mb-3 mt-4 w-full justify-center">
