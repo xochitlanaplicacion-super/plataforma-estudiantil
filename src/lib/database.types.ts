@@ -5031,6 +5031,24 @@ export type Database = {
       }
       get_auth_role: { Args: never; Returns: string }
       obtener_contexto_docente_movil: { Args: never; Returns: Json }
+      obtener_asistencia_docente_movil: {
+        Args: { p_asignacion_id: string }
+        Returns: Json
+      }
+      obtener_resumen_participacion_docente_movil: {
+        Args: { p_asignacion_id: string }
+        Returns: Json
+      }
+      guardar_asistencia_docente_movil: {
+        Args: {
+          p_asignacion_id: string
+          p_expected_cycle_id: string
+          p_expected_period_id: string
+          p_idempotency_key: string
+          p_registros: Json
+        }
+        Returns: Json
+      }
       obtener_vinculaciones_provisionales_docente: {
         Args: { p_asignacion_id: string }
         Returns: Json
