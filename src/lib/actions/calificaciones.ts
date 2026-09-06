@@ -60,6 +60,14 @@ export interface TeacherMobileCaptureSettingDto {
   confirmBeforeSave: boolean;
 }
 
+export interface TeacherQrBatchDto {
+  institution: { name: string; logoUrl: string | null; primaryColor: string };
+  cycleName: string;
+  periodName: string;
+  assignment: { id: string; subjectName: string; groupName: string };
+  students: { enrollmentId: string; name: string; enrollmentCode: string | null; token: string }[];
+}
+
 const teacherMobileCaptureSettingSchema = z.object({
   criterionId: z.string().uuid(),
   minimumGrade: z.number().int().min(0).max(10),
@@ -67,6 +75,75 @@ const teacherMobileCaptureSettingSchema = z.object({
   qrReader: z.boolean(),
   confirmBeforeSave: z.boolean(),
 });
+
+const teacherMobileContextQrSchema = z.object({
+  tenant: z.object({
+    name: z.string(),
+    logoUrl: z.string().nullable().optional(),
+    primaryColor: z.string().regex(/^#[0-9a-f]{6}$/i).optional(),
+  }),
+  cycle: z.object({ name: z.string() }),
+  period: z.object({ name: z.string() }),
+  assignments: z.array(z.object({
+    id: z.string().uuid(),
+    subjectName: z.string(),
+    groupName: z.string(),
+    students: z.array(z.object({
+      enrollmentId: z.string().uuid(),
+      name: z.string(),
+      enrollmentCode: z.string().nullable().optional(),
+    })),
+  })),
+});
+
+const teacherQrTokensSchema = z.array(z.object({
+  enrollmentId: z.string().uuid(),
+  token: z.string().uuid(),
+}));
+
+export async function loadTeacherQrBatchAction(assignmentIdInput: unknown): Promise<AcademicActionResult<TeacherQrBatchDto>> {
+  try {
+    const assignmentId = z.string().uuid().parse(assignmentIdInput);
+    const session = await requireTenantSession(['profesor']);
+    const [{ data: contextData, error: contextError }, { data: tokenData, error: tokenError }] = await Promise.all([
+      session.supabase.rpc('obtener_contexto_docente_movil'),
+      session.supabase.rpc('obtener_qrs_docente_movil', { p_asignacion_id: assignmentId }),
+    ]);
+    if (contextError) throw contextError;
+    if (tokenError) throw tokenError;
+    const context = teacherMobileContextQrSchema.parse(contextData);
+    const tokens = teacherQrTokensSchema.parse(tokenData);
+    const assignment = context.assignments.find((row) => row.id === assignmentId);
+    if (!assignment) throw new Error('La materia seleccionada no pertenece al profesor o al ciclo activo.');
+    const tokenByEnrollment = new Map(tokens.map((row) => [row.enrollmentId, row.token]));
+    const students = assignment.students.flatMap((student) => {
+      const token = tokenByEnrollment.get(student.enrollmentId);
+      return token ? [{
+        enrollmentId: student.enrollmentId,
+        name: student.name,
+        enrollmentCode: student.enrollmentCode ?? null,
+        token,
+      }] : [];
+    });
+    return academicSuccessResult({
+      institution: {
+        name: context.tenant.name,
+        logoUrl: context.tenant.logoUrl ?? null,
+        primaryColor: context.tenant.primaryColor ?? '#00b894',
+      },
+      cycleName: context.cycle.name,
+      periodName: context.period.name,
+      assignment: {
+        id: assignment.id,
+        subjectName: assignment.subjectName,
+        groupName: assignment.groupName,
+      },
+      students,
+    }, { empty: students.length === 0 });
+  } catch (error) {
+    return academicFailureResult(error);
+  }
+}
 
 export async function loadTeacherMobileCaptureSettingsAction(): Promise<AcademicActionResult<TeacherMobileCaptureSettingDto[]>> {
   try {

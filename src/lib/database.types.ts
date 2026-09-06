@@ -5030,6 +5030,11 @@ export type Database = {
         }[]
       }
       get_auth_role: { Args: never; Returns: string }
+      obtener_contexto_docente_movil: { Args: never; Returns: Json }
+      obtener_qrs_docente_movil: {
+        Args: { p_asignacion_id: string }
+        Returns: Json
+      }
       get_tenant_smtp_for_service: {
         Args: { p_tenant_id: string }
         Returns: {

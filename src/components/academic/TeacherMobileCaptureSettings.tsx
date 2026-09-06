@@ -1,9 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { QrCode, Save, Smartphone } from 'lucide-react';
+import { Download, QrCode, Save, Smartphone } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import QRCode from 'qrcode';
 
 import {
+  loadTeacherQrBatchAction,
   loadTeacherMobileCaptureSettingsAction,
   saveTeacherMobileCaptureSettingAction,
   type TeacherMobileCaptureSettingDto,
@@ -14,6 +17,39 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 
+async function imageUrlToPng(url: string | null) {
+  if (!url) return null;
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const objectUrl = URL.createObjectURL(await response.blob());
+    const image = new Image();
+    const loaded = new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error('No se pudo leer el logotipo.'));
+    });
+    image.src = objectUrl;
+    await loaded;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, image.naturalWidth);
+    canvas.height = Math.max(1, image.naturalHeight);
+    canvas.getContext('2d')?.drawImage(image, 0, 0);
+    URL.revokeObjectURL(objectUrl);
+    return canvas.toDataURL('image/png');
+  } catch {
+    return null;
+  }
+}
+
+function rgb(hex: string): [number, number, number] {
+  const value = hex.replace('#', '');
+  return [Number.parseInt(value.slice(0, 2), 16), Number.parseInt(value.slice(2, 4), 16), Number.parseInt(value.slice(4, 6), 16)];
+}
+
+function safeFileName(value: string) {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').toLowerCase();
+}
+
 const defaults = (criterionId: string): TeacherMobileCaptureSettingDto => ({
   criterionId,
   minimumGrade: 5,
@@ -22,11 +58,12 @@ const defaults = (criterionId: string): TeacherMobileCaptureSettingDto => ({
   confirmBeforeSave: false,
 });
 
-export function TeacherMobileCaptureSettings({ criteria }: { criteria: AcademicCriterionConfigurationDto[] }) {
+export function TeacherMobileCaptureSettings({ criteria, assignmentId }: { criteria: AcademicCriterionConfigurationDto[]; assignmentId: string }) {
   const eligible = criteria.filter((criterion) => criterion.active && criterion.type !== 'actividades');
   const [settings, setSettings] = useState<Record<string, TeacherMobileCaptureSettingDto>>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [message, setMessage] = useState('');
+  const [exportingQr, setExportingQr] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -59,6 +96,74 @@ export function TeacherMobileCaptureSettings({ criteria }: { criteria: AcademicC
       setMessage(result.error.message);
     }
     setSaving(null);
+  }
+
+  async function exportQrBatch() {
+    setExportingQr(true);
+    setMessage('Preparando las credenciales QR del grupo…');
+    try {
+      const result = await loadTeacherQrBatchAction(assignmentId);
+      if (!result.ok) {
+        setMessage(result.error.message);
+        return;
+      }
+      if (result.data.students.length === 0) {
+        setMessage('El grupo activo todavía no tiene alumnos para generar credenciales.');
+        return;
+      }
+      const [logo, qrImages] = await Promise.all([
+        imageUrlToPng(result.data.institution.logoUrl),
+        Promise.all(result.data.students.map((student) => QRCode.toDataURL(`xch:v1:${student.token}`, { width: 512, margin: 1, errorCorrectionLevel: 'M' }))),
+      ]);
+      const documentPdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
+      const color = rgb(result.data.institution.primaryColor);
+      const perPage = 8;
+      result.data.students.forEach((student, index) => {
+        const pageIndex = index % perPage;
+        if (index > 0 && pageIndex === 0) documentPdf.addPage();
+        if (pageIndex === 0) {
+          documentPdf.setFillColor(...color);
+          documentPdf.rect(0, 0, 210, 28, 'F');
+          if (logo) documentPdf.addImage(logo, 'PNG', 12, 5, 18, 18, undefined, 'FAST');
+          documentPdf.setTextColor(255, 255, 255);
+          documentPdf.setFont('helvetica', 'bold');
+          documentPdf.setFontSize(14);
+          documentPdf.text(result.data.institution.name, logo ? 34 : 12, 12);
+          documentPdf.setFont('helvetica', 'normal');
+          documentPdf.setFontSize(9);
+          documentPdf.text(`${result.data.assignment.subjectName} · ${result.data.assignment.groupName} · ${result.data.cycleName} · ${result.data.periodName}`, logo ? 34 : 12, 18);
+        }
+        const column = pageIndex % 2;
+        const row = Math.floor(pageIndex / 2);
+        const x = 12 + column * 95.5;
+        const y = 33 + row * 63;
+        documentPdf.setDrawColor(210, 218, 229);
+        documentPdf.setFillColor(255, 255, 255);
+        documentPdf.roundedRect(x, y, 90.5, 58, 2.5, 2.5, 'FD');
+        documentPdf.addImage(qrImages[index], 'PNG', x + 5, y + 12, 36, 36, undefined, 'FAST');
+        documentPdf.setTextColor(...color);
+        documentPdf.setFont('helvetica', 'bold');
+        documentPdf.setFontSize(7);
+        documentPdf.text(result.data.institution.name.toUpperCase().slice(0, 35), x + 5, y + 7);
+        documentPdf.setTextColor(20, 32, 52);
+        documentPdf.setFontSize(11);
+        const nameLines = documentPdf.splitTextToSize(student.name, 42) as string[];
+        documentPdf.text(nameLines.slice(0, 3), x + 45, y + 19);
+        documentPdf.setTextColor(80, 93, 115);
+        documentPdf.setFont('helvetica', 'normal');
+        documentPdf.setFontSize(8);
+        documentPdf.text(result.data.assignment.groupName, x + 45, y + 38);
+        documentPdf.text(student.enrollmentCode ? `Matrícula: ${student.enrollmentCode}` : 'Credencial de captura docente', x + 45, y + 44);
+        documentPdf.setFontSize(6.5);
+        documentPdf.text('Uso interno. Presentar al profesor.', x + 45, y + 51);
+      });
+      documentPdf.save(`credenciales-qr-${safeFileName(result.data.assignment.subjectName)}-${safeFileName(result.data.assignment.groupName)}.pdf`);
+      setMessage(`${result.data.students.length} credenciales generadas con el ciclo y periodo activos.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'No se pudo generar el archivo de credenciales.');
+    } finally {
+      setExportingQr(false);
+    }
   }
 
   if (eligible.length === 0) return null;
@@ -105,6 +210,13 @@ export function TeacherMobileCaptureSettings({ criteria }: { criteria: AcademicC
             </section>
           );
         })}
+        <section className="flex flex-col gap-3 rounded-lg border border-dashed p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="flex items-center gap-2 font-semibold"><QrCode className="size-5" aria-hidden="true" />Credenciales QR del grupo</p>
+            <p className="text-sm text-muted-foreground">Descarga un PDF listo para imprimir. Incluye únicamente alumnos de esta asignación, del ciclo activo y del periodo activo.</p>
+          </div>
+          <Button type="button" variant="outline" disabled={exportingQr} onClick={() => void exportQrBatch()}><Download />{exportingQr ? 'Generando…' : 'Descargar PDF'}</Button>
+        </section>
       </CardContent>
     </Card>
   );

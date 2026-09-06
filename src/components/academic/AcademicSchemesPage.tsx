@@ -490,7 +490,7 @@ export function AcademicSchemesPage({ audience = 'administration' }: AcademicSch
                   </> : null}
                 </div>
                 {teacherView && selectedScheme.state === 'activo' ? <DistributeScheme key={selectedScheme.id} data={data} scheme={selectedScheme} /> : null}
-                {teacherView && selectedScheme.state === 'activo' ? <TeacherMobileCaptureSettings criteria={selectedScheme.criteria} /> : null}
+                {teacherView && selectedScheme.state === 'activo' ? <TeacherMobileCaptureSettings criteria={selectedScheme.criteria} assignmentId={selectedScheme.assignmentId} /> : null}
                 </>
               ) : null}
               {selectedScheme ? (

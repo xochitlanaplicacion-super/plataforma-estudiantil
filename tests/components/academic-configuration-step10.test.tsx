@@ -11,7 +11,7 @@ const actionMocks = vi.hoisted(() => ({
   saveScheme: vi.fn(), saveCriterion: vi.fn(), saveSubcriterion: vi.fn(),
   deleteSubcriterion: vi.fn(),
   activate: vi.fn(), copy: vi.fn(),
-  mobileLoad: vi.fn(), mobileSave: vi.fn(),
+  mobileLoad: vi.fn(), mobileSave: vi.fn(), mobileQr: vi.fn(),
 }));
 
 vi.mock('@/lib/actions/calificaciones', () => ({
@@ -27,6 +27,7 @@ vi.mock('@/lib/actions/calificaciones', () => ({
   copyAcademicSchemeAction: actionMocks.copy,
   loadTeacherMobileCaptureSettingsAction: actionMocks.mobileLoad,
   saveTeacherMobileCaptureSettingAction: actionMocks.mobileSave,
+  loadTeacherQrBatchAction: actionMocks.mobileQr,
 }));
 
 import { AcademicCyclesPeriodsPage } from '@/components/academic/AcademicCyclesPeriodsPage';
