@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import axe from 'axe-core';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -11,6 +11,7 @@ const actionMocks = vi.hoisted(() => ({
   saveScheme: vi.fn(), saveCriterion: vi.fn(), saveSubcriterion: vi.fn(),
   deleteSubcriterion: vi.fn(),
   activate: vi.fn(), copy: vi.fn(),
+  mobileLoad: vi.fn(), mobileSave: vi.fn(),
 }));
 
 vi.mock('@/lib/actions/calificaciones', () => ({
@@ -24,6 +25,8 @@ vi.mock('@/lib/actions/calificaciones', () => ({
   deleteAcademicSubcriterionAction: actionMocks.deleteSubcriterion,
   activateAcademicSchemeAction: actionMocks.activate,
   copyAcademicSchemeAction: actionMocks.copy,
+  loadTeacherMobileCaptureSettingsAction: actionMocks.mobileLoad,
+  saveTeacherMobileCaptureSettingAction: actionMocks.mobileSave,
 }));
 
 import { AcademicCyclesPeriodsPage } from '@/components/academic/AcademicCyclesPeriodsPage';
@@ -59,6 +62,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   window.localStorage.setItem('academic-criteria-tour-seen-v2', 'true');
   actionMocks.audit.mockResolvedValue({ ok: true, status: 'empty', data: { items: [], page: 1, pageSize: 10, total: 0, totalPages: 0, hasPreviousPage: false, hasNextPage: false } });
+  actionMocks.mobileLoad.mockResolvedValue({ ok: true, status: 'empty', data: [] });
+  actionMocks.mobileSave.mockImplementation(async (input: unknown) => ({ ok: true, status: 'success', data: input }));
 });
 
 describe('Paso 10: interfaz administrativa accesible', () => {
@@ -213,6 +218,38 @@ describe('Paso 10: interfaz administrativa accesible', () => {
     expect(screen.queryByLabelText('Nivel')).not.toBeInTheDocument();
     expect(screen.queryByText('Auditoría académica')).not.toBeInTheDocument();
     expect(actionMocks.audit).not.toHaveBeenCalled();
+  }, 20_000);
+
+  it('guarda los ajustes de captura móvil por profesor y criterio', async () => {
+    const data = baseConfiguration();
+    data.schemes = [{
+      id: ID.scheme, cycleId: ID.cycle, assignmentId: ID.assignment, periodId: ID.period,
+      name: 'Evaluación activa', scale: '0-10', passingGrade: 6, displayDecimals: 1,
+      roundingMode: 'half_up', missingRule: 'zero_on_close', missingValue: 0,
+      excusedRule: 'exclude', state: 'activo', version: 1, copiedFromId: null,
+      updatedAt: '2026-08-30T10:00:00.000Z', criteria: [{
+        id: ID.criterion, schemeId: ID.scheme, name: 'Examen', type: 'directo',
+        weight: 100, order: 1, active: true, updatedAt: '2026-08-30T10:00:00.000Z', subcriteria: [],
+      }],
+    }];
+    actionMocks.load.mockResolvedValue({ ok: true, status: 'success', data });
+    const user = userEvent.setup();
+    render(<AcademicSchemesPage audience="teacher" />);
+
+    const qrSwitch = await screen.findByLabelText('Lector QR');
+    const section = qrSwitch.closest('section');
+    expect(section).not.toBeNull();
+    await user.click(qrSwitch);
+    await user.selectOptions(within(section!).getByLabelText('Mínima visible'), '6');
+    await user.click(within(section!).getByRole('button', { name: 'Guardar' }));
+
+    await waitFor(() => expect(actionMocks.mobileSave).toHaveBeenCalledWith({
+      criterionId: ID.criterion,
+      minimumGrade: 6,
+      increment: 1,
+      qrReader: true,
+      confirmBeforeSave: false,
+    }));
   }, 20_000);
 
   it('mantiene disponible un recorrido guiado con globos y navegación paso a paso', async () => {

@@ -27,6 +27,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { WeightDistributionPreview } from './WeightDistributionPreview';
 import { AcademicCriteriaTour } from './AcademicCriteriaTour';
+import { TeacherMobileCaptureSettings } from './TeacherMobileCaptureSettings';
 import {
   AcademicConfigurationHeader, AcademicConfirmDialog, AcademicErrorState,
   AcademicFeedback, AcademicLoadingState, fieldClassName,
@@ -489,6 +490,7 @@ export function AcademicSchemesPage({ audience = 'administration' }: AcademicSch
                   </> : null}
                 </div>
                 {teacherView && selectedScheme.state === 'activo' ? <DistributeScheme key={selectedScheme.id} data={data} scheme={selectedScheme} /> : null}
+                {teacherView && selectedScheme.state === 'activo' ? <TeacherMobileCaptureSettings criteria={selectedScheme.criteria} /> : null}
                 </>
               ) : null}
               {selectedScheme ? (

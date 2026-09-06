@@ -1,5 +1,7 @@
 'use server';
 
+import { z } from 'zod';
+
 import {
   createAcademicActionHandlers,
   type AcademicActionHandlers,
@@ -49,6 +51,76 @@ import { AcademicResultsService } from '@/lib/academic/results-service';
 import { requireTenantSession } from '@/lib/tenant/context';
 
 type TenantSession = Awaited<ReturnType<typeof requireTenantSession>>;
+
+export interface TeacherMobileCaptureSettingDto {
+  criterionId: string;
+  minimumGrade: number;
+  increment: 0.1 | 0.5 | 1;
+  qrReader: boolean;
+  confirmBeforeSave: boolean;
+}
+
+const teacherMobileCaptureSettingSchema = z.object({
+  criterionId: z.string().uuid(),
+  minimumGrade: z.number().int().min(0).max(10),
+  increment: z.union([z.literal(0.1), z.literal(0.5), z.literal(1)]),
+  qrReader: z.boolean(),
+  confirmBeforeSave: z.boolean(),
+});
+
+export async function loadTeacherMobileCaptureSettingsAction(): Promise<AcademicActionResult<TeacherMobileCaptureSettingDto[]>> {
+  try {
+    const session = await requireTenantSession(['profesor']);
+    const { data, error } = await session.supabase
+      .from('configuracion_captura_docente')
+      .select('criterio_evaluacion_id,calificacion_minima,incremento,lector_qr,confirmar_antes_guardar')
+      .eq('tenant_id', session.tenantId)
+      .eq('profesor_id', session.user.id);
+    if (error) throw error;
+    const settings = (data ?? []).map((row) => ({
+      criterionId: row.criterio_evaluacion_id,
+      minimumGrade: row.calificacion_minima,
+      increment: Number(row.incremento) as 0.1 | 0.5 | 1,
+      qrReader: row.lector_qr,
+      confirmBeforeSave: row.confirmar_antes_guardar,
+    }));
+    return academicSuccessResult(settings, { empty: settings.length === 0 });
+  } catch (error) {
+    return academicFailureResult(error);
+  }
+}
+
+export async function saveTeacherMobileCaptureSettingAction(input: unknown): Promise<AcademicActionResult<TeacherMobileCaptureSettingDto>> {
+  try {
+    const parsed = teacherMobileCaptureSettingSchema.parse(input);
+    const session = await requireTenantSession(['profesor']);
+    const { data, error } = await session.supabase
+      .from('configuracion_captura_docente')
+      .upsert({
+        tenant_id: session.tenantId,
+        profesor_id: session.user.id,
+        criterio_evaluacion_id: parsed.criterionId,
+        calificacion_minima: parsed.minimumGrade,
+        incremento: parsed.increment,
+        lector_qr: parsed.qrReader,
+        confirmar_antes_guardar: parsed.confirmBeforeSave,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'tenant_id,profesor_id,criterio_evaluacion_id' })
+      .select('criterio_evaluacion_id,calificacion_minima,incremento,lector_qr,confirmar_antes_guardar')
+      .single();
+    if (error) throw error;
+    revalidateAcademicConfigurationRoutes();
+    return academicSuccessResult({
+      criterionId: data.criterio_evaluacion_id,
+      minimumGrade: data.calificacion_minima,
+      increment: Number(data.incremento) as 0.1 | 0.5 | 1,
+      qrReader: data.lector_qr,
+      confirmBeforeSave: data.confirmar_antes_guardar,
+    });
+  } catch (error) {
+    return academicFailureResult(error);
+  }
+}
 
 async function resolveAcademicFeatureForSession(session: TenantSession): Promise<boolean> {
   const { data, error } = await session.admin

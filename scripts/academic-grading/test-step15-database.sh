@@ -11,6 +11,8 @@ SECURITY_TEST="$REPO_ROOT/supabase/tests/database/019_paso15_security.sql"
 STEP15_MIGRATION="$REPO_ROOT/supabase/migrations/20260830060100_academic_remove_legacy_exercise_policies_step15.sql"
 STEP15_VOLATILITY_MIGRATION="$REPO_ROOT/supabase/migrations/20260830064500_academic_correct_function_volatility_step15.sql"
 STEP15_LEGACY_VOLATILITY_MIGRATION="$REPO_ROOT/supabase/migrations/20260830065500_academic_correct_legacy_normalizer_volatility_step15.sql"
+TEACHER_MOBILE_MIGRATION="$REPO_ROOT/supabase/migrations/20260906050427_teacher_mobile_capture.sql"
+TEACHER_MOBILE_TEST="$REPO_ROOT/supabase/tests/database/020_teacher_mobile_capture.sql"
 MIGRATIONS=(
   "$REPO_ROOT/supabase/migrations/20260827012356_academic_cycles_enrollments_assignments.sql"
   "$REPO_ROOT/supabase/migrations/20260827031813_academic_periods_evaluation_schemes.sql"
@@ -28,7 +30,7 @@ trap cleanup EXIT INT TERM
 
 docker run -d --name "$CONTAINER_NAME" -p 127.0.0.1::5432 \
   -e POSTGRES_PASSWORD=postgres "$POSTGRES_IMAGE" >/dev/null
-for _attempt in $(seq 1 60); do
+for _attempt in $(seq 1 120); do
   health="$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$CONTAINER_NAME")"
   [[ "$health" == "healthy" ]] && break
   [[ "$health" == "unhealthy" ]] && { docker logs --tail 100 "$CONTAINER_NAME"; exit 1; }
@@ -88,6 +90,18 @@ run_sql -f "$STEP15_VOLATILITY_MIGRATION" >/dev/null
 run_sql -f "$STEP15_VOLATILITY_MIGRATION" >/dev/null
 run_sql -f "$STEP15_LEGACY_VOLATILITY_MIGRATION" >/dev/null
 run_sql -f "$STEP15_LEGACY_VOLATILITY_MIGRATION" >/dev/null
+run_sql <<'SQL' >/dev/null
+alter table public.profiles add column if not exists matricula text;
+create table if not exists public.configuracion_sistema (
+  tenant_id uuid primary key references public.tenants(id),
+  nombre_corto text,
+  logo_url text,
+  color_primario text,
+  color_secundario text
+);
+SQL
+run_sql -f "$TEACHER_MOBILE_MIGRATION" >/dev/null
+run_sql -f "$TEACHER_MOBILE_TEST" >/dev/null
 AFTER="$(run_sql -Atqc "select md5(string_agg(id::text||':'||tenant_id::text,',' order by id)) from public.ejercicios")"
 [[ -n "$BEFORE" && "$BEFORE" == "$AFTER" ]]
 

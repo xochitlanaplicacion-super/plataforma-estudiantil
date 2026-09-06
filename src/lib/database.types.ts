@@ -1298,6 +1298,54 @@ export type Database = {
           },
         ]
       }
+      configuracion_captura_docente: {
+        Row: {
+          calificacion_minima: number
+          confirmar_antes_guardar: boolean
+          criterio_evaluacion_id: string
+          incremento: number
+          lector_qr: boolean
+          profesor_id: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          calificacion_minima?: number
+          confirmar_antes_guardar?: boolean
+          criterio_evaluacion_id: string
+          incremento?: number
+          lector_qr?: boolean
+          profesor_id: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          calificacion_minima?: number
+          confirmar_antes_guardar?: boolean
+          criterio_evaluacion_id?: string
+          incremento?: number
+          lector_qr?: boolean
+          profesor_id?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "configuracion_captura_criterion_fkey"
+            columns: ["criterio_evaluacion_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "criterios_evaluacion"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "configuracion_captura_professor_fkey"
+            columns: ["profesor_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id", "tenant_id"]
+          },
+        ]
+      }
       configuracion_sistema: {
         Row: {
           codigo_matricula: string | null
