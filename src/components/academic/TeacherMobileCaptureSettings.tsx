@@ -170,11 +170,12 @@ export function TeacherMobileCaptureSettings({
         documentPdf.setDrawColor(210, 218, 229);
         documentPdf.setFillColor(255, 255, 255);
         documentPdf.roundedRect(x, y, 90.5, 58, 2.5, 2.5, 'FD');
-        documentPdf.addImage(qrImages[index], 'PNG', x + 5, y + 12, 36, 36, undefined, 'FAST');
+        if (logo) documentPdf.addImage(logo, 'PNG', x + 5, y + 3, 9, 9, undefined, 'FAST');
+        documentPdf.addImage(qrImages[index], 'PNG', x + 5, y + 15, 34, 34, undefined, 'FAST');
         documentPdf.setTextColor(...color);
         documentPdf.setFont('helvetica', 'bold');
         documentPdf.setFontSize(7);
-        documentPdf.text(result.data.institution.name.toUpperCase().slice(0, 35), x + 5, y + 7);
+        documentPdf.text(result.data.institution.name.toUpperCase().slice(0, 35), x + (logo ? 17 : 5), y + 8);
         documentPdf.setTextColor(20, 32, 52);
         documentPdf.setFontSize(11);
         const nameLines = documentPdf.splitTextToSize(student.name, 42) as string[];
