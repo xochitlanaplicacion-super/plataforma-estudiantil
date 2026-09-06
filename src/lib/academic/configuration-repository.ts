@@ -321,4 +321,40 @@ export class SupabaseAcademicConfigurationRepository {
       version: row.version,
     };
   }
+
+  async copyTeacherMobileCaptureSettings(
+    context: AcademicRepositoryContext,
+    criterionPairs: { sourceCriterionId: string; targetCriterionId: string }[],
+  ): Promise<number> {
+    if (criterionPairs.length === 0) return 0;
+    const sourceIds = [...new Set(criterionPairs.map((pair) => pair.sourceCriterionId))];
+    const { data, error } = await this.client
+      .from('configuracion_captura_docente')
+      .select('criterio_evaluacion_id,calificacion_minima,incremento,lector_qr,confirmar_antes_guardar')
+      .eq('tenant_id', context.tenantId)
+      .eq('profesor_id', context.actorId)
+      .in('criterio_evaluacion_id', sourceIds);
+    if (error) databaseFailure(error);
+
+    const byCriterion = new Map((data ?? []).map((row) => [row.criterio_evaluacion_id, row]));
+    const updatedAt = new Date().toISOString();
+    const rows = criterionPairs.map((pair) => {
+      const source = byCriterion.get(pair.sourceCriterionId);
+      return {
+        tenant_id: context.tenantId,
+        profesor_id: context.actorId,
+        criterio_evaluacion_id: pair.targetCriterionId,
+        calificacion_minima: source?.calificacion_minima ?? 5,
+        incremento: source?.incremento ?? 1,
+        lector_qr: source?.lector_qr ?? false,
+        confirmar_antes_guardar: source?.confirmar_antes_guardar ?? false,
+        updated_at: updatedAt,
+      };
+    });
+    const { error: saveError } = await this.client
+      .from('configuracion_captura_docente')
+      .upsert(rows, { onConflict: 'tenant_id,profesor_id,criterio_evaluacion_id' });
+    if (saveError) databaseFailure(saveError);
+    return rows.length;
+  }
 }

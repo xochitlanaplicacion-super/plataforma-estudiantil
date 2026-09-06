@@ -10,6 +10,7 @@ function fixture(existing = false) {
     saveScheme: vi.fn().mockResolvedValue({ id: id(7) }),
     saveCriterion: vi.fn().mockResolvedValue({ id: id(8) }),
     saveSubcriterion: vi.fn(), activateScheme: vi.fn().mockResolvedValue({}),
+    copyTeacherMobileCaptureSettings: vi.fn().mockResolvedValue(1),
   };
   const service = new AcademicConfigurationService(repo as unknown as SupabaseAcademicConfigurationRepository, { tenantId: id(10), actorId: id(6), role: 'profesor', featureEnabled: true });
   return { repo, service, input: { schemeId: id(1), expectedVersion: 1, assignmentIds: [id(5)] } };
@@ -27,10 +28,11 @@ describe('aplicar criterios a otras asignaciones', () => {
     await expect(service.distributeScheme({ ...input, assignmentIds: [id(99)] })).rejects.toMatchObject({ kind: 'forbidden' });
     expect(repo.saveScheme).not.toHaveBeenCalled();
   });
-  it('no reemplaza esquemas existentes', async () => {
+  it('conserva los criterios existentes y sincroniza sus ajustes móviles', async () => {
     const { repo, service, input } = fixture(true);
-    expect((await service.distributeScheme(input)).results[0].applied).toBe(false);
+    expect((await service.distributeScheme(input)).results[0].applied).toBe(true);
     expect(repo.saveScheme).not.toHaveBeenCalled();
+    expect(repo.copyTeacherMobileCaptureSettings).toHaveBeenCalledOnce();
   });
   it('no declara éxito si falla una copia', async () => {
     const { repo, service, input } = fixture();

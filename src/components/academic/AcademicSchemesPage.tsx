@@ -285,19 +285,27 @@ export function AcademicSchemesPage({ audience = 'administration' }: AcademicSch
     }
     setLoadState({ kind: 'ready', data: result.data });
     if (auditResult?.ok) setAudit(auditResult.data.items);
-    const scheme = result.data.schemes.find((item) => item.id === preferredSchemeId)
-      ?? result.data.schemes.find((item) => item.state === 'borrador')
-      ?? result.data.schemes.find((item) => item.state === 'activo');
-    const assignment = scheme
-      ? result.data.assignments.find((item) => item.id === scheme.assignmentId)
-      : result.data.assignments[0];
-    const cycle = scheme?.cycleId ?? assignment?.cycleId ?? result.data.cycles.find((item) => item.state === 'activo')?.id ?? result.data.cycles[0]?.id ?? '';
+    const activeCycleId = result.data.cycles.find((item) => item.state === 'activo')?.id ?? result.data.cycles[0]?.id ?? '';
+    const savedAssignmentId = teacherView && typeof window !== 'undefined' ? window.localStorage.getItem('teacher-evaluation-assignment') : null;
+    const preferredScheme = result.data.schemes.find((item) => item.id === preferredSchemeId);
+    const savedAssignment = result.data.assignments.find((item) => item.id === savedAssignmentId && item.cycleId === activeCycleId);
+    const fallbackAssignment = [...result.data.assignments]
+      .filter((item) => item.cycleId === activeCycleId)
+      .sort((left, right) => `${left.gradeName} ${left.groupName} ${left.subjectName}`.localeCompare(`${right.gradeName} ${right.groupName} ${right.subjectName}`, 'es'))[0]
+      ?? result.data.assignments[0];
+    const assignment = preferredScheme
+      ? result.data.assignments.find((item) => item.id === preferredScheme.assignmentId)
+      : savedAssignment ?? fallbackAssignment;
+    const cycle = preferredScheme?.cycleId ?? assignment?.cycleId ?? activeCycleId;
+    const period = preferredScheme?.periodId ?? result.data.periods.find((item) => item.cycleId === cycle && item.state === 'activo')?.id ?? result.data.periods.find((item) => item.cycleId === cycle)?.id ?? '';
+    const scheme = preferredScheme
+      ?? result.data.schemes.find((item) => item.assignmentId === assignment?.id && item.periodId === period && item.state === 'activo')
+      ?? result.data.schemes.find((item) => item.assignmentId === assignment?.id && item.periodId === period && item.state === 'borrador');
     setCycleId(cycle);
     if (assignment) {
       setLevelId(assignment.levelId); setCareerId(assignment.careerId);
       setGradeId(assignment.gradeId); setGroupId(assignment.groupId); setAssignmentId(assignment.id);
     }
-    const period = scheme?.periodId ?? result.data.periods.find((item) => item.cycleId === cycle && item.state === 'activo')?.id ?? result.data.periods.find((item) => item.cycleId === cycle)?.id ?? '';
     setPeriodId(period);
     if (scheme) {
       setSelectedSchemeId(scheme.id); setSchemeDraft(schemeForm(scheme)); setCopyName(`${scheme.name} — nueva versión`);
@@ -323,12 +331,22 @@ export function AcademicSchemesPage({ audience = 'administration' }: AcademicSch
   function chooseAssignment(id: string) {
     const assignment = data?.assignments.find((row) => row.id === id);
     setAssignmentId(id);
+    if (teacherView && typeof window !== 'undefined') window.localStorage.setItem('teacher-evaluation-assignment', id);
     if (assignment) {
       setLevelId(assignment.levelId); setCareerId(assignment.careerId);
       setGradeId(assignment.gradeId); setGroupId(assignment.groupId);
     }
-    setSelectedSchemeId('');
-    setSchemeDraft((value) => ({ ...emptyScheme, cycleId, assignmentId: id, periodId, passingGrade: value.passingGrade, displayDecimals: value.displayDecimals }));
+    const matching = data?.schemes.find((row) => row.assignmentId === id && row.periodId === periodId && row.state === 'activo')
+      ?? data?.schemes.find((row) => row.assignmentId === id && row.periodId === periodId && row.state === 'borrador');
+    if (matching) {
+      setSelectedSchemeId(matching.id);
+      setSchemeDraft(schemeForm(matching));
+      setCopyName(`${matching.name} — nueva versión`);
+      setNewCriterion((value) => ({ ...value, order: matching.criteria.length + 1 }));
+    } else {
+      setSelectedSchemeId('');
+      setSchemeDraft((value) => ({ ...emptyScheme, cycleId, assignmentId: id, periodId, passingGrade: value.passingGrade, displayDecimals: value.displayDecimals }));
+    }
   }
 
   function chooseScheme(id: string) {
@@ -489,7 +507,7 @@ export function AcademicSchemesPage({ audience = 'administration' }: AcademicSch
                     {teacherView ? <Button className="mt-3" disabled={!activationReady || !schemeDraft.name.trim() || feedback?.kind === 'saving'} onClick={() => void saveScheme()}><CheckCircle2 />Usar estos criterios en la libreta</Button> : null}
                   </> : null}
                 </div>
-                {teacherView && selectedScheme.state === 'activo' ? <DistributeScheme key={selectedScheme.id} data={data} scheme={selectedScheme} /> : null}
+                {teacherView && selectedScheme.state === 'activo' ? <DistributeScheme key={selectedScheme.id} data={data} scheme={selectedScheme} onApplied={() => load(selectedScheme.id)} /> : null}
                 {teacherView && selectedScheme.state === 'activo' ? <TeacherMobileCaptureSettings criteria={selectedScheme.criteria} assignmentId={selectedScheme.assignmentId} qrAssignments={data.assignments.filter((row) => row.cycleId === selectedScheme.cycleId)} /> : null}
                 </>
               ) : null}
