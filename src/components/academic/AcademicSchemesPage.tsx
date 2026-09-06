@@ -17,7 +17,8 @@ import type {
 } from '@/lib/academic/configuration-dto';
 import type { AcademicActionResult, AcademicAuditDto } from '@/lib/academic/dto';
 import type { EvaluationCriterionInput } from '@/lib/academic-grading/criterion-policy';
-import { redistributeWeights, sumWeights } from '@/lib/academic-grading/weights';
+import { redistributeWeights } from '@/lib/academic-grading/weights';
+import { validateDistribution } from '@/lib/academic-grading/distribution-validation';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -77,18 +78,6 @@ function toWeightCriteria(rows: AcademicCriterionConfigurationDto[]): Evaluation
       return { ...common, type: 'directo', configuration: {} };
     }),
   }));
-}
-
-function validForActivation(scheme: AcademicSchemeConfigurationDto | undefined): boolean {
-  if (!scheme || scheme.state !== 'borrador') return false;
-  const active = scheme.criteria.filter((criterion) => criterion.active);
-  if (active.length === 0 || sumWeights(active.map((criterion) => criterion.weight)) !== 100) return false;
-  return active.every((criterion) => {
-    const children = criterion.subcriteria.filter((child) => child.active);
-    if (criterion.type === 'hibrido' && children.length < 2) return false;
-    if (children.length > 0 && sumWeights(children.map((child) => child.internalWeight)) !== 100) return false;
-    return children.every((child) => child.internalWeight > 0 && (criterion.type === 'hibrido' || child.type === criterion.type));
-  });
 }
 
 function defaultConfiguration(type: AcademicSubcriterionConfigurationDto['type']) {
@@ -326,7 +315,8 @@ export function AcademicSchemesPage({ audience = 'administration' }: AcademicSch
   const availableSchemes = data?.schemes.filter((row) => row.assignmentId === assignmentId && row.periodId === periodId) ?? [];
   const selectedScheme = data?.schemes.find((row) => row.id === selectedSchemeId);
   const readOnly = Boolean(selectedScheme && selectedScheme.state !== 'borrador');
-  const activationReady = validForActivation(selectedScheme);
+  const distribution = validateDistribution(selectedScheme?.criteria ?? []);
+  const activationReady = selectedScheme?.state === 'borrador' && distribution.valid;
 
   function chooseAssignment(id: string) {
     const assignment = data?.assignments.find((row) => row.id === id);
@@ -492,7 +482,7 @@ export function AcademicSchemesPage({ audience = 'administration' }: AcademicSch
                   {teacherView && selectedScheme.state === 'activo' ? <><p className="mt-1 text-sm">Puedes ajustar tu evaluación. Al terminar, aplica los cambios desde este mismo recuadro.</p><Button className="mt-3" disabled={feedback?.kind === 'saving'} onClick={() => void copyScheme()}><Copy />Editar criterios</Button></> : null}
                   {selectedScheme.state === 'borrador' ? <>
                     <p className="mt-1 text-sm">Guarda cada criterio y subcriterio que edites. Después pulsa el botón de abajo para usar el conjunto en las calificaciones.</p>
-                    {!activationReady ? <p className="mt-2 text-sm text-destructive">Revisa los porcentajes guardados: los criterios activos deben sumar 100%, y cada conjunto de subcriterios también. Los subcriterios deben tener peso positivo y un tipo compatible; los criterios mixtos necesitan al menos dos.</p> : <p className="mt-2 text-sm text-primary">Los criterios guardados están listos para activarse.</p>}
+                    {!activationReady ? <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-destructive">{distribution.errors.map((error) => <li key={error}>{error}</li>)}</ul> : <p className="mt-2 text-sm text-primary">Los criterios guardados están listos para activarse.</p>}
                     {teacherView ? <Button className="mt-3" disabled={!activationReady || !schemeDraft.name.trim() || feedback?.kind === 'saving'} onClick={() => void saveScheme()}><CheckCircle2 />Usar estos criterios en la libreta</Button> : null}
                   </> : null}
                 </div>

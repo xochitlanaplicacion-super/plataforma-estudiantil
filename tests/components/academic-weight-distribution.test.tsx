@@ -31,6 +31,18 @@ function criteria(firstWeight: number, secondWeight: number): EvaluationCriterio
 }
 
 describe('vista aislada de ponderaciones', () => {
+  it('no declara válida una suma principal de 100 con subcriterios incompletos e incompatibles', () => {
+    const rows = criteria(25, 75);
+    rows[0].name = 'Trabajo en clase';
+    rows[0].type = 'directo';
+    rows[0].subcriteria = [{ ...rows[0].subcriteria[1], internalWeight: 5 }];
+    render(<WeightDistributionPreview criteria={rows} />);
+    expect(screen.getByLabelText('estado del total de ponderaciones')).toHaveTextContent('Total principal correcto, pero hay errores en subcriterios');
+    expect(screen.queryByText(/Distribución válida/)).not.toBeInTheDocument();
+    expect(screen.getByText(/sus subcriterios suman 5% interno; falta 95%/)).toBeVisible();
+    expect(screen.getByText(/usa Captura manual, pero “Participación” usa Participación/)).toBeVisible();
+  });
+
   it.each([
     [40, 60, 'Distribución válida: total exacto: 100.0000%'],
     [30, 60, 'Distribución incompleta: 90.0000%'],
