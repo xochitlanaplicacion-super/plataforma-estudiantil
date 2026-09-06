@@ -230,32 +230,32 @@ export function TeacherMobileCaptureSettings({
         {eligible.map((criterion) => {
           const value = settings[criterion.id] ?? defaults(criterion.id);
           return (
-            <section key={criterion.id} className="grid gap-4 rounded-lg border p-4 lg:grid-cols-[minmax(12rem,1.4fr)_8rem_8rem_11rem_13rem_auto] lg:items-end">
-              <div>
+            <section key={criterion.id} className="grid gap-4 rounded-lg border p-4 sm:grid-cols-2 xl:grid-cols-12 xl:items-end">
+              <div className="min-w-0 xl:col-span-2">
                 <p className="font-semibold">{criterion.name}</p>
                 <p className="text-sm text-muted-foreground">Ajustes propios de este criterio</p>
               </div>
-              <div className="space-y-2">
+              <div className="min-w-0 space-y-2 xl:col-span-2">
                 <Label htmlFor={`mobile-minimum-${criterion.id}`}>Mínima visible</Label>
                 <select id={`mobile-minimum-${criterion.id}`} className="h-10 w-full rounded-md border bg-background px-3" value={value.minimumGrade} onChange={(event) => update(criterion.id, { minimumGrade: Number(event.target.value) })}>
                   {Array.from({ length: 11 }, (_, number) => <option key={number} value={number}>{number}</option>)}
                 </select>
               </div>
-              <div className="space-y-2">
+              <div className="min-w-0 space-y-2 xl:col-span-2">
                 <Label htmlFor={`mobile-increment-${criterion.id}`}>Incremento</Label>
                 <select id={`mobile-increment-${criterion.id}`} className="h-10 w-full rounded-md border bg-background px-3" value={value.increment} onChange={(event) => update(criterion.id, { increment: Number(event.target.value) as 0.1 | 0.5 | 1 })}>
                   <option value={1}>1 punto</option><option value={0.5}>0.5</option><option value={0.1}>0.1</option>
                 </select>
               </div>
-              <div className="flex items-center justify-between gap-3 rounded-md border p-3">
+              <div className="flex min-w-0 items-center justify-between gap-3 rounded-md border p-3 xl:col-span-2">
                 <Label htmlFor={`mobile-qr-${criterion.id}`} className="flex items-center gap-2"><QrCode className="size-4" aria-hidden="true" />Lector QR</Label>
                 <Switch id={`mobile-qr-${criterion.id}`} checked={value.qrReader} onCheckedChange={(checked) => update(criterion.id, { qrReader: checked })} />
               </div>
-              <div className="flex items-center justify-between gap-3 rounded-md border p-3">
+              <div className="flex min-w-0 items-center justify-between gap-3 rounded-md border p-3 xl:col-span-2">
                 <Label htmlFor={`mobile-confirm-${criterion.id}`}>Confirmar cada captura</Label>
                 <Switch id={`mobile-confirm-${criterion.id}`} checked={value.confirmBeforeSave} onCheckedChange={(checked) => update(criterion.id, { confirmBeforeSave: checked })} />
               </div>
-              <Button type="button" disabled={saving === criterion.id} onClick={() => void save(criterion.id)}><Save />{saving === criterion.id ? 'Guardando…' : 'Guardar'}</Button>
+              <Button type="button" className="w-full xl:col-span-2" disabled={saving === criterion.id} onClick={() => void save(criterion.id)}><Save />{saving === criterion.id ? 'Guardando…' : 'Guardar'}</Button>
             </section>
           );
         })}
