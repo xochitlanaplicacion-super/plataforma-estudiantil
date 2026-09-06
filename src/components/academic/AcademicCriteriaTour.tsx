@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight, CircleHelp, PlayCircle, X } from 'lucide-rea
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
-const TOUR_STORAGE_KEY = 'academic-criteria-tour-seen-v1';
+const TOUR_STORAGE_KEY = 'academic-criteria-tour-seen-v2';
 
 interface TourStep {
   target: string;
@@ -23,12 +23,12 @@ const STEPS: readonly TourStep[] = [
   {
     target: 'draft',
     title: '2. Abre un borrador editable',
-    description: 'Pulsa “Nuevo borrador” para comenzar desde cero. Si ya existe una versión activa, primero usa “Crear copia editable” para conservar el historial.',
+    description: 'Pulsa “Nuevo borrador” para comenzar desde cero. Si tu evaluación ya está activa, pulsa “Editar criterios” en el recuadro de estado. Se prepara una copia para tus cambios y la evaluación actual sigue disponible mientras editas.',
   },
   {
     target: 'rules',
     title: '3. Ponle nombre a tu esquema',
-    description: 'Usa un nombre fácil de reconocer, por ejemplo “Evaluación Primer Periodo”. Define la calificación aprobatoria y guarda las reglas.',
+    description: 'Define el nombre, la aprobatoria y los decimales. Al comenzar, Guardar reglas prepara el conjunto para agregar criterios. Cuando los criterios guardados ya sean válidos, Guardar y activar evaluación también los deja disponibles en la libreta.',
   },
   {
     target: 'new-criterion',
@@ -38,12 +38,12 @@ const STEPS: readonly TourStep[] = [
   {
     target: 'distribution',
     title: '5. Comprueba los porcentajes',
-    description: 'Todos los criterios activos deben sumar exactamente 100%. Si no suman 100%, usa “Redistribuir proporcionalmente” y después ajusta lo que necesites.',
+    description: 'Guarda cada criterio y subcriterio después de editarlo. Los criterios activos deben sumar 100%, y los subcriterios de cada criterio también. Un criterio de actividades debe tener subcriterios de actividades; si combinas tipos, usa Mixto con subcriterios.',
   },
   {
     target: 'activation',
-    title: '6. Activa la evaluación',
-    description: 'Cuando todo sume 100%, el botón “Activar esquema” se habilitará. Al activarlo quedará listo para calcular las calificaciones en escala de 0 a 10.',
+    title: '6. Usa tus criterios en la libreta',
+    description: 'En el recuadro de estado pulsa “Usar estos criterios en la libreta”. Guarda las reglas y activa los criterios guardados. El estado cambiará a Criterios activos. Si el botón está deshabilitado, el recuadro explica qué revisar. Para un cambio posterior, crea una copia editable y vuelve a aplicarla al terminar.',
   },
 ];
 

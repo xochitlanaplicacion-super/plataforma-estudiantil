@@ -356,7 +356,17 @@ export function AcademicSchemesPage({ audience = 'administration' }: AcademicSch
     setConfirmation(null); setFeedback({ kind: 'saving', message: 'Guardando esquema…' });
     const result = await saveAcademicSchemeAction(schemeDraft);
     if (!result.ok) { setFeedback({ kind: result.status === 'conflict' ? 'conflict' : 'error', message: result.error.message }); return; }
-    setFeedback({ kind: 'success', message: 'Esquema guardado y verificado.' });
+    if (teacherView && activationReady && selectedScheme) {
+      const activated = await activateAcademicSchemeAction({ schemeId: result.data.id, expectedVersion: selectedScheme.version });
+      if (!activated.ok) {
+        setFeedback({ kind: activated.status === 'conflict' ? 'conflict' : 'error', message: `Los cambios se guardaron, pero todavía no se aplicaron: ${activated.error.message}` });
+        await load(result.data.id);
+        return;
+      }
+      setFeedback({ kind: 'success', message: 'Evaluación activa. Ya puedes usar estos criterios en la libreta de calificaciones.' });
+    } else {
+      setFeedback({ kind: 'success', message: teacherView ? 'Cambios guardados. Completa los criterios y sus porcentajes para aplicarlos en la libreta.' : 'Esquema guardado y verificado.' });
+    }
     await load(result.data.id);
   }
 
@@ -465,17 +475,28 @@ export function AcademicSchemesPage({ audience = 'administration' }: AcademicSch
                 <CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="flex items-center gap-2"><Scale aria-hidden="true" />Reglas del esquema</CardTitle><CardDescription>Primero crea un borrador. Después podrás agregar Examen, Proyecto, Tareas u otros criterios.</CardDescription></div><Button data-criteria-tour="draft" variant="outline" disabled={!assignmentId || !periodId} onClick={() => chooseScheme('')}><Plus />Nuevo borrador</Button></div></CardHeader>
                 <CardContent className="space-y-5">
                   <div className="space-y-2"><Label htmlFor="scheme-selector">Versión</Label><select id="scheme-selector" className={fieldClassName} disabled={!assignmentId || !periodId} value={selectedSchemeId} onChange={(event) => chooseScheme(event.target.value)}><option value="">Nuevo esquema</option>{availableSchemes.map((scheme) => <option key={scheme.id} value={scheme.id}>v{scheme.version} · {scheme.name} — {scheme.state}</option>)}</select></div>
-                  {readOnly ? <p role="status" className="flex items-center gap-2 rounded-md border p-3 text-sm"><LockKeyhole className="size-4" aria-hidden="true" />Esta versión es histórica o activa y no se reescribe. Crea una copia para editar.</p> : null}
+                  {readOnly ? <p role="status" className="flex items-center gap-2 rounded-md border p-3 text-sm"><LockKeyhole className="size-4" aria-hidden="true" />Esta versión conserva las calificaciones registradas. Usa “Crear copia editable” para ajustar los criterios y después aplica tus cambios en la libreta.</p> : null}
                   <form data-criteria-tour="rules" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" onSubmit={(event) => { event.preventDefault(); setConfirmation('scheme'); }}>
                     <div className="space-y-2 sm:col-span-2"><Label htmlFor="scheme-name">Nombre</Label><Input id="scheme-name" required disabled={readOnly} value={schemeDraft.name} onChange={(event) => setSchemeDraft((value) => ({ ...value, name: event.target.value, cycleId, assignmentId, periodId }))} /></div>
                     <div className="space-y-2"><Label htmlFor="scheme-passing">Calificación aprobatoria</Label><Input id="scheme-passing" type="number" min={0} max={10} step="0.0001" required disabled={readOnly} value={schemeDraft.passingGrade} onChange={(event) => setSchemeDraft((value) => ({ ...value, passingGrade: Number(event.target.value) }))} /></div>
                     <div className="space-y-2"><Label htmlFor="scheme-decimals">Decimales visibles</Label><select id="scheme-decimals" className={fieldClassName} disabled={readOnly} value={schemeDraft.displayDecimals} onChange={(event) => setSchemeDraft((value) => ({ ...value, displayDecimals: Number(event.target.value) as 0 | 1 | 2 }))}><option value={0}>0</option><option value={1}>1</option><option value={2}>2</option></select></div>
                     <div className="rounded-md border bg-muted/40 p-3 text-sm"><strong>Escala fija:</strong> 0 a 10</div><div className="rounded-md border bg-muted/40 p-3 text-sm"><strong>Redondeo:</strong> mitad hacia arriba</div><div className="rounded-md border bg-muted/40 p-3 text-sm"><strong>No entrega:</strong> 0 al cierre</div><div className="rounded-md border bg-muted/40 p-3 text-sm"><strong>Justificado:</strong> excluir</div>
-                    <div className="sm:col-span-2 lg:col-span-4 flex flex-wrap gap-2"><Button type="submit" disabled={readOnly || !assignmentId || !periodId || !schemeDraft.name}><Save />Guardar reglas</Button>{selectedScheme ? <Badge variant="outline">v{selectedScheme.version} · {selectedScheme.state}</Badge> : null}</div>
+                    <div className="sm:col-span-2 lg:col-span-4 flex flex-wrap gap-2"><Button type="submit" disabled={readOnly || !assignmentId || !periodId || !schemeDraft.name || feedback?.kind === 'saving'}><Save />{teacherView && activationReady ? 'Guardar y activar evaluación' : 'Guardar reglas'}</Button>{selectedScheme ? <Badge variant="outline">v{selectedScheme.version} · {selectedScheme.state}</Badge> : null}</div>
                   </form>
                 </CardContent>
               </Card>
 
+              {selectedScheme ? (
+                <div data-criteria-tour={teacherView ? 'activation' : undefined} className="sticky top-2 z-20 rounded-xl border-2 border-primary bg-background p-4 shadow-lg" role="status">
+                  <p className="font-bold">{selectedScheme.state === 'activo' ? 'Criterios activos: disponibles en la libreta' : selectedScheme.state === 'borrador' ? 'Cambios guardados, pendientes de aplicar' : 'Versión histórica'}</p>
+                  {teacherView && selectedScheme.state === 'activo' ? <><p className="mt-1 text-sm">Puedes ajustar tu evaluación. Al terminar, aplica los cambios desde este mismo recuadro.</p><Button className="mt-3" disabled={feedback?.kind === 'saving'} onClick={() => void copyScheme()}><Copy />Editar criterios</Button></> : null}
+                  {selectedScheme.state === 'borrador' ? <>
+                    <p className="mt-1 text-sm">Guarda cada criterio y subcriterio que edites. Después pulsa el botón de abajo para usar el conjunto en las calificaciones.</p>
+                    {!activationReady ? <p className="mt-2 text-sm text-destructive">Revisa los porcentajes guardados: los criterios activos deben sumar 100%, y cada conjunto de subcriterios también. Los subcriterios deben tener peso positivo y un tipo compatible; los criterios mixtos necesitan al menos dos.</p> : <p className="mt-2 text-sm text-primary">Los criterios guardados están listos para activarse.</p>}
+                    {teacherView ? <Button className="mt-3" disabled={!activationReady || !schemeDraft.name.trim() || feedback?.kind === 'saving'} onClick={() => void saveScheme()}><CheckCircle2 />Usar estos criterios en la libreta</Button> : null}
+                  </> : null}
+                </div>
+              ) : null}
               {selectedScheme ? (
                 <div className={teacherView ? 'grid gap-6' : 'grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(20rem,0.6fr)]'}>
                   <Card>
@@ -486,7 +507,7 @@ export function AcademicSchemesPage({ audience = 'administration' }: AcademicSch
                         {selectedScheme.criteria.map((criterion) => <CriterionEditor key={criterion.id} criterion={criterion} disabled={readOnly} onSaved={() => load(selectedScheme.id)} onFeedback={setFeedback} />)}
                       </ol>
                       {!readOnly ? <fieldset data-criteria-tour="new-criterion" className="grid gap-3 rounded-lg border border-dashed p-4 sm:grid-cols-[minmax(0,2fr)_minmax(8rem,1fr)_7rem_5rem_auto]"><legend className="px-1 font-medium">Agregar un criterio</legend><p className="text-sm text-muted-foreground sm:col-span-5">Ejemplo: escribe “Examen”, selecciona cómo se calificará, asigna su porcentaje y pulsa Agregar.</p><Input aria-label="Nombre del nuevo criterio" placeholder="Ej. Examen" value={newCriterion.name} onChange={(event) => setNewCriterion((value) => ({ ...value, name: event.target.value }))} /><select aria-label="Tipo del nuevo criterio" className={fieldClassName} value={newCriterion.type} onChange={(event) => setNewCriterion((value) => ({ ...value, type: event.target.value as typeof value.type }))}><option value="directo">Captura manual</option><option value="actividades">Promedio de actividades</option><option value="participacion">Participación</option><option value="hibrido">Mixto con subcriterios</option></select><Input aria-label="Peso del nuevo criterio" title="Porcentaje dentro de la calificación final" type="number" min={0} max={100} step="0.0001" value={newCriterion.weight} onChange={(event) => setNewCriterion((value) => ({ ...value, weight: Number(event.target.value) }))} /><Input aria-label="Orden del nuevo criterio" title="Posición en la lista" type="number" min={1} max={99} value={newCriterion.order} onChange={(event) => setNewCriterion((value) => ({ ...value, order: Number(event.target.value) }))} /><Button type="button" disabled={!newCriterion.name} onClick={() => void addCriterion()}><Plus />Agregar</Button></fieldset> : null}
-                      <div data-criteria-tour="activation" className="flex flex-wrap gap-2"><Button type="button" disabled={!activationReady} onClick={() => setConfirmation('activate')}><CheckCircle2 />Activar esquema</Button>{selectedScheme.state !== 'borrador' ? <><Input aria-label="Nombre de la nueva versión" className="max-w-sm" value={copyName} onChange={(event) => setCopyName(event.target.value)} /><Button type="button" variant="outline" disabled={!copyName.trim()} onClick={() => setConfirmation('copy')}><Copy />Crear copia editable</Button></> : null}</div>
+                      <div data-criteria-tour={!teacherView ? 'activation' : undefined} className="flex flex-wrap gap-2">{!teacherView ? <Button type="button" disabled={!activationReady} onClick={() => setConfirmation('activate')}><CheckCircle2 />Activar esquema</Button> : null}{selectedScheme.state !== 'borrador' ? <><Input aria-label="Nombre de la nueva versión" className="max-w-sm" value={copyName} onChange={(event) => setCopyName(event.target.value)} /><Button type="button" variant="outline" disabled={!copyName.trim()} onClick={() => setConfirmation('copy')}><Copy />Crear copia editable</Button></> : null}</div>
                       {!activationReady && selectedScheme.state === 'borrador' ? <p role="status" className="text-sm text-muted-foreground">La activación seguirá bloqueada hasta tener criterios válidos con total superior e internos exactamente en 100%.</p> : null}
                     </CardContent>
                   </Card>

@@ -57,7 +57,7 @@ function baseConfiguration(): AcademicConfigurationDto {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  window.localStorage.setItem('academic-criteria-tour-seen-v1', 'true');
+  window.localStorage.setItem('academic-criteria-tour-seen-v2', 'true');
   actionMocks.audit.mockResolvedValue({ ok: true, status: 'empty', data: { items: [], page: 1, pageSize: 10, total: 0, totalPages: 0, hasPreviousPage: false, hasNextPage: false } });
 });
 
@@ -177,6 +177,32 @@ describe('Paso 10: interfaz administrativa accesible', () => {
     expect(screen.getByLabelText('Grupo')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Activar esquema' })).toBeDisabled();
     expect(screen.getByLabelText('estado del total de ponderaciones')).toHaveTextContent('80.0000%');
+  }, 20_000);
+
+  it('aplica los criterios válidos del profesor con una acción visible y confirma el estado activo', async () => {
+    const data = baseConfiguration();
+    data.schemes = [{
+      id: ID.scheme, cycleId: ID.cycle, assignmentId: ID.assignment, periodId: ID.period,
+      name: 'Evaluación docente', scale: '0-10', passingGrade: 6, displayDecimals: 1,
+      roundingMode: 'half_up', missingRule: 'zero_on_close', missingValue: 0,
+      excusedRule: 'exclude', state: 'borrador', version: 2, copiedFromId: null,
+      updatedAt: '2026-08-30T10:00:00.000Z', criteria: [{
+        id: ID.criterion, schemeId: ID.scheme, name: 'Examen', type: 'directo',
+        weight: 100, order: 1, active: true, updatedAt: '2026-08-30T10:00:00.000Z', subcriteria: [],
+      }],
+    }];
+    actionMocks.load.mockResolvedValue({ ok: true, status: 'success', data });
+    actionMocks.saveScheme.mockResolvedValue({ ok: true, status: 'success', data: { id: ID.scheme, updatedAt: '2026-08-30T11:00:00.000Z' } });
+    actionMocks.activate.mockImplementation(async () => {
+      data.schemes[0].state = 'activo';
+      return { ok: true, status: 'success', data: { schemeId: ID.scheme, state: 'activo', version: 2 } };
+    });
+    const user = userEvent.setup();
+    render(<AcademicSchemesPage audience="teacher" />);
+    await user.click(await screen.findByRole('button', { name: 'Usar estos criterios en la libreta' }));
+    await waitFor(() => expect(actionMocks.activate).toHaveBeenCalledWith({ schemeId: ID.scheme, expectedVersion: 2 }));
+    expect(actionMocks.saveScheme.mock.invocationCallOrder[0]).toBeLessThan(actionMocks.activate.mock.invocationCallOrder[0]);
+    expect(await screen.findByText('Criterios activos: disponibles en la libreta')).toBeVisible();
   }, 20_000);
 
   it('ofrece al profesor únicamente sus materias y omite la auditoría administrativa', async () => {
