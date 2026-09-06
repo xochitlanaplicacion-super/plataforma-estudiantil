@@ -65,7 +65,15 @@ export interface TeacherQrBatchDto {
   cycleName: string;
   periodName: string;
   assignment: { id: string; subjectName: string; groupName: string };
-  students: { enrollmentId: string; name: string; enrollmentCode: string | null; token: string }[];
+  students: {
+    studentId: string;
+    studentType: 'registered' | 'provisional';
+    enrollmentId: string | null;
+    provisionalId: string | null;
+    name: string;
+    enrollmentCode: string | null;
+    token: string;
+  }[];
 }
 
 export interface TeacherProvisionalLinksDto {
@@ -102,9 +110,19 @@ const teacherMobileContextQrSchema = z.object({
 });
 
 const teacherQrTokensSchema = z.array(z.object({
-  enrollmentId: z.string().uuid(),
+  studentId: z.string().uuid(),
+  studentType: z.enum(['registered', 'provisional']),
+  enrollmentId: z.string().uuid().nullable(),
+  provisionalId: z.string().uuid().nullable(),
+  name: z.string(),
+  enrollmentCode: z.string().nullable().optional(),
   token: z.string().uuid(),
 }));
+
+const teacherQrBatchInputSchema = z.object({
+  assignmentId: z.string().uuid(),
+  studentType: z.enum(['registered', 'provisional']),
+});
 
 const teacherProvisionalLinksSchema = z.object({
   provisionals: z.array(z.object({
@@ -160,9 +178,9 @@ export async function linkTeacherProvisionalStudentAction(input: unknown): Promi
   }
 }
 
-export async function loadTeacherQrBatchAction(assignmentIdInput: unknown): Promise<AcademicActionResult<TeacherQrBatchDto>> {
+export async function loadTeacherQrBatchAction(input: unknown): Promise<AcademicActionResult<TeacherQrBatchDto>> {
   try {
-    const assignmentId = z.string().uuid().parse(assignmentIdInput);
+    const { assignmentId, studentType } = teacherQrBatchInputSchema.parse(input);
     const session = await requireTenantSession(['profesor']);
     const [{ data: contextData, error: contextError }, { data: tokenData, error: tokenError }] = await Promise.all([
       session.supabase.rpc('obtener_contexto_docente_movil'),
@@ -174,16 +192,10 @@ export async function loadTeacherQrBatchAction(assignmentIdInput: unknown): Prom
     const tokens = teacherQrTokensSchema.parse(tokenData);
     const assignment = context.assignments.find((row) => row.id === assignmentId);
     if (!assignment) throw new Error('La materia seleccionada no pertenece al profesor o al ciclo activo.');
-    const tokenByEnrollment = new Map(tokens.map((row) => [row.enrollmentId, row.token]));
-    const students = assignment.students.flatMap((student) => {
-      const token = tokenByEnrollment.get(student.enrollmentId);
-      return token ? [{
-        enrollmentId: student.enrollmentId,
-        name: student.name,
-        enrollmentCode: student.enrollmentCode ?? null,
-        token,
-      }] : [];
-    });
+    const students = tokens.filter((row) => row.studentType === studentType).map((row) => ({
+      ...row,
+      enrollmentCode: row.enrollmentCode ?? null,
+    }));
     return academicSuccessResult({
       institution: {
         name: context.tenant.name,

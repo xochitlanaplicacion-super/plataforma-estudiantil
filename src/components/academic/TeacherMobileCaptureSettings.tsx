@@ -76,6 +76,7 @@ export function TeacherMobileCaptureSettings({
   const [message, setMessage] = useState('');
   const [exportingQr, setExportingQr] = useState(false);
   const [qrAssignmentId, setQrAssignmentId] = useState(assignmentId);
+  const [qrStudentType, setQrStudentType] = useState<'registered' | 'provisional'>('registered');
   const [provisionalLinks, setProvisionalLinks] = useState<TeacherProvisionalLinksDto>({ provisionals: [], candidates: [] });
   const [provisionalSelection, setProvisionalSelection] = useState<Record<string, string>>({});
   const [confirmingLink, setConfirmingLink] = useState<string | null>(null);
@@ -132,13 +133,15 @@ export function TeacherMobileCaptureSettings({
     setExportingQr(true);
     setMessage('Preparando las credenciales QR del grupo…');
     try {
-      const result = await loadTeacherQrBatchAction(qrAssignmentId);
+      const result = await loadTeacherQrBatchAction({ assignmentId: qrAssignmentId, studentType: qrStudentType });
       if (!result.ok) {
         setMessage(result.error.message);
         return;
       }
       if (result.data.students.length === 0) {
-        setMessage('El grupo activo todavía no tiene alumnos para generar credenciales.');
+        setMessage(qrStudentType === 'provisional'
+          ? 'Este grupo no tiene alumnos provisionales pendientes.'
+          : 'El grupo activo todavía no tiene alumnos registrados para generar credenciales.');
         return;
       }
       const [logo, qrImages] = await Promise.all([
@@ -184,12 +187,14 @@ export function TeacherMobileCaptureSettings({
         documentPdf.setFont('helvetica', 'normal');
         documentPdf.setFontSize(8);
         documentPdf.text(result.data.assignment.groupName, x + 45, y + 38);
-        documentPdf.text(student.enrollmentCode ? `Matrícula: ${student.enrollmentCode}` : 'Credencial de captura docente', x + 45, y + 44);
+        documentPdf.text(student.studentType === 'provisional'
+          ? 'ALUMNO PROVISIONAL · PENDIENTE'
+          : student.enrollmentCode ? `Matrícula: ${student.enrollmentCode}` : 'Alumno registrado', x + 45, y + 44);
         documentPdf.setFontSize(6.5);
         documentPdf.text('Uso interno. Presentar al profesor.', x + 45, y + 51);
       });
-      documentPdf.save(`credenciales-qr-${safeFileName(result.data.assignment.subjectName)}-${safeFileName(result.data.assignment.groupName)}.pdf`);
-      setMessage(`${result.data.students.length} credenciales generadas con el ciclo y periodo activos.`);
+      documentPdf.save(`credenciales-qr-${qrStudentType === 'provisional' ? 'provisionales' : 'registrados'}-${safeFileName(result.data.assignment.subjectName)}-${safeFileName(result.data.assignment.groupName)}.pdf`);
+      setMessage(`${result.data.students.length} credenciales de alumnos ${qrStudentType === 'provisional' ? 'provisionales' : 'registrados'} generadas con el ciclo y periodo activos.`);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'No se pudo generar el archivo de credenciales.');
     } finally {
@@ -260,7 +265,7 @@ export function TeacherMobileCaptureSettings({
             </section>
           );
         })}
-        <section className="grid gap-4 rounded-lg border border-dashed p-4 lg:grid-cols-[minmax(16rem,1fr)_minmax(20rem,1.4fr)_auto] lg:items-end">
+        <section className="grid gap-4 rounded-lg border border-dashed p-4 lg:grid-cols-[minmax(14rem,1fr)_minmax(18rem,1.3fr)_minmax(13rem,.8fr)_auto] lg:items-end">
           <div>
             <p className="flex items-center gap-2 font-semibold"><QrCode className="size-5" aria-hidden="true" />Credenciales QR del grupo</p>
             <p className="text-sm text-muted-foreground">Elige claramente el nivel, grado, grupo y materia que aparecerán en el PDF.</p>
@@ -269,6 +274,13 @@ export function TeacherMobileCaptureSettings({
             <Label htmlFor="teacher-qr-assignment">Nivel, grado, grupo y materia</Label>
             <select id="teacher-qr-assignment" className="h-10 w-full rounded-md border bg-background px-3" value={qrAssignmentId} onChange={(event) => setQrAssignmentId(event.target.value)}>
               {qrAssignments.map((row) => <option key={row.id} value={row.id}>Nivel: {row.levelName} · Grado: {row.gradeName} · Grupo: {row.groupName} · Materia: {row.subjectName}</option>)}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="teacher-qr-student-type">Tipo de alumno</Label>
+            <select id="teacher-qr-student-type" className="h-10 w-full rounded-md border bg-background px-3" value={qrStudentType} onChange={(event) => setQrStudentType(event.target.value as 'registered' | 'provisional')}>
+              <option value="registered">Alumnos registrados</option>
+              <option value="provisional">Alumnos provisionales pendientes</option>
             </select>
           </div>
           <Button type="button" variant="outline" disabled={exportingQr || !qrAssignmentId} onClick={() => void exportQrBatch()}><Download />{exportingQr ? 'Generando…' : 'Descargar PDF de este grupo'}</Button>

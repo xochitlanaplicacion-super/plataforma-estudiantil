@@ -16,6 +16,8 @@ TEACHER_MOBILE_TEST="$REPO_ROOT/supabase/tests/database/020_teacher_mobile_captu
 TEACHER_PROVISIONAL_MIGRATION="$REPO_ROOT/supabase/migrations/20260906072000_teacher_mobile_provisional_students.sql"
 TEACHER_PROVISIONAL_LINK_MIGRATION="$REPO_ROOT/supabase/migrations/20260906084500_link_teacher_provisional_students.sql"
 TEACHER_PROVISIONAL_TEST="$REPO_ROOT/supabase/tests/database/021_teacher_mobile_provisional_students.sql"
+TEACHER_PROVISIONAL_QR_MIGRATION="$REPO_ROOT/supabase/migrations/20260906184301_teacher_provisional_qr_credentials.sql"
+TEACHER_PROVISIONAL_QR_TEST="$REPO_ROOT/supabase/tests/database/022_teacher_provisional_qr_credentials.sql"
 MIGRATIONS=(
   "$REPO_ROOT/supabase/migrations/20260827012356_academic_cycles_enrollments_assignments.sql"
   "$REPO_ROOT/supabase/migrations/20260827031813_academic_periods_evaluation_schemes.sql"
@@ -108,6 +110,8 @@ run_sql -f "$TEACHER_MOBILE_TEST" >/dev/null
 run_sql -f "$TEACHER_PROVISIONAL_MIGRATION" >/dev/null
 run_sql -f "$TEACHER_PROVISIONAL_LINK_MIGRATION" >/dev/null
 run_sql -f "$TEACHER_PROVISIONAL_TEST" >/dev/null
+run_sql -f "$TEACHER_PROVISIONAL_QR_MIGRATION" >/dev/null
+run_sql -f "$TEACHER_PROVISIONAL_QR_TEST" >/dev/null
 AFTER="$(run_sql -Atqc "select md5(string_agg(id::text||':'||tenant_id::text,',' order by id)) from public.ejercicios")"
 [[ -n "$BEFORE" && "$BEFORE" == "$AFTER" ]]
 
