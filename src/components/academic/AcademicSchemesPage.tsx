@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { DistributeScheme } from './DistributeScheme';
 import { CheckCircle2, Copy, History, LockKeyhole, Plus, Save, Scale, Trash2 } from 'lucide-react';
 
 import {
@@ -477,6 +478,7 @@ export function AcademicSchemesPage({ audience = 'administration' }: AcademicSch
               </Card>
 
               {selectedScheme ? (
+                <>
                 <div data-criteria-tour={teacherView ? 'activation' : undefined} className="sticky top-2 z-20 rounded-xl border-2 border-primary bg-background p-4 shadow-lg" role="status">
                   <p className="font-bold">{selectedScheme.state === 'activo' ? 'Criterios activos: disponibles en la libreta' : selectedScheme.state === 'borrador' ? 'Cambios guardados, pendientes de aplicar' : 'Versión histórica'}</p>
                   {teacherView && selectedScheme.state === 'activo' ? <><p className="mt-1 text-sm">Puedes ajustar tu evaluación. Al terminar, aplica los cambios desde este mismo recuadro.</p><Button className="mt-3" disabled={feedback?.kind === 'saving'} onClick={() => void copyScheme()}><Copy />Editar criterios</Button></> : null}
@@ -486,6 +488,8 @@ export function AcademicSchemesPage({ audience = 'administration' }: AcademicSch
                     {teacherView ? <Button className="mt-3" disabled={!activationReady || !schemeDraft.name.trim() || feedback?.kind === 'saving'} onClick={() => void saveScheme()}><CheckCircle2 />Usar estos criterios en la libreta</Button> : null}
                   </> : null}
                 </div>
+                {teacherView && selectedScheme.state === 'activo' ? <DistributeScheme key={selectedScheme.id} data={data} scheme={selectedScheme} /> : null}
+                </>
               ) : null}
               {selectedScheme ? (
                 <div className={teacherView ? 'grid gap-6' : 'grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(20rem,0.6fr)]'}>

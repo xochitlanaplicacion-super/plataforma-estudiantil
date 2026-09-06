@@ -89,6 +89,12 @@ export const academicCopySchemeSchema = z.object({
   name: z.string().trim().min(1).max(160),
 }).strict();
 
+export const academicDistributeSchemeSchema = z.object({
+  schemeId: uuid,
+  expectedVersion: z.number().int().positive(),
+  assignmentIds: z.array(uuid).min(1).max(100).transform((ids) => [...new Set(ids)]),
+}).strict();
+
 export type AcademicCycleMutationInput = z.output<typeof academicCycleMutationSchema>;
 export type AcademicPeriodMutationInput = z.output<typeof academicPeriodMutationSchema>;
 export type AcademicSchemeMutationInput = z.output<typeof academicSchemeMutationSchema>;

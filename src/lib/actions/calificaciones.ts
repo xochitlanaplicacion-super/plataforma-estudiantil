@@ -298,3 +298,7 @@ export async function copyAcademicSchemeAction(
 ): Promise<AcademicActionResult<AcademicSchemeVersionMutationDto>> {
   return executeConfiguration((service) => service.copyScheme(input), { revalidate: true });
 }
+
+export async function distributeAcademicSchemeAction(input: unknown) {
+  return executeConfiguration((service) => service.distributeScheme(input), { revalidate: true });
+}
