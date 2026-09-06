@@ -14,7 +14,7 @@ import {
   type TeacherProvisionalLinksDto,
   type TeacherMobileCaptureSettingDto,
 } from '@/lib/actions/calificaciones';
-import type { AcademicCriterionConfigurationDto } from '@/lib/academic/configuration-dto';
+import type { AcademicAssignmentOptionDto, AcademicCriterionConfigurationDto } from '@/lib/academic/configuration-dto';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
@@ -61,12 +61,21 @@ const defaults = (criterionId: string): TeacherMobileCaptureSettingDto => ({
   confirmBeforeSave: false,
 });
 
-export function TeacherMobileCaptureSettings({ criteria, assignmentId }: { criteria: AcademicCriterionConfigurationDto[]; assignmentId: string }) {
+export function TeacherMobileCaptureSettings({
+  criteria,
+  assignmentId,
+  qrAssignments,
+}: {
+  criteria: AcademicCriterionConfigurationDto[];
+  assignmentId: string;
+  qrAssignments: AcademicAssignmentOptionDto[];
+}) {
   const eligible = criteria.filter((criterion) => criterion.active && criterion.type !== 'actividades');
   const [settings, setSettings] = useState<Record<string, TeacherMobileCaptureSettingDto>>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [exportingQr, setExportingQr] = useState(false);
+  const [qrAssignmentId, setQrAssignmentId] = useState(assignmentId);
   const [provisionalLinks, setProvisionalLinks] = useState<TeacherProvisionalLinksDto>({ provisionals: [], candidates: [] });
   const [provisionalSelection, setProvisionalSelection] = useState<Record<string, string>>({});
   const [confirmingLink, setConfirmingLink] = useState<string | null>(null);
@@ -97,6 +106,8 @@ export function TeacherMobileCaptureSettings({ criteria, assignmentId }: { crite
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assignmentId]);
 
+  useEffect(() => setQrAssignmentId(assignmentId), [assignmentId]);
+
   function update(criterionId: string, changes: Partial<TeacherMobileCaptureSettingDto>) {
     setSettings((current) => ({
       ...current,
@@ -121,7 +132,7 @@ export function TeacherMobileCaptureSettings({ criteria, assignmentId }: { crite
     setExportingQr(true);
     setMessage('Preparando las credenciales QR del grupo…');
     try {
-      const result = await loadTeacherQrBatchAction(assignmentId);
+      const result = await loadTeacherQrBatchAction(qrAssignmentId);
       if (!result.ok) {
         setMessage(result.error.message);
         return;
@@ -248,12 +259,18 @@ export function TeacherMobileCaptureSettings({ criteria, assignmentId }: { crite
             </section>
           );
         })}
-        <section className="flex flex-col gap-3 rounded-lg border border-dashed p-4 sm:flex-row sm:items-center sm:justify-between">
+        <section className="grid gap-4 rounded-lg border border-dashed p-4 lg:grid-cols-[minmax(16rem,1fr)_minmax(20rem,1.4fr)_auto] lg:items-end">
           <div>
             <p className="flex items-center gap-2 font-semibold"><QrCode className="size-5" aria-hidden="true" />Credenciales QR del grupo</p>
-            <p className="text-sm text-muted-foreground">Descarga un PDF listo para imprimir. Incluye únicamente alumnos de esta asignación, del ciclo activo y del periodo activo.</p>
+            <p className="text-sm text-muted-foreground">Elige claramente el nivel, grado, grupo y materia que aparecerán en el PDF.</p>
           </div>
-          <Button type="button" variant="outline" disabled={exportingQr} onClick={() => void exportQrBatch()}><Download />{exportingQr ? 'Generando…' : 'Descargar PDF'}</Button>
+          <div className="space-y-2">
+            <Label htmlFor="teacher-qr-assignment">Nivel, grado, grupo y materia</Label>
+            <select id="teacher-qr-assignment" className="h-10 w-full rounded-md border bg-background px-3" value={qrAssignmentId} onChange={(event) => setQrAssignmentId(event.target.value)}>
+              {qrAssignments.map((row) => <option key={row.id} value={row.id}>Nivel: {row.levelName} · Grado: {row.gradeName} · Grupo: {row.groupName} · Materia: {row.subjectName}</option>)}
+            </select>
+          </div>
+          <Button type="button" variant="outline" disabled={exportingQr || !qrAssignmentId} onClick={() => void exportQrBatch()}><Download />{exportingQr ? 'Generando…' : 'Descargar PDF de este grupo'}</Button>
         </section>
         <section className="space-y-3 rounded-lg border p-4">
           <div>

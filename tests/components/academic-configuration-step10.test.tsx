@@ -242,6 +242,7 @@ describe('Paso 10: interfaz administrativa accesible', () => {
     render(<AcademicSchemesPage audience="teacher" />);
 
     const qrSwitch = await screen.findByLabelText('Lector QR');
+    expect(screen.getByLabelText('Nivel, grado, grupo y materia')).toHaveTextContent('Nivel: Secundaria · Grado: Primero · Grupo: A · Materia: Matemáticas');
     const section = qrSwitch.closest('section');
     expect(section).not.toBeNull();
     await user.click(qrSwitch);
