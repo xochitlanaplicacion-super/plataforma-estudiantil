@@ -1,14 +1,17 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Download, QrCode, Save, Smartphone } from 'lucide-react';
+import { Download, Link2, QrCode, Save, Smartphone } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import QRCode from 'qrcode';
 
 import {
   loadTeacherQrBatchAction,
+  linkTeacherProvisionalStudentAction,
+  loadTeacherProvisionalLinksAction,
   loadTeacherMobileCaptureSettingsAction,
   saveTeacherMobileCaptureSettingAction,
+  type TeacherProvisionalLinksDto,
   type TeacherMobileCaptureSettingDto,
 } from '@/lib/actions/calificaciones';
 import type { AcademicCriterionConfigurationDto } from '@/lib/academic/configuration-dto';
@@ -64,6 +67,10 @@ export function TeacherMobileCaptureSettings({ criteria, assignmentId }: { crite
   const [saving, setSaving] = useState<string | null>(null);
   const [message, setMessage] = useState('');
   const [exportingQr, setExportingQr] = useState(false);
+  const [provisionalLinks, setProvisionalLinks] = useState<TeacherProvisionalLinksDto>({ provisionals: [], candidates: [] });
+  const [provisionalSelection, setProvisionalSelection] = useState<Record<string, string>>({});
+  const [confirmingLink, setConfirmingLink] = useState<string | null>(null);
+  const [linking, setLinking] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -77,6 +84,18 @@ export function TeacherMobileCaptureSettings({ criteria, assignmentId }: { crite
     });
     return () => { active = false; };
   }, []);
+
+  async function reloadProvisionals() {
+    const result = await loadTeacherProvisionalLinksAction(assignmentId);
+    if (result.ok) setProvisionalLinks(result.data);
+    else setMessage(result.error.message);
+  }
+
+  useEffect(() => {
+    void reloadProvisionals();
+    // La asignación identifica el grupo; los criterios no cambian esta lista.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assignmentId]);
 
   function update(criterionId: string, changes: Partial<TeacherMobileCaptureSettingDto>) {
     setSettings((current) => ({
@@ -166,6 +185,25 @@ export function TeacherMobileCaptureSettings({ criteria, assignmentId }: { crite
     }
   }
 
+  async function linkProvisional(provisionalId: string) {
+    const enrollmentId = provisionalSelection[provisionalId];
+    if (!enrollmentId) {
+      setMessage('Selecciona primero la cuenta oficial del alumno.');
+      return;
+    }
+    setLinking(provisionalId);
+    setMessage('Vinculando y migrando las capturas…');
+    const result = await linkTeacherProvisionalStudentAction({ provisionalId, enrollmentId });
+    if (result.ok) {
+      setMessage(`Vinculación completa: ${result.data.migratedCaptures} captura(s) migradas a la libreta oficial.`);
+      setConfirmingLink(null);
+      await reloadProvisionals();
+    } else {
+      setMessage(result.error.message);
+    }
+    setLinking(null);
+  }
+
   if (eligible.length === 0) return null;
 
   return (
@@ -216,6 +254,19 @@ export function TeacherMobileCaptureSettings({ criteria, assignmentId }: { crite
             <p className="text-sm text-muted-foreground">Descarga un PDF listo para imprimir. Incluye únicamente alumnos de esta asignación, del ciclo activo y del periodo activo.</p>
           </div>
           <Button type="button" variant="outline" disabled={exportingQr} onClick={() => void exportQrBatch()}><Download />{exportingQr ? 'Generando…' : 'Descargar PDF'}</Button>
+        </section>
+        <section className="space-y-3 rounded-lg border p-4">
+          <div>
+            <p className="flex items-center gap-2 font-semibold"><Link2 className="size-5" aria-hidden="true" />Alumnos provisionales pendientes</p>
+            <p className="text-sm text-muted-foreground">Elige manualmente la inscripción oficial correcta. Al confirmar, todas sus capturas pasan juntas a la libreta y la operación queda auditada.</p>
+          </div>
+          {provisionalLinks.provisionals.length === 0 ? <p className="rounded-md bg-muted/40 p-3 text-sm">No hay altas provisionales pendientes en este grupo.</p> : provisionalLinks.provisionals.map((provisional) => (
+            <div key={provisional.id} className="grid gap-3 rounded-md border bg-muted/20 p-3 lg:grid-cols-[minmax(12rem,1fr)_minmax(16rem,1.5fr)_auto] lg:items-end">
+              <div><p className="font-medium">{provisional.name}</p><p className="text-xs text-muted-foreground">{provisional.captureCount} captura(s) protegidas</p></div>
+              <div className="space-y-1"><Label htmlFor={`official-student-${provisional.id}`}>Cuenta oficial de destino</Label><select id={`official-student-${provisional.id}`} className="h-10 w-full rounded-md border bg-background px-3" value={provisionalSelection[provisional.id] ?? ''} onChange={(event) => { setProvisionalSelection((current) => ({ ...current, [provisional.id]: event.target.value })); setConfirmingLink(null); }}><option value="">Selecciona alumno oficial</option>{provisionalLinks.candidates.map((candidate) => <option key={candidate.enrollmentId} value={candidate.enrollmentId}>{candidate.name}{candidate.enrollmentCode ? ` · ${candidate.enrollmentCode}` : ''}</option>)}</select></div>
+              <div className="flex gap-2">{confirmingLink === provisional.id ? <><Button type="button" variant="outline" onClick={() => setConfirmingLink(null)}>Cancelar</Button><Button type="button" disabled={linking === provisional.id} onClick={() => void linkProvisional(provisional.id)}>{linking === provisional.id ? 'Migrando…' : 'Confirmar migración'}</Button></> : <Button type="button" variant="outline" disabled={!provisionalSelection[provisional.id]} onClick={() => setConfirmingLink(provisional.id)}><Link2 />Vincular</Button>}</div>
+            </div>
+          ))}
         </section>
       </CardContent>
     </Card>

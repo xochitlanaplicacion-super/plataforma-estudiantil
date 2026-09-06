@@ -14,6 +14,7 @@ STEP15_LEGACY_VOLATILITY_MIGRATION="$REPO_ROOT/supabase/migrations/2026083006550
 TEACHER_MOBILE_MIGRATION="$REPO_ROOT/supabase/migrations/20260906050427_teacher_mobile_capture.sql"
 TEACHER_MOBILE_TEST="$REPO_ROOT/supabase/tests/database/020_teacher_mobile_capture.sql"
 TEACHER_PROVISIONAL_MIGRATION="$REPO_ROOT/supabase/migrations/20260906072000_teacher_mobile_provisional_students.sql"
+TEACHER_PROVISIONAL_LINK_MIGRATION="$REPO_ROOT/supabase/migrations/20260906084500_link_teacher_provisional_students.sql"
 TEACHER_PROVISIONAL_TEST="$REPO_ROOT/supabase/tests/database/021_teacher_mobile_provisional_students.sql"
 MIGRATIONS=(
   "$REPO_ROOT/supabase/migrations/20260827012356_academic_cycles_enrollments_assignments.sql"
@@ -105,6 +106,7 @@ SQL
 run_sql -f "$TEACHER_MOBILE_MIGRATION" >/dev/null
 run_sql -f "$TEACHER_MOBILE_TEST" >/dev/null
 run_sql -f "$TEACHER_PROVISIONAL_MIGRATION" >/dev/null
+run_sql -f "$TEACHER_PROVISIONAL_LINK_MIGRATION" >/dev/null
 run_sql -f "$TEACHER_PROVISIONAL_TEST" >/dev/null
 AFTER="$(run_sql -Atqc "select md5(string_agg(id::text||':'||tenant_id::text,',' order by id)) from public.ejercicios")"
 [[ -n "$BEFORE" && "$BEFORE" == "$AFTER" ]]

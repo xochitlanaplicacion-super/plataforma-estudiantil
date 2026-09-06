@@ -5031,6 +5031,10 @@ export type Database = {
       }
       get_auth_role: { Args: never; Returns: string }
       obtener_contexto_docente_movil: { Args: never; Returns: Json }
+      obtener_vinculaciones_provisionales_docente: {
+        Args: { p_asignacion_id: string }
+        Returns: Json
+      }
       obtener_qrs_docente_movil: {
         Args: { p_asignacion_id: string }
         Returns: Json
@@ -5109,6 +5113,10 @@ export type Database = {
           p_user_id: string
         }
         Returns: boolean
+      }
+      vincular_alumno_provisional_docente: {
+        Args: { p_alumno_provisional_id: string; p_inscripcion_id: string }
+        Returns: Json
       }
       votar_encuesta: {
         Args: { p_encuesta_id: string; p_opcion_id: string }

@@ -68,6 +68,11 @@ export interface TeacherQrBatchDto {
   students: { enrollmentId: string; name: string; enrollmentCode: string | null; token: string }[];
 }
 
+export interface TeacherProvisionalLinksDto {
+  provisionals: { id: string; name: string; createdAt: string; captureCount: number }[];
+  candidates: { enrollmentId: string; name: string; enrollmentCode: string | null }[];
+}
+
 const teacherMobileCaptureSettingSchema = z.object({
   criterionId: z.string().uuid(),
   minimumGrade: z.number().int().min(0).max(10),
@@ -100,6 +105,60 @@ const teacherQrTokensSchema = z.array(z.object({
   enrollmentId: z.string().uuid(),
   token: z.string().uuid(),
 }));
+
+const teacherProvisionalLinksSchema = z.object({
+  provisionals: z.array(z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    createdAt: z.string(),
+    captureCount: z.number().int().nonnegative(),
+  })),
+  candidates: z.array(z.object({
+    enrollmentId: z.string().uuid(),
+    name: z.string(),
+    enrollmentCode: z.string().nullable().optional(),
+  })),
+});
+
+export async function loadTeacherProvisionalLinksAction(assignmentIdInput: unknown): Promise<AcademicActionResult<TeacherProvisionalLinksDto>> {
+  try {
+    const assignmentId = z.string().uuid().parse(assignmentIdInput);
+    const session = await requireTenantSession(['profesor']);
+    const { data, error } = await session.supabase.rpc('obtener_vinculaciones_provisionales_docente', {
+      p_asignacion_id: assignmentId,
+    });
+    if (error) throw error;
+    const parsed = teacherProvisionalLinksSchema.parse(data);
+    return academicSuccessResult({
+      provisionals: parsed.provisionals,
+      candidates: parsed.candidates.map((candidate) => ({ ...candidate, enrollmentCode: candidate.enrollmentCode ?? null })),
+    }, { empty: parsed.provisionals.length === 0 });
+  } catch (error) {
+    return academicFailureResult(error);
+  }
+}
+
+export async function linkTeacherProvisionalStudentAction(input: unknown): Promise<AcademicActionResult<{ provisionalId: string; enrollmentId: string; migratedCaptures: number }>> {
+  try {
+    const parsed = z.object({ provisionalId: z.string().uuid(), enrollmentId: z.string().uuid() }).parse(input);
+    const session = await requireTenantSession(['profesor']);
+    const { data, error } = await session.supabase.rpc('vincular_alumno_provisional_docente', {
+      p_alumno_provisional_id: parsed.provisionalId,
+      p_inscripcion_id: parsed.enrollmentId,
+    });
+    if (error) throw error;
+    const result = z.object({
+      provisionalId: z.string().uuid(),
+      enrollmentId: z.string().uuid(),
+      migratedCaptures: z.number().int().nonnegative(),
+    }).parse(data);
+    revalidateAcademicConfigurationRoutes();
+    revalidateAcademicRoutes({ assignmentId: '', periodId: '' });
+    return academicSuccessResult(result);
+  } catch (error) {
+    return academicFailureResult(error);
+  }
+}
 
 export async function loadTeacherQrBatchAction(assignmentIdInput: unknown): Promise<AcademicActionResult<TeacherQrBatchDto>> {
   try {

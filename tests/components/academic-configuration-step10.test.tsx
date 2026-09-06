@@ -12,6 +12,7 @@ const actionMocks = vi.hoisted(() => ({
   deleteSubcriterion: vi.fn(),
   activate: vi.fn(), copy: vi.fn(),
   mobileLoad: vi.fn(), mobileSave: vi.fn(), mobileQr: vi.fn(),
+  provisionalLoad: vi.fn(), provisionalLink: vi.fn(),
 }));
 
 vi.mock('@/lib/actions/calificaciones', () => ({
@@ -28,6 +29,8 @@ vi.mock('@/lib/actions/calificaciones', () => ({
   loadTeacherMobileCaptureSettingsAction: actionMocks.mobileLoad,
   saveTeacherMobileCaptureSettingAction: actionMocks.mobileSave,
   loadTeacherQrBatchAction: actionMocks.mobileQr,
+  loadTeacherProvisionalLinksAction: actionMocks.provisionalLoad,
+  linkTeacherProvisionalStudentAction: actionMocks.provisionalLink,
 }));
 
 import { AcademicCyclesPeriodsPage } from '@/components/academic/AcademicCyclesPeriodsPage';
@@ -65,6 +68,7 @@ beforeEach(() => {
   actionMocks.audit.mockResolvedValue({ ok: true, status: 'empty', data: { items: [], page: 1, pageSize: 10, total: 0, totalPages: 0, hasPreviousPage: false, hasNextPage: false } });
   actionMocks.mobileLoad.mockResolvedValue({ ok: true, status: 'empty', data: [] });
   actionMocks.mobileSave.mockImplementation(async (input: unknown) => ({ ok: true, status: 'success', data: input }));
+  actionMocks.provisionalLoad.mockResolvedValue({ ok: true, status: 'empty', data: { provisionals: [], candidates: [] } });
 });
 
 describe('Paso 10: interfaz administrativa accesible', () => {
