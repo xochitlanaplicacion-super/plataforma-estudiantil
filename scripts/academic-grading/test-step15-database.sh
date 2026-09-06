@@ -13,6 +13,8 @@ STEP15_VOLATILITY_MIGRATION="$REPO_ROOT/supabase/migrations/20260830064500_acade
 STEP15_LEGACY_VOLATILITY_MIGRATION="$REPO_ROOT/supabase/migrations/20260830065500_academic_correct_legacy_normalizer_volatility_step15.sql"
 TEACHER_MOBILE_MIGRATION="$REPO_ROOT/supabase/migrations/20260906050427_teacher_mobile_capture.sql"
 TEACHER_MOBILE_TEST="$REPO_ROOT/supabase/tests/database/020_teacher_mobile_capture.sql"
+TEACHER_PROVISIONAL_MIGRATION="$REPO_ROOT/supabase/migrations/20260906072000_teacher_mobile_provisional_students.sql"
+TEACHER_PROVISIONAL_TEST="$REPO_ROOT/supabase/tests/database/021_teacher_mobile_provisional_students.sql"
 MIGRATIONS=(
   "$REPO_ROOT/supabase/migrations/20260827012356_academic_cycles_enrollments_assignments.sql"
   "$REPO_ROOT/supabase/migrations/20260827031813_academic_periods_evaluation_schemes.sql"
@@ -102,6 +104,8 @@ create table if not exists public.configuracion_sistema (
 SQL
 run_sql -f "$TEACHER_MOBILE_MIGRATION" >/dev/null
 run_sql -f "$TEACHER_MOBILE_TEST" >/dev/null
+run_sql -f "$TEACHER_PROVISIONAL_MIGRATION" >/dev/null
+run_sql -f "$TEACHER_PROVISIONAL_TEST" >/dev/null
 AFTER="$(run_sql -Atqc "select md5(string_agg(id::text||':'||tenant_id::text,',' order by id)) from public.ejercicios")"
 [[ -n "$BEFORE" && "$BEFORE" == "$AFTER" ]]
 
