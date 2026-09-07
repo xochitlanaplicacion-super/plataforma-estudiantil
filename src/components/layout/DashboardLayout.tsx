@@ -52,7 +52,8 @@ import {
   DoorOpen,
   ShieldCheck,
   ContactRound,
-  Files
+  Files,
+  FileSpreadsheet
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -224,6 +225,7 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
         { icon: LayoutDashboard, label: 'Mis Asignaturas', href: '/dashboard/profesor' },
         { icon: NotebookTabs, label: 'Libreta de calificaciones', href: '/dashboard/profesor/calificaciones' },
         { icon: BarChart3, label: 'Participación diaria', href: '/dashboard/profesor/participaciones' },
+        { icon: FileSpreadsheet, label: 'Reportes académicos', href: '/dashboard/profesor/reportes-academicos' },
         { icon: Scale, label: 'Mis criterios de evaluación', href: '/dashboard/profesor/criterios-evaluacion' },
         { icon: ClipboardList, label: 'Entregas de Actividades', href: '/dashboard/profesor/entregas' },
         { icon: Users, label: 'Listas de grupos', href: '/dashboard/profesor/grupos' },

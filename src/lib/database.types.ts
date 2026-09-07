@@ -5039,6 +5039,10 @@ export type Database = {
         Args: { p_asignacion_id: string }
         Returns: Json
       }
+      obtener_reporte_academico_docente: {
+        Args: { p_asignacion_id: string }
+        Returns: Json
+      }
       guardar_asistencia_docente_movil: {
         Args: {
           p_asignacion_id: string
