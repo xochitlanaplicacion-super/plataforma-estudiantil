@@ -37,7 +37,7 @@ describe('Bet Win Lose multi-tenant y recuperable', () => {
     expect(room).toContain('Finalizar partida');
     expect(room).toContain('Volver a actividades');
     expect(room).toContain('Volver a mis actividades');
-    expect(room).not.toContain('router.push');
+    expect(room).toContain('Puedes revisar la clasificación con calma');
   });
 
   it('no entrega la clave correcta mientras el duelo sigue abierto', () => {

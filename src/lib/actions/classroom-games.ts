@@ -31,6 +31,8 @@ const sessionSchema = z.object({
   responseSeconds: z.number().int().min(5).max(60),
 });
 
+const sessionIdsSchema = z.array(z.string().uuid()).min(1).max(50);
+
 export type ClassroomQuestionInput = z.infer<typeof questionSchema>;
 export type ClassroomBankInput = z.infer<typeof bankSchema>;
 export type ClassroomSessionInput = z.infer<typeof sessionSchema>;
@@ -257,6 +259,46 @@ export async function finishClassroomSessionAction(sessionId: string): Promise<C
       .eq('session_id', id).eq('tenant_id', tenantId).in('status', ['betting', 'steal', 'answering']);
     return { ok: true, data: undefined };
   } catch (error) { return { ok: false, message: messageOf(error) }; }
+}
+
+export async function resetClassroomSessionAction(sessionIdInput: string): Promise<ClassroomActionResult> {
+  try {
+    const sessionId = z.string().uuid().parse(sessionIdInput);
+    const { profile, tenantId, admin } = await requireTenantSession(['profesor']);
+    const { data, error } = await (admin as any).rpc('reset_classroom_game_session', {
+      target_session_id: sessionId,
+      target_tenant_id: tenantId,
+      target_teacher_id: profile.id,
+    });
+    if (error) throw error;
+    if (!data) throw new Error('La sesión no pudo reiniciarse');
+    revalidatePath('/dashboard/profesor/actividades-clase');
+    revalidatePath(`/dashboard/profesor/actividades-clase/${sessionId}`);
+    return { ok: true, data: undefined };
+  } catch (error) {
+    return { ok: false, message: messageOf(error) };
+  }
+}
+
+export async function deleteClassroomSessionsAction(sessionIdsInput: string[]): Promise<ClassroomActionResult<{ deleted: number }>> {
+  try {
+    const sessionIds = [...new Set(sessionIdsSchema.parse(sessionIdsInput))];
+    const { profile, tenantId, admin } = await requireTenantSession(['profesor']);
+    const db = admin as any;
+    const { data: owned, error: ownershipError } = await db.from('classroom_game_sessions').select('id')
+      .eq('tenant_id', tenantId).eq('teacher_id', profile.id).in('id', sessionIds);
+    if (ownershipError) throw ownershipError;
+    if ((owned || []).length !== sessionIds.length) throw new Error('Una o más sesiones no existen o no te pertenecen');
+
+    const { data: deleted, error } = await db.from('classroom_game_sessions').delete()
+      .eq('tenant_id', tenantId).eq('teacher_id', profile.id).in('id', sessionIds).select('id');
+    if (error) throw error;
+    if ((deleted || []).length !== sessionIds.length) throw new Error('No fue posible borrar todas las sesiones seleccionadas');
+    revalidatePath('/dashboard/profesor/actividades-clase');
+    return { ok: true, data: { deleted: deleted.length } };
+  } catch (error) {
+    return { ok: false, message: messageOf(error) };
+  }
 }
 
 export async function loadStudentClassroomSessionsAction(): Promise<ClassroomActionResult<any[]>> {

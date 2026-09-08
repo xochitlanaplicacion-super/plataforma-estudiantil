@@ -1,11 +1,13 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
 import { ArrowLeft, Crown, Dices, LoaderCircle, PlusCircle, Radio, RefreshCw, ShieldCheck, Swords, Trophy } from 'lucide-react';
-import { advanceClassroomSessionAction, answerClassroomQuestionAction, finishClassroomSessionAction, foldClassroomMatchAction, loadClassroomGameStateAction, placeClassroomBetAction, stealClassroomMatchAction } from '@/lib/actions/classroom-games';
+import { advanceClassroomSessionAction, answerClassroomQuestionAction, finishClassroomSessionAction, foldClassroomMatchAction, loadClassroomGameStateAction, placeClassroomBetAction, resetClassroomSessionAction, stealClassroomMatchAction } from '@/lib/actions/classroom-games';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 function personName(item: any) {
   const profile = Array.isArray(item?.profiles) ? item.profiles[0] : item?.profiles;
@@ -13,12 +15,14 @@ function personName(item: any) {
 }
 
 export function BetWinLoseRoom({ sessionId, initialState }: { sessionId: string; initialState: any }) {
+  const router = useRouter();
   const [state, setState] = useState(initialState);
   const [message, setMessage] = useState('');
   const [bet, setBet] = useState(1);
   const [pending, startTransition] = useTransition();
   const [remaining, setRemaining] = useState<number | null>(null);
   const [stealRemaining, setStealRemaining] = useState<number | null>(null);
+  const [resetOpen, setResetOpen] = useState(false);
 
   const refresh = useCallback(async (quiet = true) => {
     const result = await loadClassroomGameStateAction(sessionId);
@@ -73,6 +77,16 @@ export function BetWinLoseRoom({ sessionId, initialState }: { sessionId: string;
     });
   }
 
+  function resetSession() {
+    startTransition(async () => {
+      const result = await resetClassroomSessionAction(sessionId);
+      if (!result.ok) return setMessage(result.message);
+      setResetOpen(false);
+      router.push('/dashboard/profesor/actividades-clase');
+      router.refresh();
+    });
+  }
+
   return <main className="mx-auto min-h-[75vh] max-w-7xl space-y-5 pb-16">
     <header className="relative overflow-hidden rounded-3xl bg-[radial-gradient(circle_at_20%_0%,#22d3ee55,transparent_30%),linear-gradient(135deg,#020617,#172554_50%,#4c1d95)] p-6 text-white shadow-2xl">
       <div className="absolute right-6 top-5 flex items-center gap-2 rounded-full border border-white/20 bg-black/20 px-3 py-1 text-xs font-bold uppercase backdrop-blur"><Radio className="size-3 text-red-400"/>{state.session.status}</div>
@@ -88,7 +102,7 @@ export function BetWinLoseRoom({ sessionId, initialState }: { sessionId: string;
       <Button asChild variant={['finished', 'cancelled'].includes(state.session.status) ? 'default' : 'ghost'}><Link href="/dashboard/profesor/actividades-clase"><ArrowLeft className="size-4"/> Volver a actividades</Link></Button>
     </section>}
     {state.viewerRole === 'alumno' && !['finished', 'cancelled'].includes(state.session.status) && <section className="flex rounded-2xl border bg-card p-4"><Button asChild variant="ghost"><Link href={activitiesHref}><ArrowLeft className="size-4"/> Volver a mis actividades</Link></Button></section>}
-    {['finished', 'cancelled'].includes(state.session.status) && <section className="rounded-3xl border border-emerald-300 bg-emerald-50 p-6 dark:border-emerald-900 dark:bg-emerald-950/30"><h2 className="text-xl font-black text-emerald-950 dark:text-emerald-100">Partida finalizada</h2><p className="mt-2 text-sm text-emerald-800 dark:text-emerald-200">La actualización automática se detuvo. Puedes revisar la clasificación con calma y regresar cuando quieras.</p><div className="mt-4 flex flex-wrap gap-2"><Button asChild><Link href={activitiesHref}><ArrowLeft className="size-4"/> {state.viewerRole === 'profesor' ? 'Volver a actividades' : 'Volver a mis actividades'}</Link></Button>{state.viewerRole === 'profesor' && <Button asChild variant="outline"><Link href={activitiesHref}><PlusCircle className="size-4"/> Crear otra actividad</Link></Button>}</div></section>}
+    {['finished', 'cancelled'].includes(state.session.status) && <section className="rounded-3xl border border-emerald-300 bg-emerald-50 p-6 dark:border-emerald-900 dark:bg-emerald-950/30"><h2 className="text-xl font-black text-emerald-950 dark:text-emerald-100">Partida finalizada</h2><p className="mt-2 text-sm text-emerald-800 dark:text-emerald-200">La actualización automática se detuvo. Puedes revisar la clasificación con calma y regresar cuando quieras.</p><div className="mt-4 flex flex-wrap gap-2"><Button asChild><Link href={activitiesHref}><ArrowLeft className="size-4"/> {state.viewerRole === 'profesor' ? 'Volver a actividades' : 'Volver a mis actividades'}</Link></Button>{state.viewerRole === 'profesor' && <><Button type="button" variant="outline" onClick={() => setResetOpen(true)}><RefreshCw className="size-4"/> Reiniciar esta sesión</Button><Button asChild variant="outline"><Link href={activitiesHref}><PlusCircle className="size-4"/> Crear otra actividad</Link></Button></>}</div></section>}
     {state.session.status === 'lobby' && <section className="rounded-3xl border-2 border-dashed bg-card p-10 text-center"><LoaderCircle className="mx-auto size-12 animate-spin text-primary"/><h2 className="mt-4 text-2xl font-black">Sala de espera</h2><p className="mt-2 text-muted-foreground">{state.participants.length} participantes conectados. El profesor iniciará cuando el grupo esté listo.</p></section>}
     {state.match && state.session.status === 'active' && <section className="grid gap-5 lg:grid-cols-[1fr_1.35fr_1fr]">
       {[matchPlayers.challenger, matchPlayers.opponent].map((player: any, index: number) => <article key={player?.id || index} className={`rounded-3xl border-2 p-5 text-center shadow-sm ${player?.id === ownId ? 'border-cyan-400 bg-cyan-500/5' : 'bg-card'} ${index === 1 ? 'lg:order-3' : ''}`}><div className="mx-auto grid size-16 place-items-center rounded-2xl bg-gradient-to-br from-cyan-500 to-violet-600 text-2xl font-black text-white">{personName(player).slice(0, 1)}</div><h3 className="mt-3 font-black">{personName(player)}</h3><p className="mt-1 text-3xl font-black text-primary">{player?.points ?? 0}</p><p className="text-xs uppercase tracking-wider text-muted-foreground">monedas</p>{player?.is_king && <span className="mt-3 inline-flex items-center gap-1 rounded-full bg-amber-400/20 px-3 py-1 text-xs font-bold text-amber-700"><Crown className="size-4"/> Rey actual</span>}</article>)}
@@ -101,5 +115,6 @@ export function BetWinLoseRoom({ sessionId, initialState }: { sessionId: string;
       </article>
     </section>}
     <section className="rounded-3xl border bg-card p-5"><h2 className="flex items-center gap-2 text-lg font-black"><Trophy className="size-5 text-amber-500"/> Clasificación en vivo</h2><div className="mt-4 grid gap-2">{state.participants.map((participant: any, index: number) => <div key={participant.id} className={`grid grid-cols-[2.5rem_1fr_auto] items-center gap-3 rounded-xl border px-4 py-3 ${participant.id === ownId ? 'border-cyan-400 bg-cyan-500/5' : ''}`}><span className="text-center text-lg font-black text-muted-foreground">{index + 1}</span><div><p className="font-bold">{personName(participant)}</p><p className="text-xs text-muted-foreground">Racha {participant.momentum}{participant.eliminated ? ' · Eliminado' : ''}</p></div><strong className="text-xl text-primary">{participant.points}</strong></div>)}</div></section>
+    <AlertDialog open={resetOpen} onOpenChange={(open) => { if (!pending) setResetOpen(open); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>¿Reiniciar esta sesión?</AlertDialogTitle><AlertDialogDescription>Se conservarán el banco y la configuración, pero se borrarán los participantes y resultados de esta partida. Después podrás abrirla nuevamente desde cero.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={pending}>Cancelar</AlertDialogCancel><AlertDialogAction disabled={pending} onClick={(event) => { event.preventDefault(); resetSession(); }}>{pending && <LoaderCircle className="size-4 animate-spin"/>}{pending ? 'Reiniciando…' : 'Sí, reiniciar'}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
   </main>;
 }
