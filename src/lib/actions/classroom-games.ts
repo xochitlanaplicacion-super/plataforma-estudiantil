@@ -39,7 +39,17 @@ export type ClassroomActionResult<T = undefined> =
   | { ok: false; message: string };
 
 function messageOf(error: unknown) {
-  return error instanceof Error ? error.message : 'No fue posible completar la operación';
+  if (error instanceof z.ZodError) return error.issues[0]?.message || 'Revisa los datos capturados';
+  const detail = error && typeof error === 'object' ? error as { code?: unknown; message?: unknown } : null;
+  const code = typeof detail?.code === 'string' ? detail.code : null;
+  const message = error instanceof Error ? error.message : typeof detail?.message === 'string' ? detail.message : null;
+  if (!message?.startsWith('Dynamic server usage:')) {
+    console.error('[classroom-games]', { code, message });
+  }
+  if (code === '42P01' || code === 'PGRST205') return 'El módulo de actividades todavía no está disponible en la base de datos.';
+  if (code === 'PGRST200') return 'No fue posible leer las relaciones académicas de esta actividad.';
+  if (message && !code) return message;
+  return `No fue posible conectar con los datos de actividades${code ? ` (referencia ${code})` : ''}.`;
 }
 
 function shuffle<T>(values: T[]): T[] {
