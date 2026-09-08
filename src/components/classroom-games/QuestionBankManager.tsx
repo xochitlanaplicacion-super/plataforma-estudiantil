@@ -1,8 +1,9 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
-import { BookOpenCheck, Plus, Save, Trash2 } from 'lucide-react';
+import { BookOpenCheck, BrainCircuit, Loader2, Plus, Save, Shuffle, Sparkles, Trash2 } from 'lucide-react';
 import { saveClassroomBankAction, type ClassroomQuestionInput } from '@/lib/actions/classroom-games';
+import { shuffleEachQuestionOptions, shuffleQuestionOptions, type ClassroomQuestionMode } from '@/lib/activities/classroom-question-options';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -19,6 +20,11 @@ export function QuestionBankManager({ initialData }: { initialData: any }) {
   const [topicName, setTopicName] = useState('');
   const [questions, setQuestions] = useState<ClassroomQuestionInput[]>([emptyQuestion()]);
   const [message, setMessage] = useState('');
+  const [aiPrompt, setAiPrompt] = useState('');
+  const [aiCount, setAiCount] = useState(5);
+  const [aiMode, setAiMode] = useState<ClassroomQuestionMode>('mixed');
+  const [shuffleGeneratedOptions, setShuffleGeneratedOptions] = useState(true);
+  const [aiPending, setAiPending] = useState(false);
   const [pending, startTransition] = useTransition();
   const subjects = useMemo(() => {
     const map = new Map<string, string>();
@@ -41,6 +47,35 @@ export function QuestionBankManager({ initialData }: { initialData: any }) {
     });
   }
 
+  async function generateWithAI() {
+    const prompt = aiPrompt.trim();
+    if (prompt.length < 5) return setMessage('Describe el tema, contenido o instrucciones para generar las preguntas.');
+    setMessage('');
+    setAiPending(true);
+    try {
+      const response = await fetch('/api/exercises/generate-classroom-bank', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompt, count: aiCount, mode: aiMode }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(result.error || 'No fue posible generar las preguntas.');
+      let generated = result.items as ClassroomQuestionInput[];
+      if (!Array.isArray(generated) || generated.length < 1) throw new Error('La IA no devolvió preguntas válidas.');
+      if (shuffleGeneratedOptions) generated = shuffleEachQuestionOptions(generated);
+      setQuestions((current) => {
+        const hasWrittenQuestions = current.some((question) => question.prompt.trim() || question.options.some((option) => option.trim() && !['Verdadero', 'Falso'].includes(option)));
+        return hasWrittenQuestions ? [...current, ...generated] : generated;
+      });
+      if (!title.trim()) setTitle(topicName.trim() || unitName.trim() || 'Banco generado con IA');
+      setMessage(`${generated.length} preguntas generadas y listas para revisión. Verifica las respuestas antes de guardar.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'No fue posible generar las preguntas.');
+    } finally {
+      setAiPending(false);
+    }
+  }
+
   return <main className="mx-auto max-w-7xl space-y-6 pb-16">
     <header className="rounded-3xl bg-gradient-to-br from-slate-950 via-blue-950 to-cyan-800 p-7 text-white shadow-xl">
       <div className="flex items-center gap-3"><BookOpenCheck className="size-9 text-cyan-300"/><div><p className="text-xs font-bold uppercase tracking-[.22em] text-cyan-200">Práctica independiente</p><h1 className="text-3xl font-black">Banco de actividades</h1></div></div>
@@ -54,14 +89,33 @@ export function QuestionBankManager({ initialData }: { initialData: any }) {
         <label className="space-y-1 text-sm font-semibold">Unidad (opcional)<Input value={unitName} onChange={(event) => setUnitName(event.target.value)} /></label>
         <label className="space-y-1 text-sm font-semibold">Tema (opcional)<Input value={topicName} onChange={(event) => setTopicName(event.target.value)} /></label>
       </div>
+      <div className="mt-6 overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 via-cyan-50 to-violet-50 dark:border-blue-900 dark:from-slate-950 dark:via-blue-950/60 dark:to-violet-950/50">
+        <div className="flex items-start gap-3 border-b border-blue-200/70 p-5 dark:border-blue-900">
+          <span className="rounded-xl bg-blue-600 p-2.5 text-white shadow-lg shadow-blue-600/20"><BrainCircuit className="size-5" /></span>
+          <div><h3 className="font-black text-slate-950 dark:text-white">Generar preguntas con IA</h3><p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Elige un tipo, genera el contenido y revísalo en el mismo editor manual antes de guardarlo.</p></div>
+        </div>
+        <div className="grid gap-4 p-5 lg:grid-cols-[1fr_180px]">
+          <label className="space-y-1 text-sm font-semibold lg:col-span-2">Tema, texto o instrucciones
+            <Textarea value={aiPrompt} onChange={(event) => setAiPrompt(event.target.value)} placeholder="Ejemplo: Presente simple en inglés para segundo de secundaria, con situaciones de la vida cotidiana." className="min-h-24 bg-background" />
+          </label>
+          <fieldset className="space-y-2"><legend className="text-sm font-semibold">Tipo de reactivos</legend><div className="grid gap-2 sm:grid-cols-3">
+            {([['multiple_choice', 'Opción múltiple'], ['true_false', 'Verdadero o falso'], ['mixed', 'Combinados']] as const).map(([value, label]) => <label key={value} className={`cursor-pointer rounded-xl border p-3 text-sm font-bold transition ${aiMode === value ? 'border-blue-600 bg-blue-600 text-white shadow-md' : 'bg-background hover:border-blue-400'}`}><input className="sr-only" type="radio" name="ai-question-mode" value={value} checked={aiMode === value} onChange={() => setAiMode(value)} />{label}</label>)}
+          </div></fieldset>
+          <label className="space-y-2 text-sm font-semibold">Cantidad de preguntas<Input type="number" min={1} max={40} value={aiCount} onChange={(event) => setAiCount(Math.max(1, Math.min(40, Number(event.target.value) || 1)))} className="bg-background" /></label>
+          <label className="flex items-start gap-3 rounded-xl border bg-background p-4 text-sm lg:col-span-2"><input type="checkbox" className="mt-1 size-4 accent-blue-600" checked={shuffleGeneratedOptions} onChange={(event) => setShuffleGeneratedOptions(event.target.checked)} /><span><strong className="block">Mezclar incisos dentro de cada pregunta</strong><span className="text-muted-foreground">Reordena A, B, C y D de manera independiente y conserva la respuesta correcta. Nunca mezcla opciones entre preguntas diferentes.</span></span></label>
+          <div className="lg:col-span-2"><Button type="button" onClick={generateWithAI} disabled={aiPending || aiPrompt.trim().length < 5} className="h-11 bg-blue-600 font-bold text-white hover:bg-blue-700">{aiPending ? <Loader2 className="size-4 animate-spin" /> : <Sparkles className="size-4" />}{aiPending ? 'Generando preguntas…' : 'Generar con IA'}</Button></div>
+        </div>
+      </div>
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3"><div><h3 className="font-black">Editor manual</h3><p className="text-sm text-muted-foreground">Puedes escribir, corregir o cambiar el tipo de cada pregunta.</p></div><Button type="button" variant="outline" onClick={() => setQuestions((current) => shuffleEachQuestionOptions(current))}><Shuffle className="size-4" /> Mezclar todos los incisos</Button></div>
       <div className="mt-6 space-y-4">{questions.map((question, index) => <article key={index} className="rounded-2xl border bg-muted/20 p-4">
-        <div className="flex items-center justify-between"><h3 className="font-bold">Pregunta {index + 1}</h3>{questions.length > 1 && <Button size="sm" variant="ghost" onClick={() => setQuestions((items) => items.filter((_, i) => i !== index))}><Trash2 className="size-4"/> Quitar</Button>}</div>
+        <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-bold">Pregunta {index + 1}</h3><div className="flex gap-1">{question.questionType === 'multiple_choice' && <Button type="button" size="sm" variant="ghost" onClick={() => updateQuestion(index, shuffleQuestionOptions(question))}><Shuffle className="size-4" /> Mezclar incisos</Button>}{questions.length > 1 && <Button type="button" size="sm" variant="ghost" onClick={() => setQuestions((items) => items.filter((_, i) => i !== index))}><Trash2 className="size-4"/> Quitar</Button>}</div></div>
         <label className="mt-3 block space-y-1 text-sm font-semibold">Tipo de pregunta<select className="h-10 w-full rounded-lg border bg-background px-3" value={question.questionType} onChange={(event) => {
           const questionType = event.target.value as ClassroomQuestionInput['questionType'];
           updateQuestion(index, questionType === 'true_false' ? { questionType, options: ['Verdadero', 'Falso'], correctIndex: 0 } : { questionType, options: ['', '', '', ''], correctIndex: 0 });
         }}><option value="multiple_choice">Opción múltiple</option><option value="true_false">Verdadero o falso</option></select></label>
         <Textarea className="mt-3" value={question.prompt} onChange={(event) => updateQuestion(index, { prompt: event.target.value })} placeholder="Escribe la pregunta" />
-        <div className="mt-3 grid gap-3 sm:grid-cols-2">{question.options.map((option, optionIndex) => <label key={optionIndex} className="flex items-center gap-2 rounded-xl border bg-background p-2 text-sm"><input type="radio" name={`correct-${index}`} checked={question.correctIndex === optionIndex} onChange={() => updateQuestion(index, { correctIndex: optionIndex })}/><Input aria-label={`Opción ${optionIndex + 1}`} value={option} onChange={(event) => updateQuestion(index, { options: question.options.map((item, i) => i === optionIndex ? event.target.value : item) })}/></label>)}</div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">{question.options.map((option, optionIndex) => <label key={optionIndex} className={`flex items-center gap-2 rounded-xl border bg-background p-2 text-sm ${question.correctIndex === optionIndex ? 'border-emerald-500 ring-1 ring-emerald-500/30' : ''}`}><input type="radio" name={`correct-${index}`} checked={question.correctIndex === optionIndex} onChange={() => updateQuestion(index, { correctIndex: optionIndex })}/><span className="w-5 shrink-0 text-center font-black text-muted-foreground">{String.fromCharCode(65 + optionIndex)}</span><Input aria-label={`Opción ${optionIndex + 1}`} value={option} readOnly={question.questionType === 'true_false'} onChange={(event) => updateQuestion(index, { options: question.options.map((item, i) => i === optionIndex ? event.target.value : item) })}/></label>)}</div>
+        <label className="mt-3 block space-y-1 text-sm font-semibold">Explicación para el profesor (opcional)<Textarea value={question.explanation || ''} onChange={(event) => updateQuestion(index, { explanation: event.target.value })} placeholder="Justificación de la respuesta correcta" /></label>
       </article>)}</div>
       <div className="mt-5 flex flex-wrap gap-3"><Button variant="outline" onClick={() => setQuestions((items) => [...items, emptyQuestion()])}><Plus className="size-4"/> Agregar pregunta</Button><Button disabled={pending || !subjectId || !title.trim()} onClick={save}><Save className="size-4"/> {pending ? 'Guardando…' : 'Guardar banco'}</Button></div>
       {message && <p role="status" className="mt-3 text-sm font-semibold text-primary">{message}</p>}
