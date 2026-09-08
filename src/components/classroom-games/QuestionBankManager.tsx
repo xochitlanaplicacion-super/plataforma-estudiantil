@@ -1,12 +1,13 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
-import { BookOpenCheck, BrainCircuit, Loader2, Plus, Save, Shuffle, Sparkles, Trash2 } from 'lucide-react';
-import { saveClassroomBankAction, type ClassroomQuestionInput } from '@/lib/actions/classroom-games';
+import { useMemo, useRef, useState, useTransition } from 'react';
+import { BookOpenCheck, BrainCircuit, Loader2, Pencil, Plus, Save, Shuffle, Sparkles, Trash2, X } from 'lucide-react';
+import { deleteClassroomBankAction, saveClassroomBankAction, type ClassroomQuestionInput } from '@/lib/actions/classroom-games';
 import { shuffleEachQuestionOptions, shuffleQuestionOptions, type ClassroomQuestionMode } from '@/lib/activities/classroom-question-options';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 const emptyQuestion = (): ClassroomQuestionInput => ({
   prompt: '', questionType: 'multiple_choice', options: ['', '', '', ''], correctIndex: 0, explanation: '',
@@ -18,7 +19,10 @@ export function QuestionBankManager({ initialData }: { initialData: any }) {
   const [title, setTitle] = useState('');
   const [unitName, setUnitName] = useState('');
   const [topicName, setTopicName] = useState('');
+  const [description, setDescription] = useState('');
   const [questions, setQuestions] = useState<ClassroomQuestionInput[]>([emptyQuestion()]);
+  const [editingBankId, setEditingBankId] = useState<string | null>(null);
+  const [deletingBank, setDeletingBank] = useState<any | null>(null);
   const [message, setMessage] = useState('');
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiCount, setAiCount] = useState(5);
@@ -26,6 +30,7 @@ export function QuestionBankManager({ initialData }: { initialData: any }) {
   const [shuffleGeneratedOptions, setShuffleGeneratedOptions] = useState(true);
   const [aiPending, setAiPending] = useState(false);
   const [pending, startTransition] = useTransition();
+  const editorRef = useRef<HTMLElement>(null);
   const subjects = useMemo(() => {
     const map = new Map<string, string>();
     for (const item of initialData.assignments || []) map.set(item.materia_id, item.materias?.nombre || 'Materia');
@@ -36,14 +41,71 @@ export function QuestionBankManager({ initialData }: { initialData: any }) {
     setQuestions((current) => current.map((item, itemIndex) => itemIndex === index ? { ...item, ...patch } : item));
   }
 
+  function resetEditor() {
+    setEditingBankId(null);
+    setTitle('');
+    setUnitName('');
+    setTopicName('');
+    setDescription('');
+    setQuestions([emptyQuestion()]);
+    setAiPrompt('');
+  }
+
+  function editBank(bank: any) {
+    const bankQuestions = [...(bank.classroom_question_items || [])]
+      .sort((a: any, b: any) => Number(a.position || 0) - Number(b.position || 0))
+      .map((question: any): ClassroomQuestionInput => ({
+        prompt: question.prompt,
+        questionType: question.question_type,
+        options: Array.isArray(question.options) ? [...question.options] : [],
+        correctIndex: Number(question.correct_index),
+        explanation: question.explanation || '',
+      }));
+    setEditingBankId(bank.id);
+    setSubjectId(bank.subject_id);
+    setTitle(bank.title || '');
+    setUnitName(bank.unit_name || '');
+    setTopicName(bank.topic_name || '');
+    setDescription(bank.description || '');
+    setQuestions(bankQuestions.length ? bankQuestions : [emptyQuestion()]);
+    setMessage(`Editando “${bank.title}”. Los cambios sólo se aplicarán al guardar.`);
+    requestAnimationFrame(() => editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+  }
+
   function save() {
     setMessage('');
     startTransition(async () => {
-      const result = await saveClassroomBankAction({ subjectId, title, unitName, topicName, questions });
+      const result = await saveClassroomBankAction({ bankId: editingBankId || undefined, subjectId, title, unitName, topicName, description, questions });
       if (!result.ok) return setMessage(result.message);
-      setBanks((current: any[]) => [{ id: result.data.id, title, unit_name: unitName, topic_name: topicName, classroom_question_items: questions }, ...current]);
-      setTitle(''); setUnitName(''); setTopicName(''); setQuestions([emptyQuestion()]);
-      setMessage('Banco guardado y listo para usar en una actividad de clase.');
+      const saved = {
+        id: result.data.id, subject_id: subjectId, title, unit_name: unitName,
+        topic_name: topicName, description, status: 'ready',
+        classroom_question_items: questions.map((question, position) => ({
+          id: `${result.data.id}-${position}`, position, question_type: question.questionType,
+          prompt: question.prompt, options: question.options, correct_index: question.correctIndex,
+          explanation: question.explanation || '',
+        })),
+      };
+      setBanks((current: any[]) => editingBankId
+        ? current.map((bank) => bank.id === editingBankId ? saved : bank)
+        : [saved, ...current]);
+      resetEditor();
+      setMessage(editingBankId ? 'Cambios guardados y persistidos correctamente.' : 'Banco guardado y listo para usar en una actividad de clase.');
+    });
+  }
+
+  function removeBank() {
+    if (!deletingBank) return;
+    const bank = deletingBank;
+    startTransition(async () => {
+      const result = await deleteClassroomBankAction(bank.id);
+      if (!result.ok) return setMessage(result.message);
+      setBanks((current: any[]) => current.filter((item) => item.id !== bank.id));
+      if (editingBankId === bank.id) resetEditor();
+      setDeletingBank(null);
+      setMessage(result.data.archived
+        ? 'El banco se ocultó y el historial de las partidas que lo utilizaron quedó protegido.'
+        : 'Banco eliminado correctamente.');
     });
   }
 
@@ -81,13 +143,14 @@ export function QuestionBankManager({ initialData }: { initialData: any }) {
       <div className="flex items-center gap-3"><BookOpenCheck className="size-9 text-cyan-300"/><div><p className="text-xs font-bold uppercase tracking-[.22em] text-cyan-200">Práctica independiente</p><h1 className="text-3xl font-black">Banco de actividades</h1></div></div>
       <p className="mt-3 max-w-3xl text-sm text-blue-100">Crea preguntas reutilizables por materia, unidad y tema. Este banco no genera tareas, entregas ni calificaciones.</p>
     </header>
-    <section className="rounded-3xl border bg-card p-6 shadow-sm">
-      <h2 className="text-xl font-black">Nuevo banco</h2>
+    <section ref={editorRef} className={`scroll-mt-6 rounded-3xl border bg-card p-6 shadow-sm ${editingBankId ? 'border-blue-500 ring-2 ring-blue-500/10' : ''}`}>
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-wider text-primary">{editingBankId ? 'Edición completa' : 'Nuevo contenido'}</p><h2 className="text-xl font-black">{editingBankId ? `Editar: ${title || 'Banco'}` : 'Nuevo banco'}</h2></div>{editingBankId && <Button type="button" variant="outline" onClick={() => { resetEditor(); setMessage('Edición cancelada; no se modificó el banco.'); }}><X className="size-4" /> Cancelar edición</Button>}</div>
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <label className="space-y-1 text-sm font-semibold">Materia<select className="h-11 w-full rounded-lg border bg-background px-3" value={subjectId} onChange={(event) => setSubjectId(event.target.value)}>{subjects.map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></label>
         <label className="space-y-1 text-sm font-semibold">Nombre del banco<Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Repaso de verbos irregulares"/></label>
         <label className="space-y-1 text-sm font-semibold">Unidad (opcional)<Input value={unitName} onChange={(event) => setUnitName(event.target.value)} /></label>
         <label className="space-y-1 text-sm font-semibold">Tema (opcional)<Input value={topicName} onChange={(event) => setTopicName(event.target.value)} /></label>
+        <label className="space-y-1 text-sm font-semibold md:col-span-2">Descripción (opcional)<Textarea value={description} onChange={(event) => setDescription(event.target.value)} placeholder="Propósito o notas de uso de este banco" /></label>
       </div>
       <div className="mt-6 overflow-hidden rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50 via-cyan-50 to-violet-50 dark:border-blue-900 dark:from-slate-950 dark:via-blue-950/60 dark:to-violet-950/50">
         <div className="flex items-start gap-3 border-b border-blue-200/70 p-5 dark:border-blue-900">
@@ -117,9 +180,10 @@ export function QuestionBankManager({ initialData }: { initialData: any }) {
         <div className="mt-3 grid gap-3 sm:grid-cols-2">{question.options.map((option, optionIndex) => <label key={optionIndex} className={`flex items-center gap-2 rounded-xl border bg-background p-2 text-sm ${question.correctIndex === optionIndex ? 'border-emerald-500 ring-1 ring-emerald-500/30' : ''}`}><input type="radio" name={`correct-${index}`} checked={question.correctIndex === optionIndex} onChange={() => updateQuestion(index, { correctIndex: optionIndex })}/><span className="w-5 shrink-0 text-center font-black text-muted-foreground">{String.fromCharCode(65 + optionIndex)}</span><Input aria-label={`Opción ${optionIndex + 1}`} value={option} readOnly={question.questionType === 'true_false'} onChange={(event) => updateQuestion(index, { options: question.options.map((item, i) => i === optionIndex ? event.target.value : item) })}/></label>)}</div>
         <label className="mt-3 block space-y-1 text-sm font-semibold">Explicación para el profesor (opcional)<Textarea value={question.explanation || ''} onChange={(event) => updateQuestion(index, { explanation: event.target.value })} placeholder="Justificación de la respuesta correcta" /></label>
       </article>)}</div>
-      <div className="mt-5 flex flex-wrap gap-3"><Button variant="outline" onClick={() => setQuestions((items) => [...items, emptyQuestion()])}><Plus className="size-4"/> Agregar pregunta</Button><Button disabled={pending || !subjectId || !title.trim()} onClick={save}><Save className="size-4"/> {pending ? 'Guardando…' : 'Guardar banco'}</Button></div>
+      <div className="mt-5 flex flex-wrap gap-3"><Button variant="outline" onClick={() => setQuestions((items) => [...items, emptyQuestion()])}><Plus className="size-4"/> Agregar pregunta</Button><Button disabled={pending || !subjectId || !title.trim()} onClick={save}><Save className="size-4"/> {pending ? 'Guardando…' : editingBankId ? 'Guardar cambios' : 'Guardar banco'}</Button></div>
       {message && <p role="status" className="mt-3 text-sm font-semibold text-primary">{message}</p>}
     </section>
-    <section><h2 className="mb-3 text-xl font-black">Mis bancos</h2><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{banks.map((bank: any) => <article key={bank.id} className="rounded-2xl border bg-card p-5"><p className="text-xs font-bold uppercase tracking-wider text-primary">{bank.unit_name || 'Sin unidad'} · {bank.topic_name || 'Tema general'}</p><h3 className="mt-2 text-lg font-black">{bank.title}</h3><p className="mt-3 text-sm text-muted-foreground">{bank.classroom_question_items?.length || 0} preguntas · Listo para jugar</p></article>)}</div></section>
+    <section><h2 className="mb-3 text-xl font-black">Mis bancos</h2><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{banks.map((bank: any) => <article key={bank.id} className={`rounded-2xl border bg-card p-5 transition ${editingBankId === bank.id ? 'border-blue-500 ring-2 ring-blue-500/20' : 'hover:border-primary/50 hover:shadow-md'}`}><p className="text-xs font-bold uppercase tracking-wider text-primary">{bank.unit_name || 'Sin unidad'} · {bank.topic_name || 'Tema general'}</p><h3 className="mt-2 text-lg font-black">{bank.title}</h3>{bank.description && <p className="mt-2 line-clamp-2 text-sm text-muted-foreground">{bank.description}</p>}<p className="mt-3 text-sm text-muted-foreground">{bank.classroom_question_items?.length || 0} preguntas · Listo para jugar</p><div className="mt-4 flex flex-wrap gap-2"><Button type="button" size="sm" onClick={() => editBank(bank)}><Pencil className="size-4" /> Abrir y editar</Button><Button type="button" size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => setDeletingBank(bank)}><Trash2 className="size-4" /> Eliminar</Button></div></article>)}</div></section>
+    <AlertDialog open={!!deletingBank} onOpenChange={(open) => { if (!open && !pending) setDeletingBank(null); }}><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>¿Eliminar “{deletingBank?.title}”?</AlertDialogTitle><AlertDialogDescription>Se eliminarán sus preguntas si nunca fue utilizado. Si ya forma parte de una partida, se ocultará del banco para proteger el historial de los alumnos. Esta acción no se puede deshacer desde esta pantalla.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel disabled={pending}>Conservar banco</AlertDialogCancel><AlertDialogAction disabled={pending} onClick={(event) => { event.preventDefault(); removeBank(); }} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">{pending ? <Loader2 className="size-4 animate-spin" /> : <Trash2 className="size-4" />} {pending ? 'Eliminando…' : 'Sí, eliminar'}</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
   </main>;
 }

@@ -31,6 +31,15 @@ describe('Bet Win Lose multi-tenant y recuperable', () => {
     expect(room).toContain('setInterval(() => void refresh(), 1500)');
   });
 
+  it('detiene la recuperación al finalizar y permite revisar antes de volver al listado', () => {
+    expect(room).toContain("if (['finished', 'cancelled'].includes(state.session.status)) return");
+    expect(room).toContain('Partida finalizada');
+    expect(room).toContain('Finalizar partida');
+    expect(room).toContain('Volver a actividades');
+    expect(room).toContain('Volver a mis actividades');
+    expect(room).not.toContain('router.push');
+  });
+
   it('no entrega la clave correcta mientras el duelo sigue abierto', () => {
     expect(actions).toContain("match.status === 'resolved' ? { correctIndex: data.correct_index");
     expect(actions).not.toContain('question_order: session.question_order');

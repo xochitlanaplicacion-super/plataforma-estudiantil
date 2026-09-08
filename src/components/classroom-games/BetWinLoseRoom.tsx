@@ -1,7 +1,8 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
-import { Crown, Dices, LoaderCircle, Radio, RefreshCw, ShieldCheck, Swords, Trophy } from 'lucide-react';
+import { ArrowLeft, Crown, Dices, LoaderCircle, PlusCircle, Radio, RefreshCw, ShieldCheck, Swords, Trophy } from 'lucide-react';
 import { advanceClassroomSessionAction, answerClassroomQuestionAction, finishClassroomSessionAction, foldClassroomMatchAction, loadClassroomGameStateAction, placeClassroomBetAction, stealClassroomMatchAction } from '@/lib/actions/classroom-games';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,12 +27,13 @@ export function BetWinLoseRoom({ sessionId, initialState }: { sessionId: string;
   }, [sessionId]);
 
   useEffect(() => {
+    if (['finished', 'cancelled'].includes(state.session.status)) return;
     const timer = window.setInterval(() => void refresh(), 1500);
     const resume = () => { if (document.visibilityState === 'visible') void refresh(); };
     document.addEventListener('visibilitychange', resume);
     window.addEventListener('online', resume);
     return () => { window.clearInterval(timer); document.removeEventListener('visibilitychange', resume); window.removeEventListener('online', resume); };
-  }, [refresh]);
+  }, [refresh, state.session.status]);
 
   useEffect(() => {
     if (!state.match?.answer_deadline || state.match.status !== 'answering') return setRemaining(null);
@@ -53,10 +55,22 @@ export function BetWinLoseRoom({ sessionId, initialState }: { sessionId: string;
   const isDuelist = ownId && [state.match?.challenger_id, state.match?.opponent_id].includes(ownId);
   const ownBet = ownId === state.match?.challenger_id ? state.match?.challenger_bet : state.match?.opponent_bet;
   const ownAnswered = ownId === state.match?.challenger_id ? state.match?.challenger_answered_at : state.match?.opponent_answered_at;
+  const activitiesHref = state.viewerRole === 'profesor'
+    ? '/dashboard/profesor/actividades-clase'
+    : '/dashboard/alumno/actividades-clase';
 
   function mutate(operation: () => Promise<any>) {
     setMessage('');
     startTransition(async () => { const result = await operation(); if (!result.ok) setMessage(result.message); await refresh(false); });
+  }
+
+  function finishSession() {
+    setMessage('');
+    startTransition(async () => {
+      const result = await finishClassroomSessionAction(sessionId);
+      if (!result.ok) return setMessage(result.message);
+      setState((current: any) => ({ ...current, session: { ...current.session, status: 'finished' } }));
+    });
   }
 
   return <main className="mx-auto min-h-[75vh] max-w-7xl space-y-5 pb-16">
@@ -66,7 +80,15 @@ export function BetWinLoseRoom({ sessionId, initialState }: { sessionId: string;
       <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-slate-200"><span className="inline-flex items-center gap-2"><ShieldCheck className="size-4 text-emerald-300"/> Progreso protegido en servidor</span><span>·</span><span>Puedes recargar y continuar</span></div>
     </header>
     {message && <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-destructive">{message}</div>}
-    {state.viewerRole === 'profesor' && <section className="flex flex-wrap gap-3 rounded-2xl border bg-card p-4">{state.session.status === 'lobby' && <Button disabled={pending || state.participants.length < 2} onClick={() => mutate(() => advanceClassroomSessionAction(sessionId))}><Swords className="size-4"/> Iniciar primer duelo</Button>}{state.session.status === 'active' && ['resolved', 'cancelled'].includes(state.match?.status) && <Button disabled={pending} onClick={() => mutate(() => advanceClassroomSessionAction(sessionId))}><Dices className="size-4"/> Siguiente duelo</Button>}{['lobby','active'].includes(state.session.status) && <Button variant="outline" disabled={pending} onClick={() => mutate(() => finishClassroomSessionAction(sessionId))}>Finalizar partida</Button>}<Button variant="ghost" onClick={() => void refresh(false)}><RefreshCw className="size-4"/> Actualizar</Button></section>}
+    {state.viewerRole === 'profesor' && <section className="flex flex-wrap gap-3 rounded-2xl border bg-card p-4">
+      {state.session.status === 'lobby' && <Button disabled={pending || state.participants.length < 2} onClick={() => mutate(() => advanceClassroomSessionAction(sessionId))}><Swords className="size-4"/> Iniciar primer duelo</Button>}
+      {state.session.status === 'active' && ['resolved', 'cancelled'].includes(state.match?.status) && <Button disabled={pending} onClick={() => mutate(() => advanceClassroomSessionAction(sessionId))}><Dices className="size-4"/> Siguiente duelo</Button>}
+      {['lobby','active'].includes(state.session.status) && <Button variant="outline" disabled={pending} onClick={finishSession}>{pending && <LoaderCircle className="size-4 animate-spin" />} Finalizar partida</Button>}
+      {!['finished', 'cancelled'].includes(state.session.status) && <Button variant="ghost" onClick={() => void refresh(false)}><RefreshCw className="size-4"/> Actualizar</Button>}
+      <Button asChild variant={['finished', 'cancelled'].includes(state.session.status) ? 'default' : 'ghost'}><Link href="/dashboard/profesor/actividades-clase"><ArrowLeft className="size-4"/> Volver a actividades</Link></Button>
+    </section>}
+    {state.viewerRole === 'alumno' && !['finished', 'cancelled'].includes(state.session.status) && <section className="flex rounded-2xl border bg-card p-4"><Button asChild variant="ghost"><Link href={activitiesHref}><ArrowLeft className="size-4"/> Volver a mis actividades</Link></Button></section>}
+    {['finished', 'cancelled'].includes(state.session.status) && <section className="rounded-3xl border border-emerald-300 bg-emerald-50 p-6 dark:border-emerald-900 dark:bg-emerald-950/30"><h2 className="text-xl font-black text-emerald-950 dark:text-emerald-100">Partida finalizada</h2><p className="mt-2 text-sm text-emerald-800 dark:text-emerald-200">La actualización automática se detuvo. Puedes revisar la clasificación con calma y regresar cuando quieras.</p><div className="mt-4 flex flex-wrap gap-2"><Button asChild><Link href={activitiesHref}><ArrowLeft className="size-4"/> {state.viewerRole === 'profesor' ? 'Volver a actividades' : 'Volver a mis actividades'}</Link></Button>{state.viewerRole === 'profesor' && <Button asChild variant="outline"><Link href={activitiesHref}><PlusCircle className="size-4"/> Crear otra actividad</Link></Button>}</div></section>}
     {state.session.status === 'lobby' && <section className="rounded-3xl border-2 border-dashed bg-card p-10 text-center"><LoaderCircle className="mx-auto size-12 animate-spin text-primary"/><h2 className="mt-4 text-2xl font-black">Sala de espera</h2><p className="mt-2 text-muted-foreground">{state.participants.length} participantes conectados. El profesor iniciará cuando el grupo esté listo.</p></section>}
     {state.match && state.session.status === 'active' && <section className="grid gap-5 lg:grid-cols-[1fr_1.35fr_1fr]">
       {[matchPlayers.challenger, matchPlayers.opponent].map((player: any, index: number) => <article key={player?.id || index} className={`rounded-3xl border-2 p-5 text-center shadow-sm ${player?.id === ownId ? 'border-cyan-400 bg-cyan-500/5' : 'bg-card'} ${index === 1 ? 'lg:order-3' : ''}`}><div className="mx-auto grid size-16 place-items-center rounded-2xl bg-gradient-to-br from-cyan-500 to-violet-600 text-2xl font-black text-white">{personName(player).slice(0, 1)}</div><h3 className="mt-3 font-black">{personName(player)}</h3><p className="mt-1 text-3xl font-black text-primary">{player?.points ?? 0}</p><p className="text-xs uppercase tracking-wider text-muted-foreground">monedas</p>{player?.is_king && <span className="mt-3 inline-flex items-center gap-1 rounded-full bg-amber-400/20 px-3 py-1 text-xs font-bold text-amber-700"><Crown className="size-4"/> Rey actual</span>}</article>)}

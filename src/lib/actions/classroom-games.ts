@@ -73,7 +73,7 @@ export async function loadTeacherClassroomAction(): Promise<ClassroomActionResul
         .eq('tenant_id', tenantId).eq('profesor_id', profile.id).eq('activo', true)
         .order('created_at', { ascending: false }),
       db.from('classroom_question_banks')
-        .select('id,subject_id,title,unit_name,topic_name,description,status,updated_at,classroom_question_items(id,position,question_type,prompt,options,correct_index,explanation)')
+        .select('id,subject_id,title,unit_name,topic_name,description,status,updated_at,classroom_question_items(id,position,question_type,prompt,options,correct_index,explanation,retired_at)')
         .eq('tenant_id', tenantId).eq('teacher_id', profile.id).neq('status', 'archived')
         .order('updated_at', { ascending: false }),
       db.from('classroom_game_sessions')
@@ -82,7 +82,11 @@ export async function loadTeacherClassroomAction(): Promise<ClassroomActionResul
         .order('updated_at', { ascending: false }).limit(30),
     ]);
     if (assignmentsError || banksError || sessionsError) throw assignmentsError || banksError || sessionsError;
-    return { ok: true, data: { assignments: assignments || [], banks: banks || [], sessions: sessions || [] } };
+    const editableBanks = (banks || []).map((bank: any) => ({
+      ...bank,
+      classroom_question_items: (bank.classroom_question_items || []).filter((question: any) => !question.retired_at),
+    }));
+    return { ok: true, data: { assignments: assignments || [], banks: editableBanks, sessions: sessions || [] } };
   } catch (error) {
     return { ok: false, message: messageOf(error) };
   }
@@ -97,36 +101,54 @@ export async function saveClassroomBankAction(input: ClassroomBankInput): Promis
       .eq('tenant_id', tenantId).eq('profesor_id', profile.id).eq('materia_id', parsed.subjectId).eq('activo', true).limit(1).maybeSingle();
     if (!subjectAssignment) throw new Error('La materia no pertenece a tus asignaciones activas');
 
-    let bankId = parsed.bankId;
-    if (bankId) {
-      const { data: owned } = await db.from('classroom_question_banks').select('id,status')
-        .eq('id', bankId).eq('tenant_id', tenantId).eq('teacher_id', profile.id).maybeSingle();
-      if (!owned) throw new Error('Banco no encontrado');
-      const { error } = await db.from('classroom_question_banks').update({
-        subject_id: parsed.subjectId, title: parsed.title, unit_name: parsed.unitName || null,
-        topic_name: parsed.topicName || null, description: parsed.description || null, status: 'ready',
-      }).eq('id', bankId).eq('tenant_id', tenantId).eq('teacher_id', profile.id);
-      if (error) throw error;
-      const { error: deleteError } = await db.from('classroom_question_items').delete()
-        .eq('bank_id', bankId).eq('tenant_id', tenantId);
-      if (deleteError) throw deleteError;
-    } else {
-      const { data, error } = await db.from('classroom_question_banks').insert({
-        tenant_id: tenantId, teacher_id: profile.id, subject_id: parsed.subjectId, title: parsed.title,
-        unit_name: parsed.unitName || null, topic_name: parsed.topicName || null,
-        description: parsed.description || null, status: 'ready',
-      }).select('id').single();
-      if (error) throw error;
-      bankId = data.id;
-    }
-    const { error: questionsError } = await db.from('classroom_question_items').insert(parsed.questions.map((question, position) => ({
-      tenant_id: tenantId, bank_id: bankId, position, question_type: question.questionType,
-      prompt: question.prompt, options: question.options, correct_index: question.correctIndex,
-      explanation: question.explanation || null,
-    })));
-    if (questionsError) throw questionsError;
+    const { data: bankId, error } = await db.rpc('replace_classroom_question_bank', {
+      target_bank_id: parsed.bankId || null,
+      target_tenant_id: tenantId,
+      target_teacher_id: profile.id,
+      target_subject_id: parsed.subjectId,
+      target_title: parsed.title,
+      target_unit_name: parsed.unitName || '',
+      target_topic_name: parsed.topicName || '',
+      target_description: parsed.description || '',
+      target_questions: parsed.questions,
+    });
+    if (error) throw error;
     revalidatePath('/dashboard/profesor/banco-actividades');
-    return { ok: true, data: { id: bankId! } };
+    revalidatePath('/dashboard/profesor/actividades-clase');
+    return { ok: true, data: { id: bankId as string } };
+  } catch (error) {
+    return { ok: false, message: messageOf(error) };
+  }
+}
+
+export async function deleteClassroomBankAction(bankIdInput: string): Promise<ClassroomActionResult<{ archived: boolean }>> {
+  try {
+    const bankId = z.string().uuid().parse(bankIdInput);
+    const { profile, tenantId, admin } = await requireTenantSession(['profesor']);
+    const db = admin as any;
+    const { data: bank, error: bankError } = await db.from('classroom_question_banks').select('id')
+      .eq('id', bankId).eq('tenant_id', tenantId).eq('teacher_id', profile.id).neq('status', 'archived').maybeSingle();
+    if (bankError) throw bankError;
+    if (!bank) throw new Error('Banco no encontrado');
+
+    const { data: usedSession, error: sessionError } = await db.from('classroom_game_sessions').select('id')
+      .eq('tenant_id', tenantId).eq('bank_id', bankId).limit(1).maybeSingle();
+    if (sessionError) throw sessionError;
+    if (usedSession) {
+      const { error } = await db.from('classroom_question_banks').update({ status: 'archived' })
+        .eq('id', bankId).eq('tenant_id', tenantId).eq('teacher_id', profile.id);
+      if (error) throw error;
+      revalidatePath('/dashboard/profesor/banco-actividades');
+      revalidatePath('/dashboard/profesor/actividades-clase');
+      return { ok: true, data: { archived: true } };
+    }
+
+    const { error } = await db.from('classroom_question_banks').delete()
+      .eq('id', bankId).eq('tenant_id', tenantId).eq('teacher_id', profile.id);
+    if (error) throw error;
+    revalidatePath('/dashboard/profesor/banco-actividades');
+    revalidatePath('/dashboard/profesor/actividades-clase');
+    return { ok: true, data: { archived: false } };
   } catch (error) {
     return { ok: false, message: messageOf(error) };
   }
@@ -164,7 +186,7 @@ export async function openClassroomSessionAction(sessionId: string): Promise<Cla
       .eq('id', sessionId).eq('tenant_id', tenantId).eq('teacher_id', profile.id).maybeSingle();
     if (!session || session.status !== 'draft') throw new Error('La sesión no puede abrirse');
     const { data: questions } = await db.from('classroom_question_items').select('id')
-      .eq('tenant_id', tenantId).eq('bank_id', session.bank_id).order('position');
+      .eq('tenant_id', tenantId).eq('bank_id', session.bank_id).is('retired_at', null).order('position');
     if (!questions || questions.length < 1) throw new Error('El banco no contiene preguntas');
     const order = shuffle(questions.map((item: any) => item.id));
     const { error } = await db.from('classroom_game_sessions').update({

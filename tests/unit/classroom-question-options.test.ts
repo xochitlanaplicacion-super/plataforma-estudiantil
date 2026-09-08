@@ -4,6 +4,9 @@ import { describe, expect, it } from 'vitest';
 import { shuffleEachQuestionOptions, shuffleQuestionOptions } from '@/lib/activities/classroom-question-options';
 
 const aiRoute = readFileSync(join(process.cwd(), 'src/app/api/exercises/generate-classroom-bank/route.ts'), 'utf8');
+const bankManager = readFileSync(join(process.cwd(), 'src/components/classroom-games/QuestionBankManager.tsx'), 'utf8');
+const bankActions = readFileSync(join(process.cwd(), 'src/lib/actions/classroom-games.ts'), 'utf8');
+const atomicMigration = readFileSync(join(process.cwd(), 'supabase/migrations/20260908053557_atomic_classroom_question_bank_updates.sql'), 'utf8');
 
 describe('mezcla de incisos del banco de actividades', () => {
   it('mueve la respuesta correcta junto con su texto', () => {
@@ -43,5 +46,23 @@ describe('mezcla de incisos del banco de actividades', () => {
     expect(aiRoute).toContain('tenant_id: tenantId');
     expect(aiRoute).toContain('user_id: user.id');
     expect(aiRoute).not.toContain('userId } = await request.json()');
+  });
+
+  it('abre bancos completos, confirma el borrado y guarda la edición sobre el mismo id', () => {
+    expect(bankManager).toContain('Abrir y editar');
+    expect(bankManager).toContain('Guardar cambios');
+    expect(bankManager).toContain('¿Eliminar');
+    expect(bankManager).toContain('bankId: editingBankId');
+    expect(bankActions).toContain('deleteClassroomBankAction');
+  });
+
+  it('reemplaza encabezado y preguntas atómicamente sólo desde el backend', () => {
+    expect(bankActions).toContain("db.rpc('replace_classroom_question_bank'");
+    expect(atomicMigration).toContain('security invoker');
+    expect(atomicMigration).toContain('from public, anon, authenticated');
+    expect(atomicMigration).toContain('to service_role');
+    expect(atomicMigration).toContain('set retired_at = now()');
+    expect(atomicMigration).toContain('insert into public.classroom_question_items');
+    expect(atomicMigration).toContain('where retired_at is null');
   });
 });
