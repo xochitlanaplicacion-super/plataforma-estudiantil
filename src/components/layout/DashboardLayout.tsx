@@ -53,7 +53,9 @@ import {
   ShieldCheck,
   ContactRound,
   Files,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Gamepad2,
+  LibraryBig
 } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
@@ -225,6 +227,8 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
         { icon: LayoutDashboard, label: 'Mis Asignaturas', href: '/dashboard/profesor' },
         { icon: NotebookTabs, label: 'Libreta de calificaciones', href: '/dashboard/profesor/calificaciones' },
         { icon: BarChart3, label: 'Participación diaria', href: '/dashboard/profesor/participaciones' },
+        { icon: LibraryBig, label: 'Banco de actividades', href: '/dashboard/profesor/banco-actividades' },
+        { icon: Gamepad2, label: 'Actividades en clase', href: '/dashboard/profesor/actividades-clase' },
         { icon: FileSpreadsheet, label: 'Reportes académicos', href: '/dashboard/profesor/reportes-academicos' },
         { icon: Scale, label: 'Mis criterios de evaluación', href: '/dashboard/profesor/criterios-evaluacion' },
         { icon: ClipboardList, label: 'Entregas de Actividades', href: '/dashboard/profesor/entregas' },
@@ -238,6 +242,7 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
         { icon: LayoutDashboard, label: 'Mi Portal Educativo', href: '/dashboard/alumno' },
         { icon: UserCircle, label: 'Mis Datos', href: '/dashboard/alumno/perfil' },
         { icon: BookOpen, label: 'Mis Materias', href: '/dashboard/alumno/materias' },
+        { icon: Gamepad2, label: 'Actividades en clase', href: '/dashboard/alumno/actividades-clase' },
         { icon: BarChart3, label: 'Mis Calificaciones', href: '/dashboard/alumno/calificaciones' },
         { icon: CreditCard, label: 'Mis Pagos', href: '/dashboard/alumno/pagos' },
         { icon: FileText, label: 'Documento de Acreditación', href: '/dashboard/alumno/acreditacion' },
