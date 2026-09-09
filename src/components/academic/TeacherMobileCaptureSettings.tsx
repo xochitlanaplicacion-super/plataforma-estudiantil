@@ -268,6 +268,7 @@ export function TeacherMobileCaptureSettings({
         <section className="grid gap-4 rounded-lg border border-dashed p-4 lg:grid-cols-[minmax(14rem,1fr)_minmax(18rem,1.3fr)_minmax(13rem,.8fr)_auto] lg:items-end">
           <div>
             <p className="flex items-center gap-2 font-semibold"><QrCode className="size-5" aria-hidden="true" />Credenciales QR del grupo</p>
+            <p className="text-xs text-muted-foreground">La credencial provisional conserva el mismo QR cuando el alumno se vincula con su inscripción oficial.</p>
             <p className="text-sm text-muted-foreground">Elige claramente el nivel, grado, grupo y materia que aparecerán en el PDF.</p>
           </div>
           <div className="space-y-2">

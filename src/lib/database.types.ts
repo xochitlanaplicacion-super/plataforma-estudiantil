@@ -5035,11 +5035,23 @@ export type Database = {
         Args: { p_asignacion_id: string }
         Returns: Json
       }
+      obtener_asistencia_docente_movil_unificada: {
+        Args: { p_asignacion_id: string }
+        Returns: Json
+      }
       obtener_resumen_participacion_docente_movil: {
         Args: { p_asignacion_id: string }
         Returns: Json
       }
+      obtener_resumen_participacion_docente_movil_unificado: {
+        Args: { p_asignacion_id: string }
+        Returns: Json
+      }
       obtener_reporte_academico_docente: {
+        Args: { p_asignacion_id: string }
+        Returns: Json
+      }
+      obtener_reporte_academico_docente_unificado: {
         Args: { p_asignacion_id: string }
         Returns: Json
       }
@@ -5050,6 +5062,31 @@ export type Database = {
           p_expected_period_id: string
           p_idempotency_key: string
           p_registros: Json
+        }
+        Returns: Json
+      }
+      guardar_asistencia_docente_movil_unificada: {
+        Args: {
+          p_asignacion_id: string
+          p_expected_cycle_id: string
+          p_expected_period_id: string
+          p_idempotency_key: string
+          p_registros: Json
+        }
+        Returns: Json
+      }
+      registrar_ajuste_participacion_docente_movil: {
+        Args: {
+          p_asignacion_id: string
+          p_criterio_id: string
+          p_expected_cycle_id: string
+          p_expected_period_id: string
+          p_idempotency_key: string
+          p_observacion: string
+          p_puntos: number
+          p_student_id: string
+          p_student_type: string
+          p_subcriterio_id: string | null
         }
         Returns: Json
       }

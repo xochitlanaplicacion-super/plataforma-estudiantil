@@ -9,6 +9,7 @@ select set_config('request.jwt.claim.sub','1a000000-0000-4000-8000-000000000003'
 do $provisional_qr_test$
 declare context jsonb; provisional jsonb; credentials jsonb; metadata jsonb;
   assignment_id uuid; cycle_id uuid; period_id uuid; enrollment_id uuid; provisional_id uuid;
+  provisional_token uuid;
 begin
   context := public.obtener_contexto_docente_movil();
   cycle_id := (context #>> '{cycle,id}')::uuid;
@@ -32,6 +33,9 @@ begin
       and row->>'name'='Credencial Provisional' and row->>'token' is not null) then
     raise exception 'PROVISIONAL_QR_TEST: falta credencial provisional';
   end if;
+  select (row->>'token')::uuid into provisional_token
+  from jsonb_array_elements(credentials) row
+  where row->>'studentType'='provisional' and (row->>'provisionalId')::uuid=provisional_id;
 
   metadata := public.obtener_asignaciones_credenciales_docente_movil();
   if not exists(select 1 from jsonb_array_elements(metadata) row
@@ -50,6 +54,10 @@ begin
   if exists(select 1 from public.identificadores_qr_alumno_provisional q
     where q.alumno_provisional_id=provisional_id and q.activo) then
     raise exception 'PROVISIONAL_QR_TEST: el token vinculado no fue revocado';
+  end if;
+  if not exists(select 1 from public.identificadores_qr_inscripcion q
+    where q.inscripcion_alumno_id=enrollment_id and q.activo and q.token=provisional_token) then
+    raise exception 'PROVISIONAL_QR_TEST: el QR impreso no conservó su token al pasar a oficial';
   end if;
 end
 $provisional_qr_test$;
