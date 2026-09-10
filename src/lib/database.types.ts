@@ -5055,6 +5055,30 @@ export type Database = {
         Args: { p_asignacion_id: string }
         Returns: Json
       }
+      obtener_reporte_academico_docente_unificado_rango: {
+        Args: {
+          p_asignacion_id: string
+          p_fecha_desde: string | null
+          p_fecha_hasta: string | null
+        }
+        Returns: Json
+      }
+      obtener_contexto_asistencia_conceptos_docente: {
+        Args: {
+          p_asignacion_id: string
+          p_fecha_desde?: string | null
+          p_fecha_hasta?: string | null
+        }
+        Returns: Json
+      }
+      obtener_conceptos_recientes_docente_movil: {
+        Args: {
+          p_asignacion_id: string
+          p_criterio_id: string
+          p_subcriterio_id: string | null
+        }
+        Returns: Json
+      }
       guardar_asistencia_docente_movil: {
         Args: {
           p_asignacion_id: string

@@ -36,7 +36,7 @@ describe('unified provisional academic roster', () => {
     expect(mobileApi).toContain("rpc('obtener_asistencia_docente_movil_unificada'");
     expect(mobileApi).toContain("rpc('guardar_asistencia_docente_movil_unificada'");
     expect(mobileApi).toContain("rpc('obtener_resumen_participacion_docente_movil_unificado'");
-    expect(mobileApi).toContain("rpc('obtener_reporte_academico_docente_unificado'");
+    expect(mobileApi).toContain("rpc('obtener_reporte_academico_docente_unificado_rango'");
     expect(mobileApi).toContain("rpc('registrar_ajuste_participacion_docente_movil'");
   });
 });

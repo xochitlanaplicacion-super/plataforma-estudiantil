@@ -19,14 +19,38 @@ const resultEntry = z.object({
   state: z.string(),
   participationPoints: z.number(),
   participationCount: z.number(),
+  expectedCount: z.number().int().nonnegative(),
+  gradedCount: z.number().int().nonnegative(),
+  missingCount: z.number().int().nonnegative(),
+  complete: z.boolean(),
+  missingConceptNames: z.array(z.string()),
+  calculationPolicy: z.enum(['explicit_grades_only_with_coverage', 'direct_grade']),
 });
 const conceptGrade = z.object({
   grade: z.number(),
   observation: z.string(),
   updatedAt: z.string(),
 });
+const conceptAttendanceContext = z.record(
+  z.string(),
+  z.object({
+    activityDate: z.string(),
+    attendance: z.record(z.string(), z.enum(['presente', 'ausente'])),
+  }),
+);
 const reportSchema = z.object({
   generatedAt: z.string(),
+  range: z.object({
+    from: z.string(),
+    to: z.string(),
+    today: z.string(),
+    isFullPeriod: z.boolean(),
+  }),
+  calculationPolicy: z.object({
+    pendingCountsAsZero: z.literal(false),
+    explicitZeroCounts: z.literal(true),
+    partialAverageRequiresCoverage: z.literal(true),
+  }),
   tenant: z.object({
     id: z.string().uuid(),
     name: z.string(),
@@ -70,6 +94,8 @@ const reportSchema = z.object({
       name: z.string(),
       type: z.string(),
       createdAt: z.string(),
+      activityDate: z.string(),
+      attendance: z.record(z.string(), z.enum(['presente', 'ausente'])),
     }),
   ),
   students: z.array(
@@ -93,6 +119,18 @@ export type AcademicReportData = {
   selectedAssignmentId: string | null;
   report: AcademicReport | null;
 };
+
+const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const reportRequestSchema = z
+  .object({
+    assignmentId: z.string().uuid().optional(),
+    from: isoDateSchema.optional(),
+    to: isoDateSchema.optional(),
+  })
+  .strict()
+  .refine((value) => !value.from || !value.to || value.from <= value.to, {
+    message: 'La fecha inicial no puede ser posterior a la final.',
+  });
 
 export async function loadAcademicReportAction(input?: unknown): Promise<{ ok: true; data: AcademicReportData } | { ok: false; message: string }> {
   try {
@@ -121,21 +159,63 @@ export async function loadAcademicReportAction(input?: unknown): Promise<{ ok: t
           gradeName: 'Grado sin especificar',
         },
     );
-    const requested = typeof input === 'string' ? z.string().uuid().safeParse(input) : null;
-    const selectedAssignmentId = requested?.success && assignments.some((row) => row.id === requested.data) ? requested.data : (assignments[0]?.id ?? null);
+    const legacyRequest = typeof input === 'string' ? z.string().uuid().safeParse(input) : null;
+    const structuredRequest = typeof input === 'object' && input !== null
+      ? reportRequestSchema.safeParse(input)
+      : null;
+    if (structuredRequest && !structuredRequest.success) {
+      return { ok: false, message: structuredRequest.error.issues[0]?.message ?? 'El rango de fechas no es válido.' };
+    }
+    const requestedAssignmentId = legacyRequest?.success
+      ? legacyRequest.data
+      : structuredRequest?.success
+        ? structuredRequest.data.assignmentId
+        : undefined;
+    const selectedAssignmentId = requestedAssignmentId && assignments.some((row) => row.id === requestedAssignmentId)
+      ? requestedAssignmentId
+      : (assignments[0]?.id ?? null);
     if (!selectedAssignmentId)
       return {
         ok: true,
         data: { assignments, selectedAssignmentId: null, report: null },
       };
-    const reportResult = await session.supabase.rpc('obtener_reporte_academico_docente_unificado', { p_asignacion_id: selectedAssignmentId });
+    const from = structuredRequest?.success ? (structuredRequest.data.from ?? null) : null;
+    const to = structuredRequest?.success ? (structuredRequest.data.to ?? null) : null;
+    const [reportResult, conceptContextResult] = await Promise.all([
+      session.supabase.rpc('obtener_reporte_academico_docente_unificado_rango', {
+        p_asignacion_id: selectedAssignmentId,
+        p_fecha_desde: from,
+        p_fecha_hasta: to,
+      }),
+      session.supabase.rpc('obtener_contexto_asistencia_conceptos_docente', {
+        p_asignacion_id: selectedAssignmentId,
+        p_fecha_desde: from,
+        p_fecha_hasta: to,
+      }),
+    ]);
     if (reportResult.error) throw reportResult.error;
+    if (conceptContextResult.error) throw conceptContextResult.error;
+    const contextByConcept = conceptAttendanceContext.parse(conceptContextResult.data);
+    const rawReport = z.record(z.string(), z.unknown()).parse(reportResult.data);
+    const rawConcepts = z.array(z.record(z.string(), z.unknown())).parse(rawReport.concepts);
+    const enrichedReport = {
+      ...rawReport,
+      concepts: rawConcepts.map((concept) => {
+        const id = z.string().uuid().parse(concept.id);
+        const context = contextByConcept[id];
+        return {
+          ...concept,
+          activityDate: context?.activityDate ?? z.string().parse(concept.createdAt).slice(0, 10),
+          attendance: context?.attendance ?? {},
+        };
+      }),
+    };
     return {
       ok: true,
       data: {
         assignments,
         selectedAssignmentId,
-        report: reportSchema.parse(reportResult.data),
+        report: reportSchema.parse(enrichedReport),
       },
     };
   } catch (error) {

@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
-import { CalendarCheck2, Download, FileSpreadsheet, FileText, Loader2, RefreshCw } from 'lucide-react';
+import { AlertCircle, CalendarCheck2, CalendarRange, CheckCircle2, Download, FileSpreadsheet, FileText, Loader2, RefreshCw } from 'lucide-react';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
@@ -9,6 +9,7 @@ import autoTable from 'jspdf-autotable';
 import { loadAcademicReportAction, type AcademicReport, type AcademicReportData } from '@/lib/actions/reportes-academicos';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
@@ -29,7 +30,30 @@ const resultLabel = (row: AcademicReport['students'][number], key: string, type:
   const value = row.results[key];
   if (!value) return '—';
   if (type === 'participacion') return `${value.participationPoints.toFixed(1)} pts`;
-  return value.grade === null ? '—' : value.grade.toFixed(1);
+  if (value.expectedCount > 0 && !value.complete) {
+    const partial = value.grade === null ? '' : ` · promedio parcial ${value.grade.toFixed(1)}`;
+    return `Pendiente · ${value.gradedCount}/${value.expectedCount}${partial}`;
+  }
+  if (value.grade === null) return value.state === 'pendiente' ? 'Pendiente' : '—';
+  return value.expectedCount > 0
+    ? `${value.grade.toFixed(1)} · ${value.gradedCount}/${value.expectedCount}`
+    : value.grade.toFixed(1);
+};
+const conceptGradeLabel = (
+  student: AcademicReport['students'][number],
+  concept: AcademicReport['concepts'][number],
+) => {
+  const grade = student.conceptGrades[concept.id];
+  if (grade) return { value: grade.grade, state: grade.grade === 0 ? 'No entregó · cero explícito' : 'Calificado' };
+  const attendance = concept.attendance[student.enrollmentId];
+  if (attendance === 'ausente') return { value: '', state: `Ausente el ${dateLabel(concept.activityDate)} · pendiente de recuperar` };
+  if (attendance === 'presente') return { value: '', state: `Asistió el ${dateLabel(concept.activityDate)} · falta calificar` };
+  return { value: '', state: `Sin pase de lista del ${dateLabel(concept.activityDate)} · revisar` };
+};
+const subtractDays = (date: string, days: number) => {
+  const value = new Date(`${date}T12:00:00`);
+  value.setDate(value.getDate() - days);
+  return value.toISOString().slice(0, 10);
 };
 
 async function imageData(url: string | null) {
@@ -53,7 +77,11 @@ export function AcademicReportsDashboard({ initialData }: { initialData: Academi
   const [data, setData] = useState(initialData),
     [view, setView] = useState<View>('attendance'),
     [message, setMessage] = useState(''),
-    [exporting, setExporting] = useState<'pdf' | 'excel' | null>(null);
+    [exporting, setExporting] = useState<'pdf' | 'excel' | null>(null),
+    [range, setRange] = useState(() => ({
+      from: initialData.report?.range.from ?? '',
+      to: initialData.report?.range.to ?? '',
+    }));
   const [pending, startTransition] = useTransition();
   const { toast } = useToast();
   const report = data.report;
@@ -73,13 +101,40 @@ export function AcademicReportsDashboard({ initialData }: { initialData: Academi
       }) ?? [],
     [report],
   );
-  const reload = (assignmentId: string) =>
+  const reload = (assignmentId: string, requestedRange?: { from: string; to: string }) =>
     startTransition(async () => {
       setMessage('');
-      const result = await loadAcademicReportAction(assignmentId);
-      if (result.ok) setData(result.data);
+      const result = await loadAcademicReportAction({
+        assignmentId,
+        ...(requestedRange?.from ? { from: requestedRange.from } : {}),
+        ...(requestedRange?.to ? { to: requestedRange.to } : {}),
+      });
+      if (result.ok) {
+        setData(result.data);
+        if (result.data.report) {
+          setRange({ from: result.data.report.range.from, to: result.data.report.range.to });
+        }
+      }
       else setMessage(result.message);
     });
+
+  const applyPreset = (days: number | null) => {
+    if (!report || !data.selectedAssignmentId) return;
+    if (days === null) {
+      reload(data.selectedAssignmentId, {
+        from: report.period.startDate,
+        to: report.period.endDate,
+      });
+      return;
+    }
+    const today = report.range.today;
+    const to = today < report.period.endDate ? today : report.period.endDate;
+    const calculatedFrom = subtractDays(to, days - 1);
+    reload(data.selectedAssignmentId, {
+      from: calculatedFrom > report.period.startDate ? calculatedFrom : report.period.startDate,
+      to,
+    });
+  };
 
   async function exportExcel() {
     if (!report) return;
@@ -163,7 +218,7 @@ export function AcademicReportsDashboard({ initialData }: { initialData: Academi
       const detail = workbook.addWorksheet('Evidencias detalladas', {
         views: [{ state: 'frozen', ySplit: 1 }],
       });
-      detail.addRow(['Matrícula', 'Alumno', 'Criterio', 'Evidencia', 'Tipo', 'Calificación', 'Observación', 'Última actualización']);
+      detail.addRow(['Matrícula', 'Alumno', 'Criterio', 'Evidencia', 'Tipo', 'Calificación', 'Estado', 'Observación', 'Última actualización']);
       detail.getRow(1).eachCell((cell) => {
         cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
         cell.fill = {
@@ -175,7 +230,8 @@ export function AcademicReportsDashboard({ initialData }: { initialData: Academi
       for (const student of report.students)
         for (const concept of report.concepts) {
           const grade = student.conceptGrades[concept.id];
-          detail.addRow([student.enrollmentCode ?? '', student.name, report.criteria.find((row) => row.key === concept.criterionKey) ? criterionLabel(report.criteria.find((row) => row.key === concept.criterionKey)!) : '', concept.name, concept.type, grade?.grade ?? '', grade?.observation ?? '', grade?.updatedAt ? new Date(grade.updatedAt).toLocaleString('es-MX') : '']);
+          const detailGrade = conceptGradeLabel(student, concept);
+          detail.addRow([student.enrollmentCode ?? '', student.name, report.criteria.find((row) => row.key === concept.criterionKey) ? criterionLabel(report.criteria.find((row) => row.key === concept.criterionKey)!) : '', concept.name, concept.type, detailGrade.value, detailGrade.state, grade?.observation ?? '', grade?.updatedAt ? new Date(grade.updatedAt).toLocaleString('es-MX') : '']);
         }
       detail.columns.forEach((column, index) => {
         column.width = index === 1 ? 34 : index === 6 ? 42 : 20;
@@ -185,7 +241,7 @@ export function AcademicReportsDashboard({ initialData }: { initialData: Academi
         new Blob([buffer], {
           type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         }),
-        `Reporte_academico_${safeName(report.assignment.gradeName)}_${safeName(report.assignment.groupName)}.xlsx`,
+        `Reporte_academico_${safeName(report.assignment.gradeName)}_${safeName(report.assignment.groupName)}_${report.range.from}_${report.range.to}.xlsx`,
       );
       toast({
         title: 'Excel generado',
@@ -233,7 +289,7 @@ export function AcademicReportsDashboard({ initialData }: { initialData: Academi
         pdf.text(subtitle, logo ? 39 : 14, 30);
         pdf.setTextColor(20, 30, 45);
       };
-      const subtitle = `${report.assignment.levelName} · ${report.assignment.gradeName} · ${report.assignment.groupName} · ${report.assignment.subjectName} · ${report.period.name}`;
+      const subtitle = `${report.assignment.levelName} · ${report.assignment.gradeName} · ${report.assignment.groupName} · ${report.assignment.subjectName} · ${report.period.name} · ${report.range.from} a ${report.range.to}`;
       const dateChunks = report.attendanceDates.length ? Array.from({ length: Math.ceil(report.attendanceDates.length / 12) }, (_, index) => report.attendanceDates.slice(index * 12, index * 12 + 12)) : [[]];
       for (const dates of dateChunks) {
         header('HISTORIAL DE ASISTENCIA', subtitle);
@@ -265,24 +321,26 @@ export function AcademicReportsDashboard({ initialData }: { initialData: Academi
         const detailRows = report.students.flatMap((student) =>
           report.concepts.map((concept) => {
             const grade = student.conceptGrades[concept.id];
-            return [student.enrollmentCode ?? '', student.name, concept.name, concept.type, grade?.grade ?? '—', grade?.observation ?? ''];
+            const detailGrade = conceptGradeLabel(student, concept);
+            return [student.enrollmentCode ?? '', student.name, concept.name, concept.type, detailGrade.value === '' ? '—' : detailGrade.value, detailGrade.state, grade?.observation ?? ''];
           }),
         );
         autoTable(pdf, {
           startY: 42,
           theme: 'striped',
-          head: [['Matrícula', 'Alumno', 'Evidencia', 'Tipo', 'Calificación', 'Observación']],
+          head: [['Matrícula', 'Alumno', 'Evidencia', 'Tipo', 'Calificación', 'Estado', 'Observación']],
           body: detailRows,
           headStyles: { fillColor: '#1e293b' },
           styles: { fontSize: 7 },
           columnStyles: {
             1: { cellWidth: 48 },
             2: { cellWidth: 48 },
-            5: { cellWidth: 65 },
+            5: { cellWidth: 35 },
+            6: { cellWidth: 55 },
           },
         });
       }
-      pdf.save(`Reporte_academico_${safeName(report.assignment.gradeName)}_${safeName(report.assignment.groupName)}.pdf`);
+      pdf.save(`Reporte_academico_${safeName(report.assignment.gradeName)}_${safeName(report.assignment.groupName)}_${report.range.from}_${report.range.to}.pdf`);
       toast({
         title: 'PDF generado',
         description: 'Incluye asistencia y todos los criterios del esquema activo.',
@@ -340,9 +398,40 @@ export function AcademicReportsDashboard({ initialData }: { initialData: Academi
             </Select>
           </div>
           <div className="flex items-end">
-            <Button variant="outline" disabled={pending || !data.selectedAssignmentId} onClick={() => data.selectedAssignmentId && reload(data.selectedAssignmentId)}>
+            <Button variant="outline" disabled={pending || !data.selectedAssignmentId} onClick={() => data.selectedAssignmentId && reload(data.selectedAssignmentId, range)}>
               <RefreshCw className={cn('mr-2 size-4', pending && 'animate-spin')} />
               Actualizar
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="space-y-4 p-5">
+          <div className="flex items-start gap-3">
+            <CalendarRange className="mt-0.5 size-5 text-primary" aria-hidden="true" />
+            <div>
+              <h2 className="font-black">Rango del reporte</h2>
+              <p className="text-sm text-muted-foreground">La pantalla, el PDF y el Excel usarán exactamente estas fechas, siempre dentro del periodo activo.</p>
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" size="sm" variant={report?.range.isFullPeriod ? 'default' : 'outline'} disabled={!report || pending} onClick={() => applyPreset(null)}>Todo el periodo</Button>
+            <Button type="button" size="sm" variant="outline" disabled={!report || pending} onClick={() => applyPreset(7)}>Últimos 7 días</Button>
+            <Button type="button" size="sm" variant="outline" disabled={!report || pending} onClick={() => applyPreset(15)}>Últimos 15 días</Button>
+            <Button type="button" size="sm" variant="outline" disabled={!report || pending} onClick={() => applyPreset(30)}>Últimos 30 días</Button>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+            <label className="space-y-2 text-sm font-bold">
+              <span>Desde</span>
+              <Input type="date" min={report?.period.startDate} max={range.to || report?.period.endDate} value={range.from} disabled={!report || pending} onChange={(event) => setRange((current) => ({ ...current, from: event.target.value }))} />
+            </label>
+            <label className="space-y-2 text-sm font-bold">
+              <span>Hasta</span>
+              <Input type="date" min={range.from || report?.period.startDate} max={report?.period.endDate} value={range.to} disabled={!report || pending} onChange={(event) => setRange((current) => ({ ...current, to: event.target.value }))} />
+            </label>
+            <Button type="button" disabled={!report || pending || !range.from || !range.to || range.from > range.to || !data.selectedAssignmentId} onClick={() => data.selectedAssignmentId && reload(data.selectedAssignmentId, range)}>
+              {pending ? <Loader2 className="mr-2 size-4 animate-spin" /> : <CalendarRange className="mr-2 size-4" />}
+              Aplicar fechas
             </Button>
           </div>
         </CardContent>
@@ -354,6 +443,13 @@ export function AcademicReportsDashboard({ initialData }: { initialData: Academi
       ) : null}
       {report ? (
         <>
+          <div className="grid gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-950 md:grid-cols-[auto_1fr]">
+            <AlertCircle className="size-5" aria-hidden="true" />
+            <div>
+              <p className="font-black">Promedios transparentes · {report.range.from} a {report.range.to}</p>
+              <p className="text-sm">Los vacíos aparecen como pendientes y no valen cero. Un cero sólo cuenta cuando el profesor lo registra expresamente. Todo promedio incompleto se identifica como parcial y muestra cuántas evidencias faltan.</p>
+            </div>
+          </div>
           <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <Metric label="Alumnos" value={report.students.length} />
             <Metric label="Listas registradas" value={report.attendanceDates.length} />
@@ -399,6 +495,39 @@ function Metric({ label, value }: { label: string; value: number }) {
 }
 function StudentStatus({ student }: { student: AcademicReport['students'][number] }) {
   return <span className={cn('ml-2 text-[10px] font-black', student.studentType === 'provisional' ? 'text-amber-700' : 'text-emerald-700')}>{student.studentType === 'provisional' ? 'PROVISIONAL' : 'REGISTRADO'}</span>;
+}
+function ResultCell({ report, student, criterion }: { report: AcademicReport; student: AcademicReport['students'][number]; criterion: AcademicReport['criteria'][number] }) {
+  const result = student.results[criterion.key];
+  if (!result) return <span className="text-muted-foreground">—</span>;
+  if (criterion.type === 'participacion') return <span>{result.participationPoints.toFixed(1)} pts</span>;
+  if (result.expectedCount > 0 && !result.complete) {
+    const missingConcepts = report.concepts.filter(
+      (concept) => concept.criterionKey === criterion.key
+        && result.missingConceptNames.includes(concept.name)
+        && !student.conceptGrades[concept.id],
+    );
+    const absent = missingConcepts.filter((concept) => concept.attendance[student.enrollmentId] === 'ausente').length;
+    const present = missingConcepts.filter((concept) => concept.attendance[student.enrollmentId] === 'presente').length;
+    const unchecked = Math.max(result.missingCount - absent - present, 0);
+    return (
+      <div className="min-w-44 space-y-1 text-left" title={result.missingConceptNames.length ? `Faltan: ${result.missingConceptNames.join(', ')}` : undefined}>
+        <span className="flex items-center gap-1 font-black text-amber-700"><AlertCircle className="size-4" />Pendiente</span>
+        <span className="block text-xs font-bold text-slate-700">{result.gradedCount} de {result.expectedCount} calificadas</span>
+        {result.grade !== null ? <span className="block text-[11px] font-normal text-muted-foreground">Promedio parcial: {result.grade.toFixed(1)}</span> : null}
+        <span className="block text-[11px] font-normal text-rose-700">Faltan {result.missingCount}</span>
+        {absent ? <span className="block text-[11px] font-bold text-amber-700">{absent} por ausencia · recuperables</span> : null}
+        {present ? <span className="block text-[11px] font-bold text-rose-700">{present} asistió · falta calificar</span> : null}
+        {unchecked ? <span className="block text-[11px] font-normal text-muted-foreground">{unchecked} sin pase de lista · revisar</span> : null}
+      </div>
+    );
+  }
+  if (result.grade === null) return <span className="font-bold text-muted-foreground">{result.state === 'pendiente' ? 'Pendiente' : '—'}</span>;
+  return (
+    <div className="min-w-32 space-y-1">
+      <span className="flex items-center justify-center gap-1 font-black text-emerald-700"><CheckCircle2 className="size-4" />{result.grade.toFixed(1)}</span>
+      {result.expectedCount > 0 ? <span className="block text-[11px] font-normal text-muted-foreground">{result.gradedCount}/{result.expectedCount} calificadas</span> : null}
+    </div>
+  );
 }
 function AttendanceTable({
   report,
@@ -494,7 +623,7 @@ function EvidenceTable({ report }: { report: AcademicReport }) {
                   </td>
                   {report.criteria.map((row) => (
                     <td key={row.key} className="px-3 py-3 text-center font-black">
-                      {resultLabel(student, row.key, row.type)}
+                      <ResultCell report={report} student={student} criterion={row} />
                     </td>
                   ))}
                 </tr>
