@@ -70,7 +70,8 @@ describe('Control de Filtro multitenant', () => {
     expect(late).not.toContain('draftStatus === \'queued\' && student?.id && !sending');
     expect(early).not.toContain('sendDraft(draft, true)');
     expect(extraordinary).not.toContain('send(draft, true)');
-    expect(late).toContain('evidenceRecoveryIssue');
+    expect(late).not.toContain('FilterEvidenceCapture');
+    expect(late).not.toContain('Foto o comprobante');
     expect(late).toContain('el navegador no confirmó el almacenamiento local');
     expect(early).toContain('recoveryFileIssues');
   });
@@ -112,5 +113,35 @@ describe('Control de Filtro multitenant', () => {
     expect(report).toContain('institution.logo_url');
     expect(report).toContain("const x=i===0?12:107");
     expect(report).toContain('Firma de la persona que recibe al alumno');
+  });
+
+  it('los campos retirados no bloquean guardado ni reaparecen en los PDF', () => {
+    const early = readFileSync('src/components/filter/FilterEarlyDepartureWizard.tsx', 'utf8');
+    const extraordinary = readFileSync('src/components/filter/FilterExtraordinaryWizard.tsx', 'utf8');
+    const actions = readFileSync('src/lib/actions/filter-control.ts', 'utf8');
+    const report = readFileSync('src/components/filter/FilterReports.tsx', 'utf8');
+    const migration = readFileSync('supabase/migrations/20260909234639_simplify_filter_forms_and_import_preschool_roster.sql', 'utf8');
+
+    expect(early).toContain('¿Quién notificó?');
+    expect(early).toContain('Familiar autorizado');
+    expect(early).not.toContain('Nombre del docente de guardia que registra');
+    for (const removed of [
+      'Vincular salida anticipada', 'Últimos caracteres de la identificación',
+      'Vehículo (opcional)', 'Teléfono, correo o referencia de contacto',
+      'Código de un solo uso', 'Vigencia opcional',
+      'Declaración expresa de autorización', 'Resultado de identidad',
+      'Personal que valida', 'Segundo responsable o testigo',
+    ]) expect(extraordinary).not.toContain(removed);
+
+    expect(actions).toContain('identification_reference: null');
+    expect(actions).toContain('authorization_statement: null');
+    expect(actions).toContain('validator_name: actorName');
+    expect(actions).toContain('witness_name: null');
+    expect(report).not.toContain("['Validación',`${enumLabel(row.identity_status)}");
+    expect(report).not.toContain('Evidencia de vehículo adjunta');
+    expect(migration).toContain('alter column identification_reference drop not null');
+    expect(migration).toContain('alter column authorization_statement drop not null');
+    expect(migration).toContain('alter column witness_name drop not null');
+    expect(migration).toContain("'rows', 77");
   });
 });
