@@ -119,6 +119,13 @@ import { ParkourRaceEditor } from '@/components/activities/parkour-race/ParkourR
 import { createParkourRaceContent, normalizeParkourRaceContent, validateParkourRaceContent } from '@/lib/activities/parkour-race';
 import { BackroomsScapeEditor } from '@/components/activities/backrooms-scape/BackroomsScapeEditor';
 import { createBackroomsScapeContent, normalizeBackroomsScapeContent, validateBackroomsScapeContent } from '@/lib/activities/backrooms-scape';
+import {
+  ACADEMIC_UPLOAD_MAX_MB,
+  EDUCATIONAL_RESOURCE_ACCEPT,
+  academicUploadValidationMessage,
+  buildTenantAcademicStoragePath,
+  normalizeAcademicUpload,
+} from '@/lib/storage/academic-uploads';
 
 const LOGO_FALLBACK = '/images/logo_placeholder.svg';
 
@@ -567,14 +574,22 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
     const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      if (file.size > 3 * 1024 * 1024) {
-        toast({ variant: "destructive", title: "Archivo demasiado grande", description: "Máximo 3MB" });
+      const validationError = academicUploadValidationMessage(file, { allowImages: false });
+      const normalizedFile = normalizeAcademicUpload(file, { allowImages: false });
+      if (validationError || !normalizedFile) {
+        toast({ variant: "destructive", title: "Archivo no válido", description: validationError || 'No se pudo validar el archivo.' });
         return;
       }
       setUploading(true);
       try {
-        const filePath = `actividades-guia/${Date.now()}_${file.name}`;
-        const { error } = await supabase.storage.from('recursos-educativos').upload(filePath, file);
+        const { data: { user } } = await supabase.auth.getUser();
+        const tenantId = user?.app_metadata?.tenant_id || inst.tenant_id;
+        if (!tenantId) throw new Error('No se pudo identificar la institución del profesor.');
+        const filePath = buildTenantAcademicStoragePath(tenantId, 'actividades-guia', file.name);
+        const { error } = await supabase.storage.from('recursos-educativos').upload(filePath, file, {
+          contentType: normalizedFile.mime,
+          upsert: false,
+        });
         if (error) throw error;
         const { data: { publicUrl } } = supabase.storage.from('recursos-educativos').getPublicUrl(filePath);
         updateContent({ ...content, fileUrl: publicUrl, fileName: file.name });
@@ -595,9 +610,9 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
             </div>
             <div className="space-y-1">
               <p className="font-black uppercase text-xs tracking-widest text-slate-700">Subir Documento Guía (Opcional)</p>
-              <p className="text-[10px] text-slate-400 font-bold uppercase">PDF, Word o Excel (Máx. 3MB)</p>
+              <p className="text-[10px] text-slate-400 font-bold uppercase">PDF, Word, Excel, CSV o PowerPoint (Máx. {ACADEMIC_UPLOAD_MAX_MB} MB)</p>
             </div>
-            <input type="file" className="hidden" onChange={handleFile} disabled={uploading} />
+            <input type="file" accept={EDUCATIONAL_RESOURCE_ACCEPT} className="hidden" onChange={handleFile} disabled={uploading} />
           </label>
           {content.fileName && (
             <div className="mt-4 p-3 bg-white rounded-xl border flex items-center justify-between">
@@ -1729,15 +1744,23 @@ export default function ProfesorDashboard() {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 3 * 1024 * 1024) { toast({ variant: "destructive", title: "Archivo grande", description: "Límite 3MB" }); return; }
+    const validationError = academicUploadValidationMessage(file, { allowImages: false });
+    const normalizedFile = normalizeAcademicUpload(file, { allowImages: false });
+    if (validationError || !normalizedFile) {
+      toast({ variant: "destructive", title: "Archivo no válido", description: validationError || 'No se pudo validar el archivo.' });
+      return;
+    }
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return;
     setUploading(true);
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${selectedTema.id}/${Date.now()}.${fileExt}`;
-      const filePath = `recursos/${fileName}`;
-      const { error: uploadError } = await supabase.storage.from('recursos-educativos').upload(filePath, file);
+      const tenantId = user.app_metadata?.tenant_id || inst.tenant_id;
+      if (!tenantId) throw new Error('No se pudo identificar la institución del profesor.');
+      const filePath = buildTenantAcademicStoragePath(tenantId, 'recursos', file.name, selectedTema.id);
+      const { error: uploadError } = await supabase.storage.from('recursos-educativos').upload(filePath, file, {
+        contentType: normalizedFile.mime,
+        upsert: false,
+      });
       if (uploadError) throw uploadError;
       const { data: { publicUrl } } = supabase.storage.from('recursos-educativos').getPublicUrl(filePath);
       const newResource = {
@@ -1745,7 +1768,7 @@ export default function ProfesorDashboard() {
         titulo: file.name,
         archivo_url: publicUrl,
         file_path: filePath,
-        tipo: fileExt?.toLowerCase(),
+        tipo: normalizedFile.extension,
         created_by: user.id
       };
       const { error: dbError } = await upsertResource(newResource, isGroupMode);
@@ -1804,15 +1827,26 @@ export default function ProfesorDashboard() {
         toast({ variant: 'destructive', title: 'Archivo demasiado grande', description: 'Máximo 5MB por imagen.' });
         return null;
       }
-      const ext = file.name.split('.').pop();
-      const path = `slides/${selectedTema?.id || 'general'}/${Date.now()}.${ext}`;
-      const { error: uploadErr } = await supabase.storage.from('diapositivas-assets').upload(path, file);
+      const ext = file.name.split('.').pop()?.toLowerCase() || '';
+      const slideMimeByExtension: Record<string, string> = {
+        jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp', gif: 'image/gif',
+      };
+      const contentType = slideMimeByExtension[ext];
+      const declaredType = file.type.toLowerCase() === 'image/jpg' ? 'image/jpeg' : file.type.toLowerCase();
+      if (!contentType || (declaredType && declaredType !== contentType)) {
+        toast({ variant: 'destructive', title: 'Imagen no válida', description: 'Usa JPG, PNG, WebP o GIF.' });
+        return null;
+      }
+      const tenantId = user.app_metadata?.tenant_id || inst.tenant_id;
+      if (!tenantId) throw new Error('No se pudo identificar la institución del profesor.');
+      const path = `${tenantId}/slides/${selectedTema?.id || 'general'}/${crypto.randomUUID()}.${ext}`;
+      const { error: uploadErr } = await supabase.storage.from('diapositivas-assets').upload(path, file, {
+        contentType,
+        upsert: false,
+      });
       if (uploadErr) {
-        // Si el bucket no existe, intentar con recursos-educativos
-        const { error: fallbackErr } = await supabase.storage.from('recursos-educativos').upload(`slides/${path}`, file);
-        if (fallbackErr) { toast({ variant: 'destructive', title: 'Error al subir imagen', description: fallbackErr.message }); return null; }
-        const { data: { publicUrl } } = supabase.storage.from('recursos-educativos').getPublicUrl(`slides/${path}`);
-        return publicUrl;
+        toast({ variant: 'destructive', title: 'Error al subir imagen', description: uploadErr.message });
+        return null;
       }
       const { data: { publicUrl } } = supabase.storage.from('diapositivas-assets').getPublicUrl(path);
       return publicUrl;
@@ -2872,7 +2906,8 @@ export default function ProfesorDashboard() {
                   {uploading ? <Loader2 className="animate-spin" size={32} /> : <FileUp size={32} />}
                 </div>
                 <p className="font-black text-slate-700 uppercase tracking-widest text-sm">{uploading ? "Subiendo..." : "Haz clic para subir un recurso"}</p>
-                <input type="file" className="hidden" onChange={handleFileUpload} disabled={uploading} />
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">PDF, Word, Excel, CSV o PowerPoint · Máx. {ACADEMIC_UPLOAD_MAX_MB} MB</p>
+                <input type="file" accept={EDUCATIONAL_RESOURCE_ACCEPT} className="hidden" onChange={handleFileUpload} disabled={uploading} />
               </label>
             </div>
             <div className="space-y-4">

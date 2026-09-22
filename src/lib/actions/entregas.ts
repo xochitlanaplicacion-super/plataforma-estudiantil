@@ -3,6 +3,8 @@
 import { requireTenantSession } from '@/lib/tenant/context';
 
 import { revalidatePath } from 'next/cache';
+import { after } from 'next/server';
+import { dispatchSubmissionPush } from '@/lib/notifications/submission-push';
 import { randomUUID } from 'node:crypto';
 import { descriptiveSubmission } from '@/lib/academic-grading/source-adapters';
 import {
@@ -10,138 +12,39 @@ import {
   parseExerciseResultResponse,
   validateDescriptiveGrade,
 } from '@/lib/academic-grading/exercise-results';
+import {
+  ACADEMIC_UPLOAD_MAX_BYTES,
+  ACADEMIC_UPLOAD_MAX_MB,
+  normalizeAcademicUpload,
+} from '@/lib/storage/academic-uploads';
+import { resolveExerciseUnitId } from '@/lib/academic-grading/submission-context';
 
 const BUCKET = 'entregas-alumnos';
 const EXPIRY_DAYS = 10;
 
-const ALLOWED_MIME = [
-  'application/pdf',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'text/csv',
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-powerpoint',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  'image/jpeg',
-  'image/png',
-  'image/webp',
-  'image/heic',
-  'image/heif',
-];
-
-const MIME_BY_EXTENSION: Record<string, string> = {
-  pdf: 'application/pdf',
-  xls: 'application/vnd.ms-excel',
-  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  csv: 'text/csv',
-  doc: 'application/msword',
-  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  ppt: 'application/vnd.ms-powerpoint',
-  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-  jpg: 'image/jpeg',
-  jpeg: 'image/jpeg',
-  png: 'image/png',
-  webp: 'image/webp',
-  heic: 'image/heic',
-  heif: 'image/heif',
-};
-
-const EXTENSION_BY_MIME: Record<string, string> = {
-  ...Object.fromEntries(Object.entries(MIME_BY_EXTENSION).map(([extension, mime]) => [mime, extension])),
-  'image/jpg': 'jpg',
-};
-
-const MAX_SIZE = 10 * 1024 * 1024; // 10 MB
 const SIGNED_URL_SECONDS = 5 * 60;
+const UPLOAD_INTENT_TTL_MS = 10 * 60 * 1000;
+const MAX_NEW_UPLOAD_INTENTS_PER_HOUR = 10;
 
-function normalizarArchivo(file: File) {
-  const extensionNombre = file.name.split('.').pop()?.toLowerCase() || '';
-  const mimeDeclarado = file.type.toLowerCase() === 'image/jpg' ? 'image/jpeg' : file.type.toLowerCase();
-  const mimeGenerico = !mimeDeclarado || mimeDeclarado === 'application/octet-stream';
-  if (!mimeGenerico && !ALLOWED_MIME.includes(mimeDeclarado)) return null;
-
-  const mime = mimeGenerico ? MIME_BY_EXTENSION[extensionNombre] : mimeDeclarado;
-  const extension = EXTENSION_BY_MIME[mime] || extensionNombre;
-
-  if (!mime || !ALLOWED_MIME.includes(mime) || !extension) return null;
-  return { mime, extension };
+interface StudentUploadInput {
+  ejercicioId: string;
+  archivoNombre: string;
+  archivoTipo: string;
+  archivoTamano: number;
 }
 
-async function profesorPuedeAccederEjercicio(
+interface ConfirmStudentUploadInput extends StudentUploadInput {
+  archivoPath: string;
+  uploadIntentId: string;
+}
+
+async function obtenerContextoEntrega(
+  supabase: any,
   admin: any,
   tenantId: string,
-  profesorId: string,
-  ejercicioId: string,
-  alumnoId?: string
+  alumnoId: string,
+  ejercicioId: string
 ) {
-  const { data: ejercicio } = await admin
-    .from('ejercicios')
-    .select('tema_id')
-    .eq('id', ejercicioId)
-    .eq('tenant_id', tenantId)
-    .maybeSingle();
-  if (!ejercicio?.tema_id) return false;
-
-  const { data: tema } = await admin
-    .from('temas')
-    .select('unidad_id')
-    .eq('id', ejercicio.tema_id)
-    .eq('tenant_id', tenantId)
-    .maybeSingle();
-  if (!tema?.unidad_id) return false;
-
-  const { data: unidad } = await admin
-    .from('unidades')
-    .select('materia_id')
-    .eq('id', tema.unidad_id)
-    .eq('tenant_id', tenantId)
-    .maybeSingle();
-  if (!unidad?.materia_id) return false;
-
-  let grupoId: string | null = null;
-  if (alumnoId) {
-    const { data: alumno } = await admin
-      .from('profiles')
-      .select('grupo_id')
-      .eq('id', alumnoId)
-      .eq('tenant_id', tenantId)
-      .maybeSingle();
-    grupoId = alumno?.grupo_id || null;
-  }
-
-  let query = admin
-    .from('asignaciones_profesor')
-    .select('id')
-    .eq('tenant_id', tenantId)
-    .eq('profesor_id', profesorId)
-    .eq('materia_id', unidad.materia_id)
-    .eq('activo', true);
-  if (grupoId) query = query.eq('grupo_id', grupoId);
-
-  const { data: asignacion } = await query.limit(1).maybeSingle();
-  return Boolean(asignacion);
-}
-
-// -------------------------------------------------------------------
-// 1. SUBIR ENTREGA DE ALUMNO
-//    - Valida tipo y tamaño
-//    - Si ya existe archivo previo, lo borra del storage
-//    - Sube nuevo archivo
-//    - Guarda registro en BD (primer_envio_en NO se actualiza si ya existe)
-// -------------------------------------------------------------------
-export async function subirEntregaAlumno(formData: FormData) {
-  const { admin, tenantId, user } = await requireTenantSession(['alumno']);
-
-  const file = formData.get('archivo') as File;
-  const ejercicioId = formData.get('ejercicioId') as string;
-
-  if (!file || !ejercicioId) return { error: 'Datos incompletos' };
-  if (file.size <= 0) return { error: 'El archivo está vacío' };
-  if (file.size > MAX_SIZE) return { error: 'El archivo supera el límite de 10 MB' };
-  const archivoNormalizado = normalizarArchivo(file);
-  if (!archivoNormalizado) return { error: 'Tipo de archivo no permitido' };
-
   const { data: ejercicio } = await admin
     .from('ejercicios')
     .select('id, tipo, fecha_entrega, temas(unidad_id)')
@@ -149,40 +52,22 @@ export async function subirEntregaAlumno(formData: FormData) {
     .eq('tenant_id', tenantId)
     .maybeSingle();
   if (!ejercicio || ejercicio.tipo !== 'actividad_descriptiva') {
-    return { error: 'La actividad descriptiva no existe en tu institución' };
+    return { error: 'La actividad descriptiva no existe en tu institución' } as const;
   }
 
-  // Verificar si ya existe un registro (para preservar primer_envio_en)
   const { data: existing } = await admin
     .from('resultados_ejercicios')
     .select('archivo_path, primer_envio_en, caduca_el')
     .eq('tenant_id', tenantId)
-    .eq('alumno_id', user.id)
+    .eq('alumno_id', alumnoId)
     .eq('ejercicio_id', ejercicioId)
     .maybeSingle();
 
-  // Construir ruta única: {tenant}/entregas/{alumno}/{ejercicio}/{uuid}.{ext}
-  const filePath = `${tenantId}/entregas/${user.id}/${ejercicioId}/${randomUUID()}.${archivoNormalizado.extension}`;
-
-  // Subir primero el archivo nuevo; el anterior se elimina sólo cuando la BD confirma el cambio.
-  const bytes = await file.arrayBuffer();
-  const { error: uploadError } = await admin.storage
-    .from(BUCKET)
-    .upload(filePath, bytes, {
-      contentType: archivoNormalizado.mime,
-      upsert: false,
-    });
-
-  if (uploadError) return { error: `Error al subir: ${uploadError.message}` };
-
-  // Calcular fechas: primer_envio_en solo se pone la PRIMERA vez
-  const ahora = new Date();
-  const primerEnvio = existing?.primer_envio_en ? new Date(existing.primer_envio_en) : ahora;
-  const caduca = new Date(primerEnvio.getTime() + EXPIRY_DAYS * 24 * 60 * 60 * 1000);
-
-  const { data: link } = await admin
+  // Este acceso usa deliberadamente el cliente autenticado: la RLS de los
+  // vinculos sólo deja ver al alumno las asignaciones de su grupo vigente.
+  const { data: link } = await supabase
     .from('vinculos_evaluacion_ejercicio')
-    .select('id, ciclo_escolar_id, periodos_evaluacion!inner(estado)')
+    .select('id, ciclo_escolar_id, asignacion_profesor_id, periodos_evaluacion!inner(estado)')
     .eq('tenant_id', tenantId)
     .eq('ejercicio_id', ejercicioId)
     .eq('origen', 'descriptiveSubmission')
@@ -190,35 +75,286 @@ export async function subirEntregaAlumno(formData: FormData) {
     .eq('periodos_evaluacion.estado', 'activo')
     .limit(1)
     .maybeSingle();
-  const { data: enrollment } = link ? await admin
+
+  const { data: assignment } = link ? await admin
+    .from('asignaciones_profesor')
+    .select('grupo_id')
+    .eq('tenant_id', tenantId)
+    .eq('id', link.asignacion_profesor_id)
+    .eq('ciclo_escolar_id', link.ciclo_escolar_id)
+    .eq('activo', true)
+    .maybeSingle() : { data: null };
+  const { data: enrollment } = link && assignment?.grupo_id ? await admin
     .from('inscripciones_alumno')
     .select('id')
     .eq('tenant_id', tenantId)
     .eq('ciclo_escolar_id', link.ciclo_escolar_id)
-    .eq('alumno_id', user.id)
+    .eq('grupo_id', assignment.grupo_id)
+    .eq('alumno_id', alumnoId)
     .eq('activo', true)
     .maybeSingle() : { data: null };
-  const unitId = ejercicio.temas?.[0]?.unidad_id;
-  if (!existing && (!link || !enrollment || !unitId)) {
-    await admin.storage.from(BUCKET).remove([filePath]);
-    return { error: 'La actividad aún no tiene una fuente de evaluación activa para tu inscripción.' };
+  const unitId = resolveExerciseUnitId(ejercicio.temas);
+
+  if (!link || !assignment || !enrollment || !unitId) {
+    return { error: 'La actividad aún no tiene una fuente de evaluación activa para tu inscripción.' } as const;
   }
+  return { ejercicio, existing, link, enrollment, unitId, error: null } as const;
+}
+
+// -------------------------------------------------------------------
+// 1. ENTREGA DE ALUMNO EN DOS FASES
+//    El binario viaja directo del navegador a Supabase mediante una URL firmada.
+//    Sólo la autorización y los metadatos pequeños pasan por la Server Action.
+// -------------------------------------------------------------------
+export async function prepararCargaEntregaAlumno(input: StudentUploadInput) {
+  try {
+    const { supabase, admin, tenantId, user } = await requireTenantSession(['alumno']);
+    const archivo = normalizeAcademicUpload({
+      name: input.archivoNombre,
+      type: input.archivoTipo,
+      size: input.archivoTamano,
+    }, { allowImages: true });
+    if (!input.ejercicioId || !archivo) {
+      return { error: `Archivo inválido o mayor a ${ACADEMIC_UPLOAD_MAX_MB} MB.` };
+    }
+
+    const contexto = await obtenerContextoEntrega(supabase, admin, tenantId, user.id, input.ejercicioId);
+    if (contexto.error) return { error: contexto.error };
+
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + UPLOAD_INTENT_TTL_MS);
+    const normalizedName = input.archivoNombre.slice(0, 255);
+    const { data: activeIntent } = await admin
+      .from('student_submission_upload_intents')
+      .select('id, object_path, status, expires_at')
+      .eq('tenant_id', tenantId)
+      .eq('alumno_id', user.id)
+      .eq('ejercicio_id', input.ejercicioId)
+      .in('status', ['pending', 'processing'])
+      .limit(1)
+      .maybeSingle();
+
+    if (activeIntent) {
+      if (
+        activeIntent.status === 'processing' &&
+        new Date(activeIntent.expires_at).getTime() > now.getTime()
+      ) {
+        return { error: 'La entrega anterior todavía se está confirmando. Espera unos segundos e inténtalo de nuevo.' };
+      }
+
+      // Cada autorización recibe una ruta nueva. El cambio condicional evita
+      // cancelar un intento que otra petición acaba de reclamar para confirmar.
+      const { data: cancelledIntent } = await admin
+        .from('student_submission_upload_intents')
+        .update({
+          status: 'cancelled',
+          updated_at: now.toISOString(),
+        })
+        .eq('id', activeIntent.id)
+        .eq('tenant_id', tenantId)
+        .eq('status', activeIntent.status)
+        .select('id, object_path')
+        .maybeSingle();
+      if (!cancelledIntent) {
+        return { error: 'La entrega anterior comenzó a confirmarse. Espera unos segundos e inténtalo de nuevo.' };
+      }
+
+      const { data: referenced } = await admin
+        .from('resultados_ejercicios')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('alumno_id', user.id)
+        .eq('ejercicio_id', input.ejercicioId)
+        .eq('archivo_path', cancelledIntent.object_path)
+        .limit(1)
+        .maybeSingle();
+      if (referenced) {
+        await admin
+          .from('student_submission_upload_intents')
+          .update({ status: 'confirmed', confirmed_at: now.toISOString(), updated_at: now.toISOString() })
+          .eq('id', cancelledIntent.id)
+          .eq('status', 'cancelled');
+      } else {
+        // Sólo se limpia una ruta que no está referenciada por una entrega.
+        // Si un token anterior termina después, el cron también la recogerá.
+        await admin.storage.from(BUCKET).remove([cancelledIntent.object_path]);
+      }
+    }
+
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
+    const { count } = await admin
+      .from('student_submission_upload_intents')
+      .select('id', { count: 'exact', head: true })
+      .eq('tenant_id', tenantId)
+      .eq('alumno_id', user.id)
+      .eq('ejercicio_id', input.ejercicioId)
+      .gte('created_at', oneHourAgo);
+    if ((count || 0) >= MAX_NEW_UPLOAD_INTENTS_PER_HOUR) {
+      return { error: 'Se alcanzó el límite temporal de intentos para esta tarea. Espera una hora o solicita apoyo al profesor.' };
+    }
+
+    const filePath = `${tenantId}/entregas/${user.id}/${input.ejercicioId}/${randomUUID()}`;
+    const { data: intent, error: intentError } = await admin
+      .from('student_submission_upload_intents')
+      .insert({
+        tenant_id: tenantId,
+        alumno_id: user.id,
+        ejercicio_id: input.ejercicioId,
+        object_path: filePath,
+        original_name: normalizedName,
+        content_type: archivo.mime,
+        size_bytes: input.archivoTamano,
+        status: 'pending',
+        expires_at: expiresAt.toISOString(),
+        updated_at: now.toISOString(),
+      })
+      .select('id, object_path')
+      .single();
+    if (intentError || !intent) {
+      return { error: `No se pudo registrar la autorización de carga: ${intentError?.message || 'intento no disponible'}` };
+    }
+
+    const { data, error } = await admin.storage
+      .from(BUCKET)
+      .createSignedUploadUrl(filePath, { upsert: false });
+    if (error || !data?.token) {
+      return { error: `No se pudo preparar la carga: ${error?.message || 'token no disponible'}` };
+    }
+
+    return {
+      success: true,
+      uploadIntentId: intent.id,
+      archivoPath: filePath,
+      token: data.token,
+      contentType: archivo.mime,
+    };
+  } catch (error: any) {
+    return { error: error.message || 'No se pudo preparar la carga.' };
+  }
+}
+
+export async function confirmarCargaEntregaAlumno(input: ConfirmStudentUploadInput) {
+  const { supabase, admin, tenantId, user } = await requireTenantSession(['alumno']);
+  const archivo = normalizeAcademicUpload({
+    name: input.archivoNombre,
+    type: input.archivoTipo,
+    size: input.archivoTamano,
+  }, { allowImages: true });
+  const expectedPrefix = `${tenantId}/entregas/${user.id}/${input.ejercicioId}/`;
+  if (!archivo || !input.archivoPath?.startsWith(expectedPrefix)) {
+    return { error: 'La ruta o el archivo de la entrega no es válido.' };
+  }
+
+  const relativeName = input.archivoPath.slice(expectedPrefix.length);
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(relativeName)) {
+    return { error: 'La ruta de la entrega no coincide con el archivo autorizado.' };
+  }
+
+  // Se consulta antes de cualquier validación que pudiera limpiar Storage.
+  // Una ruta ya persistida jamás debe borrarse por metadata manipulada o por
+  // un reintento ocurrido después de que el periodo haya cerrado.
+  const { data: alreadyConfirmed } = await admin
+    .from('resultados_ejercicios')
+    .select('archivo_path, caduca_el')
+    .eq('tenant_id', tenantId)
+    .eq('alumno_id', user.id)
+    .eq('ejercicio_id', input.ejercicioId)
+    .maybeSingle();
+  if (alreadyConfirmed?.archivo_path === input.archivoPath) {
+    await admin
+      .from('student_submission_upload_intents')
+      .update({ status: 'confirmed', confirmed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .eq('id', input.uploadIntentId)
+      .eq('tenant_id', tenantId)
+      .eq('object_path', input.archivoPath)
+      .in('status', ['pending', 'processing']);
+    return {
+      success: true,
+      caduca_el: alreadyConfirmed.caduca_el,
+      archivo_path: input.archivoPath,
+      alreadyConfirmed: true,
+    };
+  }
+
+  const { data: intent } = await admin
+    .from('student_submission_upload_intents')
+    .select('id, object_path, original_name, content_type, size_bytes, status, expires_at')
+    .eq('id', input.uploadIntentId)
+    .eq('tenant_id', tenantId)
+    .eq('alumno_id', user.id)
+    .eq('ejercicio_id', input.ejercicioId)
+    .maybeSingle();
+  if (
+    !intent ||
+    intent.object_path !== input.archivoPath ||
+    intent.original_name !== input.archivoNombre.slice(0, 255) ||
+    intent.content_type !== archivo.mime ||
+    Number(intent.size_bytes) !== input.archivoTamano ||
+    intent.status !== 'pending' ||
+    new Date(intent.expires_at).getTime() <= Date.now()
+  ) {
+    return { error: 'La autorización de carga ya no es válida. Selecciona el archivo y vuelve a subirlo.' };
+  }
+
+  const { data: storedObjects, error: objectError } = await admin.storage
+    .from(BUCKET)
+    .list(expectedPrefix.slice(0, -1), { search: relativeName, limit: 10 });
+  const storedObject = storedObjects?.find((object: any) => object.name === relativeName);
+  const storedSize = Number(storedObject?.metadata?.size);
+  const storedMime = String(storedObject?.metadata?.mimetype || storedObject?.metadata?.contentType || '').toLowerCase();
+  if (
+    objectError ||
+    !storedObject ||
+    !Number.isFinite(storedSize) ||
+    storedSize <= 0 ||
+    storedSize > ACADEMIC_UPLOAD_MAX_BYTES ||
+    storedSize !== input.archivoTamano ||
+    (storedMime && storedMime !== archivo.mime)
+  ) {
+    return { error: 'Storage no confirmó un archivo válido de hasta 20 MB.' };
+  }
+
+  const processingAt = new Date().toISOString();
+  const { data: claimedIntent } = await admin
+    .from('student_submission_upload_intents')
+    .update({ status: 'processing', updated_at: processingAt })
+    .eq('id', intent.id)
+    .eq('tenant_id', tenantId)
+    .eq('status', 'pending')
+    .select('id')
+    .maybeSingle();
+  if (!claimedIntent) {
+    return { error: 'La entrega ya se está confirmando. Actualiza la página en unos segundos.' };
+  }
+
+  const contexto = await obtenerContextoEntrega(supabase, admin, tenantId, user.id, input.ejercicioId);
+  if (contexto.error) {
+    await admin
+      .from('student_submission_upload_intents')
+      .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+      .eq('id', intent.id)
+      .eq('status', 'processing');
+    return { error: contexto.error };
+  }
+  const { ejercicio, existing, link, enrollment, unitId } = contexto;
+  const ahora = new Date();
+  const primerEnvio = existing?.primer_envio_en ? new Date(existing.primer_envio_en) : ahora;
+  const caduca = new Date(primerEnvio.getTime() + EXPIRY_DAYS * 24 * 60 * 60 * 1000);
   const submission = descriptiveSubmission({
     submittedAt: ahora,
     dueAt: ejercicio.fecha_entrega ? new Date(ejercicio.fecha_entrega) : null,
   });
 
-  // Guardar en base de datos
   const { error: dbError } = await admin
     .from('resultados_ejercicios')
     .upsert({
       tenant_id: tenantId,
       alumno_id: user.id,
-      ejercicio_id: ejercicioId,
+      ejercicio_id: input.ejercicioId,
       estado: submission.state,
       archivo_url: null,
-      archivo_nombre: file.name,
-      archivo_path: filePath,
+      archivo_nombre: input.archivoNombre.slice(0, 255),
+      archivo_path: input.archivoPath,
       primer_envio_en: primerEnvio.toISOString(),
       caduca_el: caduca.toISOString(),
       ...(existing ? {} : {
@@ -233,18 +369,30 @@ export async function subirEntregaAlumno(formData: FormData) {
     .single();
 
   if (dbError) {
-    // Intentar limpiar archivo subido si falló el DB
-    await admin.storage.from(BUCKET).remove([filePath]);
+    await admin
+      .from('student_submission_upload_intents')
+      .update({ status: 'pending', updated_at: new Date().toISOString() })
+      .eq('id', intent.id)
+      .eq('status', 'processing');
     return { error: `Error al registrar: ${dbError.message}` };
   }
-
-  if (existing?.archivo_path && existing.archivo_path !== filePath) {
+  const confirmedAt = new Date().toISOString();
+  const { error: confirmationError } = await admin
+    .from('student_submission_upload_intents')
+    .update({ status: 'confirmed', confirmed_at: confirmedAt, updated_at: confirmedAt })
+    .eq('id', intent.id)
+    .eq('status', 'processing');
+  if (confirmationError) {
+    console.error('[KIBO entrega] La nota se guardó, pero no se pudo cerrar el intento de carga:', confirmationError.message);
+  }
+  if (existing?.archivo_path && existing.archivo_path !== input.archivoPath) {
     await admin.storage.from(BUCKET).remove([existing.archivo_path]);
   }
 
   revalidatePath('/dashboard/alumno/materias');
-  revalidatePath(`/dashboard/alumno/ejercicios/${ejercicioId}`);
-  return { success: true, caduca_el: caduca.toISOString(), archivo_path: filePath };
+  revalidatePath(`/dashboard/alumno/ejercicios/${input.ejercicioId}`);
+  after(async () => { try { await dispatchSubmissionPush(); } catch { console.warn('[KIBO push] Entrega guardada; aviso pendiente de reintento.'); } });
+  return { success: true, caduca_el: caduca.toISOString(), archivo_path: input.archivoPath };
 }
 
 // -------------------------------------------------------------------
@@ -273,7 +421,7 @@ export async function obtenerAccesoArchivoEntrega(
   modo: 'ver' | 'descargar'
 ) {
   try {
-    const { admin, tenantId, user, profile } = await requireTenantSession([
+    const { supabase, admin, tenantId, user, profile } = await requireTenantSession([
       'alumno',
       'profesor',
       'admin',
@@ -298,14 +446,15 @@ export async function obtenerAccesoArchivoEntrega(
       return { error: 'No tienes permiso para abrir esta entrega' };
     }
     if (profile.rol === 'profesor') {
-      const permitido = await profesorPuedeAccederEjercicio(
-        admin,
-        tenantId,
-        user.id,
-        entrega.ejercicio_id,
-        entrega.alumno_id
-      );
-      if (!permitido) return { error: 'La entrega no pertenece a uno de tus grupos' };
+      // La RLS académica valida el vínculo, la inscripción y la asignación
+      // exacta del profesor; no se infiere acceso desde profiles.grupo_id.
+      const { data: permittedResult } = await supabase
+        .from('resultados_ejercicios')
+        .select('id')
+        .eq('tenant_id', tenantId)
+        .eq('archivo_path', filePath)
+        .maybeSingle();
+      if (!permittedResult) return { error: 'La entrega no pertenece a uno de tus grupos' };
     }
 
     const options = modo === 'descargar'

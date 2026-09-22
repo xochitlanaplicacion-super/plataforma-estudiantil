@@ -1,10 +1,10 @@
 
 "use client";
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Users, GraduationCap, School, Layers, AlertCircle, Loader2, FileWarning, Mail, Send, Eye, MessageSquare, ClipboardList, ArrowRight, ShieldOff, ShieldCheck } from 'lucide-react';
+import { Users, GraduationCap, School, Layers, AlertCircle, Loader2, FileWarning, Mail, Send, Eye, MessageSquare, ClipboardList, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -46,7 +46,8 @@ export default function AdminDashboard() {
     estado: string | null;
     fecha_inicio: string | null;
     duracion_dias: number;
-  }>({ estado: null, fecha_inicio: null, duracion_dias: 30 });
+    timezone?: string | null;
+  }>({ estado: null, fecha_inicio: null, duracion_dias: 30, timezone: 'America/Mexico_City' });
   const [academicContext, setAcademicContext] = useState<AcademicContextIndicator | null>(null);
 
   const fetchData = async () => {
@@ -138,6 +139,7 @@ export default function AdminDashboard() {
           estado: resServicio.data.estado,
           fecha_inicio: resServicio.data.fecha_inicio,
           duracion_dias: resServicio.data.duracion_dias,
+          timezone: resServicio.data.timezone,
         });
       }
 
@@ -177,41 +179,6 @@ export default function AdminDashboard() {
     { name: 'CURP Doc', count: alumnosMissingDocs.filter(u => !u.doc_curp).length, color: '#1A4A3F' },
     { name: 'INE', count: alumnosMissingDocs.filter(u => !u.doc_ine).length, color: '#f59e0b' },
   ];
-
-  // ─── Lógica del indicador circular de vigencia ───
-  const DURACION_SERVICIO_DIAS = servicioPlataforma.duracion_dias || 30;
-
-  const servicioInfo = useMemo(() => {
-    if (!servicioPlataforma.fecha_inicio || servicioPlataforma.estado !== 'SI') {
-      return { diasRestantes: 0, fechaFin: null, porcentaje: 0, activo: servicioPlataforma.estado === 'SI' };
-    }
-    const inicio = new Date(servicioPlataforma.fecha_inicio + 'T00:00:00');
-    const fin = new Date(inicio);
-    fin.setDate(fin.getDate() + DURACION_SERVICIO_DIAS);
-    const ahora = new Date();
-    const msRestantes = fin.getTime() - ahora.getTime();
-    const diasRestantes = Math.max(0, Math.ceil(msRestantes / (1000 * 60 * 60 * 24)));
-    const porcentaje = Math.max(0, Math.min(1, diasRestantes / DURACION_SERVICIO_DIAS));
-    return { diasRestantes, fechaFin: fin, porcentaje, activo: true };
-  }, [servicioPlataforma]);
-
-  const getColorVigencia = (dias: number): string => {
-    if (dias >= 21) return '#166534'; // verde oscuro
-    if (dias >= 16) return '#22c55e'; // verde claro
-    if (dias >= 11) return '#eab308'; // amarillo
-    if (dias >= 6)  return '#f97316'; // naranja
-    if (dias >= 3)  return '#ea580c'; // naranja oscuro
-    return '#dc2626';                 // rojo
-  };
-
-  const formatFechaLarga = (date: Date | null): string => {
-    if (!date) return '—';
-    return date.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
-  };
-
-  // SVG circular constants
-  const RADIO = 54;
-  const CIRCUNFERENCIA = 2 * Math.PI * RADIO;
 
   return (
     <div className="space-y-8">

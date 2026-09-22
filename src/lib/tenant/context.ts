@@ -4,6 +4,7 @@ import { headers } from 'next/headers';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { getHostnameCandidates, normalizeHostname } from '@/lib/tenant/hostname';
+import { getPlatformServiceEndDate } from '@/lib/service-countdown';
 
 export { normalizeHostname } from '@/lib/tenant/hostname';
 
@@ -24,6 +25,7 @@ export interface TenantServiceState {
   ia_habilitada: boolean;
   bloquear_acceso_usuarios: boolean;
   mensaje_bloqueo: string | null;
+  timezone?: string;
 }
 
 export async function getRequestHostname(): Promise<string> {
@@ -84,12 +86,22 @@ export async function resolveTenantFromHostname(hostnameInput?: string | null): 
 
 export async function getTenantServiceState(tenantId: string): Promise<TenantServiceState | null> {
   const admin = createSupabaseAdminClient();
-  const { data } = await admin
-    .from('pago_de_servicios')
-    .select('estado, fecha_inicio, duracion_dias, ia_habilitada, bloquear_acceso_usuarios, mensaje_bloqueo')
-    .eq('tenant_id', tenantId)
-    .maybeSingle();
-  return (data as TenantServiceState | null) || null;
+  const [{ data }, { data: feature }] = await Promise.all([
+    admin
+      .from('pago_de_servicios')
+      .select('estado, fecha_inicio, duracion_dias, ia_habilitada, bloquear_acceso_usuarios, mensaje_bloqueo')
+      .eq('tenant_id', tenantId)
+      .maybeSingle(),
+    admin
+      .from('tenant_features')
+      .select('timezone')
+      .eq('tenant_id', tenantId)
+      .maybeSingle(),
+  ]);
+  return data ? {
+    ...data,
+    timezone: feature?.timezone || 'America/Mexico_City',
+  } as TenantServiceState : null;
 }
 
 export async function requireTenantSession(allowedRoles?: TenantRole[]) {
@@ -157,7 +169,6 @@ export function isServiceExpired(service: TenantServiceState | null, now = new D
   if (service.estado !== 'SI') return true;
   if (!service.fecha_inicio) return false;
 
-  const end = new Date(`${service.fecha_inicio}T00:00:00`);
-  end.setDate(end.getDate() + service.duracion_dias);
-  return now >= end;
+  const end = getPlatformServiceEndDate(service);
+  return end ? now >= end : false;
 }

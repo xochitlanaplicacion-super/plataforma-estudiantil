@@ -32,3 +32,9 @@ refresh_token_reuse_interval = 10
 enable_signup = true
 enable_anonymous_sign_ins = false
 minimum_password_length = 8
+
+[functions.kibo-push-dispatch]
+verify_jwt = false
+
+[functions.kibo-submission-file]
+verify_jwt = false

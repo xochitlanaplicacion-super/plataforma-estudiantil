@@ -5,6 +5,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { ShieldCheck, ShieldOff } from 'lucide-react';
 import { useInstitucion } from '@/hooks/use-institucion';
 import { motion, AnimatePresence } from 'framer-motion';
+import { getPlatformServiceEndDate } from '@/lib/service-countdown';
 
 // Componente individual para cada bloque numérico con animación
 function AnimatedNumber({ value, label, color }: { value: string | number; label: string; color: string }) {
@@ -19,7 +20,7 @@ function AnimatedNumber({ value, label, color }: { value: string | number; label
             initial={{ y: -30, opacity: 0, filter: 'blur(4px)' }}
             animate={{ y: 0, opacity: 1, filter: 'blur(0px)' }}
             exit={{ y: 30, opacity: 0, filter: 'blur(4px)' }}
-            transition={{ duration: 0.4, ease: 'backOut' }}
+            transition={{ duration: 0.4, ease: 'easeOut' }}
             className="absolute text-4xl font-black tabular-nums tracking-tighter"
             style={{ color }}
           >
@@ -35,7 +36,7 @@ function AnimatedNumber({ value, label, color }: { value: string | number; label
 }
 
 export function VigenciaPlataformaCard({ servicioPlataforma }: {
-  servicioPlataforma: { estado: string | null; fecha_inicio: string | null; duracion_dias?: number | null }
+  servicioPlataforma: { estado: string | null; fecha_inicio: string | null; duracion_dias?: number | null; timezone?: string | null }
 }) {
   const { config: inst } = useInstitucion();
   const DURACION_SERVICIO_DIAS = servicioPlataforma.duracion_dias || 30;
@@ -50,12 +51,13 @@ export function VigenciaPlataformaCard({ servicioPlataforma }: {
   });
 
   const fechaFin = useMemo(() => {
-    if (!servicioPlataforma.fecha_inicio) return null;
-    const inicio = new Date(servicioPlataforma.fecha_inicio + 'T00:00:00');
-    const fin = new Date(inicio);
-    fin.setDate(fin.getDate() + DURACION_SERVICIO_DIAS);
-    return fin;
-  }, [servicioPlataforma.fecha_inicio, DURACION_SERVICIO_DIAS]);
+    return getPlatformServiceEndDate({
+      estado: 'SI',
+      fecha_inicio: servicioPlataforma.fecha_inicio,
+      duracion_dias: DURACION_SERVICIO_DIAS,
+      timezone: servicioPlataforma.timezone,
+    });
+  }, [servicioPlataforma.fecha_inicio, servicioPlataforma.timezone, DURACION_SERVICIO_DIAS]);
 
   useEffect(() => {
     if (servicioPlataforma.estado !== 'SI' || !fechaFin) return;
@@ -82,7 +84,7 @@ export function VigenciaPlataformaCard({ servicioPlataforma }: {
     tick();
     const intervalId = setInterval(tick, 1000);
     return () => clearInterval(intervalId);
-  }, [fechaFin, servicioPlataforma.estado]);
+  }, [fechaFin, servicioPlataforma.estado, DURACION_SERVICIO_DIAS]);
 
   const getColorVigencia = (dias: number): string => {
     if (dias >= 21) return '#166534'; // verde oscuro
@@ -95,7 +97,10 @@ export function VigenciaPlataformaCard({ servicioPlataforma }: {
 
   const formatFechaLarga = (date: Date | null): string => {
     if (!date) return '—';
-    return date.toLocaleDateString('es-MX', { day: 'numeric', month: 'long', year: 'numeric' });
+    return date.toLocaleDateString('es-MX', {
+      day: 'numeric', month: 'long', year: 'numeric',
+      timeZone: servicioPlataforma.timezone || 'America/Mexico_City',
+    });
   };
 
   // SVG circular constants
@@ -206,7 +211,7 @@ export function VigenciaPlataformaCard({ servicioPlataforma }: {
 
             <div className="flex flex-col sm:flex-row gap-2 sm:gap-8 mb-8">
               <p className="text-[13px] text-slate-500 font-medium">
-                Inicio: <span className="font-bold" style={{ color: textColor }}>{formatFechaLarga(new Date(servicioPlataforma.fecha_inicio + 'T00:00:00'))}</span>
+                Inicio: <span className="font-bold" style={{ color: textColor }}>{formatFechaLarga(new Date(servicioPlataforma.fecha_inicio + 'T12:00:00Z'))}</span>
               </p>
               <p className="text-[13px] text-slate-500 font-medium">
                 Vence el: <span className="font-bold" style={{ color: textColor }}>{formatFechaLarga(fechaFin)}</span>

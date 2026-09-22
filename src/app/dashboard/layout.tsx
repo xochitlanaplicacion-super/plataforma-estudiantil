@@ -7,6 +7,7 @@ import { getEstadoPagoIA } from '@/lib/actions/pagos';
 import { AlumnoAIAssistant } from '@/components/shared/AlumnoAIAssistant';
 import { ProfesorAIAssistant } from '@/components/shared/ProfesorAIAssistant';
 import { AIAssistantWrapper } from '@/components/shared/AIAssistantWrapper';
+import { getTenantServiceState } from '@/lib/tenant/context';
 
 export default async function Layout({ children }: { children: React.ReactNode }) {
   const supabase = await createServerSupabaseClient();
@@ -32,6 +33,15 @@ export default async function Layout({ children }: { children: React.ReactNode }
   const { data: filterFeature } = ['superuser', 'admin', 'encargado_filtro'].includes(profile.rol)
     ? await supabase.from('tenant_features').select('primary_filter_enabled').eq('tenant_id', profile.tenant_id).maybeSingle()
     : { data: null };
+  const rawServiceState = ['profesor', 'encargado_filtro'].includes(profile.rol)
+    ? await getTenantServiceState(profile.tenant_id)
+    : null;
+  const serviceState = rawServiceState ? {
+    estado: rawServiceState.estado,
+    fecha_inicio: rawServiceState.fecha_inicio,
+    duracion_dias: rawServiceState.duracion_dias,
+    timezone: rawServiceState.timezone,
+  } : null;
 
   return (
     <>
@@ -41,6 +51,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
         userId={user.id}
         userAvatar={profile.foto_perfil}
         filterEnabled={Boolean(filterFeature?.primary_filter_enabled)}
+        serviceState={serviceState}
       >
         {children}
       </DashboardLayout>

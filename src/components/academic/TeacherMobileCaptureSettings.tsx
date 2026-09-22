@@ -70,7 +70,7 @@ export function TeacherMobileCaptureSettings({
   assignmentId: string;
   qrAssignments: AcademicAssignmentOptionDto[];
 }) {
-  const eligible = criteria.filter((criterion) => criterion.active && criterion.type !== 'actividades');
+  const eligible = criteria.filter((criterion) => criterion.active);
   const [settings, setSettings] = useState<Record<string, TeacherMobileCaptureSettingDto>>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [message, setMessage] = useState('');

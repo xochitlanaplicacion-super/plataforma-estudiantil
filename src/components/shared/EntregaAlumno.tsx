@@ -3,8 +3,14 @@
 import React, { useState, useRef, useTransition } from 'react';
 import { Upload, FileText, FileSpreadsheet, File, CheckCircle2, Clock, AlertTriangle, Loader2, X, Camera, Image as ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { subirEntregaAlumno } from '@/lib/actions/entregas';
+import { confirmarCargaEntregaAlumno, prepararCargaEntregaAlumno } from '@/lib/actions/entregas';
 import { AccionesArchivoEntrega } from '@/components/shared/AccionesArchivoEntrega';
+import { createClient } from '@/lib/supabase/client';
+import {
+  ACADEMIC_UPLOAD_MAX_MB,
+  STUDENT_SUBMISSION_ACCEPT,
+  academicUploadValidationMessage,
+} from '@/lib/storage/academic-uploads';
 
 interface EntregaAlumnoProps {
   ejercicioId: string;
@@ -17,31 +23,6 @@ interface EntregaAlumnoProps {
   } | null;
   isPreview?: boolean;
 }
-
-const MIME_LABELS: Record<string, string> = {
-  'application/pdf': 'PDF',
-  'application/vnd.ms-excel': 'Excel (.xls)',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'Excel (.xlsx)',
-  'text/csv': 'CSV',
-  'application/msword': 'Word (.doc)',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'Word (.docx)',
-  'application/vnd.ms-powerpoint': 'PowerPoint (.ppt)',
-  'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'PowerPoint (.pptx)',
-  'image/jpeg': 'Foto JPEG',
-  'image/png': 'Imagen PNG',
-  'image/webp': 'Imagen WebP',
-  'image/heic': 'Foto HEIC',
-  'image/heif': 'Foto HEIF',
-};
-
-const ALLOWED_MIME = Object.keys(MIME_LABELS);
-const ALLOWED_EXTENSIONS = ['pdf', 'xls', 'xlsx', 'csv', 'doc', 'docx', 'ppt', 'pptx', 'jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'];
-const ACCEPTED_FILES = [
-  ...ALLOWED_MIME,
-  ...ALLOWED_EXTENSIONS.map((extension) => `.${extension}`),
-].join(',');
-const MAX_SIZE_MB = 10;
-const MAX_SIZE_BYTES = MAX_SIZE_MB * 1024 * 1024;
 
 function getIconForName(nombre: string) {
   const lower = nombre.toLowerCase();
@@ -63,6 +44,7 @@ function getDiasRestantes(caduca_el: string): { dias: number; horas: number; pct
 }
 
 export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: EntregaAlumnoProps) {
+  const supabase = createClient();
   const [isPending, startTransition] = useTransition();
   const [archivoSeleccionado, setArchivoSeleccionado] = useState<File | null>(null);
   const [errorLocal, setErrorLocal] = useState<string | null>(null);
@@ -79,12 +61,7 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
     : { dias: 0, horas: 0, pct: 0 };
 
   const validarArchivo = (file: File): string | null => {
-    if (file.size > MAX_SIZE_BYTES) return `El archivo supera ${MAX_SIZE_MB}MB (tamaño: ${(file.size / 1024 / 1024).toFixed(1)}MB)`;
-    const extension = file.name.split('.').pop()?.toLowerCase() || '';
-    if (!ALLOWED_MIME.includes(file.type) && !ALLOWED_EXTENSIONS.includes(extension)) {
-      return 'Tipo no permitido. Usa una foto, PDF, Excel, CSV, Word o PowerPoint.';
-    }
-    return null;
+    return academicUploadValidationMessage(file, { allowImages: true });
   };
 
   const handleFile = (file: File) => {
@@ -104,13 +81,37 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
   const handleSubir = () => {
     if (!archivoSeleccionado) return;
     startTransition(async () => {
-      const fd = new FormData();
-      fd.append('archivo', archivoSeleccionado);
-      fd.append('ejercicioId', ejercicioId);
-      const res = await subirEntregaAlumno(fd);
-      if (res.error) {
-        setErrorLocal(res.error);
-      } else {
+      setErrorLocal(null);
+      try {
+        const metadata = {
+          ejercicioId,
+          archivoNombre: archivoSeleccionado.name,
+          archivoTipo: archivoSeleccionado.type,
+          archivoTamano: archivoSeleccionado.size,
+        };
+        const prepared = await prepararCargaEntregaAlumno(metadata);
+        if (prepared.error || !prepared.uploadIntentId || !prepared.archivoPath || !prepared.token || !prepared.contentType) {
+          setErrorLocal(prepared.error || 'No se pudo preparar la entrega.');
+          return;
+        }
+        const { error: uploadError } = await supabase.storage
+          .from('entregas-alumnos')
+          .uploadToSignedUrl(prepared.archivoPath, prepared.token, archivoSeleccionado, {
+            contentType: prepared.contentType,
+          });
+        if (uploadError) {
+          setErrorLocal(`No se pudo subir el archivo: ${uploadError.message}`);
+          return;
+        }
+        const res = await confirmarCargaEntregaAlumno({
+          ...metadata,
+          archivoPath: prepared.archivoPath,
+          uploadIntentId: prepared.uploadIntentId,
+        });
+        if (res.error) {
+          setErrorLocal(res.error);
+          return;
+        }
         setExito(true);
         setEntrega({
           ...entrega,
@@ -120,6 +121,8 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
           primer_envio_en: entrega?.primer_envio_en || new Date().toISOString(),
         });
         setArchivoSeleccionado(null);
+      } catch (error: any) {
+        setErrorLocal(error?.message || 'No se pudo completar la entrega.');
       }
     });
   };
@@ -133,7 +136,7 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
         <div>
           <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">Tu Entrega</h3>
           <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">
-            Fotos, PDF, Excel, CSV, Word o PowerPoint · Máx {MAX_SIZE_MB}MB · 1 archivo
+            Fotos, PDF, Excel, CSV, Word o PowerPoint · Máx {ACADEMIC_UPLOAD_MAX_MB}MB · 1 archivo
           </p>
         </div>
       </div>
@@ -244,7 +247,7 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
               ref={inputRef}
               type="file"
               className="hidden"
-              accept={ACCEPTED_FILES}
+              accept={STUDENT_SUBMISSION_ACCEPT}
               onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }}
             />
             <input
@@ -277,7 +280,7 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
                 </div>
                 <div className="text-center">
                   <p className="font-black text-slate-600 text-sm">Arrastra tu archivo aquí o haz clic</p>
-                  <p className="text-[11px] text-slate-400 mt-1">Foto · PDF · Excel · CSV · Word · PowerPoint · máx {MAX_SIZE_MB}MB</p>
+                  <p className="text-[11px] text-slate-400 mt-1">Foto · PDF · Excel · CSV · Word · PowerPoint · máx {ACADEMIC_UPLOAD_MAX_MB}MB</p>
                 </div>
               </>
             )}

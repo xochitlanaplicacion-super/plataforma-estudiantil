@@ -2,6 +2,7 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 import { getHostnameCandidates, normalizeHostname } from '@/lib/tenant/hostname';
+import { getPlatformServiceEndDate } from '@/lib/service-countdown';
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
@@ -136,13 +137,17 @@ export async function updateSession(request: NextRequest) {
   }
 
 
-  const { data: service } = await supabase.from('pago_de_servicios')
-    .select('estado, fecha_inicio, duracion_dias, bloquear_acceso_usuarios')
-    .eq('tenant_id', profile.tenant_id).maybeSingle();
-  const serviceEndsAt = service?.fecha_inicio
-    ? new Date(`${service.fecha_inicio}T00:00:00`)
+  const [{ data: service }, { data: feature }] = await Promise.all([
+    supabase.from('pago_de_servicios')
+      .select('estado, fecha_inicio, duracion_dias, bloquear_acceso_usuarios')
+      .eq('tenant_id', profile.tenant_id).maybeSingle(),
+    supabase.from('tenant_features')
+      .select('primary_filter_enabled, timezone')
+      .eq('tenant_id', profile.tenant_id).maybeSingle(),
+  ]);
+  const serviceEndsAt = service
+    ? getPlatformServiceEndDate({ ...service, timezone: feature?.timezone || 'America/Mexico_City' })
     : null;
-  if (serviceEndsAt) serviceEndsAt.setDate(serviceEndsAt.getDate() + Number(service?.duracion_dias || 30));
   const serviceUnavailable = !service || service.estado !== 'SI' || (serviceEndsAt ? new Date() >= serviceEndsAt : false);
   if (serviceUnavailable && service?.bloquear_acceso_usuarios && ['profesor', 'alumno'].includes(profile.rol)) {
     const url = request.nextUrl.clone();
@@ -152,8 +157,6 @@ export async function updateSession(request: NextRequest) {
   }
 
   if (profile.rol === 'encargado_filtro') {
-    const { data: feature } = await supabase.from('tenant_features').select('primary_filter_enabled')
-      .eq('tenant_id', profile.tenant_id).maybeSingle();
     if (!feature?.primary_filter_enabled) {
       const url = request.nextUrl.clone(); url.pathname = '/expired'; url.searchParams.set('reason', 'feature');
       return NextResponse.redirect(url);
@@ -168,8 +171,6 @@ export async function updateSession(request: NextRequest) {
       url.pathname = profile.rol === 'profesor' ? '/dashboard/profesor' : '/dashboard/alumno';
       return NextResponse.redirect(url);
     }
-    const { data: feature } = await supabase.from('tenant_features').select('primary_filter_enabled')
-      .eq('tenant_id', profile.tenant_id).maybeSingle();
     if (!feature?.primary_filter_enabled) {
       const url = request.nextUrl.clone(); url.pathname = '/dashboard/admin';
       return NextResponse.redirect(url);

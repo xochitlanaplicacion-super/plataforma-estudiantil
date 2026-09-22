@@ -66,6 +66,8 @@ import { cn } from '@/lib/utils';
 import { GlobalChatNotification } from '@/components/shared/GlobalChatNotification';
 import { useInstitucion } from '@/hooks/use-institucion';
 import { verificarMensajesClasePendientes } from '@/lib/actions/mensajes_clases';
+import { ServiceTimeRemaining } from '@/components/shared/ServiceTimeRemaining';
+import type { PlatformServiceSummary } from '@/lib/service-countdown';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -74,6 +76,7 @@ interface DashboardLayoutProps {
   userId: string;
   userAvatar?: string | null;
   filterEnabled?: boolean;
+  serviceState?: PlatformServiceSummary | null;
 }
 
 function SidebarNav({ activeMenus, pathname, hasUnreadClases }: { activeMenus: any[], pathname: string, hasUnreadClases: boolean }) {
@@ -124,7 +127,7 @@ function SidebarNav({ activeMenus, pathname, hasUnreadClases }: { activeMenus: a
   );
 }
 
-export function DashboardLayout({ children, userRole, userName, userId, userAvatar, filterEnabled = false }: DashboardLayoutProps) {
+export function DashboardLayout({ children, userRole, userName, userId, userAvatar, filterEnabled = false, serviceState = null }: DashboardLayoutProps) {
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
@@ -325,7 +328,12 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
              </div>
           </header>
           <main className="flex-1 overflow-y-auto overflow-x-hidden p-6 md:p-10">
-            <div className={cn("max-w-full mx-auto animate-in fade-in slide-in-from-bottom-2", userRole === 'encargado_filtro' ? 'duration-150' : 'duration-700')}>{children}</div>
+            <div className={cn("max-w-full mx-auto animate-in fade-in slide-in-from-bottom-2", userRole === 'encargado_filtro' ? 'duration-150' : 'duration-700')}>
+              {serviceState && (userRole === 'profesor' || userRole === 'encargado_filtro') && (
+                <ServiceTimeRemaining service={serviceState} />
+              )}
+              {children}
+            </div>
           </main>
         </div>
       </SidebarInset>
