@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { parkourRaceGameActivity } from '@/lib/activities/parkour-race';
 import type { GameLeaderboard } from '@/lib/game-leaderboard';
+import type { GameAnswerEvent } from '@/lib/academic/game-answer-details';
 
 export interface ParkourRaceResult {
   hits: number;
@@ -12,6 +13,8 @@ export interface ParkourRaceResult {
   falls: number;
   score: number;
   seedCode: string;
+  answers?: GameAnswerEvent[];
+  answersTruncated?: boolean;
 }
 
 export function ParkourRaceFrame({

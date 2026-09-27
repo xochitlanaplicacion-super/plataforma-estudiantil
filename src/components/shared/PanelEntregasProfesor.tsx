@@ -18,7 +18,8 @@ import {
 import { AccionesArchivoEntrega } from '@/components/shared/AccionesArchivoEntrega';
 import { GaleriaEntrega } from '@/components/shared/GaleriaEntrega';
 import { readSubmissionPhotos } from '@/lib/storage/photo-gallery';
-import { exercisePerformanceCsv } from '@/lib/academic/exercise-performance-csv';
+import { exerciseAttemptDetailCsv, exercisePerformanceCsv } from '@/lib/academic/exercise-performance-csv';
+import { readExerciseAttempts } from '@/lib/academic/exercise-attempt-history';
 
 interface Entrega {
   alumno_id: string;
@@ -35,7 +36,7 @@ interface Entrega {
   intentos?: number;
   aciertos?: number;
   total_preguntas?: number;
-  historico_intentos?: any[];
+  historico_intentos?: unknown;
   profiles: {
     nombre: string;
     apellidos: string;
@@ -91,6 +92,7 @@ function EntregaRow({
   const nombreCompleto = entrega.profiles 
     ? `${entrega.profiles.nombre} ${entrega.profiles.apellidos}` 
     : entrega.alumno_id.substring(0, 8) + '...';
+  const attempts = readExerciseAttempts(entrega.historico_intentos);
 
   const handleCalificar = () => {
     const cal = parseFloat(calInput);
@@ -115,6 +117,7 @@ function EntregaRow({
   };
 
   const isAuto = ejercicioTipo !== 'actividad_descriptiva';
+  const isGame = ejercicioTipo === 'parkour_race' || ejercicioTipo === 'backrooms_scape';
 
   if (isAuto) {
     return (
@@ -125,22 +128,26 @@ function EntregaRow({
           </div>
           <div>
             <p className="font-black text-slate-800 text-sm">{nombreCompleto}</p>
-            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{entrega.intentos} Intentos Realizados</p>
+            <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">{entrega.intentos ?? attempts.length} intentos realizados</p>
           </div>
         </div>
 
         <div className="flex items-center gap-6">
           <div className="text-right hidden sm:block">
-            <p className="text-[10px] font-black uppercase text-indigo-400 tracking-widest mb-1">Aciertos</p>
+            <p className="text-[10px] font-black uppercase text-indigo-400 tracking-widest mb-1">
+              {isGame ? 'Aciertos al primer intento (última partida)' : 'Aciertos del último intento'}
+            </p>
             <div className="flex items-center gap-1.5 text-slate-700 font-bold text-sm">
               <Target className="w-4 h-4 text-emerald-500" />
-              {entrega.aciertos}/{entrega.total_preguntas}
+              {entrega.aciertos != null && entrega.total_preguntas != null
+                ? `${entrega.aciertos}/${entrega.total_preguntas}` : '—'}
             </div>
           </div>
           <div className="text-right">
-            <p className="text-[10px] font-black uppercase text-indigo-400 tracking-widest mb-1">Calificación</p>
+            <p className="text-[10px] font-black uppercase text-indigo-400 tracking-widest mb-1">Promedio / 10</p>
             <div className="bg-indigo-600 text-white px-3 py-1.5 rounded-xl font-black text-sm text-center">
-              {Number(entrega.calificacion || 0).toFixed(1)}
+              {entrega.calificacion != null && Number.isFinite(Number(entrega.calificacion))
+                ? Number(entrega.calificacion).toFixed(1) : '—'}
             </div>
           </div>
           
@@ -158,60 +165,86 @@ function EntregaRow({
                 <p className="text-sm font-bold text-slate-500">{nombreCompleto}</p>
               </DialogHeader>
               <div className="p-6 max-h-[60vh] overflow-y-auto space-y-4 custom-scrollbar">
-                {!entrega.historico_intentos || entrega.historico_intentos.length === 0 ? (
+                {attempts.length === 0 ? (
                   <div className="text-center py-8">
                     <Activity className="w-12 h-12 text-slate-200 mx-auto mb-3" />
                     <p className="font-black text-slate-500 uppercase tracking-widest text-sm">Registro en Versión Antigua</p>
                     <p className="text-xs font-bold text-slate-400 mt-2">No hay detalles almacenados para este alumno.</p>
                   </div>
                 ) : (
-                  entrega.historico_intentos.map((intento: any, idx: number) => (
+                  attempts.map((intento, idx) => (
                     <div key={idx} className="bg-white border rounded-2xl p-5 shadow-sm">
                       <div className="flex justify-between items-center mb-4 border-b pb-3">
                         <h4 className="font-black text-indigo-900 uppercase tracking-widest text-sm flex items-center gap-2">
-                          <span className="bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-md text-[10px]">#{intento.intento}</span>
+                          <span className="bg-indigo-100 text-indigo-600 px-2 py-0.5 rounded-md text-[10px]">#{intento.number}</span>
                           Intento
                         </h4>
                         <div className="text-right">
-                          <span className="bg-indigo-600 text-white px-2 py-1 rounded-lg text-xs font-black">{Number(intento.calificacion).toFixed(1)}</span>
+                          <span className="bg-indigo-600 text-white px-2 py-1 rounded-lg text-xs font-black">
+                            {intento.grade !== null ? `${intento.grade.toFixed(1)}/10` : 'Nota no disponible'}
+                          </span>
                           <p className="text-[9px] text-slate-400 uppercase font-bold mt-1 tracking-widest">
-                            {new Date(intento.fecha).toLocaleString('es-MX')}
+                            {intento.date && !Number.isNaN(Date.parse(intento.date))
+                              ? new Date(intento.date).toLocaleString('es-MX') : 'Fecha no disponible'}
                           </p>
                         </div>
                       </div>
-                      
-                      {intento.detalles && intento.detalles.length > 0 ? (
+                      {intento.hits !== null && intento.total !== null && (
+                        <p className="mb-4 text-xs font-semibold text-slate-600">
+                          {intento.game ? 'Aciertos al primer intento de esta partida' : 'Aciertos de este intento'}: {intento.hits}/{intento.total}
+                        </p>
+                      )}
+                      {intento.game && (
+                        <div className="mb-4 rounded-xl border border-indigo-100 bg-indigo-50/60 p-3">
+                          <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-indigo-700">
+                            Resumen de {intento.game.type === 'parkour_race' ? 'Parkour Race' : 'Backrooms Scape'}
+                          </p>
+                          <div className="grid grid-cols-2 gap-2 text-xs text-slate-700 sm:grid-cols-3">
+                            {intento.game.wrongAttempts !== null && <span>Respuestas incorrectas: <b>{intento.game.wrongAttempts}</b></span>}
+                            {intento.game.seconds !== null && <span>Tiempo: <b>{Math.round(intento.game.seconds)} s</b></span>}
+                            {intento.game.falls !== null && <span>Caídas: <b>{intento.game.falls}</b></span>}
+                            {intento.game.captures !== null && <span>Capturas: <b>{intento.game.captures}</b></span>}
+                            {intento.game.fragments !== null && <span>Fragmentos: <b>{intento.game.fragments}</b></span>}
+                            {intento.game.points !== null && <span>Puntos: <b>{intento.game.points}</b></span>}
+                            {intento.game.mapCode && <span>Mapa: <b>{intento.game.mapCode}</b></span>}
+                          </div>
+                        </div>
+                      )}
+                      {intento.game?.traceTruncated && (
+                        <p className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-semibold text-amber-900">
+                          Historial parcial: esta partida tuvo más respuestas o reintentos de los que se pudieron conservar.
+                          {intento.game.answersOmitted > 0 ? ` Se omitieron al menos ${intento.game.answersOmitted}.` : ''}
+                        </p>
+                      )}
+                      {intento.answers.length > 0 ? (
                         <div>
                           <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest mb-3 flex items-center gap-1">
-                            <Activity className="w-3 h-3" /> Desglose de Respuestas ({intento.detalles.length})
+                            <Activity className="w-3 h-3" /> Respuestas y reintentos ({intento.answers.length})
                           </p>
                           <ul className="space-y-3">
-                            {intento.detalles.map((err: any, eIdx: number) => {
-                              const esCorrecto = err.esCorrecto !== false; // If not explicitly false, assume true (or handle legacy where missing meant false, but we'll assume modern schema)
-                              // Actually, legacy data only has mistakes. So if esCorrecto is undefined, it's an old record which means it was a mistake.
-                              const isActuallyCorrect = err.esCorrecto === true;
-                              
-                              return (
-                                <li key={eIdx} className={cn("p-3 rounded-xl border text-xs", isActuallyCorrect ? "bg-emerald-50/50 border-emerald-100" : "bg-red-50/50 border-red-100")}>
-                                  <span className="font-bold text-slate-700 block mb-1">{err.reactivo || 'Pregunta/Concepto'}</span>
-                                  <div className="flex items-center gap-4 mt-2">
-                                    {isActuallyCorrect ? (
-                                      <span className="text-emerald-600 font-bold flex-1 break-words">✓ {err.respuesta_correcta}</span>
-                                    ) : (
-                                      <>
-                                        <span className="text-red-600 font-semibold line-through opacity-70 flex-1 break-words">✗ {err.respuesta_dada || 'Vacío'}</span>
-                                        <span className="text-emerald-600 font-bold flex-1 break-words">✓ {err.respuesta_correcta}</span>
-                                      </>
-                                    )}
-                                  </div>
-                                </li>
-                              );
-                            })}
+                            {intento.answers.map((answer, answerIndex) => (
+                              <li key={answerIndex} className={cn('rounded-xl border p-3 text-xs',
+                                answer.isCorrect ? 'border-emerald-100 bg-emerald-50/50' : 'border-red-100 bg-red-50/50')}>
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <span className="font-bold text-slate-700">{answer.prompt}</span>
+                                  <span className={cn('font-bold', answer.isCorrect ? 'text-emerald-700' : 'text-red-700')}>
+                                    {answer.retryNumber ? `Respuesta ${answer.retryNumber} · ` : ''}
+                                    {answer.timedOut ? 'Tiempo agotado' : answer.isCorrect ? 'Correcta' : 'Incorrecta'}
+                                  </span>
+                                </div>
+                                <div className="mt-2 grid gap-1 sm:grid-cols-2">
+                                  <span className="break-words text-slate-600">Respondió: <b>{answer.given ?? (answer.timedOut ? 'Sin respuesta' : 'No registrada')}</b></span>
+                                  <span className="break-words text-emerald-700">Correcta: <b>{answer.correctAnswer ?? 'No registrada'}</b></span>
+                                </div>
+                              </li>
+                            ))}
                           </ul>
                         </div>
                       ) : (
-                        <p className="text-xs font-bold text-emerald-600 flex items-center gap-2 bg-emerald-50 p-3 rounded-xl">
-                          <CheckCircle2 className="w-4 h-4" /> Actividad resuelta sin registrar detalles.
+                        <p className="rounded-xl bg-amber-50 p-3 text-xs font-semibold text-amber-800">
+                          {intento.game
+                            ? 'Esta partida guardó el resultado general, pero no las respuestas de cada pregunta. No es posible reconstruirlas.'
+                            : 'No hay desglose de respuestas disponible para este intento.'}
                         </p>
                       )}
                     </div>
@@ -365,6 +398,17 @@ export function PanelEntregasProfesor({ ejercicios, materiaNombre, isGroupMode }
     );
   };
 
+  const downloadCsv = (csv: string, fileName: string) => {
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = fileName;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  };
+
+  const exerciseFileName = (exercise: Ejercicio) => exercise.titulo.replace(/[^a-z0-9-]+/gi, '-').slice(0, 60);
+
   const downloadPerformance = (exercise: Ejercicio) => {
     const csv = exercisePerformanceCsv(entregas.map((row) => ({
       name: row.profiles ? `${row.profiles.nombre} ${row.profiles.apellidos}` : row.alumno_id,
@@ -374,13 +418,17 @@ export function PanelEntregasProfesor({ ejercicios, materiaNombre, isGroupMode }
       hits: row.aciertos,
       total: row.total_preguntas,
       attempts: row.intentos,
+    })), { game: exercise.tipo === 'parkour_race' || exercise.tipo === 'backrooms_scape' });
+    downloadCsv(csv, `resultados-${exerciseFileName(exercise)}.csv`);
+  };
+
+  const downloadAttemptDetails = (exercise: Ejercicio) => {
+    const csv = exerciseAttemptDetailCsv(entregas.map((row) => ({
+      name: row.profiles ? `${row.profiles.nombre} ${row.profiles.apellidos}` : row.alumno_id,
+      group: row.grupo_nombre,
+      history: row.historico_intentos,
     })));
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `resultados-${exercise.titulo.replace(/[^a-z0-9-]+/gi, '-').slice(0, 60)}.csv`;
-    anchor.click();
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    downloadCsv(csv, `intentos-y-respuestas-${exerciseFileName(exercise)}.csv`);
   };
 
   if (ejercicios.length === 0) return null;
@@ -441,11 +489,17 @@ export function PanelEntregasProfesor({ ejercicios, materiaNombre, isGroupMode }
             {activo && (
               <div className="border-t border-slate-100 bg-slate-50/50 p-5 space-y-4">
                 {!cargando && ej.tipo !== 'actividad_descriptiva' && entregas.length > 0 && (
-                  <div className="flex justify-end">
+                  <div className="flex flex-wrap justify-end gap-2">
                     <button type="button" onClick={() => downloadPerformance(ej)}
                       className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-700">
-                      Descargar reporte de resultados CSV
+                      Descargar resumen CSV
                     </button>
+                    {entregas.some((row) => readExerciseAttempts(row.historico_intentos).length > 0) && (
+                      <button type="button" onClick={() => downloadAttemptDetails(ej)}
+                        className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-700">
+                        Descargar intentos y respuestas CSV
+                      </button>
+                    )}
                   </div>
                 )}
                 {isGroupMode && !cargando && entregas.length > 0 && (

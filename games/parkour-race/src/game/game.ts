@@ -10,6 +10,11 @@ import { UniversalCamera } from "@babylonjs/core/Cameras/universalCamera";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector";
 import type { Activity, Results } from "../lib/core";
 import { seedCode, fmtTime } from "../lib/core";
+import {
+  appendParkourAnswer,
+  makeParkourAnswerEvent,
+  type GameAnswerTrace,
+} from "../lib/answer-trace";
 import { useStore } from "../store";
 import { buildSkyAndLights, burstConfetti, SkyRig } from "./builder";
 import { generateCourse, GeneratedCourse } from "./generator";
@@ -58,6 +63,8 @@ export class AdventureGame {
   private checkpoint: { pos: Vector3; yaw: number };
   private stats = { falls: 0, wrong: 0, score: 0, answered: 0, firstTryCorrect: 0 };
   private firstTry = true;
+  private answerAttemptsByStation = new Map<number, number>();
+  private answerTrace: GameAnswerTrace = { answers: [], truncated: false };
 
   private onKeyDown: (e: KeyboardEvent) => void;
   private onKeyUp: (e: KeyboardEvent) => void;
@@ -244,6 +251,12 @@ export class AdventureGame {
     if (!q) return "wrong";
     const question = this.course.orderedQuestions[q.index];
     if (!question) return "wrong";
+    const attemptNumber = (this.answerAttemptsByStation.get(q.index) ?? 0) + 1;
+    this.answerAttemptsByStation.set(q.index, attemptNumber);
+    this.answerTrace = appendParkourAnswer(
+      this.answerTrace,
+      makeParkourAnswerEvent(question, choice, attemptNumber),
+    );
     const ok = choice === question.correctIndex;
     if (ok) {
       this.completeStation(q.index);
@@ -422,6 +435,8 @@ export class AdventureGame {
           falls: this.stats.falls,
           score: results.score,
           seedCode: results.seedCode,
+          answers: this.answerTrace.answers,
+          answersTruncated: this.answerTrace.truncated,
         },
       }, window.location.origin);
     }

@@ -37,6 +37,7 @@ import {
 } from "./textures";
 import { shuffleQuestion, type ShuffledQuestion } from "./questions";
 import { seedCode, type PlatformActivity, type PlatformResult } from "../platform";
+import { appendBackroomsAnswer, makeBackroomsAnswerEvent, type BackroomsAnswerTrace } from './answer-history';
 import { AudioEngine } from "./audio";
 import { backroomsMusic } from "./music";
 import {
@@ -239,6 +240,9 @@ export class BackroomsGame {
   private correctN = 0;
   private firstTryN = 0;
   private wrongN = 0;
+  private answerHistory: BackroomsAnswerTrace = { answers: [], truncated: false };
+  private answerOrder = 0;
+  private attemptsByQuestion = new Map<string, number>();
   private usedQuestions = new Set<number>();
   private question: { q: ShuffledQuestion; left: number; total: number; room: Room } | null = null;
   private answerFeedback: AnswerFeedback | null = null;
@@ -890,6 +894,9 @@ export class BackroomsGame {
     this.correctN = 0;
     this.firstTryN = 0;
     this.wrongN = 0;
+    this.answerHistory = { answers: [], truncated: false };
+    this.answerOrder = 0;
+    this.attemptsByQuestion.clear();
     this.usedQuestions.clear();
     this.question = null;
     this.answerFeedback = null;
@@ -996,6 +1003,7 @@ export class BackroomsGame {
     if (this.mode !== "question" || !this.question) return;
     const { q, room } = this.question;
     const correct = i === q.correct;
+    this.recordAnswer(q, i);
     backroomsMusic.leaveQuestion();
     if (!this.activity.settings.showFeedback) {
       if (correct) this.onCorrect(room);
@@ -1265,7 +1273,17 @@ export class BackroomsGame {
       score: this.score,
       seedCode: seedCode(this.seed),
       fragments: this.fragments,
+      answers: [...this.answerHistory.answers],
+      answersTruncated: this.answerHistory.truncated,
     });
+  }
+
+  private recordAnswer(q: ShuffledQuestion, selectedIndex: number | null, timedOut = false): void {
+    const questionId = q.id.slice(0, 80);
+    const attemptNumber = (this.attemptsByQuestion.get(questionId) ?? 0) + 1;
+    this.attemptsByQuestion.set(questionId, attemptNumber);
+    const answer = makeBackroomsAnswerEvent(q, selectedIndex, attemptNumber, ++this.answerOrder, timedOut);
+    this.answerHistory = appendBackroomsAnswer(this.answerHistory, answer);
   }
 
   // --------------------------- update ---------------------------
@@ -1823,6 +1841,7 @@ export class BackroomsGame {
     this.question.left -= dt;
     if (this.question.left <= 0) {
       this.question.left = 0;
+      this.recordAnswer(this.question.q, null, true);
       backroomsMusic.leaveQuestion();
       if (!this.activity.settings.showFeedback) {
         this.onWrong(this.question.room, true);

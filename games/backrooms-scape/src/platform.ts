@@ -38,6 +38,19 @@ export interface PlatformResult {
   score: number;
   seedCode: string;
   fragments: number;
+  answers: PlatformAnswer[];
+  answersTruncated: boolean;
+}
+
+export interface PlatformAnswer {
+  questionId: string;
+  prompt: string;
+  selectedAnswer: string | null;
+  correctAnswer: string;
+  isCorrect: boolean;
+  attemptNumber: number;
+  order: number;
+  timedOut?: boolean;
 }
 
 const clamp = (value: number, minimum: number, maximum: number) => Math.max(minimum, Math.min(maximum, value));

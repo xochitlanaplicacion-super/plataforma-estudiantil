@@ -15,6 +15,23 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { ParkourRaceFrame } from '@/components/activities/parkour-race/ParkourRaceFrame';
 import { BackroomsScapeFrame } from '@/components/activities/backrooms-scape/BackroomsScapeFrame';
 import type { GameLeaderboard } from '@/lib/game-leaderboard';
+import { normalizeGameAnswerDetails } from '@/lib/academic/game-answer-details';
+
+function gameAttemptDetails(
+  gameType: 'parkour_race' | 'backrooms_scape',
+  metrics: Record<string, unknown>,
+  answers: unknown,
+  answersTruncated = false,
+) {
+  const { details, omitted } = normalizeGameAnswerDetails(answers);
+  return [{
+    tipo: gameType,
+    ...metrics,
+    detalle_respuestas_disponible: Array.isArray(answers),
+    respuestas_omitidas: omitted,
+    traza_truncada: answersTruncated || omitted > 0,
+  }, ...details];
+}
 
 // --- MOBILE DRAG INSTRUCTIONS POPUP ---
 function MobileDragTip({ type, onDismiss }: { type: string; onDismiss: () => void }) {
@@ -639,15 +656,14 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
             exercise={exercise}
             leaderboard={gameLeaderboard}
             onClose={onClose}
-            onComplete={onComplete ? (result) => onComplete(result.hits, result.total, [{
-              tipo: 'backrooms_scape',
+            onComplete={onComplete ? (result) => onComplete(result.hits, result.total, gameAttemptDetails('backrooms_scape', {
               intentos_incorrectos: result.wrongAttempts,
               tiempo_segundos: result.time,
               capturas: result.captures,
               fragmentos: result.fragments,
               puntos_juego: result.score,
               codigo_mapa: result.seedCode,
-            }]) : undefined}
+            }, result.answers, result.answersTruncated)) : undefined}
           />
         </div>
       );
@@ -660,14 +676,13 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
             exercise={exercise}
             leaderboard={gameLeaderboard}
             onClose={onClose}
-            onComplete={onComplete ? (result) => onComplete(result.hits, result.total, [{
-              tipo: 'parkour_race',
+            onComplete={onComplete ? (result) => onComplete(result.hits, result.total, gameAttemptDetails('parkour_race', {
               intentos_incorrectos: result.wrongAttempts,
               tiempo_segundos: result.time,
               caidas: result.falls,
               puntos_juego: result.score,
               codigo_mapa: result.seedCode,
-            }]) : undefined}
+            }, result.answers, result.answersTruncated)) : undefined}
           />
         </div>
       );

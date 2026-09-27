@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { backroomsScapeGameActivity } from '@/lib/activities/backrooms-scape';
 import type { GameLeaderboard } from '@/lib/game-leaderboard';
+import type { GameAnswerEvent } from '@/lib/academic/game-answer-details';
 
 export interface BackroomsScapeResult {
   hits: number;
@@ -13,6 +14,8 @@ export interface BackroomsScapeResult {
   score: number;
   seedCode: string;
   fragments: number;
+  answers?: GameAnswerEvent[];
+  answersTruncated?: boolean;
 }
 
 export function BackroomsScapeFrame({ exercise, leaderboard, onComplete, onClose, className = '' }: {
