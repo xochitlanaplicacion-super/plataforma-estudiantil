@@ -3,6 +3,8 @@
 import { requireTenantSession } from '@/lib/tenant/context';
 
 import { randomUUID } from 'node:crypto';
+import { after } from 'next/server';
+import { dispatchSubmissionPush } from '@/lib/notifications/submission-push';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import {
   academicExerciseErrorMessage,
@@ -351,6 +353,10 @@ export async function saveExerciseResult(
 
   try {
     const response = parseExerciseResultResponse(data);
+    if (response.saved) {
+      after(async () => { try { await dispatchSubmissionPush(); }
+        catch { console.warn('[KIBO push] Resultado automático guardado; aviso pendiente de reintento.'); } });
+    }
     return {
       success: true,
       isExpired: response.status === 'expired',

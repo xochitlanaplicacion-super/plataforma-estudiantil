@@ -17,6 +17,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { AccionesArchivoEntrega } from '@/components/shared/AccionesArchivoEntrega';
+import { GaleriaEntrega } from '@/components/shared/GaleriaEntrega';
+import { readSubmissionPhotos } from '@/lib/storage/photo-gallery';
 
 // ── Tipos ──────────────────────────────────────────────────────────
 
@@ -26,6 +28,7 @@ interface EntregaGlobal {
   archivo_url: string;
   archivo_nombre: string;
   archivo_path: string;
+  fotos_json?: unknown;
   primer_envio_en: string;
   caduca_el: string;
   calificacion: number | null;
@@ -188,7 +191,9 @@ function EntregaRowGlobal({
         </div>
 
         {/* Archivo */}
-        {!vencido && entrega.archivo_path ? (
+        {!vencido && readSubmissionPhotos(entrega.fotos_json).length > 0 ? (
+          <GaleriaEntrega photos={entrega.fotos_json} />
+        ) : !vencido && entrega.archivo_path ? (
           <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
             <FileText className="w-5 h-5 text-blue-500 shrink-0" />
             <span className="text-sm font-bold text-slate-700 truncate flex-1">{entrega.archivo_nombre}</span>

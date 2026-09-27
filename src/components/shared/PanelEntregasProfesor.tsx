@@ -16,13 +16,18 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { AccionesArchivoEntrega } from '@/components/shared/AccionesArchivoEntrega';
+import { GaleriaEntrega } from '@/components/shared/GaleriaEntrega';
+import { readSubmissionPhotos } from '@/lib/storage/photo-gallery';
+import { exercisePerformanceCsv } from '@/lib/academic/exercise-performance-csv';
 
 interface Entrega {
   alumno_id: string;
   archivo_url: string;
   archivo_nombre: string;
   archivo_path: string;
+  fotos_json?: unknown;
   primer_envio_en: string;
+  fecha_completado?: string | null;
   caduca_el: string;
   calificacion: number | null;
   row_version: number;
@@ -249,7 +254,9 @@ function EntregaRow({
       </div>
 
       {/* Archivo */}
-      {!vencido && entrega.archivo_path ? (
+      {!vencido && readSubmissionPhotos(entrega.fotos_json).length > 0 ? (
+        <GaleriaEntrega photos={entrega.fotos_json} />
+      ) : !vencido && entrega.archivo_path ? (
         <div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-100">
           <FileText className="w-5 h-5 text-blue-500 shrink-0" />
           <span className="text-sm font-bold text-slate-700 truncate flex-1">{entrega.archivo_nombre}</span>
@@ -358,6 +365,24 @@ export function PanelEntregasProfesor({ ejercicios, materiaNombre, isGroupMode }
     );
   };
 
+  const downloadPerformance = (exercise: Ejercicio) => {
+    const csv = exercisePerformanceCsv(entregas.map((row) => ({
+      name: row.profiles ? `${row.profiles.nombre} ${row.profiles.apellidos}` : row.alumno_id,
+      group: row.grupo_nombre,
+      completedAt: row.fecha_completado || row.primer_envio_en,
+      grade: row.calificacion,
+      hits: row.aciertos,
+      total: row.total_preguntas,
+      attempts: row.intentos,
+    })));
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `resultados-${exercise.titulo.replace(/[^a-z0-9-]+/gi, '-').slice(0, 60)}.csv`;
+    anchor.click();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  };
+
   if (ejercicios.length === 0) return null;
 
   return (
@@ -415,6 +440,14 @@ export function PanelEntregasProfesor({ ejercicios, materiaNombre, isGroupMode }
             {/* Lista de entregas */}
             {activo && (
               <div className="border-t border-slate-100 bg-slate-50/50 p-5 space-y-4">
+                {!cargando && ej.tipo !== 'actividad_descriptiva' && entregas.length > 0 && (
+                  <div className="flex justify-end">
+                    <button type="button" onClick={() => downloadPerformance(ej)}
+                      className="rounded-lg border border-indigo-200 bg-white px-3 py-2 text-xs font-bold text-indigo-700">
+                      Descargar reporte de resultados CSV
+                    </button>
+                  </div>
+                )}
                 {isGroupMode && !cargando && entregas.length > 0 && (
                   <div className="flex items-center justify-end mb-4 gap-2">
                     <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Filtrar por grupo:</span>

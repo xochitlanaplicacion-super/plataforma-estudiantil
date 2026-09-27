@@ -40,10 +40,13 @@ export async function dispatchSubmissionPush() {
   if (!rows?.length) return { enabled: true, submitted: 0 };
   try {
     const response = await expo('send', rows.map((row: any) => ({
-      to: row.token, title: 'KIBO · Nueva entrega', body: 'Un alumno entregó una tarea. Toca para revisarla.',
+      to: row.token, title: row.tipo_aviso === 'exercise_result' ? 'KIBO · Ejercicio completado' : 'KIBO · Nueva entrega',
+      body: row.tipo_aviso === 'exercise_result' ? 'Se guardó la calificación de un ejercicio. Toca para ver el resultado.' : 'Un alumno entregó una tarea. Toca para revisarla.',
       sound: 'default', priority: 'high', channelId: 'kibo-entregas-v1',
-      data: { type: 'submission', notificationId: row.id, teacherId: row.profesor_id,
-        tenantId: row.tenant_id, assignmentId: row.asignacion_id, exerciseId: row.ejercicio_id },
+      data: { type: row.tipo_aviso === 'exercise_result' ? 'exercise_result' : 'submission',
+        notificationId: row.id, teacherId: row.profesor_id,
+        tenantId: row.tenant_id, assignmentId: row.asignacion_id, exerciseId: row.ejercicio_id,
+        ...(row.tipo_aviso === 'exercise_result' ? { resultId: row.resultado_id } : {}) },
     })));
     if (!Array.isArray(response.data) || response.data.length !== rows.length) throw new Error('PUSH_RESPONSE_INVALID');
     for (let i=0;i<rows.length;i++) {

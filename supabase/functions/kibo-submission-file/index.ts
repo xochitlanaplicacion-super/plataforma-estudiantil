@@ -8,7 +8,7 @@ Deno.serve(async request => {
   const { data: auth, error: authError } = await db.auth.getUser();
   if (authError || !auth.user) return Response.json({ error: 'Sesión inválida.' }, { status: 401 });
   try {
-    const { assignmentId, exerciseId, studentId, download } = await request.json();
+    const { assignmentId, exerciseId, studentId, download, gallery } = await request.json();
     const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (![assignmentId, exerciseId, studentId].every(id => typeof id === 'string' && uuid.test(id))) {
       return Response.json({ error: 'Solicitud inválida.' }, { status: 400 });
@@ -21,13 +21,26 @@ Deno.serve(async request => {
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
     const { data: profile } = await admin.from('profiles').select('tenant_id').eq('id', auth.user.id).single();
     const { data: result, error: resultError } = await admin.from('resultados_ejercicios')
-      .select('archivo_path,archivo_nombre,caduca_el').eq('tenant_id', profile?.tenant_id)
+      .select('archivo_path,archivo_nombre,fotos_json,caduca_el').eq('tenant_id', profile?.tenant_id)
       .eq('ejercicio_id', exerciseId).eq('alumno_id', studentId).eq('inscripcion_alumno_id', student.enrollmentId).maybeSingle();
     if (resultError || !result?.archivo_path || !result.archivo_path.startsWith(`${profile?.tenant_id}/entregas/`)) {
       return Response.json({ error: 'La entrega no tiene archivo disponible.' }, { status: 404 });
     }
     if (result.caduca_el && Date.parse(result.caduca_el) <= Date.now()) {
       return Response.json({ error: 'El archivo de esta entrega ya caducó.' }, { status: 410 });
+    }
+    const photos = Array.isArray(result.fotos_json) ? result.fotos_json : [];
+    if (gallery && photos.length) {
+      const allowed = photos.filter((item: { path?: unknown; name?: unknown }) =>
+        typeof item.path === 'string' && item.path.startsWith(`${profile?.tenant_id}/entregas/${studentId}/${exerciseId}/`)
+          && typeof item.name === 'string').slice(0, 15);
+      if (allowed.length !== photos.length) return Response.json({ error: 'Galería inválida.' }, { status: 422 });
+      const signed = await Promise.all(allowed.map(async (item: { path: string; name: string }) => {
+        const { data, error } = await admin.storage.from('entregas-alumnos').createSignedUrl(item.path, 300);
+        if (error || !data) throw new Error('STORAGE_UNAVAILABLE');
+        return { url: data.signedUrl, name: item.name };
+      }));
+      return Response.json({ photos: signed }, { headers: { 'Cache-Control': 'no-store' } });
     }
     const { data, error: signingError } = await admin.storage.from('entregas-alumnos')
       .createSignedUrl(result.archivo_path, 300, download ? { download: result.archivo_nombre || true } : {});

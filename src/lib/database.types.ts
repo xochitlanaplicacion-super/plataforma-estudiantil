@@ -3782,6 +3782,7 @@ export type Database = {
           ejercicio_id: string
           estado: string | null
           fecha_completado: string | null
+          fotos_json: Json | null
           historico_intentos: Json | null
           id: string
           idempotency_key: string | null
@@ -3815,6 +3816,7 @@ export type Database = {
           ejercicio_id: string
           estado?: string | null
           fecha_completado?: string | null
+          fotos_json?: Json | null
           historico_intentos?: Json | null
           id?: string
           idempotency_key?: string | null
@@ -3848,6 +3850,7 @@ export type Database = {
           ejercicio_id?: string
           estado?: string | null
           fecha_completado?: string | null
+          fotos_json?: Json | null
           historico_intentos?: Json | null
           id?: string
           idempotency_key?: string | null
@@ -5099,6 +5102,10 @@ export type Database = {
           p_fecha_desde: string | null
           p_fecha_hasta: string | null
         }
+        Returns: Json
+      }
+      obtener_reporte_trabajos_docente: {
+        Args: { p_asignacion_id: string }
         Returns: Json
       }
       obtener_contexto_asistencia_conceptos_docente: {

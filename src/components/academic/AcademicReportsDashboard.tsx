@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
 import { isPastDeadline } from '@/lib/academic/deadline-policy';
+import { TeacherWorkReport } from './TeacherWorkReport';
 
 type View = 'attendance' | 'evidence';
 const dateLabel = (value: string) =>
@@ -414,6 +415,10 @@ export function AcademicReportsDashboard({ initialData }: { initialData: Academi
           </div>
         </CardContent>
       </Card>
+      <TeacherWorkReport assignmentId={data.selectedAssignmentId}
+        assignmentLabel={data.assignments.find((item) => item.id === data.selectedAssignmentId)
+          ? (() => { const item = data.assignments.find((row) => row.id === data.selectedAssignmentId)!;
+            return `${item.subjectName} · ${item.gradeName} · ${item.groupName}`; })() : 'Materia y grupo'} />
       <Card>
         <CardContent className="space-y-4 p-5">
           <div className="flex items-start gap-3">

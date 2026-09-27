@@ -4,6 +4,29 @@ import { z } from 'zod';
 import { requireTenantSession } from '@/lib/tenant/context';
 import { mergeReportExercises, type ReportExercise, type ReportExerciseGrade } from '@/lib/academic/report-exercise-merge';
 
+const workRow = z.object({
+  exerciseId: z.string().uuid(), exerciseTitle: z.string(), exerciseType: z.string(),
+  studentId: z.string().uuid(), studentName: z.string(), enrollmentId: z.string().uuid(),
+  grade: z.number().nullable(), state: z.string().nullable(), completedAt: z.string().nullable(),
+  hits: z.number().nullable(), totalQuestions: z.number().nullable(), attempts: z.number().nullable(),
+  hasUpload: z.boolean(), photoCount: z.number().int().nonnegative(), weighted: z.boolean(),
+});
+const workReport = z.object({ assignmentId: z.string().uuid(), periodId: z.string().uuid(), rows: z.array(workRow) });
+export type TeacherWorkReport = z.infer<typeof workReport>;
+
+export async function loadTeacherWorkReportAction(assignmentId: string): Promise<
+  { ok: true; data: TeacherWorkReport } | { ok: false; message: string }> {
+  try {
+    if (!z.string().uuid().safeParse(assignmentId).success) return { ok: false, message: 'Selecciona una materia y grupo.' };
+    const { supabase } = await requireTenantSession(['profesor']);
+    const { data, error } = await supabase.rpc('obtener_reporte_trabajos_docente', { p_asignacion_id: assignmentId });
+    if (error) throw error;
+    return { ok: true, data: workReport.parse(data) };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'No se pudo cargar el reporte de trabajos.' };
+  }
+}
+
 const assignmentSchema = z.object({
   id: z.string().uuid(),
   subjectName: z.string(),

@@ -3,8 +3,10 @@
 import React, { useState, useRef, useTransition } from 'react';
 import { Upload, FileText, FileSpreadsheet, File, CheckCircle2, Clock, AlertTriangle, Loader2, X, Camera, Image as ImageIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { confirmarCargaEntregaAlumno, prepararCargaEntregaAlumno } from '@/lib/actions/entregas';
+import { confirmarCargaEntregaAlumno, prepararCargaEntregaAlumno, confirmarCargaFotosAlumno, prepararCargaFotosAlumno } from '@/lib/actions/entregas';
 import { AccionesArchivoEntrega } from '@/components/shared/AccionesArchivoEntrega';
+import { GaleriaEntrega } from '@/components/shared/GaleriaEntrega';
+import { MAX_GALLERY_BYTES, MAX_SUBMISSION_PHOTOS, prepareSubmissionPhoto, readSubmissionPhotos } from '@/lib/storage/photo-gallery';
 import { createClient } from '@/lib/supabase/client';
 import {
   ACADEMIC_UPLOAD_MAX_MB,
@@ -17,6 +19,7 @@ interface EntregaAlumnoProps {
   entregaExistente?: {
     archivo_nombre?: string | null;
     archivo_path?: string | null;
+    fotos_json?: unknown;
     caduca_el?: string | null;
     primer_envio_en?: string | null;
     calificacion?: number | null;
@@ -47,12 +50,15 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
   const supabase = createClient();
   const [isPending, startTransition] = useTransition();
   const [archivoSeleccionado, setArchivoSeleccionado] = useState<File | null>(null);
+  const [fotos, setFotos] = useState<File[]>([]);
+  const [procesandoFotos, setProcesandoFotos] = useState(false);
   const [errorLocal, setErrorLocal] = useState<string | null>(null);
   const [exito, setExito] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [entrega, setEntrega] = useState(entregaExistente);
   const inputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const photosInputRef = useRef<HTMLInputElement>(null);
 
   const yaCalificado = entrega?.calificacion !== null && entrega?.calificacion !== undefined;
   const tieneArchivo = !!entrega?.archivo_nombre;
@@ -69,6 +75,27 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
     if (err) { setErrorLocal(err); setArchivoSeleccionado(null); return; }
     setErrorLocal(null);
     setArchivoSeleccionado(file);
+    setFotos([]);
+  };
+
+  const addPhotos = async (selected: FileList | null) => {
+    if (!selected?.length) return;
+    if (fotos.length + selected.length > MAX_SUBMISSION_PHOTOS) {
+      setErrorLocal(`Máximo ${MAX_SUBMISSION_PHOTOS} fotos por entrega.`); return;
+    }
+    setProcesandoFotos(true);
+    try {
+      const next: File[] = [];
+      for (const file of Array.from(selected)) next.push(await prepareSubmissionPhoto(file));
+      if ([...fotos, ...next].reduce((sum, item) => sum + item.size, 0) > MAX_GALLERY_BYTES) {
+        throw new Error('La galería supera 20 MB. Elimina algunas fotos.');
+      }
+      setFotos((current) => [...current, ...next]);
+      setArchivoSeleccionado(null);
+      setErrorLocal(null);
+    } catch (error) {
+      setErrorLocal(error instanceof Error ? error.message : 'No se pudieron procesar las fotos.');
+    } finally { setProcesandoFotos(false); }
   };
 
   const handleDrop = (e: React.DragEvent) => {
@@ -79,10 +106,31 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
   };
 
   const handleSubir = () => {
-    if (!archivoSeleccionado) return;
+    if (!archivoSeleccionado && !fotos.length) return;
     startTransition(async () => {
       setErrorLocal(null);
       try {
+        if (fotos.length) {
+          const metadata = fotos.map((file) => ({ ejercicioId, archivoNombre: file.name,
+            archivoTipo: file.type, archivoTamano: file.size }));
+          const prepared = await prepararCargaFotosAlumno(metadata);
+          if (!prepared.uploads || !prepared.uploadIntentId) {
+            setErrorLocal(prepared.error || 'No se pudo preparar la galería.'); return;
+          }
+          for (let index = 0; index < fotos.length; index++) {
+            const upload = prepared.uploads[index];
+            const { error } = await supabase.storage.from('entregas-alumnos')
+              .uploadToSignedUrl(upload.path, upload.token, fotos[index], { contentType: 'image/jpeg' });
+            if (error) { setErrorLocal(`No se pudo subir la foto ${index + 1}: ${error.message}`); return; }
+          }
+          const saved = await confirmarCargaFotosAlumno({ ejercicioId, uploadIntentId: prepared.uploadIntentId, fotos: metadata });
+          if (saved.error) { setErrorLocal(saved.error); return; }
+          setEntrega({ ...entrega, archivo_nombre: `${fotos.length} fotos`, archivo_path: saved.archivo_path,
+            fotos_json: saved.fotos_json, caduca_el: saved.caduca_el,
+            primer_envio_en: entrega?.primer_envio_en || new Date().toISOString() });
+          setFotos([]); setExito(true); return;
+        }
+        if (!archivoSeleccionado) return;
         const metadata = {
           ejercicioId,
           archivoNombre: archivoSeleccionado.name,
@@ -117,6 +165,7 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
           ...entrega,
           archivo_nombre: archivoSeleccionado.name,
           archivo_path: res.archivo_path,
+          fotos_json: null,
           caduca_el: res.caduca_el,
           primer_envio_en: entrega?.primer_envio_en || new Date().toISOString(),
         });
@@ -136,7 +185,7 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
         <div>
           <h3 className="font-black text-slate-800 uppercase tracking-widest text-sm">Tu Entrega</h3>
           <p className="text-[11px] text-slate-400 font-bold uppercase tracking-wider">
-            Fotos, PDF, Excel, CSV, Word o PowerPoint · Máx {ACADEMIC_UPLOAD_MAX_MB}MB · 1 archivo
+            Hasta 15 fotos comprimidas o 1 archivo · Máx {ACADEMIC_UPLOAD_MAX_MB}MB
           </p>
         </div>
       </div>
@@ -165,7 +214,9 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
               <p className="text-xs text-slate-500 font-semibold">Entregado · Pendiente de calificación</p>
             </div>
           </div>
-          {entrega?.archivo_path && (
+          {readSubmissionPhotos(entrega?.fotos_json).length > 0 ? (
+            <GaleriaEntrega photos={entrega?.fotos_json} />
+          ) : entrega?.archivo_path && (
             <AccionesArchivoEntrega
               archivoPath={entrega.archivo_path}
               archivoNombre={entrega.archivo_nombre || 'entrega'}
@@ -256,8 +307,10 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
               className="hidden"
               accept="image/*"
               capture="environment"
-              onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFile(f); e.target.value = ''; }}
+              onChange={(e) => { void addPhotos(e.target.files); e.target.value = ''; }}
             />
+            <input ref={photosInputRef} type="file" className="hidden" accept="image/*" multiple
+              onChange={(e) => { void addPhotos(e.target.files); e.target.value = ''; }} />
             {archivoSeleccionado ? (
               <>
                 {getIconForName(archivoSeleccionado.name)}
@@ -292,7 +345,7 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
               onClick={() => cameraInputRef.current?.click()}
               className="flex h-12 items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/5 text-sm font-bold text-primary transition-colors hover:bg-primary/10"
             >
-              <Camera className="h-4 w-4" /> Tomar foto
+              <Camera className="h-4 w-4" /> Tomar foto y añadir
             </button>
             <button
               type="button"
@@ -301,7 +354,19 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
             >
               <Upload className="h-4 w-4" /> Elegir archivo o foto
             </button>
+            <button type="button" onClick={() => photosInputRef.current?.click()}
+              className="flex h-12 items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/5 text-sm font-bold text-primary">
+              <ImageIcon className="h-4 w-4" /> Añadir varias fotos
+            </button>
           </div>
+          {procesandoFotos && <p className="text-sm text-slate-500">Preparando fotos en buena calidad…</p>}
+          {fotos.length > 0 && <div className="space-y-2 rounded-xl border p-3">
+            <p className="text-sm font-semibold">{fotos.length}/{MAX_SUBMISSION_PHOTOS} fotos · {(fotos.reduce((sum, file) => sum + file.size, 0) / 1048576).toFixed(1)} MB</p>
+            {fotos.map((file, index) => <div key={`${file.name}-${index}`} className="flex items-center justify-between text-xs">
+              <span>{index + 1}. {file.name}</span>
+              <button type="button" onClick={() => setFotos((current) => current.filter((_, position) => position !== index))} aria-label={`Quitar foto ${index + 1}`}><X className="h-4 w-4" /></button>
+            </div>)}
+          </div>}
 
           {/* Error de validación */}
           {errorLocal && (
@@ -314,10 +379,10 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
           {/* Botón de subida */}
           <button
             onClick={handleSubir}
-            disabled={!archivoSeleccionado || isPending}
+            disabled={(!archivoSeleccionado && !fotos.length) || isPending || procesandoFotos}
             className={cn(
               "w-full h-14 rounded-2xl font-black uppercase tracking-widest text-sm flex items-center justify-center gap-3 transition-all shadow-lg",
-              archivoSeleccionado && !isPending
+              (archivoSeleccionado || fotos.length) && !isPending && !procesandoFotos
                 ? "bg-primary text-white hover:opacity-90 hover:shadow-xl hover:-translate-y-0.5 active:scale-[0.98]"
                 : "bg-slate-100 text-slate-400 cursor-not-allowed"
             )}
@@ -325,7 +390,7 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
             {isPending ? (
               <>
                 <Loader2 className="w-5 h-5 animate-spin" />
-                Subiendo archivo...
+                Subiendo entrega...
               </>
             ) : (
               <>

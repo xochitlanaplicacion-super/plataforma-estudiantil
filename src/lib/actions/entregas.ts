@@ -18,6 +18,7 @@ import {
   normalizeAcademicUpload,
 } from '@/lib/storage/academic-uploads';
 import { resolveExerciseUnitId } from '@/lib/academic-grading/submission-context';
+import { MAX_GALLERY_BYTES, MAX_PHOTO_BYTES, MAX_SUBMISSION_PHOTOS, readSubmissionPhotos } from '@/lib/storage/photo-gallery';
 
 const BUCKET = 'entregas-alumnos';
 const EXPIRY_DAYS = 10;
@@ -57,7 +58,7 @@ async function obtenerContextoEntrega(
 
   const { data: existing } = await admin
     .from('resultados_ejercicios')
-    .select('archivo_path, primer_envio_en, caduca_el')
+    .select('archivo_path, fotos_json, primer_envio_en, caduca_el, calificacion')
     .eq('tenant_id', tenantId)
     .eq('alumno_id', alumnoId)
     .eq('ejercicio_id', ejercicioId)
@@ -337,6 +338,9 @@ export async function confirmarCargaEntregaAlumno(input: ConfirmStudentUploadInp
     return { error: contexto.error };
   }
   const { ejercicio, existing, link, enrollment, unitId } = contexto;
+  if (existing?.calificacion !== null && existing?.calificacion !== undefined) {
+    return { error: 'Esta tarea ya fue calificada.' };
+  }
   const ahora = new Date();
   const primerEnvio = existing?.primer_envio_en ? new Date(existing.primer_envio_en) : ahora;
   const caduca = new Date(primerEnvio.getTime() + EXPIRY_DAYS * 24 * 60 * 60 * 1000);
@@ -355,6 +359,7 @@ export async function confirmarCargaEntregaAlumno(input: ConfirmStudentUploadInp
       archivo_url: null,
       archivo_nombre: input.archivoNombre.slice(0, 255),
       archivo_path: input.archivoPath,
+      fotos_json: null,
       primer_envio_en: primerEnvio.toISOString(),
       caduca_el: caduca.toISOString(),
       ...(existing ? {} : {
@@ -386,13 +391,168 @@ export async function confirmarCargaEntregaAlumno(input: ConfirmStudentUploadInp
     console.error('[KIBO entrega] La nota se guardó, pero no se pudo cerrar el intento de carga:', confirmationError.message);
   }
   if (existing?.archivo_path && existing.archivo_path !== input.archivoPath) {
-    await admin.storage.from(BUCKET).remove([existing.archivo_path]);
+    await admin.storage.from(BUCKET).remove(Array.from(new Set([
+      existing.archivo_path,
+      ...readSubmissionPhotos(existing.fotos_json).map((photo) => photo.path),
+    ])));
   }
 
   revalidatePath('/dashboard/alumno/materias');
   revalidatePath(`/dashboard/alumno/ejercicios/${input.ejercicioId}`);
   after(async () => { try { await dispatchSubmissionPush(); } catch { console.warn('[KIBO push] Entrega guardada; aviso pendiente de reintento.'); } });
   return { success: true, caduca_el: caduca.toISOString(), archivo_path: input.archivoPath };
+}
+
+type PhotoUploadInput = StudentUploadInput[];
+
+function validatePhotoUpload(input: PhotoUploadInput) {
+  if (!Array.isArray(input) || input.length < 1 || input.length > MAX_SUBMISSION_PHOTOS) return null;
+  if (input.some((item) => !item || item.ejercicioId !== input[0].ejercicioId
+    || item.archivoTipo !== 'image/jpeg' || item.archivoTamano < 1
+    || item.archivoTamano > MAX_PHOTO_BYTES || !normalizeAcademicUpload({
+      name: item.archivoNombre, type: item.archivoTipo, size: item.archivoTamano,
+    }, { allowImages: true }))) return null;
+  if (input.reduce((sum, item) => sum + item.archivoTamano, 0) > MAX_GALLERY_BYTES) return null;
+  return input.map((item) => ({ name: item.archivoNombre.slice(0, 255),
+    mime: 'image/jpeg', size: item.archivoTamano }));
+}
+
+export async function prepararCargaFotosAlumno(input: PhotoUploadInput) {
+  try {
+    const files = validatePhotoUpload(input);
+    if (!files) return { error: 'Selecciona hasta 15 fotos JPEG comprimidas (máximo 20 MB en total).' };
+    const { supabase, admin, tenantId, user } = await requireTenantSession(['alumno']);
+    const exerciseId = input[0].ejercicioId;
+    const context = await obtenerContextoEntrega(supabase, admin, tenantId, user.id, exerciseId);
+    if (context.error) return { error: context.error };
+    if (context.existing?.calificacion !== null && context.existing?.calificacion !== undefined) {
+      return { error: 'Esta tarea ya fue calificada.' };
+    }
+    const now = new Date();
+    const { data: active } = await admin.from('student_submission_upload_intents')
+      .select('id, object_path, status, expires_at')
+      .eq('tenant_id', tenantId).eq('alumno_id', user.id).eq('ejercicio_id', exerciseId)
+      .in('status', ['pending', 'processing']).limit(1).maybeSingle();
+    if (active?.status === 'processing' && new Date(active.expires_at).getTime() > now.getTime()) {
+      return { error: 'La entrega anterior todavía se está confirmando.' };
+    }
+    if (active) {
+      const { data: cancelled } = await admin.from('student_submission_upload_intents')
+        .update({ status: 'cancelled', updated_at: now.toISOString() })
+        .eq('id', active.id).eq('status', active.status).select('id, photo_files, object_path').maybeSingle();
+      if (!cancelled) return { error: 'Otra carga empezó a confirmarse. Inténtalo de nuevo.' };
+      const oldPaths = readSubmissionPhotos(cancelled.photo_files).map((photo) => photo.path);
+      const { data: referenced } = await admin.from('resultados_ejercicios').select('id')
+        .eq('tenant_id', tenantId).eq('alumno_id', user.id).eq('ejercicio_id', exerciseId)
+        .eq('archivo_path', cancelled.object_path).maybeSingle();
+      if (!referenced) await admin.storage.from(BUCKET).remove(oldPaths.length ? oldPaths : [cancelled.object_path]);
+    }
+    const { count } = await admin.from('student_submission_upload_intents')
+      .select('id', { count: 'exact', head: true }).eq('tenant_id', tenantId)
+      .eq('alumno_id', user.id).eq('ejercicio_id', exerciseId)
+      .gte('created_at', new Date(now.getTime() - 3600000).toISOString());
+    if ((count ?? 0) >= MAX_NEW_UPLOAD_INTENTS_PER_HOUR) {
+      return { error: 'Demasiados intentos de carga. Espera una hora.' };
+    }
+    const photoFiles = files.map((file) => ({ ...file,
+      path: `${tenantId}/entregas/${user.id}/${exerciseId}/${randomUUID()}` }));
+    const { data: intent, error: insertError } = await admin.from('student_submission_upload_intents')
+      .insert({ tenant_id: tenantId, alumno_id: user.id, ejercicio_id: exerciseId,
+        object_path: photoFiles[0].path, original_name: photoFiles[0].name,
+        content_type: 'image/jpeg', size_bytes: photoFiles[0].size,
+        photo_files: photoFiles, status: 'pending',
+        expires_at: new Date(now.getTime() + UPLOAD_INTENT_TTL_MS).toISOString(),
+        updated_at: now.toISOString() })
+      .select('id').single();
+    if (insertError || !intent) return { error: insertError?.message || 'No se pudo preparar la galería.' };
+    const uploads = [];
+    for (const file of photoFiles) {
+      const { data, error } = await admin.storage.from(BUCKET).createSignedUploadUrl(file.path, { upsert: false });
+      if (error || !data?.token) {
+        await admin.from('student_submission_upload_intents').update({ status: 'cancelled' }).eq('id', intent.id);
+        return { error: error?.message || 'No se pudo firmar la carga de fotos.' };
+      }
+      uploads.push({ path: file.path, token: data.token, name: file.name });
+    }
+    return { success: true, uploadIntentId: intent.id, uploads };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'No se pudo preparar la galería.' };
+  }
+}
+
+export async function confirmarCargaFotosAlumno(input: {
+  ejercicioId: string; uploadIntentId: string; fotos: PhotoUploadInput;
+}) {
+  try {
+    const normalized = validatePhotoUpload(input.fotos);
+    if (!normalized || input.fotos[0].ejercicioId !== input.ejercicioId) return { error: 'Galería inválida.' };
+    const { supabase, admin, tenantId, user } = await requireTenantSession(['alumno']);
+    const { data: intent } = await admin.from('student_submission_upload_intents')
+      .select('id, photo_files, object_path, status, expires_at')
+      .eq('id', input.uploadIntentId).eq('tenant_id', tenantId).eq('alumno_id', user.id)
+      .eq('ejercicio_id', input.ejercicioId).maybeSingle();
+    const files = Array.isArray(intent?.photo_files) ? intent.photo_files : [];
+    if (!intent || intent.status !== 'pending' || new Date(intent.expires_at).getTime() <= Date.now()
+      || files.length !== normalized.length || files.some((file: any, index: number) =>
+        file.name !== normalized[index].name || file.mime !== normalized[index].mime
+        || file.size !== normalized[index].size
+        || !String(file.path).startsWith(`${tenantId}/entregas/${user.id}/${input.ejercicioId}/`))) {
+      return { error: 'La autorización de fotos ya no es válida.' };
+    }
+    for (const file of files) {
+      const path = String(file.path);
+      const slash = path.lastIndexOf('/');
+      const { data: objects, error } = await admin.storage.from(BUCKET)
+        .list(path.slice(0, slash), { search: path.slice(slash + 1), limit: 10 });
+      const stored = objects?.find((object: any) => object.name === path.slice(slash + 1));
+      if (error || !stored || Number(stored.metadata?.size) !== file.size) {
+        return { error: 'Una o más fotos no terminaron de subir. Vuelve a intentarlo.' };
+      }
+    }
+    const { data: claimed } = await admin.from('student_submission_upload_intents')
+      .update({ status: 'processing', updated_at: new Date().toISOString() })
+      .eq('id', intent.id).eq('status', 'pending').select('id').maybeSingle();
+    if (!claimed) return { error: 'Esta entrega ya se está confirmando.' };
+    const context = await obtenerContextoEntrega(supabase, admin, tenantId, user.id, input.ejercicioId);
+    if (context.error) return { error: context.error };
+    if (context.existing?.calificacion !== null && context.existing?.calificacion !== undefined) {
+      return { error: 'Esta tarea ya fue calificada.' };
+    }
+    const now = new Date();
+    const first = context.existing?.primer_envio_en ? new Date(context.existing.primer_envio_en) : now;
+    const expires = new Date(first.getTime() + EXPIRY_DAYS * 86400000);
+    const submission = descriptiveSubmission({ submittedAt: now,
+      dueAt: context.ejercicio.fecha_entrega ? new Date(context.ejercicio.fecha_entrega) : null });
+    const gallery = files.map((file: any) => ({ path: String(file.path), name: String(file.name) }));
+    const { error } = await admin.from('resultados_ejercicios').upsert({
+      tenant_id: tenantId, alumno_id: user.id, ejercicio_id: input.ejercicioId,
+      estado: submission.state, archivo_url: null,
+      archivo_nombre: `${gallery.length} foto${gallery.length === 1 ? '' : 's'}`,
+      archivo_path: gallery[0].path, fotos_json: gallery,
+      primer_envio_en: first.toISOString(), caduca_el: expires.toISOString(),
+      ...(context.existing ? {} : { inscripcion_alumno_id: context.enrollment!.id,
+        vinculo_evaluacion_id: context.link!.id, unidad_origen_id: context.unitId,
+        origen: 'descriptiveSubmission' as const, registro_legacy: false }),
+    }, { onConflict: 'alumno_id, ejercicio_id' });
+    if (error) {
+      await admin.from('student_submission_upload_intents').update({ status: 'pending' }).eq('id', intent.id).eq('status', 'processing');
+      return { error: `No se pudo registrar la galería: ${error.message}` };
+    }
+    await admin.from('student_submission_upload_intents').update({ status: 'confirmed',
+      confirmed_at: now.toISOString(), updated_at: now.toISOString() }).eq('id', intent.id).eq('status', 'processing');
+    const previous = Array.from(new Set([
+      ...(context.existing?.archivo_path ? [context.existing.archivo_path] : []),
+      ...readSubmissionPhotos(context.existing?.fotos_json).map((photo) => photo.path),
+    ])).filter((path) => !gallery.some((photo: { path: string }) => photo.path === path));
+    if (previous.length) await admin.storage.from(BUCKET).remove(previous);
+    revalidatePath('/dashboard/alumno/materias');
+    revalidatePath(`/dashboard/alumno/ejercicios/${input.ejercicioId}`);
+    after(async () => { try { await dispatchSubmissionPush(); } catch { console.warn('[KIBO push] Aviso de galería pendiente.'); } });
+    return { success: true, fotos_json: gallery, archivo_path: gallery[0].path,
+      caduca_el: expires.toISOString() };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'No se pudo registrar la galería.' };
+  }
 }
 
 // -------------------------------------------------------------------
@@ -403,7 +563,7 @@ export async function getEntregaAlumno(ejercicioId: string) {
 
   const { data } = await admin
     .from('resultados_ejercicios')
-    .select('archivo_url, archivo_nombre, archivo_path, primer_envio_en, caduca_el, calificacion')
+    .select('archivo_url, archivo_nombre, archivo_path, fotos_json, primer_envio_en, caduca_el, calificacion')
     .eq('tenant_id', tenantId)
     .eq('alumno_id', user.id)
     .eq('ejercicio_id', ejercicioId)
@@ -430,14 +590,20 @@ export async function obtenerAccesoArchivoEntrega(
     if (!filePath || !filePath.startsWith(`${tenantId}/entregas/`)) {
       return { error: 'Ruta de archivo inválida' };
     }
-
+    const segments = filePath.split('/');
+    if (segments.length !== 5 || segments[1] !== 'entregas') return { error: 'Ruta de archivo inválida' };
+    const [, , studentId, exerciseId] = segments;
     const { data: entrega } = await admin
       .from('resultados_ejercicios')
-      .select('alumno_id, ejercicio_id, archivo_path, archivo_nombre, caduca_el')
+      .select('id, alumno_id, ejercicio_id, archivo_path, archivo_nombre, fotos_json, caduca_el')
       .eq('tenant_id', tenantId)
-      .eq('archivo_path', filePath)
+      .eq('alumno_id', studentId)
+      .eq('ejercicio_id', exerciseId)
       .maybeSingle();
-    if (!entrega?.archivo_path) return { error: 'El archivo ya no está disponible' };
+    const galleryPhoto = readSubmissionPhotos(entrega?.fotos_json).find((photo) => photo.path === filePath);
+    if (!entrega?.archivo_path || (entrega.archivo_path !== filePath && !galleryPhoto)) {
+      return { error: 'El archivo ya no está disponible' };
+    }
     if (entrega.caduca_el && new Date(entrega.caduca_el).getTime() <= Date.now()) {
       return { error: 'El archivo cumplió su periodo de conservación' };
     }
@@ -452,24 +618,24 @@ export async function obtenerAccesoArchivoEntrega(
         .from('resultados_ejercicios')
         .select('id')
         .eq('tenant_id', tenantId)
-        .eq('archivo_path', filePath)
+        .eq('id', entrega.id)
         .maybeSingle();
       if (!permittedResult) return { error: 'La entrega no pertenece a uno de tus grupos' };
     }
 
     const options = modo === 'descargar'
-      ? { download: entrega.archivo_nombre || true }
+      ? { download: galleryPhoto?.name || entrega.archivo_nombre || true }
       : undefined;
     const { data, error } = await admin.storage
       .from(BUCKET)
-      .createSignedUrl(entrega.archivo_path, SIGNED_URL_SECONDS, options);
+      .createSignedUrl(filePath, SIGNED_URL_SECONDS, options);
     if (error || !data?.signedUrl) {
       return { error: error?.message || 'No se pudo generar el acceso al archivo' };
     }
     return {
       success: true,
       url: data.signedUrl,
-      nombre: entrega.archivo_nombre || 'entrega',
+      nombre: galleryPhoto?.name || entrega.archivo_nombre || 'entrega',
     };
   } catch (error: any) {
     return { error: error.message || 'No se pudo abrir el archivo' };
@@ -539,6 +705,7 @@ export async function getEntregasDeEjercicio(ejercicioId: string) {
       archivo_url,
       archivo_nombre,
       archivo_path,
+      fotos_json,
       primer_envio_en,
       caduca_el,
       estado,
@@ -623,6 +790,7 @@ export async function getEntregasAgrupadasPorSyncId(syncId: string) {
       archivo_url,
       archivo_nombre,
       archivo_path,
+      fotos_json,
       primer_envio_en,
       caduca_el,
       estado,
@@ -745,6 +913,7 @@ export async function getEntregasGlobalesProfesor(_profesorId?: string) {
         archivo_url,
         archivo_nombre,
         archivo_path,
+        fotos_json,
         primer_envio_en,
         caduca_el,
         calificacion,

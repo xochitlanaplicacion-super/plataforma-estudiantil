@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
+import { readSubmissionPhotos } from '@/lib/storage/photo-gallery';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +23,7 @@ export async function GET(request: NextRequest) {
     // confirmación activa del alumno.
     const { data: staleIntents, error: intentFetchError } = await supabaseAdmin
       .from('student_submission_upload_intents')
-      .select('id, tenant_id, alumno_id, ejercicio_id, object_path, status')
+      .select('id, tenant_id, alumno_id, ejercicio_id, object_path, photo_files, status')
       .in('status', ['pending', 'processing', 'cancelled'])
       .lt('expires_at', ahora)
       .lt('updated_at', staleBefore)
@@ -81,9 +82,10 @@ export async function GET(request: NextRequest) {
         erroresIntentos.push({ path: intent.object_path, error: 'Ruta fuera del espacio del intento' });
         continue;
       }
+      const orphanPaths = readSubmissionPhotos(intent.photo_files).map((photo) => photo.path);
       const { error: orphanRemoveError } = await supabaseAdmin.storage
         .from(BUCKET)
-        .remove([intent.object_path]);
+        .remove(orphanPaths.length ? orphanPaths : [intent.object_path]);
       if (orphanRemoveError) {
         erroresIntentos.push({ path: intent.object_path, error: orphanRemoveError.message });
         await supabaseAdmin
@@ -99,7 +101,7 @@ export async function GET(request: NextRequest) {
     // Buscar todos los registros cuya fecha de caducidad ya pasó y tienen archivo
     const { data: expirados, error: fetchError } = await supabaseAdmin
       .from('resultados_ejercicios')
-      .select('tenant_id, alumno_id, ejercicio_id, archivo_path, archivo_nombre, caduca_el')
+      .select('tenant_id, alumno_id, ejercicio_id, archivo_path, fotos_json, archivo_nombre, caduca_el')
       .lt('caduca_el', ahora)
       .not('archivo_path', 'is', null)
       .order('caduca_el', { ascending: true })
@@ -127,9 +129,13 @@ export async function GET(request: NextRequest) {
         continue;
       }
 
+      const paths = Array.from(new Set([path, ...readSubmissionPhotos(entrega.fotos_json).map((photo) => photo.path)]));
+      if (paths.some((item) => !item.startsWith(`${entrega.tenant_id}/entregas/${entrega.alumno_id}/${entrega.ejercicio_id}/`))) {
+        rutasInvalidas++; continue;
+      }
       const { data: removedFiles, error: removeError } = await supabaseAdmin.storage
         .from(BUCKET)
-        .remove([path]);
+        .remove(paths);
 
       if (removeError) {
         console.error('[CRON] Error removing file from storage:', path, removeError);
@@ -144,6 +150,7 @@ export async function GET(request: NextRequest) {
           archivo_url: null,
           archivo_nombre: null,
           archivo_path: null,
+          fotos_json: null,
         })
         .eq('alumno_id', entrega.alumno_id)
         .eq('ejercicio_id', entrega.ejercicio_id)

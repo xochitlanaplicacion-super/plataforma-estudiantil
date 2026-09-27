@@ -1,14 +1,17 @@
--- Synthetic integration check. Run after the two 20260925/20260927 migrations.
+-- Synthetic integration check. Run after the teacher criteria and work-report migrations.
 -- The transaction rolls back all fixture rows.
 begin;
 
-insert into auth.users(id) values ('23000000-0000-4000-8000-000000000001');
+insert into auth.users(id,email) values ('23000000-0000-4000-8000-000000000001','virtual-zero-test@example.invalid');
 insert into public.tenants(id,slug,nombre,estado)
 values ('23000000-0000-4000-8000-000000000002','virtual-zero-test','Prueba virtual','activo');
 insert into public.profiles(id,tenant_id,nombre,apellidos,curp,email,rol,estatus)
 values ('23000000-0000-4000-8000-000000000001',
   '23000000-0000-4000-8000-000000000002','Docente','Prueba',
-  'TEST000000HDFXXX00','virtual-zero-test@example.invalid','profesor','activo');
+  'TEST000000HDFXXX00','virtual-zero-test@example.invalid','profesor','activo')
+on conflict (id) do update set tenant_id=excluded.tenant_id,
+  nombre=excluded.nombre, apellidos=excluded.apellidos, curp=excluded.curp,
+  email=excluded.email, rol=excluded.rol, estatus=excluded.estatus;
 insert into public.niveles(id,tenant_id,nombre)
 values ('23000000-0000-4000-8000-000000000003',
   '23000000-0000-4000-8000-000000000002','Secundaria');
@@ -56,7 +59,7 @@ select set_config('request.jwt.claim.sub',
   '23000000-0000-4000-8000-000000000001',true);
 
 do $test$
-declare category uuid; scheme_id uuid; policy boolean;
+declare category uuid; scheme_id uuid; policy boolean; work_report jsonb;
 begin
   category := public.asegurar_categoria_plataforma_sin_peso(
     '23000000-0000-4000-8000-000000000010',
@@ -74,6 +77,12 @@ begin
   if not policy or not exists (select 1 from public.esquemas_evaluacion e
     where e.id=scheme_id and e.pendientes_vencidos_como_cero) then
     raise exception 'No se guardó el switch';
+  end if;
+  work_report := public.obtener_reporte_trabajos_docente(
+    '23000000-0000-4000-8000-000000000010');
+  if work_report->>'assignmentId' <> '23000000-0000-4000-8000-000000000010'
+    or work_report->'rows' <> '[]'::jsonb then
+    raise exception 'El reporte de trabajos no respetó la asignación vacía';
   end if;
 end $test$;
 
