@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
+import { UNWEIGHTED_PLATFORM_CRITERION_ID } from '@/lib/academic/platform-category';
 import { 
   BookOpen, 
   ListTree, 
@@ -102,6 +103,7 @@ import {
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription as AlertDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { cn, parseFechaLocal } from '@/lib/utils';
+import { calendarDateFromDeadline, dateInTenantTimezone } from '@/lib/service-countdown';
 import confetti from 'canvas-confetti';
 import { polyfill } from "mobile-drag-drop";
 import "mobile-drag-drop/default.css";
@@ -1055,6 +1057,7 @@ export default function ProfesorDashboard() {
   const [currentTab, setCurrentTab] = useState('materias');
   const [dialog, setDialog] = useState<any>({ open: false, type: '', data: {} });
   const [evaluationOptions, setEvaluationOptions] = useState<any[]>([]);
+  const [evaluationTimezone, setEvaluationTimezone] = useState('America/Mexico_City');
   const [evaluationOptionsLoading, setEvaluationOptionsLoading] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<any>(null);
@@ -1082,6 +1085,7 @@ export default function ProfesorDashboard() {
       if (!active) return;
       const contexts = result.data || [];
       setEvaluationOptions(contexts);
+      if (result.timezone) setEvaluationTimezone(result.timezone);
       if (result.error) {
         toast({
           title: 'No se pudo cargar la evaluación',
@@ -1100,18 +1104,20 @@ export default function ProfesorDashboard() {
           const previousLink = previous.find(
             (link: any) => link.assignmentId === context.assignmentId,
           );
-          const periodId = existing?.periodo_evaluacion_id
-            ?? previousLink?.periodId ?? '';
-          const period = context.periods.find((item: any) => item.id === periodId)
-            ?? null;
-          const criterionId = existing?.criterio_evaluacion_id
-            ?? previousLink?.criterionId ?? '';
+          const period = context.periods[0] ?? null;
+          const periodId = period?.id ?? '';
+          const priorCriterionId = existing?.periodo_evaluacion_id === periodId
+            ? existing?.criterio_evaluacion_id
+            : previousLink?.periodId === periodId ? previousLink.criterionId : null;
+          const criterionId = period?.criteria.find((item: any) => item.id === priorCriterionId)?.id
+            ?? period?.criteria.find((item: any) => item.id === UNWEIGHTED_PLATFORM_CRITERION_ID)?.id ?? '';
           return {
             assignmentId: context.assignmentId,
             periodId,
             criterionId,
-            subcriterionId: existing?.subcriterio_evaluacion_id
-              ?? previousLink?.subcriterionId ?? null,
+            subcriterionId: priorCriterionId === criterionId
+              ? existing?.subcriterio_evaluacion_id ?? previousLink?.subcriterionId ?? null
+              : null,
           };
         });
         return { ...current, data: { ...current.data, evaluationLinks: links } };
@@ -1440,7 +1446,7 @@ export default function ProfesorDashboard() {
         toast({
           variant: 'destructive',
           title: 'Evaluación requerida',
-          description: 'Cada grupo debe tener un periodo y criterio de actividades activos.',
+          description: 'Cada grupo debe tener un periodo activo y una categoría de actividades disponible.',
         });
         return;
       }
@@ -2303,8 +2309,8 @@ export default function ProfesorDashboard() {
                   id="fecha-entrega-input"
                   type="date"
                   className={cn("h-12 rounded-xl font-bold text-slate-700 border-2", (!dialog.data.fecha_entrega || dialog.data.fecha_entrega === '') ? 'border-amber-400 bg-white focus-visible:ring-amber-400' : 'border-emerald-400 bg-white')}
-                  value={dialog.data.fecha_entrega ? dialog.data.fecha_entrega.split('T')[0] : ''}
-                  min={new Date().toISOString().split('T')[0]}
+                  value={dialog.data.fecha_entrega ? calendarDateFromDeadline(dialog.data.fecha_entrega, evaluationTimezone) : ''}
+                  min={dateInTenantTimezone(new Date(), evaluationTimezone)}
                   onChange={e => setDialog({...dialog, data: {...dialog.data, fecha_entrega: e.target.value ? e.target.value + 'T23:59:59' : ''}})}
                 />
                 {(!dialog.data.fecha_entrega || dialog.data.fecha_entrega === '') && (
@@ -2320,7 +2326,7 @@ export default function ProfesorDashboard() {
                     Ubicación en la evaluación *
                   </label>
                   <p className="text-[10px] text-slate-500 font-medium mt-1">
-                    La actividad se vincula al periodo y criterio elegidos. En una agrupación se conserva un vínculo independiente por grupo.
+                    La actividad se vincula al periodo actual. Por defecto queda en “Actividades de plataforma (sin peso)”; elige un criterio evaluable sólo si deseas que cuente en el promedio.
                   </p>
                 </div>
                 {evaluationOptionsLoading ? (
@@ -2329,7 +2335,7 @@ export default function ProfesorDashboard() {
                   </div>
                 ) : evaluationOptions.length === 0 ? (
                   <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-800">
-                    Esta asignación no tiene un esquema activo con criterio de actividades. Actívalo en Configuración académica antes de publicar.
+                    No se pudieron consultar los periodos de esta asignación. Pide al administrador que cree y defina el periodo activo antes de crear actividades.
                   </div>
                 ) : evaluationOptions.map((context: any) => {
                   const links = Array.isArray(dialog.data.evaluationLinks)
@@ -2345,33 +2351,29 @@ export default function ProfesorDashboard() {
                   return (
                     <div key={context.assignmentId} className="rounded-xl bg-white border border-slate-200 p-4 space-y-3">
                       <p className="text-[10px] font-black uppercase tracking-wider text-slate-700">{context.label}</p>
+                      {context.periods.length === 0 && (
+                        <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-800">
+                          Esta escuela aún no tiene un periodo activo para este grupo. Pide al administrador que cree y defina los periodos antes de crear actividades.
+                        </p>
+                      )}
+                      {period && period.criteria.length === 0 && (
+                        <p className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs font-bold text-amber-800">
+                          No se pudo preparar la categoría de actividades para este periodo. Actualiza e inténtalo de nuevo.
+                        </p>
+                      )}
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <div className="space-y-1">
                           <label className="text-[9px] font-black uppercase text-slate-400">Periodo</label>
                           <select
                             className="h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold"
                             value={link.periodId || ''}
-                            onChange={(event) => {
-                              const nextPeriod = context.periods.find((item: any) => item.id === event.target.value);
-                              updateLink({
-                                periodId: event.target.value,
-                                criterionId: nextPeriod?.criteria[0]?.id || '',
-                                subcriterionId: null,
-                              });
-                            }}
+                            disabled
                           >
-                            <option value="">Selecciona periodo</option>
+                            {context.periods.length === 0 && <option value="">Sin periodo activo</option>}
                             {context.periods.map((item: any) => (
-                              <option key={item.id} value={item.id} disabled={item.schemeState !== 'activo'}>
-                                {item.name}{item.schemeState !== 'activo' ? ' — activa primero el esquema' : ''}
-                              </option>
+                              <option key={item.id} value={item.id}>{item.name}</option>
                             ))}
                           </select>
-                          {context.periods.some((item: any) => item.schemeState !== 'activo') && (
-                            <p className="text-[9px] font-semibold text-amber-700">
-                              Los periodos deshabilitados necesitan que actives su esquema en Mis criterios de evaluación.
-                            </p>
-                          )}
                         </div>
                         <div className="space-y-1">
                           <label className="text-[9px] font-black uppercase text-slate-400">Criterio</label>

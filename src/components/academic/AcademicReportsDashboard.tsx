@@ -13,6 +13,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
+import { isPastDeadline } from '@/lib/academic/deadline-policy';
 
 type View = 'attendance' | 'evidence';
 const dateLabel = (value: string) =>
@@ -26,6 +27,7 @@ const safeName = (value: string) =>
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-zA-Z0-9_-]+/g, '_');
 const criterionLabel = (row: AcademicReport['criteria'][number]) => (row.subcriterionName ? `${row.criterionName} · ${row.subcriterionName}` : row.criterionName);
+const evidenceTypeLabel = (type: string) => type === 'automaticExercise' ? 'Ejercicio automático' : type === 'descriptiveSubmission' ? 'Tarea descriptiva' : type;
 const resultLabel = (row: AcademicReport['students'][number], key: string, type: string) => {
   const value = row.results[key];
   if (!value) return '—';
@@ -40,11 +42,18 @@ const resultLabel = (row: AcademicReport['students'][number], key: string, type:
     : value.grade.toFixed(1);
 };
 const conceptGradeLabel = (
+  report: AcademicReport,
   student: AcademicReport['students'][number],
   concept: AcademicReport['concepts'][number],
 ) => {
   const grade = student.conceptGrades[concept.id];
-  if (grade) return { value: grade.grade, state: grade.grade === 0 ? 'No entregó · cero explícito' : 'Calificado' };
+  if (grade) return { value: grade.grade, state: grade.grade === 0 && concept.type !== 'automaticExercise' && concept.type !== 'descriptiveSubmission' ? 'Cero explícito' : 'Calificado' };
+  if (report.calculationPolicy.pendingCountsAsZero
+    && isPastDeadline(concept.dueAt, report.generatedAt)) {
+    return { value: 0, state: 'Cero virtual por vencimiento · sin nota guardada' };
+  }
+  if (concept.type === 'automaticExercise' || concept.type === 'descriptiveSubmission')
+    return { value: '', state: 'Sin calificación registrada' };
   const attendance = concept.attendance[student.enrollmentId];
   if (attendance === 'ausente') return { value: '', state: `Ausente el ${dateLabel(concept.activityDate)} · pendiente de recuperar` };
   if (attendance === 'presente') return { value: '', state: `Asistió el ${dateLabel(concept.activityDate)} · falta calificar` };
@@ -218,7 +227,7 @@ export function AcademicReportsDashboard({ initialData }: { initialData: Academi
       const detail = workbook.addWorksheet('Evidencias detalladas', {
         views: [{ state: 'frozen', ySplit: 1 }],
       });
-      detail.addRow(['Matrícula', 'Alumno', 'Criterio', 'Evidencia', 'Tipo', 'Calificación', 'Estado', 'Observación', 'Última actualización']);
+      detail.addRow(['Matrícula', 'Alumno', 'Criterio', 'Evidencia', 'Fecha', 'Tipo', 'Calificación', 'Estado', 'Observación', 'Última actualización']);
       detail.getRow(1).eachCell((cell) => {
         cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
         cell.fill = {
@@ -230,11 +239,11 @@ export function AcademicReportsDashboard({ initialData }: { initialData: Academi
       for (const student of report.students)
         for (const concept of report.concepts) {
           const grade = student.conceptGrades[concept.id];
-          const detailGrade = conceptGradeLabel(student, concept);
-          detail.addRow([student.enrollmentCode ?? '', student.name, report.criteria.find((row) => row.key === concept.criterionKey) ? criterionLabel(report.criteria.find((row) => row.key === concept.criterionKey)!) : '', concept.name, concept.type, detailGrade.value, detailGrade.state, grade?.observation ?? '', grade?.updatedAt ? new Date(grade.updatedAt).toLocaleString('es-MX') : '']);
+          const detailGrade = conceptGradeLabel(report, student, concept);
+          detail.addRow([student.enrollmentCode ?? '', student.name, report.criteria.find((row) => row.key === concept.criterionKey) ? criterionLabel(report.criteria.find((row) => row.key === concept.criterionKey)!) : '', concept.name, concept.activityDate, evidenceTypeLabel(concept.type), detailGrade.value, detailGrade.state, grade?.observation ?? '', grade?.updatedAt ? new Date(grade.updatedAt).toLocaleString('es-MX') : '']);
         }
       detail.columns.forEach((column, index) => {
-        column.width = index === 1 ? 34 : index === 6 ? 42 : 20;
+        column.width = index === 1 ? 34 : index === 7 ? 42 : 20;
       });
       const buffer = await workbook.xlsx.writeBuffer();
       saveAs(
@@ -321,22 +330,22 @@ export function AcademicReportsDashboard({ initialData }: { initialData: Academi
         const detailRows = report.students.flatMap((student) =>
           report.concepts.map((concept) => {
             const grade = student.conceptGrades[concept.id];
-            const detailGrade = conceptGradeLabel(student, concept);
-            return [student.enrollmentCode ?? '', student.name, concept.name, concept.type, detailGrade.value === '' ? '—' : detailGrade.value, detailGrade.state, grade?.observation ?? ''];
+            const detailGrade = conceptGradeLabel(report, student, concept);
+            return [student.enrollmentCode ?? '', student.name, concept.name, concept.activityDate, evidenceTypeLabel(concept.type), detailGrade.value === '' ? '—' : detailGrade.value, detailGrade.state, grade?.observation ?? ''];
           }),
         );
         autoTable(pdf, {
           startY: 42,
           theme: 'striped',
-          head: [['Matrícula', 'Alumno', 'Evidencia', 'Tipo', 'Calificación', 'Estado', 'Observación']],
+          head: [['Matrícula', 'Alumno', 'Evidencia', 'Fecha', 'Tipo', 'Calificación', 'Estado', 'Observación']],
           body: detailRows,
           headStyles: { fillColor: '#1e293b' },
           styles: { fontSize: 7 },
           columnStyles: {
             1: { cellWidth: 48 },
             2: { cellWidth: 48 },
-            5: { cellWidth: 35 },
-            6: { cellWidth: 55 },
+            6: { cellWidth: 35 },
+            7: { cellWidth: 55 },
           },
         });
       }
@@ -447,7 +456,9 @@ export function AcademicReportsDashboard({ initialData }: { initialData: Academi
             <AlertCircle className="size-5" aria-hidden="true" />
             <div>
               <p className="font-black">Promedios transparentes · {report.range.from} a {report.range.to}</p>
-              <p className="text-sm">Los vacíos aparecen como pendientes y no valen cero. Un cero sólo cuenta cuando el profesor lo registra expresamente. Todo promedio incompleto se identifica como parcial y muestra cuántas evidencias faltan.</p>
+              <p className="text-sm">{report.calculationPolicy.pendingCountsAsZero
+                ? 'Las actividades cuya fecha límite ya pasó y siguen sin nota cuentan como cero virtual en el promedio. Las que aún están en plazo no cuentan. Ninguna nota guardada se modifica.'
+                : 'Los vacíos aparecen como pendientes y no valen cero. Un cero sólo cuenta cuando el profesor lo registra expresamente. Todo promedio incompleto se identifica como parcial y muestra cuántas evidencias faltan.'}</p>
             </div>
           </div>
           <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">

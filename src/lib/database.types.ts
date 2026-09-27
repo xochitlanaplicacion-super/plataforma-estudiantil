@@ -1538,6 +1538,7 @@ export type Database = {
           activo: boolean
           created_at: string
           created_by: string
+          es_sistema_sin_peso: boolean
           esquema_evaluacion_id: string
           id: string
           nombre: string
@@ -1551,6 +1552,7 @@ export type Database = {
           activo?: boolean
           created_at?: string
           created_by: string
+          es_sistema_sin_peso?: boolean
           esquema_evaluacion_id: string
           id?: string
           nombre: string
@@ -1564,6 +1566,7 @@ export type Database = {
           activo?: boolean
           created_at?: string
           created_by?: string
+          es_sistema_sin_peso?: boolean
           esquema_evaluacion_id?: string
           id?: string
           nombre?: string
@@ -1914,6 +1917,7 @@ export type Database = {
           migration_version: string | null
           modo_redondeo: string
           nombre: string
+          pendientes_vencidos_como_cero: boolean
           periodo_evaluacion_id: string
           regla_justificado: string
           regla_no_entrego: string
@@ -1936,6 +1940,7 @@ export type Database = {
           migration_version?: string | null
           modo_redondeo?: string
           nombre: string
+          pendientes_vencidos_como_cero?: boolean
           periodo_evaluacion_id: string
           regla_justificado?: string
           regla_no_entrego?: string
@@ -1958,6 +1963,7 @@ export type Database = {
           migration_version?: string | null
           modo_redondeo?: string
           nombre?: string
+          pendientes_vencidos_como_cero?: boolean
           periodo_evaluacion_id?: string
           regla_justificado?: string
           regla_no_entrego?: string
@@ -4928,6 +4934,22 @@ export type Database = {
           version: number
         }[]
       }
+      aplicar_edicion_esquema_docente: {
+        Args: { p_esquema_borrador_id: string; p_version_esperada: number }
+        Returns: {
+          esquema_id: string
+          estado: string
+          version: number
+        }[]
+      }
+      aplicar_criterios_docente_a_asignacion: {
+        Args: {
+          p_esquema_origen_id: string
+          p_version_esperada: number
+          p_asignacion_destino_id: string
+        }
+        Returns: Json
+      }
       actualizar_encuesta: {
         Args: {
           p_activa: boolean
@@ -4976,6 +4998,18 @@ export type Database = {
         }
         Returns: Json
       }
+      asegurar_categoria_plataforma_sin_peso: {
+        Args: { p_asignacion_id: string; p_periodo_id: string }
+        Returns: string
+      }
+      configurar_vinculo_plataforma_sin_peso: {
+        Args: { p_ejercicio_id: string; p_asignacion_id: string; p_periodo_id: string }
+        Returns: Json
+      }
+      configurar_ceros_virtuales_docente: {
+        Args: { p_esquema_id: string; p_activado: boolean }
+        Returns: boolean
+      }
       consumir_cuota_servicio: {
         Args: { p_servicio: string }
         Returns: {
@@ -4995,6 +5029,10 @@ export type Database = {
           estado: string
           version: number
         }[]
+      }
+      eliminar_criterio_borrador_docente: {
+        Args: { p_criterio_id: string; p_esquema_id: string }
+        Returns: boolean
       }
       crear_encuesta: {
         Args: {

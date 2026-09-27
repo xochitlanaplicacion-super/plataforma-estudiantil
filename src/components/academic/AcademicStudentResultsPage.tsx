@@ -177,6 +177,7 @@ export function AcademicStudentResultsPage({ initialData }: { initialData?: Acad
                         <Progress value={item.progressPercent} aria-label={`Progreso de captura ${item.progressPercent}%`} />
                         <p className="mt-2 text-xs text-muted-foreground">{item.resolvedSourceCount} de {item.sourceCount} fuentes resueltas</p>
                       </div>
+                      {item.virtualZeroCount ? <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900" role="status">{item.virtualZeroCount} {item.virtualZeroCount === 1 ? 'actividad vencida sin nota cuenta' : 'actividades vencidas sin nota cuentan'} como cero virtual en este promedio. Las actividades que aún están en plazo no cuentan.</p> : null}
                       {item.publicationState === 'reopened' && (
                         <p className="rounded-lg border border-accent bg-accent/40 p-3 text-xs" role="status">
                           El cierre versión {item.closureVersion} fue reabierto. La calificación mostrada vuelve a ser provisional.

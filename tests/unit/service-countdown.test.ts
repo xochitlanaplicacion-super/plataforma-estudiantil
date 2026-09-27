@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { calculatePlatformServiceCountdown } from '@/lib/service-countdown';
+import {
+  calculatePlatformServiceCountdown,
+  calendarDateFromDeadline,
+  endOfTenantCalendarDayIso,
+  startOfTenantCalendarDayIso,
+} from '@/lib/service-countdown';
 
 describe('platform service countdown', () => {
   it('computes the live remaining time', () => {
@@ -18,5 +23,17 @@ describe('platform service countdown', () => {
     ).status).toBe('expired');
     expect(calculatePlatformServiceCountdown({ estado: 'NO', fecha_inicio: '2026-09-01' }).status).toBe('suspended');
     expect(calculatePlatformServiceCountdown({ estado: 'SI', fecha_inicio: null }).status).toBe('no-date');
+  });
+
+  it('stores a teacher-selected due date at the end of the tenant day', () => {
+    expect(startOfTenantCalendarDayIso('2026-09-25', 'America/Mexico_City'))
+      .toBe('2026-09-25T06:00:00.000Z');
+    expect(endOfTenantCalendarDayIso('2026-09-24', 'America/Mexico_City'))
+      .toBe('2026-09-25T05:59:59.000Z');
+    expect(endOfTenantCalendarDayIso('2026-02-30', 'America/Mexico_City')).toBeNull();
+    expect(calendarDateFromDeadline('2026-09-25T05:59:59.000Z', 'America/Mexico_City'))
+      .toBe('2026-09-24');
+    expect(calendarDateFromDeadline('2026-09-24T23:59:59', 'America/Mexico_City'))
+      .toBe('2026-09-24');
   });
 });

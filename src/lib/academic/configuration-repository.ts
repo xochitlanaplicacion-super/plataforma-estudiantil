@@ -103,6 +103,7 @@ export class SupabaseAcademicConfigurationRepository {
     }
     const criteriaByScheme = new Map<string, AcademicCriterionConfigurationDto[]>();
     for (const row of criteriaResult.data ?? []) {
+      if (row.es_sistema_sin_peso) continue;
       const items = criteriaByScheme.get(row.esquema_evaluacion_id) ?? [];
       items.push({
         id: row.id,
@@ -147,6 +148,7 @@ export class SupabaseAcademicConfigurationRepository {
         displayDecimals: row.decimales_mostrados as 0 | 1 | 2,
         roundingMode: 'half_up', missingRule: 'zero_on_close', missingValue: 0,
         excusedRule: 'exclude', state: row.estado as AcademicSchemeConfigurationDto['state'],
+        overduePendingAsZero: row.pendientes_vencidos_como_cero,
         version: row.version, copiedFromId: row.copiado_desde_id, updatedAt: row.updated_at,
         criteria: criteriaByScheme.get(row.id) ?? [],
       })),
@@ -289,14 +291,33 @@ export class SupabaseAcademicConfigurationRepository {
     return { id: data.id };
   }
 
+  async deleteCriterion(
+    _context: AcademicRepositoryContext,
+    input: { id: string; schemeId: string },
+  ): Promise<AcademicConfigurationDeletionDto> {
+    const { data, error } = await this.client.rpc('eliminar_criterio_borrador_docente', {
+      p_criterio_id: input.id,
+      p_esquema_id: input.schemeId,
+    });
+    if (error) databaseFailure(error);
+    if (!data) throw new AcademicApplicationError('conflict');
+    return { id: input.id };
+  }
+
   async activateScheme(
     _context: AcademicRepositoryContext,
     input: AcademicActivateSchemeInput,
   ): Promise<AcademicSchemeVersionMutationDto> {
-    const { data, error } = await this.client.rpc('activar_esquema_evaluacion', {
-      target_scheme_id: input.schemeId,
-      expected_scheme_version: input.expectedVersion,
+    const { data, error } = await this.client.rpc('aplicar_edicion_esquema_docente', {
+      p_esquema_borrador_id: input.schemeId,
+      p_version_esperada: input.expectedVersion,
     });
+    if (error?.message.includes('ACADEMIC_STRUCTURE_HAS_RECORDS')) {
+      throw new AcademicApplicationError('conflict', { message: 'Esta materia ya tiene actividades o notas vinculadas. Puedes recalcular porcentajes, pero cambiar nombre, tipo o cantidad de criterios requiere revisar y asociar esos registros antes. No se aplicó el cambio.' });
+    }
+    if (error?.message.includes('ACADEMIC_SCHEME_CLOSED')) {
+      throw new AcademicApplicationError('closed', { message: 'Este periodo ya tiene calificaciones cerradas. No se modificó el esquema.' });
+    }
     if (error) databaseFailure(error);
     const row = data?.[0];
     if (!row) throw new AcademicApplicationError('not_found');
@@ -356,5 +377,30 @@ export class SupabaseAcademicConfigurationRepository {
       .upsert(rows, { onConflict: 'tenant_id,profesor_id,criterio_evaluacion_id' });
     if (saveError) databaseFailure(saveError);
     return rows.length;
+  }
+
+  async applyTeacherCriteriaToAssignment(
+    sourceSchemeId: string,
+    expectedVersion: number,
+    targetAssignmentId: string,
+  ): Promise<{ criterionCount: number; mode: 'replaced' | 'reweighted' }> {
+    const { data, error } = await this.client.rpc('aplicar_criterios_docente_a_asignacion', {
+      p_esquema_origen_id: sourceSchemeId,
+      p_version_esperada: expectedVersion,
+      p_asignacion_destino_id: targetAssignmentId,
+    });
+    if (error?.message.includes('ACADEMIC_TARGET_STRUCTURE_HAS_RECORDS')) {
+      throw new AcademicApplicationError('conflict', { message: 'Esta materia ya tiene registros y sus criterios no son equivalentes. Puedes actualizar porcentajes, pero cambiar nombres, tipos o eliminar criterios requiere revisar las notas existentes.' });
+    }
+    if (error?.message.includes('ACADEMIC_TARGET_CLOSED')) {
+      throw new AcademicApplicationError('closed', { message: 'Esta materia ya tiene calificaciones cerradas. No se modificó su evaluación.' });
+    }
+    if (error) databaseFailure(error);
+    if (!data || typeof data !== 'object' || Array.isArray(data)
+      || typeof data.criterionCount !== 'number'
+      || (data.mode !== 'replaced' && data.mode !== 'reweighted')) {
+      throw new AcademicApplicationError('unexpected');
+    }
+    return { criterionCount: data.criterionCount, mode: data.mode };
   }
 }

@@ -6,6 +6,8 @@ import { CheckCircle2, Copy, History, LockKeyhole, Plus, Save, Scale, Trash2 } f
 
 import {
   activateAcademicSchemeAction, copyAcademicSchemeAction,
+  configureOverdueVirtualZerosAction,
+  deleteAcademicCriterionAction,
   deleteAcademicSubcriterionAction,
   listAcademicAuditAction, loadAcademicConfigurationAction,
   saveAcademicCriterionAction, saveAcademicSchemeAction,
@@ -25,6 +27,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { WeightDistributionPreview } from './WeightDistributionPreview';
 import { AcademicCriteriaTour } from './AcademicCriteriaTour';
 import { TeacherMobileCaptureSettings } from './TeacherMobileCaptureSettings';
@@ -146,6 +149,7 @@ function CriterionEditor({
     name: criterion.name, type: criterion.type, weight: criterion.weight,
     order: criterion.order, active: criterion.active,
   });
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [newChild, setNewChild] = useState({
     name: '', type: 'directo' as AcademicSubcriterionConfigurationDto['type'],
     internalWeight: 0, order: criterion.subcriteria.length + 1,
@@ -167,6 +171,18 @@ function CriterionEditor({
       return;
     }
     onFeedback({ kind: 'success', message: 'Criterio guardado y verificado.' });
+    await onSaved();
+  }
+
+  async function deleteCriterion() {
+    setDeleteOpen(false);
+    onFeedback({ kind: 'saving', message: `Eliminando ${criterion.name}…` });
+    const result = await deleteAcademicCriterionAction({ id: criterion.id, schemeId: criterion.schemeId });
+    if (!result.ok) {
+      onFeedback({ kind: result.status === 'conflict' ? 'conflict' : 'error', message: result.error.message });
+      return;
+    }
+    onFeedback({ kind: 'success', message: `El criterio “${criterion.name}” fue eliminado de los cambios en preparación.` });
     await onSaved();
   }
 
@@ -230,7 +246,8 @@ function CriterionEditor({
         <div className="space-y-1"><Label htmlFor={`criterion-order-${criterion.id}`}>Orden</Label><Input id={`criterion-order-${criterion.id}`} type="number" min={1} max={99} disabled={disabled} value={draft.order} onChange={(event) => setDraft((value) => ({ ...value, order: Number(event.target.value) }))} /></div>
         <div className="flex items-end"><Button type="button" size="sm" disabled={disabled || !draft.name} onClick={() => void saveCriterion()}><Save />Guardar</Button></div>
       </div>
-      {!disabled ? <Button type="button" size="sm" variant="outline" onClick={() => setDraft((value) => ({ ...value, active: !value.active }))}>{draft.active ? 'Marcar inactivo' : 'Reactivar'}</Button> : null}
+      {draft.type === 'directo' && /tarea|trabajo|actividad/i.test(draft.name) ? <p className="text-sm text-amber-800">“Captura manual” no permite vincular actividades creadas en Mis materias. Si ése es tu objetivo, cambia este campo a “Promedio de actividades” y guarda.</p> : null}
+      {!disabled ? <div className="flex flex-wrap gap-2"><Button type="button" size="sm" variant="outline" onClick={() => setDraft((value) => ({ ...value, active: !value.active }))}>{draft.active ? 'Marcar inactivo' : 'Reactivar'}</Button><Button type="button" size="sm" variant="destructive" onClick={() => setDeleteOpen(true)}><Trash2 />Eliminar criterio</Button></div> : null}
       {criterion.subcriteria.length > 0 ? (
         <ul className="space-y-2 border-l pl-4" aria-label={`Subcriterios de ${criterion.name}`}>
           {criterion.subcriteria.map((child) => <SubcriterionEditor key={child.id} child={child} disabled={disabled} onSave={saveChild} onDelete={deleteChild} />)}
@@ -245,6 +262,15 @@ function CriterionEditor({
           <Button type="button" variant="outline" disabled={!newChild.name} onClick={() => void addChild()}><Plus />Agregar</Button>
         </fieldset>
       ) : null}
+      <AcademicConfirmDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onConfirm={() => void deleteCriterion()}
+        title={`Eliminar criterio “${criterion.name}”`}
+        description="Se quitará de esta edición junto con sus subcriterios. Las calificaciones y versiones ya publicadas no se eliminarán."
+        confirmLabel="Eliminar criterio"
+        destructive
+      />
     </li>
   );
 }
@@ -297,10 +323,13 @@ export function AcademicSchemesPage({ audience = 'administration' }: AcademicSch
       ? result.data.assignments.find((item) => item.id === preferredScheme.assignmentId)
       : savedAssignment ?? fallbackAssignment;
     const cycle = preferredScheme?.cycleId ?? assignment?.cycleId ?? activeCycleId;
-    const period = preferredScheme?.periodId ?? result.data.periods.find((item) => item.cycleId === cycle && item.state === 'activo')?.id ?? result.data.periods.find((item) => item.cycleId === cycle)?.id ?? '';
+    const period = teacherView
+      ? result.data.periods.find((item) => item.cycleId === cycle && item.state === 'activo')?.id ?? ''
+      : preferredScheme?.periodId ?? result.data.periods.find((item) => item.cycleId === cycle && item.state === 'activo')?.id ?? result.data.periods.find((item) => item.cycleId === cycle)?.id ?? '';
+    const schemesInScope = result.data.schemes.filter((item) => item.assignmentId === assignment?.id && item.periodId === period);
     const scheme = preferredScheme
-      ?? result.data.schemes.find((item) => item.assignmentId === assignment?.id && item.periodId === period && item.state === 'activo')
-      ?? result.data.schemes.find((item) => item.assignmentId === assignment?.id && item.periodId === period && item.state === 'borrador');
+      ?? schemesInScope.find((item) => item.state === (teacherView ? 'borrador' : 'activo'))
+      ?? schemesInScope.find((item) => item.state === (teacherView ? 'activo' : 'borrador'));
     setCycleId(cycle);
     if (assignment) {
       setLevelId(assignment.levelId); setCareerId(assignment.careerId);
@@ -336,8 +365,9 @@ export function AcademicSchemesPage({ audience = 'administration' }: AcademicSch
       setLevelId(assignment.levelId); setCareerId(assignment.careerId);
       setGradeId(assignment.gradeId); setGroupId(assignment.groupId);
     }
-    const matching = data?.schemes.find((row) => row.assignmentId === id && row.periodId === periodId && row.state === 'activo')
-      ?? data?.schemes.find((row) => row.assignmentId === id && row.periodId === periodId && row.state === 'borrador');
+    const schemesInScope = data?.schemes.filter((row) => row.assignmentId === id && row.periodId === periodId) ?? [];
+    const matching = schemesInScope.find((row) => row.state === (teacherView ? 'borrador' : 'activo'))
+      ?? schemesInScope.find((row) => row.state === (teacherView ? 'activo' : 'borrador'));
     if (matching) {
       setSelectedSchemeId(matching.id);
       setSchemeDraft(schemeForm(matching));
@@ -366,6 +396,7 @@ export function AcademicSchemesPage({ audience = 'administration' }: AcademicSch
     setConfirmation(null); setFeedback({ kind: 'saving', message: 'Guardando esquema…' });
     const result = await saveAcademicSchemeAction(schemeDraft);
     if (!result.ok) { setFeedback({ kind: result.status === 'conflict' ? 'conflict' : 'error', message: result.error.message }); return; }
+    let visibleSchemeId = result.data.id;
     if (teacherView && activationReady && selectedScheme) {
       const activated = await activateAcademicSchemeAction({ schemeId: result.data.id, expectedVersion: selectedScheme.version });
       if (!activated.ok) {
@@ -373,11 +404,12 @@ export function AcademicSchemesPage({ audience = 'administration' }: AcademicSch
         await load(result.data.id);
         return;
       }
+      visibleSchemeId = activated.data.schemeId;
       setFeedback({ kind: 'success', message: 'Evaluación activa. Ya puedes usar estos criterios en la libreta de calificaciones.' });
     } else {
       setFeedback({ kind: 'success', message: teacherView ? 'Cambios guardados. Completa los criterios y sus porcentajes para aplicarlos en la libreta.' : 'Esquema guardado y verificado.' });
     }
-    await load(result.data.id);
+    await load(visibleSchemeId);
   }
 
   async function addCriterion() {
@@ -399,16 +431,41 @@ export function AcademicSchemesPage({ audience = 'administration' }: AcademicSch
     const result = await activateAcademicSchemeAction({ schemeId: selectedScheme.id, expectedVersion: selectedScheme.version });
     if (!result.ok) { setFeedback({ kind: result.status === 'conflict' ? 'conflict' : 'error', message: result.error.message }); return; }
     setFeedback({ kind: 'success', message: 'Esquema activo. La persistencia fue confirmada.' });
-    await load(selectedScheme.id);
+    await load(result.data.schemeId);
   }
 
   async function copyScheme() {
     if (!selectedScheme) return;
     setConfirmation(null); setFeedback({ kind: 'saving', message: 'Creando nueva versión…' });
-    const result = await copyAcademicSchemeAction({ schemeId: selectedScheme.id, expectedVersion: selectedScheme.version, name: copyName });
+    const unfinished = data?.schemes.find((row) => row.assignmentId === selectedScheme.assignmentId
+      && row.periodId === selectedScheme.periodId && row.state === 'borrador');
+    if (unfinished) {
+      setFeedback({ kind: 'success', message: 'Ya tenías cambios sin aplicar. Continúa editándolos aquí.' });
+      await load(unfinished.id);
+      return;
+    }
+    const result = await copyAcademicSchemeAction({
+      schemeId: selectedScheme.id,
+      expectedVersion: selectedScheme.version,
+      name: teacherView ? selectedScheme.name : copyName,
+    });
     if (!result.ok) { setFeedback({ kind: result.status === 'conflict' ? 'conflict' : 'error', message: result.error.message }); return; }
-    setFeedback({ kind: 'success', message: 'Nueva versión creada con sus criterios.' });
+    setFeedback({ kind: 'success', message: teacherView ? 'Puedes editar los criterios. Los cambios se publicarán al pulsar “Guardar y aplicar”.' : 'Nueva versión creada con sus criterios.' });
     await load(result.data.schemeId);
+  }
+
+  async function changeVirtualZeroPolicy(enabled: boolean) {
+    if (!selectedScheme || selectedScheme.state !== 'activo') return;
+    setFeedback({ kind: 'saving', message: 'Actualizando el cálculo de pendientes vencidas…' });
+    const result = await configureOverdueVirtualZerosAction({ schemeId: selectedScheme.id, enabled });
+    if (!result.ok) {
+      setFeedback({ kind: result.status === 'conflict' ? 'conflict' : 'error', message: result.error.message });
+      return;
+    }
+    setFeedback({ kind: 'success', message: enabled
+      ? 'Las actividades vencidas sin nota contarán como cero virtual. Las notas guardadas no cambiaron.'
+      : 'Las actividades sin nota volverán a quedar fuera del promedio provisional.' });
+    await load(selectedScheme.id);
   }
 
   async function redistributeCriteria() {
@@ -467,7 +524,7 @@ export function AcademicSchemesPage({ audience = 'administration' }: AcademicSch
               <Card data-criteria-tour={teacherView ? 'scope' : undefined}>
                 <CardHeader><CardTitle>{teacherView ? 'Materia, grupo y periodo' : 'Alcance del esquema'}</CardTitle><CardDescription>{teacherView ? 'Sólo aparecen las asignaciones docentes que te corresponden.' : 'Selecciona de lo general a lo específico. Cada filtro reduce las opciones siguientes.'}</CardDescription></CardHeader>
                 <CardContent className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                  <div className="space-y-2"><Label htmlFor="scheme-cycle">Ciclo</Label><select id="scheme-cycle" className={fieldClassName} value={cycleId} onChange={(event) => { const id = event.target.value; setCycleId(id); setLevelId(''); setCareerId(''); setGradeId(''); setGroupId(''); setAssignmentId(''); setPeriodId(''); setSelectedSchemeId(''); }}><option value="">Selecciona ciclo</option>{data.cycles.map((cycle) => <option key={cycle.id} value={cycle.id}>{cycle.name}</option>)}</select></div>
+                  <div className="space-y-2"><Label htmlFor="scheme-cycle">Ciclo</Label><select id="scheme-cycle" className={fieldClassName} disabled={teacherView} value={cycleId} onChange={(event) => { const id = event.target.value; setCycleId(id); setLevelId(''); setCareerId(''); setGradeId(''); setGroupId(''); setAssignmentId(''); setPeriodId(''); setSelectedSchemeId(''); }}><option value="">Selecciona ciclo</option>{data.cycles.filter((cycle) => !teacherView || cycle.state === 'activo').map((cycle) => <option key={cycle.id} value={cycle.id}>{cycle.name}</option>)}</select></div>
                   {teacherView ? (
                     <div className="space-y-2 sm:col-span-2"><Label htmlFor="scheme-assignment">Mi materia y grupo</Label><select id="scheme-assignment" className={fieldClassName} value={assignmentId} onChange={(event) => chooseAssignment(event.target.value)}><option value="">Selecciona asignación</option>{cycleAssignments.map((row) => <option key={row.id} value={row.id}>{row.subjectName} — {row.gradeName} {row.groupName}</option>)}</select></div>
                   ) : <>
@@ -477,21 +534,21 @@ export function AcademicSchemesPage({ audience = 'administration' }: AcademicSch
                   <div className="space-y-2"><Label htmlFor="scheme-group">Grupo</Label><select id="scheme-group" className={fieldClassName} value={groupId} onChange={(event) => { setGroupId(event.target.value); setAssignmentId(''); }}><option value="">Selecciona grupo</option>{uniqueOptions(gradeAssignments, 'groupId', 'groupName').map(([id, name]) => <option key={id} value={id}>{name}</option>)}</select></div>
                   <div className="space-y-2 sm:col-span-2"><Label htmlFor="scheme-assignment">Materia y profesor</Label><select id="scheme-assignment" className={fieldClassName} value={assignmentId} onChange={(event) => chooseAssignment(event.target.value)}><option value="">Selecciona asignación</option>{groupAssignments.map((row) => <option key={row.id} value={row.id}>{row.subjectName} — {row.teacherName}</option>)}</select></div>
                   </>}
-                  <div className="space-y-2"><Label htmlFor="scheme-period">Periodo</Label><select id="scheme-period" className={fieldClassName} value={periodId} onChange={(event) => { const id = event.target.value; setPeriodId(id); setSelectedSchemeId(''); setSchemeDraft({ ...emptyScheme, cycleId, assignmentId, periodId: id }); }}><option value="">Selecciona periodo</option>{data.periods.filter((row) => row.cycleId === cycleId).map((period) => <option key={period.id} value={period.id}>{period.order}. {period.name} — {period.state}</option>)}</select></div>
+                  <div className="space-y-2"><Label htmlFor="scheme-period">Periodo {teacherView ? 'actual de la escuela' : ''}</Label><select id="scheme-period" className={fieldClassName} disabled={teacherView} value={periodId} onChange={(event) => { const id = event.target.value; setPeriodId(id); setSelectedSchemeId(''); setSchemeDraft({ ...emptyScheme, cycleId, assignmentId, periodId: id }); }}><option value="">{teacherView ? 'Sin periodo activo' : 'Selecciona periodo'}</option>{data.periods.filter((row) => row.cycleId === cycleId && (!teacherView || row.state === 'activo')).map((period) => <option key={period.id} value={period.id}>{period.order}. {period.name}{teacherView ? '' : ` — ${period.state}`}</option>)}</select>{teacherView && !periodId ? <p className="text-sm text-amber-800">Pide al administrador que cree y active un periodo de evaluación antes de configurar criterios.</p> : null}</div>
                 </CardContent>
               </Card>
 
               <Card>
-                <CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="flex items-center gap-2"><Scale aria-hidden="true" />Reglas del esquema</CardTitle><CardDescription>Primero crea un borrador. Después podrás agregar Examen, Proyecto, Tareas u otros criterios.</CardDescription></div><Button data-criteria-tour="draft" variant="outline" disabled={!assignmentId || !periodId} onClick={() => chooseScheme('')}><Plus />Nuevo borrador</Button></div></CardHeader>
+                <CardHeader><div className="flex flex-wrap items-start justify-between gap-3"><div><CardTitle className="flex items-center gap-2"><Scale aria-hidden="true" />{teacherView ? 'Criterios de esta materia' : 'Reglas del esquema'}</CardTitle><CardDescription>{teacherView ? 'Configura los porcentajes de esta materia y grupo. Los cambios estarán disponibles cuando pulses Guardar y aplicar.' : 'Primero crea un borrador. Después podrás agregar Examen, Proyecto, Tareas u otros criterios.'}</CardDescription></div>{(!teacherView || !selectedScheme) ? <Button data-criteria-tour="draft" variant="outline" disabled={!assignmentId || !periodId} onClick={() => { chooseScheme(''); if (teacherView) setSchemeDraft({ ...emptyScheme, cycleId, assignmentId, periodId, name: `${data.assignments.find((row) => row.id === assignmentId)?.subjectName ?? 'Evaluación'} · ${data.periods.find((row) => row.id === periodId)?.name ?? 'Periodo actual'}` }); }}><Plus />{teacherView ? 'Definir criterios' : 'Nuevo borrador'}</Button> : null}</div></CardHeader>
                 <CardContent className="space-y-5">
-                  <div className="space-y-2"><Label htmlFor="scheme-selector">Versión</Label><select id="scheme-selector" className={fieldClassName} disabled={!assignmentId || !periodId} value={selectedSchemeId} onChange={(event) => chooseScheme(event.target.value)}><option value="">Nuevo esquema</option>{availableSchemes.map((scheme) => <option key={scheme.id} value={scheme.id}>v{scheme.version} · {scheme.name} — {scheme.state}</option>)}</select></div>
-                  {readOnly ? <p role="status" className="flex items-center gap-2 rounded-md border p-3 text-sm"><LockKeyhole className="size-4" aria-hidden="true" />Esta versión conserva las calificaciones registradas. Usa “Crear copia editable” para ajustar los criterios y después aplica tus cambios en la libreta.</p> : null}
+                  {!teacherView ? <div className="space-y-2"><Label htmlFor="scheme-selector">Versión</Label><select id="scheme-selector" className={fieldClassName} disabled={!assignmentId || !periodId} value={selectedSchemeId} onChange={(event) => chooseScheme(event.target.value)}><option value="">Nuevo esquema</option>{availableSchemes.map((scheme) => <option key={scheme.id} value={scheme.id}>v{scheme.version} · {scheme.name} — {scheme.state}</option>)}</select></div> : null}
+                  {readOnly ? <p role="status" className="flex items-center gap-2 rounded-md border p-3 text-sm"><LockKeyhole className="size-4" aria-hidden="true" />{teacherView ? 'Estos criterios ya están publicados. Pulsa “Editar criterios” para cambiarlos sin interrumpir las calificaciones actuales.' : 'Esta versión conserva las calificaciones registradas. Usa “Crear copia editable” para ajustar los criterios y después aplica tus cambios en la libreta.'}</p> : null}
                   <form data-criteria-tour="rules" className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" onSubmit={(event) => { event.preventDefault(); setConfirmation('scheme'); }}>
                     <div className="space-y-2 sm:col-span-2"><Label htmlFor="scheme-name">Nombre</Label><Input id="scheme-name" required disabled={readOnly} value={schemeDraft.name} onChange={(event) => setSchemeDraft((value) => ({ ...value, name: event.target.value, cycleId, assignmentId, periodId }))} /></div>
                     <div className="space-y-2"><Label htmlFor="scheme-passing">Calificación aprobatoria</Label><Input id="scheme-passing" type="number" min={0} max={10} step="0.0001" required disabled={readOnly} value={schemeDraft.passingGrade} onChange={(event) => setSchemeDraft((value) => ({ ...value, passingGrade: Number(event.target.value) }))} /></div>
                     <div className="space-y-2"><Label htmlFor="scheme-decimals">Decimales visibles</Label><select id="scheme-decimals" className={fieldClassName} disabled={readOnly} value={schemeDraft.displayDecimals} onChange={(event) => setSchemeDraft((value) => ({ ...value, displayDecimals: Number(event.target.value) as 0 | 1 | 2 }))}><option value={0}>0</option><option value={1}>1</option><option value={2}>2</option></select></div>
                     <div className="rounded-md border bg-muted/40 p-3 text-sm"><strong>Escala fija:</strong> 0 a 10</div><div className="rounded-md border bg-muted/40 p-3 text-sm"><strong>Redondeo:</strong> mitad hacia arriba</div><div className="rounded-md border bg-muted/40 p-3 text-sm"><strong>No entrega:</strong> 0 al cierre</div><div className="rounded-md border bg-muted/40 p-3 text-sm"><strong>Justificado:</strong> excluir</div>
-                    <div className="sm:col-span-2 lg:col-span-4 flex flex-wrap gap-2"><Button type="submit" disabled={readOnly || !assignmentId || !periodId || !schemeDraft.name || feedback?.kind === 'saving'}><Save />{teacherView && activationReady ? 'Guardar y activar evaluación' : 'Guardar reglas'}</Button>{selectedScheme ? <Badge variant="outline">v{selectedScheme.version} · {selectedScheme.state}</Badge> : null}</div>
+                    <div className="sm:col-span-2 lg:col-span-4 flex flex-wrap gap-2"><Button type="submit" disabled={readOnly || !assignmentId || !periodId || !schemeDraft.name || feedback?.kind === 'saving'}><Save />{teacherView && activationReady ? 'Guardar y aplicar' : 'Guardar configuración'}</Button>{selectedScheme && !teacherView ? <Badge variant="outline">v{selectedScheme.version} · {selectedScheme.state}</Badge> : null}</div>
                   </form>
                 </CardContent>
               </Card>
@@ -499,15 +556,17 @@ export function AcademicSchemesPage({ audience = 'administration' }: AcademicSch
               {selectedScheme ? (
                 <>
                 <div data-criteria-tour={teacherView ? 'activation' : undefined} className="sticky top-2 z-20 rounded-xl border-2 border-primary bg-background p-4 shadow-lg" role="status">
-                  <p className="font-bold">{selectedScheme.state === 'activo' ? 'Criterios activos: disponibles en la libreta' : selectedScheme.state === 'borrador' ? 'Cambios guardados, pendientes de aplicar' : 'Versión histórica'}</p>
-                  {teacherView && selectedScheme.state === 'activo' ? <><p className="mt-1 text-sm">Puedes ajustar tu evaluación. Al terminar, aplica los cambios desde este mismo recuadro.</p><Button className="mt-3" disabled={feedback?.kind === 'saving'} onClick={() => void copyScheme()}><Copy />Editar criterios</Button></> : null}
+                  <p className="font-bold">{selectedScheme.state === 'activo' ? 'Criterios activos: disponibles en la libreta' : selectedScheme.state === 'borrador' ? teacherView ? 'Cambios en preparación: todavía no se usan para calificar' : 'Cambios guardados, pendientes de aplicar' : 'Versión histórica'}</p>
+                  {teacherView && selectedScheme.state === 'activo' ? <><p className="mt-1 text-sm">Los criterios actuales seguirán funcionando mientras haces cambios.</p><Button className="mt-3" disabled={feedback?.kind === 'saving'} onClick={() => void copyScheme()}><Copy />Editar criterios</Button></> : null}
                   {selectedScheme.state === 'borrador' ? <>
-                    <p className="mt-1 text-sm">Guarda cada criterio y subcriterio que edites. Después pulsa el botón de abajo para usar el conjunto en las calificaciones.</p>
+                    <p className="mt-1 text-sm">{teacherView ? 'Guarda los cambios de cada criterio. Cuando todos los porcentajes sumen 100%, pulsa “Guardar y aplicar” para que los alumnos y la libreta usen esta configuración.' : 'Guarda cada criterio y subcriterio que edites. Después pulsa el botón de abajo para usar el conjunto en las calificaciones.'}</p>
                     {!activationReady ? <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-destructive">{distribution.errors.map((error) => <li key={error}>{error}</li>)}</ul> : <p className="mt-2 text-sm text-primary">Los criterios guardados están listos para activarse.</p>}
-                    {teacherView ? <Button className="mt-3" disabled={!activationReady || !schemeDraft.name.trim() || feedback?.kind === 'saving'} onClick={() => void saveScheme()}><CheckCircle2 />Usar estos criterios en la libreta</Button> : null}
+                    {teacherView ? <Button className="mt-3" disabled={!activationReady || !schemeDraft.name.trim() || feedback?.kind === 'saving'} onClick={() => void saveScheme()}><CheckCircle2 />Guardar y aplicar</Button> : null}
                   </> : null}
+                  {teacherView && selectedScheme.criteria.some((criterion) => criterion.active && criterion.type === 'directo' && /tarea|trabajo|actividad/i.test(criterion.name)) ? <p className="mt-2 text-sm font-medium text-amber-800">Hay criterios llamados “Tareas”, “Trabajos” o “Actividades” configurados como captura manual. Así no aparecen al crear ejercicios. Edita el criterio y elige “Promedio de actividades” si quieres vincular esas actividades.</p> : null}
                 </div>
                 {teacherView && selectedScheme.state === 'activo' ? <DistributeScheme key={selectedScheme.id} data={data} scheme={selectedScheme} onApplied={() => load(selectedScheme.id)} /> : null}
+                {teacherView && selectedScheme.state === 'activo' ? <div className="rounded-xl border bg-background p-4"><div className="flex items-center justify-between gap-4"><div><Label htmlFor="overdue-virtual-zeros" className="font-semibold">Contar pendientes vencidas como cero virtual</Label><p className="mt-1 text-sm text-muted-foreground">Sólo se incluyen actividades cuya fecha límite ya pasó. Las que siguen en plazo no cuentan; ninguna nota guardada se modifica.</p></div><Switch id="overdue-virtual-zeros" checked={selectedScheme.overduePendingAsZero} disabled={feedback?.kind === 'saving'} onCheckedChange={(checked) => void changeVirtualZeroPolicy(checked)} /></div></div> : null}
                 {teacherView && selectedScheme.state === 'activo' ? <TeacherMobileCaptureSettings criteria={selectedScheme.criteria} assignmentId={selectedScheme.assignmentId} qrAssignments={data.assignments.filter((row) => row.cycleId === selectedScheme.cycleId)} /> : null}
                 </>
               ) : null}
@@ -521,7 +580,7 @@ export function AcademicSchemesPage({ audience = 'administration' }: AcademicSch
                         {selectedScheme.criteria.map((criterion) => <CriterionEditor key={criterion.id} criterion={criterion} disabled={readOnly} onSaved={() => load(selectedScheme.id)} onFeedback={setFeedback} />)}
                       </ol>
                       {!readOnly ? <fieldset data-criteria-tour="new-criterion" className="grid gap-3 rounded-lg border border-dashed p-4 sm:grid-cols-[minmax(0,2fr)_minmax(8rem,1fr)_7rem_5rem_auto]"><legend className="px-1 font-medium">Agregar un criterio</legend><p className="text-sm text-muted-foreground sm:col-span-5">Ejemplo: escribe “Examen”, selecciona cómo se calificará, asigna su porcentaje y pulsa Agregar.</p><Input aria-label="Nombre del nuevo criterio" placeholder="Ej. Examen" value={newCriterion.name} onChange={(event) => setNewCriterion((value) => ({ ...value, name: event.target.value }))} /><select aria-label="Tipo del nuevo criterio" className={fieldClassName} value={newCriterion.type} onChange={(event) => setNewCriterion((value) => ({ ...value, type: event.target.value as typeof value.type }))}><option value="directo">Captura manual</option><option value="actividades">Promedio de actividades</option><option value="participacion">Participación</option><option value="hibrido">Mixto con subcriterios</option></select><Input aria-label="Peso del nuevo criterio" title="Porcentaje dentro de la calificación final" type="number" min={0} max={100} step="0.0001" value={newCriterion.weight} onChange={(event) => setNewCriterion((value) => ({ ...value, weight: Number(event.target.value) }))} /><Input aria-label="Orden del nuevo criterio" title="Posición en la lista" type="number" min={1} max={99} value={newCriterion.order} onChange={(event) => setNewCriterion((value) => ({ ...value, order: Number(event.target.value) }))} /><Button type="button" disabled={!newCriterion.name} onClick={() => void addCriterion()}><Plus />Agregar</Button></fieldset> : null}
-                      <div data-criteria-tour={!teacherView ? 'activation' : undefined} className="flex flex-wrap gap-2">{!teacherView ? <Button type="button" disabled={!activationReady} onClick={() => setConfirmation('activate')}><CheckCircle2 />Activar esquema</Button> : null}{selectedScheme.state !== 'borrador' ? <><Input aria-label="Nombre de la nueva versión" className="max-w-sm" value={copyName} onChange={(event) => setCopyName(event.target.value)} /><Button type="button" variant="outline" disabled={!copyName.trim()} onClick={() => setConfirmation('copy')}><Copy />Crear copia editable</Button></> : null}</div>
+                      <div data-criteria-tour={!teacherView ? 'activation' : undefined} className="flex flex-wrap gap-2">{!teacherView ? <Button type="button" disabled={!activationReady} onClick={() => setConfirmation('activate')}><CheckCircle2 />Activar esquema</Button> : null}{selectedScheme.state !== 'borrador' && !teacherView ? <><Input aria-label="Nombre de la nueva versión" className="max-w-sm" value={copyName} onChange={(event) => setCopyName(event.target.value)} /><Button type="button" variant="outline" disabled={!copyName.trim()} onClick={() => setConfirmation('copy')}><Copy />Crear copia editable</Button></> : null}</div>
                       {!activationReady && selectedScheme.state === 'borrador' ? <p role="status" className="text-sm text-muted-foreground">La activación seguirá bloqueada hasta tener criterios válidos con total superior e internos exactamente en 100%.</p> : null}
                     </CardContent>
                   </Card>

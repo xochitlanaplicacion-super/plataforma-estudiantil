@@ -21,6 +21,8 @@ export interface CalculationSource {
   scale: CalculationSourceScale;
   value: DecimalInput | null;
   zeroDenominatorExcluded?: boolean;
+  /** Projection-only zero for an ungraded activity whose deadline has passed. */
+  virtualOverdue?: boolean;
 }
 
 export interface CalculationSubcriterion {

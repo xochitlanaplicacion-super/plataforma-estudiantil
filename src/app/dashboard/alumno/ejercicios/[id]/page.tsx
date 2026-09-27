@@ -17,9 +17,10 @@ export default async function RealizarEjercicioPage({ params }: { params: Promis
   // inscripción activa (tenant, ciclo y grupo). La URL directa no basta.
   const { data: authorizedLink } = await supabase
     .from('vinculos_evaluacion_ejercicio')
-    .select('ejercicio_id')
+    .select('ejercicio_id, periodos_evaluacion!inner(estado)')
     .eq('ejercicio_id', resolvedParams.id)
     .eq('activo', true)
+    .neq('periodos_evaluacion.estado', 'borrador')
     .maybeSingle();
 
   if (!authorizedLink) {

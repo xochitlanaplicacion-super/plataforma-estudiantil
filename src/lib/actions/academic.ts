@@ -7,6 +7,8 @@ import { createClient } from '@supabase/supabase-js';
 import { revalidatePath, unstable_noStore as noStore } from 'next/cache';
 import { parseFechaLocal } from '@/lib/utils';
 import { selectPublishedEvaluationSchemes } from '@/lib/academic/exercise-evaluation-options';
+import { endOfTenantCalendarDayIso } from '@/lib/service-countdown';
+import { UNWEIGHTED_PLATFORM_CRITERION_ID, UNWEIGHTED_PLATFORM_CRITERION_NAME } from '@/lib/academic/platform-category';
 
 const prepareForUpsert = (data: any) => {
   const cleanData = { ...data };
@@ -467,64 +469,69 @@ export async function getExerciseEvaluationOptions(
   exerciseId?: string,
   syncId?: string,
 ) {
-  const { supabase, tenantId, user, profile } = await requireTenantSession([
+  const { supabase, admin, tenantId, user, profile } = await requireTenantSession([
     'profesor', 'admin', 'superuser',
   ]);
   const uniqueAssignmentIds = [...new Set(assignmentIds.filter(Boolean))];
-  if (uniqueAssignmentIds.length === 0) return { data: [], existing: [], error: null };
+  if (uniqueAssignmentIds.length === 0) return { data: [], existing: [], error: null, timezone: null };
+
+  const { data: tenantFeatures } = await admin.from('tenant_features')
+    .select('timezone').eq('tenant_id', tenantId).maybeSingle();
+  const timezone = tenantFeatures?.timezone || 'America/Mexico_City';
 
   let assignmentsQuery = supabase
     .from('asignaciones_profesor')
-    .select('id, materia_id, grupos(nombre), materias(nombre)')
+    .select('id, materia_id, ciclo_escolar_id, grupos(nombre), materias(nombre)')
     .eq('tenant_id', tenantId)
     .eq('activo', true)
     .in('id', uniqueAssignmentIds);
   if (profile.rol === 'profesor') assignmentsQuery = assignmentsQuery.eq('profesor_id', user.id);
   const { data: assignments, error: assignmentError } = await assignmentsQuery;
-  if (assignmentError) return { data: null, existing: [], error: assignmentError };
+  if (assignmentError) return { data: null, existing: [], error: assignmentError, timezone };
   if ((assignments?.length || 0) !== uniqueAssignmentIds.length) {
-    return { data: null, existing: [], error: new Error('Una asignación no pertenece al profesor autenticado') };
+    return { data: null, existing: [], error: new Error('Una asignación no pertenece al profesor autenticado'), timezone };
   }
+
+  const cycleIds = [...new Set((assignments || []).map((row) => row.ciclo_escolar_id))];
+  const { data: periods, error: periodError } = await supabase
+    .from('periodos_evaluacion')
+    .select('id, nombre, orden, estado, ciclo_escolar_id')
+    .eq('tenant_id', tenantId)
+    .eq('estado', 'activo')
+    .in('ciclo_escolar_id', cycleIds)
+    .order('orden');
+  if (periodError) return { data: null, existing: [], error: periodError, timezone };
 
   const { data: schemes, error: schemeError } = await supabase
     .from('esquemas_evaluacion')
     .select('id, asignacion_profesor_id, periodo_evaluacion_id, estado, version')
     .eq('tenant_id', tenantId)
-    .in('estado', ['activo', 'borrador'])
+    .eq('estado', 'activo')
     .in('asignacion_profesor_id', uniqueAssignmentIds);
-  if (schemeError) return { data: null, existing: [], error: schemeError };
+  if (schemeError) return { data: null, existing: [], error: schemeError, timezone };
   const schemeIds = (schemes || []).map((row) => row.id);
-  const periodIds = [...new Set((schemes || []).map((row) => row.periodo_evaluacion_id))];
-
-  const [{ data: periods, error: periodError }, { data: criteria, error: criterionError }] = await Promise.all([
-    periodIds.length > 0
-      ? supabase.from('periodos_evaluacion').select('id, nombre, orden, estado')
-        .eq('tenant_id', tenantId).neq('estado', 'cerrado').in('id', periodIds).order('orden')
-      : Promise.resolve({ data: [], error: null }),
-    schemeIds.length > 0
-      ? supabase.from('criterios_evaluacion')
-        .select('id, esquema_evaluacion_id, nombre, tipo, orden, subcriterios_evaluacion(id, nombre, tipo, orden, activo)')
-        .eq('tenant_id', tenantId).eq('activo', true).in('esquema_evaluacion_id', schemeIds)
-        .in('tipo', ['actividades', 'hibrido']).order('orden')
-      : Promise.resolve({ data: [], error: null }),
-  ]);
-  if (periodError || criterionError) {
-    return { data: null, existing: [], error: periodError || criterionError };
-  }
+  const { data: criteria, error: criterionError } = schemeIds.length > 0
+    ? await supabase.from('criterios_evaluacion')
+      .select('id, esquema_evaluacion_id, nombre, tipo, orden, es_sistema_sin_peso, subcriterios_evaluacion(id, nombre, tipo, orden, activo)')
+      .eq('tenant_id', tenantId).eq('activo', true).in('esquema_evaluacion_id', schemeIds)
+      .in('tipo', ['actividades', 'hibrido']).order('orden')
+    : { data: [], error: null };
+  if (criterionError) return { data: null, existing: [], error: criterionError, timezone };
 
   const contexts = (assignments || []).map((assignment: any) => ({
     assignmentId: assignment.id,
     label: `${assignment.materias?.nombre || 'Materia'} · ${assignment.grupos?.nombre || 'Grupo'}`,
-    periods: selectPublishedEvaluationSchemes(schemes || [], assignment.id)
-      .map((scheme) => {
-        const period = (periods || []).find((row) => row.id === scheme.periodo_evaluacion_id);
-        return period ? {
+    periods: (periods || []).filter((period) => period.ciclo_escolar_id === assignment.ciclo_escolar_id)
+      .map((period) => {
+        const scheme = selectPublishedEvaluationSchemes(schemes || [], assignment.id)
+          .find((row) => row.periodo_evaluacion_id === period.id);
+        return {
           id: period.id,
           name: period.nombre,
           order: period.orden,
           state: period.estado,
-          schemeState: scheme.estado,
-          criteria: (criteria || []).filter((criterion) => criterion.esquema_evaluacion_id === scheme.id)
+          schemeState: scheme?.estado || 'sin_esquema',
+          criteria: (criteria || []).filter((criterion) => criterion.esquema_evaluacion_id === scheme?.id && !criterion.es_sistema_sin_peso)
             .map((criterion: any) => ({
               id: criterion.id,
               name: criterion.nombre,
@@ -533,9 +540,14 @@ export async function getExerciseEvaluationOptions(
                 .filter((subcriterion: any) => subcriterion.activo
                   && ['actividades', 'hibrido'].includes(subcriterion.tipo))
                 .sort((a: any, b: any) => a.orden - b.orden),
-            })),
-        } : null;
-      }).filter(Boolean),
+            })).concat([{
+              id: UNWEIGHTED_PLATFORM_CRITERION_ID,
+              name: UNWEIGHTED_PLATFORM_CRITERION_NAME,
+              type: 'actividades',
+              subcriteria: [],
+            }]),
+        };
+      }),
   }));
 
   let targetExerciseIds = exerciseId ? [exerciseId] : [];
@@ -549,7 +561,15 @@ export async function getExerciseEvaluationOptions(
       .select('ejercicio_id, asignacion_profesor_id, periodo_evaluacion_id, criterio_evaluacion_id, subcriterio_evaluacion_id')
       .eq('tenant_id', tenantId).eq('activo', true).in('ejercicio_id', targetExerciseIds)
     : { data: [] };
-  return { data: contexts, existing: existing || [], error: null };
+  const systemCriterionIds = new Set((criteria || []).filter((criterion) => criterion.es_sistema_sin_peso).map((criterion) => criterion.id));
+  return {
+    data: contexts,
+    existing: (existing || []).map((link) => systemCriterionIds.has(link.criterio_evaluacion_id)
+      ? { ...link, criterio_evaluacion_id: UNWEIGHTED_PLATFORM_CRITERION_ID }
+      : link),
+    error: null,
+    timezone,
+  };
 }
 
 async function configureExerciseEvaluationLinks(
@@ -572,20 +592,26 @@ async function configureExerciseEvaluationLinks(
       ?? (exercises.length === 1 ? selections[0] : undefined);
     if (!selection) return new Error('No se pudo asociar un ejercicio sincronizado con su asignación');
 
-    const { error } = await supabase.rpc('configurar_vinculo_evaluacion_ejercicio', {
-      p_ejercicio_id: exercise.id,
-      p_asignacion_id: selection.assignmentId,
-      p_periodo_id: selection.periodId,
-      p_criterio_id: selection.criterionId,
-      p_subcriterio_id: selection.subcriterionId ?? null,
-    });
+    const { error } = selection.criterionId === UNWEIGHTED_PLATFORM_CRITERION_ID
+      ? await supabase.rpc('configurar_vinculo_plataforma_sin_peso', {
+        p_ejercicio_id: exercise.id,
+        p_asignacion_id: selection.assignmentId,
+        p_periodo_id: selection.periodId,
+      })
+      : await supabase.rpc('configurar_vinculo_evaluacion_ejercicio', {
+        p_ejercicio_id: exercise.id,
+        p_asignacion_id: selection.assignmentId,
+        p_periodo_id: selection.periodId,
+        p_criterio_id: selection.criterionId,
+        p_subcriterio_id: selection.subcriterionId ?? null,
+      });
     if (error) return error;
   }
   return null;
 }
 
 export async function upsertEjercicio(ejercicio: any, isSyncCreation: boolean = false) {
-  const { supabase: supabaseAdmin, tenantId, user, profile } = await requireTenantSession([
+  const { supabase: supabaseAdmin, admin, tenantId, user, profile } = await requireTenantSession([
     'profesor', 'admin', 'superuser',
   ]);
   const evaluationSelections = Array.isArray(ejercicio.evaluationLinks)
@@ -594,6 +620,44 @@ export async function upsertEjercicio(ejercicio: any, isSyncCreation: boolean = 
   delete ejercicio.evaluationLinks;
   delete ejercicio.syncToAll;
   const cleanData = prepareForUpsert(ejercicio);
+  const { data: tenantFeatures, error: timezoneError } = await admin
+    .from('tenant_features')
+    .select('timezone')
+    .eq('tenant_id', tenantId)
+    .maybeSingle();
+  if (timezoneError) return { data: null, error: timezoneError };
+  const tenantTimezone = tenantFeatures?.timezone;
+
+  // El selector del profesor envía una fecha civil sin zona horaria. Postgres
+  // interpretaría las 23:59 como UTC y cerraría la tarea horas antes en México.
+  if (typeof cleanData.fecha_entrega === 'string') {
+    const localDay = /^(\d{4}-\d{2}-\d{2})(?:T23:59:59)?$/.exec(cleanData.fecha_entrega);
+    if (localDay) {
+      const deadline = endOfTenantCalendarDayIso(localDay[1], tenantTimezone);
+      if (!deadline) return { data: null, error: new Error('La fecha límite no es válida.') };
+      cleanData.fecha_entrega = deadline;
+    }
+  }
+
+  if (evaluationSelections.length > 0) {
+    const periodIds = [...new Set(evaluationSelections.map((selection) => selection.periodId))];
+    const { data: periods, error: periodError } = await admin
+      .from('periodos_evaluacion')
+      .select('id, nombre, estado')
+      .eq('tenant_id', tenantId)
+      .in('id', periodIds);
+    if (periodError) return { data: null, error: periodError };
+    for (const selection of evaluationSelections) {
+      const period = periods?.find((item) => item.id === selection.periodId);
+      if (!period) return { data: null, error: new Error('El periodo de evaluación no existe en esta institución.') };
+      if (period.estado !== 'activo') {
+        return {
+          data: null,
+          error: new Error('Sólo puedes vincular actividades al periodo activo definido por la institución.'),
+        };
+      }
+    }
+  }
 
   // La autoría se deriva de la sesión, nunca de datos manipulables del cliente.
   if (!cleanData.id) cleanData.created_by = user.id;

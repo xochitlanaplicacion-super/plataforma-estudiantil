@@ -87,6 +87,7 @@ export interface AcademicSchemeConfigurationDto {
   missingRule: 'zero_on_close';
   missingValue: 0;
   excusedRule: 'exclude';
+  overduePendingAsZero: boolean;
   state: AcademicSchemeState;
   version: number;
   copiedFromId: string | null;

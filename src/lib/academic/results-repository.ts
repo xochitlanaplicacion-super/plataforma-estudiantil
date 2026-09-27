@@ -19,9 +19,12 @@ import {
   ACADEMIC_RESULTS_MAX_STUDENTS,
 } from './results-dto';
 import { createAcademicResultsCsv } from './results-export';
+import { isPastDeadline } from './deadline-policy';
 import {
   projectAcademicResult,
   summarizeTenantResults,
+  type AcademicCriterionTemplate,
+  type AcademicOverdueSource,
   type AcademicResultProjectionContext,
 } from './results-projector';
 import type {
@@ -68,6 +71,7 @@ interface SchemeRow {
   calificacion_aprobatoria: number;
   decimales_mostrados: number;
   estado: string;
+  pendientes_vencidos_como_cero: boolean;
 }
 
 interface NamedRow { id: string; nombre: string }
@@ -180,6 +184,134 @@ function projectContext(input: {
 export class SupabaseAcademicResultsRepository implements AcademicResultsRepository {
   constructor(private readonly client: SupabaseClient<Database>) {}
 
+  private async loadCriterionTemplates(
+    tenantId: string,
+    schemeIds: readonly string[],
+  ): Promise<Map<string, AcademicCriterionTemplate[]>> {
+    const result = new Map<string, AcademicCriterionTemplate[]>();
+    if (!schemeIds.length) return result;
+    const { data: criteria, error: criteriaError } = await this.client.from('criterios_evaluacion')
+      .select('id, esquema_evaluacion_id, nombre, tipo, peso, orden')
+      .eq('tenant_id', tenantId).eq('activo', true).eq('es_sistema_sin_peso', false)
+      .in('esquema_evaluacion_id', schemeIds).order('orden').limit(1001);
+    if (criteriaError) fail(criteriaError);
+    if ((criteria?.length ?? 0) > 1000) throw new AcademicApplicationError('conflict', {
+      cause: new Error('Demasiados criterios para proyectar resultados.'),
+    });
+    const criterionIds = (criteria ?? []).map((row) => row.id);
+    const { data: subcriteria, error: subcriteriaError } = criterionIds.length
+      ? await this.client.from('subcriterios_evaluacion')
+        .select('id, criterio_evaluacion_id, nombre, tipo, peso_interno, orden')
+        .eq('tenant_id', tenantId).eq('activo', true)
+        .in('criterio_evaluacion_id', criterionIds).order('orden').limit(1001)
+      : { data: [], error: null };
+    if (subcriteriaError) fail(subcriteriaError);
+    if ((subcriteria?.length ?? 0) > 1000) throw new AcademicApplicationError('conflict', {
+      cause: new Error('Demasiados subcriterios para proyectar resultados.'),
+    });
+    for (const row of criteria ?? []) {
+      const list = result.get(row.esquema_evaluacion_id) ?? [];
+      list.push({
+        id: row.id, label: row.nombre,
+        type: row.tipo as AcademicCriterionTemplate['type'],
+        weight: String(row.peso), order: row.orden,
+        subcriteria: (subcriteria ?? [])
+          .filter((subcriterion) => subcriterion.criterio_evaluacion_id === row.id)
+          .map((subcriterion) => ({
+            id: subcriterion.id, label: subcriterion.nombre,
+            type: subcriterion.tipo as AcademicCriterionTemplate['subcriteria'][number]['type'],
+            internalWeight: String(subcriterion.peso_interno), order: subcriterion.orden,
+          })),
+      });
+      result.set(row.esquema_evaluacion_id, list);
+    }
+    return result;
+  }
+
+  private async loadOverdueSources(
+    tenantId: string,
+    scopes: readonly { assignmentId: string; periodId: string; enrollmentId: string; schemeId: string }[],
+    templates: Map<string, AcademicCriterionTemplate[]>,
+  ): Promise<Map<string, AcademicOverdueSource[]>> {
+    const output = new Map<string, AcademicOverdueSource[]>();
+    if (!scopes.length) return output;
+    const assignmentIds = [...new Set(scopes.map((scope) => scope.assignmentId))];
+    const periodIds = [...new Set(scopes.map((scope) => scope.periodId))];
+    const { data: links, error: linksError } = await this.client.from('vinculos_evaluacion_ejercicio')
+      .select('id, ejercicio_id, asignacion_profesor_id, periodo_evaluacion_id, criterio_evaluacion_id, subcriterio_evaluacion_id')
+      .eq('tenant_id', tenantId).eq('activo', true)
+      .in('asignacion_profesor_id', assignmentIds).in('periodo_evaluacion_id', periodIds)
+      .limit(1001);
+    if (linksError) fail(linksError);
+    if ((links?.length ?? 0) > 1000) throw new AcademicApplicationError('conflict', {
+      cause: new Error('Demasiadas actividades para calcular pendientes vencidas.'),
+    });
+    const eligible = (links ?? []).filter((link) => scopes.some((scope) =>
+      scope.assignmentId === link.asignacion_profesor_id
+      && scope.periodId === link.periodo_evaluacion_id
+      && templates.get(scope.schemeId)?.some((criterion) => criterion.id === link.criterio_evaluacion_id)
+    ));
+    if (!eligible.length) return output;
+    const due = new Map<string, string>();
+    const exerciseIds = [...new Set(eligible.map((link) => link.ejercicio_id))];
+    for (let index = 0; index < exerciseIds.length; index += 100) {
+      const { data, error } = await this.client.from('ejercicios')
+        .select('id, fecha_entrega, publicado, visible')
+        .eq('tenant_id', tenantId).in('id', exerciseIds.slice(index, index + 100));
+      if (error) fail(error);
+      for (const exercise of data ?? []) {
+        if (exercise.fecha_entrega && exercise.publicado !== false && exercise.visible !== false) {
+          due.set(exercise.id, exercise.fecha_entrega);
+        }
+      }
+    }
+    const now = Date.now();
+    const expired = eligible.filter((link) => {
+      return isPastDeadline(due.get(link.ejercicio_id), now);
+    });
+    if (!expired.length) return output;
+    const enrollmentIds = [...new Set(scopes.map((scope) => scope.enrollmentId))];
+    const resolved = new Set<string>();
+    const resultIds = new Map<string, string>();
+    for (let index = 0; index < expired.length; index += 100) {
+      const { data, error } = await this.client.from('resultados_ejercicios')
+        .select('id, vinculo_evaluacion_id, inscripcion_alumno_id, estado, calificacion')
+        .eq('tenant_id', tenantId)
+        .in('vinculo_evaluacion_id', expired.slice(index, index + 100).map((link) => link.id))
+        .in('inscripcion_alumno_id', enrollmentIds)
+        .limit(ACADEMIC_RESULTS_MAX_SOURCE_ROWS + 1);
+      if (error) fail(error);
+      if ((data?.length ?? 0) > ACADEMIC_RESULTS_MAX_SOURCE_ROWS) {
+        throw new AcademicApplicationError('conflict', { cause: new Error('Demasiados resultados de actividades.') });
+      }
+      for (const row of data ?? []) {
+        if (row.vinculo_evaluacion_id && row.inscripcion_alumno_id) {
+          resultIds.set(key(row.vinculo_evaluacion_id, row.inscripcion_alumno_id), row.id);
+        }
+        if (row.vinculo_evaluacion_id && row.inscripcion_alumno_id
+          && row.estado === 'calificado' && row.calificacion !== null) {
+          resolved.add(key(row.vinculo_evaluacion_id, row.inscripcion_alumno_id));
+        }
+      }
+    }
+    for (const scope of scopes) {
+      const scopeKey = key(scope.enrollmentId, scope.assignmentId, scope.periodId);
+      const missing = expired.filter((link) =>
+        link.asignacion_profesor_id === scope.assignmentId
+        && link.periodo_evaluacion_id === scope.periodId
+        && templates.get(scope.schemeId)?.some((criterion) => criterion.id === link.criterio_evaluacion_id)
+        && !resolved.has(key(link.id, scope.enrollmentId))
+      ).map((link) => ({
+        exerciseId: link.ejercicio_id,
+        criterionId: link.criterio_evaluacion_id,
+        subcriterionId: link.subcriterio_evaluacion_id,
+        resultId: resultIds.get(key(link.id, scope.enrollmentId)),
+      }));
+      if (missing.length) output.set(scopeKey, missing);
+    }
+    return output;
+  }
+
   async listMyResults(
     context: AcademicRepositoryContext,
     input: AcademicStudentResultsQueryInput,
@@ -236,7 +368,7 @@ export class SupabaseAcademicResultsRepository implements AcademicResultsReposit
         .select('id, ciclo_escolar_id, nombre, fecha_inicio, fecha_fin, orden, estado')
         .eq('tenant_id', context.tenantId).in('ciclo_escolar_id', cycleIds).order('orden').limit(500),
       this.client.from('esquemas_evaluacion')
-        .select('id, asignacion_profesor_id, periodo_evaluacion_id, version, calificacion_aprobatoria, decimales_mostrados, estado')
+        .select('id, asignacion_profesor_id, periodo_evaluacion_id, version, calificacion_aprobatoria, decimales_mostrados, estado, pendientes_vencidos_como_cero')
         .eq('tenant_id', context.tenantId).eq('estado', 'activo')
         .in('asignacion_profesor_id', assignmentIds).limit(500),
       this.client.from('ciclos_escolares').select('id, nombre')
@@ -302,6 +434,14 @@ export class SupabaseAcademicResultsRepository implements AcademicResultsReposit
     ) as readonly ClosureRow[];
     const groupedSources = groupSources(sources);
     const latest = latestClosures(closures);
+    const criterionTemplates = await this.loadCriterionTemplates(
+      context.tenantId, [...new Set(scopes.map((scope) => scope.scheme.id))],
+    );
+    const overdueSources = await this.loadOverdueSources(context.tenantId,
+      scopes.filter((scope) => scope.scheme.pendientes_vencidos_como_cero).map((scope) => ({
+        assignmentId: scope.assignment.id, periodId: scope.period.id,
+        enrollmentId: scope.enrollment.id, schemeId: scope.scheme.id,
+      })), criterionTemplates);
     const cycles = new Map((cycleResult.data ?? []).map((row) => [row.id, row]));
     const subjects = new Map((subjectResult.data ?? []).map((row) => [row.id, row]));
     const groups = new Map((groupResult.data ?? []).map((row) => [row.id, row]));
@@ -318,6 +458,8 @@ export class SupabaseAcademicResultsRepository implements AcademicResultsReposit
         }),
         rows: groupedSources.get(scopeKey) ?? [],
         latestClosure: latest.get(scopeKey) ?? null,
+        criteriaTemplates: criterionTemplates.get(scope.scheme.id),
+        overdueSources: overdueSources.get(scopeKey),
       });
     }).sort((a, b) =>
       a.cycleName.localeCompare(b.cycleName, 'es')
@@ -352,7 +494,7 @@ export class SupabaseAcademicResultsRepository implements AcademicResultsReposit
         .eq('tenant_id', context.tenantId).eq('id', input.periodId)
         .eq('ciclo_escolar_id', assignment.ciclo_escolar_id).maybeSingle(),
       this.client.from('esquemas_evaluacion')
-        .select('id, asignacion_profesor_id, periodo_evaluacion_id, version, calificacion_aprobatoria, decimales_mostrados, estado')
+        .select('id, asignacion_profesor_id, periodo_evaluacion_id, version, calificacion_aprobatoria, decimales_mostrados, estado, pendientes_vencidos_como_cero')
         .eq('tenant_id', context.tenantId).eq('asignacion_profesor_id', assignment.id)
         .eq('periodo_evaluacion_id', input.periodId).eq('estado', 'activo')
         .order('version', { ascending: false }).limit(1).maybeSingle(),
@@ -413,6 +555,12 @@ export class SupabaseAcademicResultsRepository implements AcademicResultsReposit
     const profiles = new Map((profilesResult.data ?? []).map((row) => [row.id, row as StudentProfileRow]));
     const groupedSources = groupSources(sources);
     const latest = latestClosures(closures);
+    const criterionTemplates = await this.loadCriterionTemplates(context.tenantId, [scheme.id]);
+    const overdueSources = await this.loadOverdueSources(context.tenantId,
+      scheme.pendientes_vencidos_como_cero ? enrollments.map((enrollment) => ({
+        assignmentId: assignment.id, periodId: period.id,
+        enrollmentId: enrollment.id, schemeId: scheme.id,
+      })) : [], criterionTemplates);
     const rows = enrollments.map((enrollment): AcademicTenantStudentResultDto => {
       const scopeKey = key(enrollment.id, assignment.id, period.id);
       const profile = profiles.get(enrollment.alumno_id);
@@ -427,6 +575,8 @@ export class SupabaseAcademicResultsRepository implements AcademicResultsReposit
           }),
           rows: groupedSources.get(scopeKey) ?? [],
           latestClosure: latest.get(scopeKey) ?? null,
+          criteriaTemplates: criterionTemplates.get(scheme.id),
+          overdueSources: overdueSources.get(scopeKey),
         }),
         studentId: enrollment.alumno_id,
         studentName: [profile?.apellidos, profile?.nombre].filter(Boolean).join(' ') || 'Alumno sin nombre',

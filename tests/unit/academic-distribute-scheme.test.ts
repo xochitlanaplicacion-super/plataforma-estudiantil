@@ -7,39 +7,38 @@ function fixture(existing = false) {
   const source = { id: id(1), assignmentId: id(2), cycleId: id(3), periodId: id(4), state: 'activo', version: 1, name: 'Evaluación', passingGrade: 6, displayDecimals: 1, criteria: [{ name: 'Examen', type: 'directo', weight: 100, order: 1, active: true, subcriteria: [] }] };
   const repo = {
     load: vi.fn().mockResolvedValue({ schemes: [source, ...(existing ? [{ ...source, id: id(9), assignmentId: id(5) }] : [])], assignments: [id(2), id(5)].map((assignmentId) => ({ id: assignmentId, teacherId: id(6), cycleId: id(3) })) }),
-    saveScheme: vi.fn().mockResolvedValue({ id: id(7) }),
-    saveCriterion: vi.fn().mockResolvedValue({ id: id(8) }),
-    saveSubcriterion: vi.fn(), activateScheme: vi.fn().mockResolvedValue({}),
-    copyTeacherMobileCaptureSettings: vi.fn().mockResolvedValue(1),
+    applyTeacherCriteriaToAssignment: vi.fn().mockResolvedValue({ criterionCount: 1, mode: 'replaced' }),
   };
   const service = new AcademicConfigurationService(repo as unknown as SupabaseAcademicConfigurationRepository, { tenantId: id(10), actorId: id(6), role: 'profesor', featureEnabled: true });
   return { repo, service, input: { schemeId: id(1), expectedVersion: 1, assignmentIds: [id(5)] } };
 }
 describe('aplicar criterios a otras asignaciones', () => {
-  it('guarda criterios y activa con el contexto del profesor y tenant', async () => {
+  it('aplica los criterios mediante una operación transaccional por destino', async () => {
     const { repo, service, input } = fixture();
     expect((await service.distributeScheme(input)).results[0].applied).toBe(true);
-    expect(repo.saveScheme).toHaveBeenCalledWith({ tenantId: id(10), actorId: id(6), role: 'profesor' }, expect.objectContaining({ assignmentId: id(5), periodId: id(4) }));
-    expect(repo.saveCriterion).toHaveBeenCalledOnce();
-    expect(repo.activateScheme).toHaveBeenCalledOnce();
+    expect(repo.applyTeacherCriteriaToAssignment).toHaveBeenCalledWith(id(1), 1, id(5));
   });
   it('rechaza destinos ajenos antes de escribir', async () => {
     const { repo, service, input } = fixture();
     await expect(service.distributeScheme({ ...input, assignmentIds: [id(99)] })).rejects.toMatchObject({ kind: 'forbidden' });
-    expect(repo.saveScheme).not.toHaveBeenCalled();
+    expect(repo.applyTeacherCriteriaToAssignment).not.toHaveBeenCalled();
   });
-  it('conserva los criterios existentes y sincroniza sus ajustes móviles', async () => {
+  it('reemplaza los criterios existentes cuando la base confirma que no hay registros', async () => {
     const { repo, service, input } = fixture(true);
     expect((await service.distributeScheme(input)).results[0].applied).toBe(true);
-    expect(repo.saveScheme).not.toHaveBeenCalled();
-    expect(repo.copyTeacherMobileCaptureSettings).toHaveBeenCalledOnce();
+    expect(repo.applyTeacherCriteriaToAssignment).toHaveBeenCalledWith(id(1), 1, id(5));
   });
-  it('no declara éxito si falla una copia', async () => {
-    const { repo, service, input } = fixture();
-    repo.saveCriterion.mockRejectedValueOnce(new Error('network'));
+  it('recalcula porcentajes equivalentes sin copiar ni perder notas', async () => {
+    const { repo, service, input } = fixture(true);
+    repo.applyTeacherCriteriaToAssignment.mockResolvedValueOnce({ criterionCount: 1, mode: 'reweighted' });
     const result = await service.distributeScheme(input);
-    expect(result.results[0].message).toContain('borrador');
+    expect(result.results[0]).toMatchObject({ applied: true, message: expect.stringContaining('notas originales') });
+  });
+  it('no declara éxito ni oculta el motivo si el destino tiene registros', async () => {
+    const { repo, service, input } = fixture();
+    repo.applyTeacherCriteriaToAssignment.mockRejectedValueOnce(new Error('Esta materia ya tiene calificaciones vinculadas.'));
+    const result = await service.distributeScheme(input);
+    expect(result.results[0].message).toContain('calificaciones vinculadas');
     expect(result.results[0].applied).toBe(false);
-    expect(repo.activateScheme).not.toHaveBeenCalled();
   });
 });

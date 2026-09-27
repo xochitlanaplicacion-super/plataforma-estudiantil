@@ -90,6 +90,38 @@ function zonedMidnight(value: string, requestedTimezone?: string | null) {
   return null;
 }
 
+/** Inicio de un día civil de la institución, expresado en UTC. */
+export function startOfTenantCalendarDayIso(value: string, timezone?: string | null) {
+  return zonedMidnight(value, timezone)?.toISOString() ?? null;
+}
+
+export function dateInTenantTimezone(value: Date, timezone?: string | null) {
+  try {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone || DEFAULT_PLATFORM_TIMEZONE,
+      year: 'numeric', month: '2-digit', day: '2-digit',
+    }).formatToParts(value).map((part) => [part.type, part.value]));
+    return `${parts.year}-${parts.month}-${parts.day}`;
+  } catch {
+    return dateInTenantTimezone(value, DEFAULT_PLATFORM_TIMEZONE);
+  }
+}
+
+export function calendarDateFromDeadline(value: string, timezone?: string | null) {
+  if (/^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2})?$/.test(value)) {
+    return value.slice(0, 10);
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? '' : dateInTenantTimezone(parsed, timezone);
+}
+
+/** Fin inclusivo de un día civil de la institución, expresado en UTC. */
+export function endOfTenantCalendarDayIso(value: string, timezone?: string | null) {
+  const followingDay = addCalendarDays(value, 1);
+  const followingMidnight = followingDay ? zonedMidnight(followingDay, timezone) : null;
+  return followingMidnight ? new Date(followingMidnight.getTime() - 1000).toISOString() : null;
+}
+
 export function getPlatformServiceEndDate(service: PlatformServiceSummary) {
   if (!service.fecha_inicio) return null;
   const duration = Number(service.duracion_dias || 30);

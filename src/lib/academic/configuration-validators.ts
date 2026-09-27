@@ -78,6 +78,11 @@ export const academicDeleteSubcriterionSchema = z.object({
   expectedUpdatedAt: z.string().datetime({ offset: true }),
 }).strict();
 
+export const academicDeleteCriterionSchema = z.object({
+  id: uuid,
+  schemeId: uuid,
+}).strict();
+
 export const academicActivateSchemeSchema = z.object({
   schemeId: uuid,
   expectedVersion: z.number().int().positive(),

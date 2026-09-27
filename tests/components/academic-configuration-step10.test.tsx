@@ -9,7 +9,7 @@ import type { AcademicConfigurationDto } from '@/lib/academic/configuration-dto'
 const actionMocks = vi.hoisted(() => ({
   load: vi.fn(), audit: vi.fn(), saveCycle: vi.fn(), savePeriod: vi.fn(),
   saveScheme: vi.fn(), saveCriterion: vi.fn(), saveSubcriterion: vi.fn(),
-  deleteSubcriterion: vi.fn(),
+  deleteSubcriterion: vi.fn(), deleteCriterion: vi.fn(),
   activate: vi.fn(), copy: vi.fn(),
   mobileLoad: vi.fn(), mobileSave: vi.fn(), mobileQr: vi.fn(),
   provisionalLoad: vi.fn(), provisionalLink: vi.fn(),
@@ -24,6 +24,7 @@ vi.mock('@/lib/actions/calificaciones', () => ({
   saveAcademicCriterionAction: actionMocks.saveCriterion,
   saveAcademicSubcriterionAction: actionMocks.saveSubcriterion,
   deleteAcademicSubcriterionAction: actionMocks.deleteSubcriterion,
+  deleteAcademicCriterionAction: actionMocks.deleteCriterion,
   activateAcademicSchemeAction: actionMocks.activate,
   copyAcademicSchemeAction: actionMocks.copy,
   loadTeacherMobileCaptureSettingsAction: actionMocks.mobileLoad,
@@ -64,7 +65,7 @@ function baseConfiguration(): AcademicConfigurationDto {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  window.localStorage.setItem('academic-criteria-tour-seen-v2', 'true');
+  window.localStorage.setItem('academic-criteria-tour-seen-v3', 'true');
   actionMocks.audit.mockResolvedValue({ ok: true, status: 'empty', data: { items: [], page: 1, pageSize: 10, total: 0, totalPages: 0, hasPreviousPage: false, hasNextPage: false } });
   actionMocks.mobileLoad.mockResolvedValue({ ok: true, status: 'empty', data: [] });
   actionMocks.mobileSave.mockImplementation(async (input: unknown) => ({ ok: true, status: 'success', data: input }));
@@ -128,7 +129,7 @@ describe('Paso 10: interfaz administrativa accesible', () => {
           id: ID.scheme, cycleId: ID.cycle, assignmentId: ID.assignment, periodId: ID.period,
           name: input.name, scale: '0-10', passingGrade: 6, displayDecimals: 1,
           roundingMode: 'half_up', missingRule: 'zero_on_close', missingValue: 0,
-          excusedRule: 'exclude', state: 'borrador', version: 1, copiedFromId: null,
+          excusedRule: 'exclude', overduePendingAsZero: false, state: 'borrador', version: 1, copiedFromId: null,
           updatedAt: '2026-08-28T10:01:00.000Z', criteria: [],
         }],
       };
@@ -151,7 +152,7 @@ describe('Paso 10: interfaz administrativa accesible', () => {
     render(<AcademicSchemesPage />);
     const name = await screen.findByLabelText('Nombre');
     await user.type(name, 'Esquema institucional');
-    await user.click(screen.getByRole('button', { name: 'Guardar reglas' }));
+    await user.click(screen.getByRole('button', { name: 'Guardar configuración' }));
     await user.click(screen.getByRole('button', { name: 'Confirmar cambio' }));
     await waitFor(() => expect(actionMocks.saveScheme).toHaveBeenCalledOnce());
 
@@ -173,7 +174,7 @@ describe('Paso 10: interfaz administrativa accesible', () => {
       id: ID.scheme, cycleId: ID.cycle, assignmentId: ID.assignment, periodId: ID.period,
       name: 'Borrador', scale: '0-10', passingGrade: 6, displayDecimals: 1,
       roundingMode: 'half_up', missingRule: 'zero_on_close', missingValue: 0,
-      excusedRule: 'exclude', state: 'borrador', version: 1, copiedFromId: null,
+      excusedRule: 'exclude', overduePendingAsZero: false, state: 'borrador', version: 1, copiedFromId: null,
       updatedAt: '2026-08-28T10:00:00.000Z', criteria: [{
         id: ID.criterion, schemeId: ID.scheme, name: 'Parcial', type: 'directo',
         weight: 80, order: 1, active: true, updatedAt: '2026-08-28T10:00:00.000Z', subcriteria: [],
@@ -195,7 +196,7 @@ describe('Paso 10: interfaz administrativa accesible', () => {
       id: ID.scheme, cycleId: ID.cycle, assignmentId: ID.assignment, periodId: ID.period,
       name: 'Evaluación docente', scale: '0-10', passingGrade: 6, displayDecimals: 1,
       roundingMode: 'half_up', missingRule: 'zero_on_close', missingValue: 0,
-      excusedRule: 'exclude', state: 'borrador', version: 2, copiedFromId: null,
+      excusedRule: 'exclude', overduePendingAsZero: false, state: 'borrador', version: 2, copiedFromId: null,
       updatedAt: '2026-08-30T10:00:00.000Z', criteria: [{
         id: ID.criterion, schemeId: ID.scheme, name: 'Examen', type: 'directo',
         weight: 100, order: 1, active: true, updatedAt: '2026-08-30T10:00:00.000Z', subcriteria: [],
@@ -209,7 +210,7 @@ describe('Paso 10: interfaz administrativa accesible', () => {
     });
     const user = userEvent.setup();
     render(<AcademicSchemesPage audience="teacher" />);
-    await user.click(await screen.findByRole('button', { name: 'Usar estos criterios en la libreta' }));
+    await user.click((await screen.findAllByRole('button', { name: 'Guardar y aplicar' })).at(-1)!);
     await waitFor(() => expect(actionMocks.activate).toHaveBeenCalledWith({ schemeId: ID.scheme, expectedVersion: 2 }));
     expect(actionMocks.saveScheme.mock.invocationCallOrder[0]).toBeLessThan(actionMocks.activate.mock.invocationCallOrder[0]);
     expect(await screen.findByText('Criterios activos: disponibles en la libreta')).toBeVisible();
@@ -231,7 +232,7 @@ describe('Paso 10: interfaz administrativa accesible', () => {
       id: ID.scheme, cycleId: ID.cycle, assignmentId: ID.assignment, periodId: ID.period,
       name: 'Evaluación activa', scale: '0-10', passingGrade: 6, displayDecimals: 1,
       roundingMode: 'half_up', missingRule: 'zero_on_close', missingValue: 0,
-      excusedRule: 'exclude', state: 'activo', version: 1, copiedFromId: null,
+      excusedRule: 'exclude', overduePendingAsZero: false, state: 'activo', version: 1, copiedFromId: null,
       updatedAt: '2026-08-30T10:00:00.000Z', criteria: [{
         id: ID.criterion, schemeId: ID.scheme, name: 'Examen', type: 'directo',
         weight: 100, order: 1, active: true, updatedAt: '2026-08-30T10:00:00.000Z', subcriteria: [],
@@ -268,7 +269,7 @@ describe('Paso 10: interfaz administrativa accesible', () => {
     await user.click(screen.getByRole('button', { name: 'Iniciar recorrido guiado' }));
     expect(screen.getByRole('dialog', { name: '1. Elige dónde aplicarás la evaluación' })).toBeVisible();
     await user.click(screen.getByRole('button', { name: 'Siguiente' }));
-    expect(screen.getByRole('dialog', { name: '2. Abre un borrador editable' })).toBeVisible();
+    expect(screen.getByRole('dialog', { name: '2. Comprueba si tus criterios ya están en uso' })).toBeVisible();
     expect(screen.getByRole('button', { name: 'Abrir tutorial de criterios de evaluación' })).toBeVisible();
   }, 20_000);
 
@@ -278,7 +279,7 @@ describe('Paso 10: interfaz administrativa accesible', () => {
       id: ID.scheme, cycleId: ID.cycle, assignmentId: ID.assignment, periodId: ID.period,
       name: 'Borrador docente', scale: '0-10', passingGrade: 6, displayDecimals: 1,
       roundingMode: 'half_up', missingRule: 'zero_on_close', missingValue: 0,
-      excusedRule: 'exclude', state: 'borrador', version: 1, copiedFromId: null,
+      excusedRule: 'exclude', overduePendingAsZero: false, state: 'borrador', version: 1, copiedFromId: null,
       updatedAt: '2026-08-30T10:00:00.000Z', criteria: [{
         id: ID.criterion, schemeId: ID.scheme, name: 'Tareas', type: 'actividades',
         weight: 100, order: 1, active: true, updatedAt: '2026-08-30T10:00:00.000Z',

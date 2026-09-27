@@ -47,6 +47,7 @@ export interface AcademicResultBaseDto {
   resolvedSourceCount: number;
   missingSourceCount: number;
   progressPercent: number;
+  virtualZeroCount?: number;
   criteria: AcademicResultCriterionDto[];
   warnings: AcademicCalculationBreakdown['warnings'];
 }

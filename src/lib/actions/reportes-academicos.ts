@@ -2,6 +2,7 @@
 
 import { z } from 'zod';
 import { requireTenantSession } from '@/lib/tenant/context';
+import { mergeReportExercises, type ReportExercise, type ReportExerciseGrade } from '@/lib/academic/report-exercise-merge';
 
 const assignmentSchema = z.object({
   id: z.string().uuid(),
@@ -47,7 +48,7 @@ const reportSchema = z.object({
     isFullPeriod: z.boolean(),
   }),
   calculationPolicy: z.object({
-    pendingCountsAsZero: z.literal(false),
+    pendingCountsAsZero: z.boolean(),
     explicitZeroCounts: z.literal(true),
     partialAverageRequiresCoverage: z.literal(true),
   }),
@@ -95,6 +96,7 @@ const reportSchema = z.object({
       type: z.string(),
       createdAt: z.string(),
       activityDate: z.string(),
+      dueAt: z.string().nullable().optional(),
       attendance: z.record(z.string(), z.enum(['presente', 'ausente'])),
     }),
   ),
@@ -131,6 +133,93 @@ const reportRequestSchema = z
   .refine((value) => !value.from || !value.to || value.from <= value.to, {
     message: 'La fecha inicial no puede ser posterior a la final.',
   });
+
+async function includeLinkedExercises(
+  report: AcademicReport,
+  supabase: Awaited<ReturnType<typeof requireTenantSession>>['supabase'],
+): Promise<AcademicReport> {
+  const { data: links, error: linkError } = await supabase
+    .from('vinculos_evaluacion_ejercicio')
+    .select('id, ejercicio_id, criterio_evaluacion_id, subcriterio_evaluacion_id, origen, created_at')
+    .eq('tenant_id', report.tenant.id)
+    .eq('asignacion_profesor_id', report.assignment.id)
+    .eq('periodo_evaluacion_id', report.period.id)
+    .eq('activo', true)
+    .limit(1001);
+  if (linkError) throw linkError;
+  if (!links?.length) return report;
+  if (links.length > 1000) throw new Error('El reporte supera 1000 tareas vinculadas; acota el periodo.');
+  const exercises: ReportExercise[] = [];
+  const grades: ReportExerciseGrade[] = [];
+  for (let index = 0; index < links.length; index += 100) {
+    const group = links.slice(index, index + 100);
+    const { data: tasks, error: taskError } = await supabase.from('ejercicios')
+      .select('id, titulo, fecha_entrega, publicado, visible')
+      .eq('tenant_id', report.tenant.id)
+      .in('id', group.map((link) => link.ejercicio_id));
+    if (taskError) throw taskError;
+    const byId = new Map((tasks ?? []).map((task) => [task.id, task]));
+    for (const link of group) {
+      const task = byId.get(link.ejercicio_id);
+      if (!task || task.publicado === false || task.visible === false) continue;
+      const createdAt = link.created_at;
+      exercises.push({
+        id: task.id,
+        criterionKey: `${link.criterio_evaluacion_id}:${link.subcriterio_evaluacion_id ?? 'root'}`,
+        name: task.titulo,
+        type: link.origen,
+        createdAt,
+        activityDate: createdAt.slice(0, 10),
+        dueAt: task.fecha_entrega,
+      });
+    }
+    for (let offset = 0; offset < 20000; offset += 500) {
+      const { data: results, error: resultError } = await supabase.from('resultados_ejercicios')
+        .select('vinculo_evaluacion_id, ejercicio_id, inscripcion_alumno_id, estado, calificacion, observacion, updated_at')
+        .eq('tenant_id', report.tenant.id)
+        .in('vinculo_evaluacion_id', group.map((link) => link.id))
+        .range(offset, offset + 499);
+      if (resultError) throw resultError;
+      for (const result of results ?? []) {
+        if (result.estado !== 'calificado' || result.calificacion === null || !result.inscripcion_alumno_id) continue;
+        grades.push({
+          exerciseId: result.ejercicio_id,
+          enrollmentId: result.inscripcion_alumno_id,
+          grade: Number(result.calificacion),
+          observation: result.observacion ?? '',
+          updatedAt: result.updated_at,
+        });
+      }
+      if ((results?.length ?? 0) < 500) break;
+      if (offset === 19500) throw new Error('El reporte supera 20000 resultados; acota el periodo.');
+    }
+  }
+  const { data: descriptiveData, error: descriptiveError } = await supabase.rpc(
+    'obtener_tareas_descriptivas_docente_movil',
+    { p_asignacion_id: report.assignment.id },
+  );
+  if (descriptiveError) throw descriptiveError;
+  const descriptiveTasks = z.object({ tasks: z.array(z.object({
+    id: z.string().uuid(),
+    students: z.array(z.object({
+      provisionalId: z.string().uuid().optional(),
+      grade: z.number().nullable(),
+    }).passthrough()),
+  }).passthrough()) }).passthrough().parse(descriptiveData).tasks;
+  for (const task of descriptiveTasks) {
+    for (const student of task.students) {
+      if (!student.provisionalId || student.grade === null) continue;
+      grades.push({
+        exerciseId: task.id,
+        enrollmentId: student.provisionalId,
+        grade: student.grade,
+        observation: '',
+        updatedAt: '',
+      });
+    }
+  }
+  return mergeReportExercises(report, exercises, grades);
+}
 
 export async function loadAcademicReportAction(input?: unknown): Promise<{ ok: true; data: AcademicReportData } | { ok: false; message: string }> {
   try {
@@ -197,25 +286,59 @@ export async function loadAcademicReportAction(input?: unknown): Promise<{ ok: t
     if (conceptContextResult.error) throw conceptContextResult.error;
     const contextByConcept = conceptAttendanceContext.parse(conceptContextResult.data);
     const rawReport = z.record(z.string(), z.unknown()).parse(reportResult.data);
+    const globalResult = from || to
+      ? await session.supabase.rpc('obtener_reporte_academico_docente_unificado_rango', {
+        p_asignacion_id: selectedAssignmentId,
+        p_fecha_desde: null,
+        p_fecha_hasta: null,
+      })
+      : { data: null, error: null };
+    if (globalResult.error) throw globalResult.error;
+    const activeCriteria = new Set(z.array(z.object({ key: z.string() }).passthrough())
+      .parse(rawReport.criteria).map((row) => row.key));
+    const globalStudents = globalResult.data
+      ? z.array(z.object({ enrollmentId: z.string().uuid(), results: z.record(z.string(), resultEntry) }).passthrough())
+        .parse(z.record(z.string(), z.unknown()).parse(globalResult.data).students)
+      : [];
+    const globalByStudent = new Map(globalStudents.map((student) => [student.enrollmentId, student.results]));
+    const reportPeriodId = z.object({ id: z.string().uuid() }).parse(rawReport.period).id;
+    const { data: activeScheme, error: schemeError } = await session.supabase
+      .from('esquemas_evaluacion')
+      .select('pendientes_vencidos_como_cero')
+      .eq('tenant_id', session.tenant.id)
+      .eq('asignacion_profesor_id', selectedAssignmentId)
+      .eq('periodo_evaluacion_id', reportPeriodId)
+      .eq('estado', 'activo').maybeSingle();
+    if (schemeError) throw schemeError;
     const rawConcepts = z.array(z.record(z.string(), z.unknown())).parse(rawReport.concepts);
     const enrichedReport = {
       ...rawReport,
-      concepts: rawConcepts.map((concept) => {
+      calculationPolicy: {
+        ...z.record(z.string(), z.unknown()).parse(rawReport.calculationPolicy),
+        pendingCountsAsZero: activeScheme?.pendientes_vencidos_como_cero ?? false,
+      },
+      concepts: rawConcepts.filter((concept) => activeCriteria.has(z.string().parse(concept.criterionKey)))
+        .map((concept) => {
         const id = z.string().uuid().parse(concept.id);
         const context = contextByConcept[id];
         return {
           ...concept,
           activityDate: context?.activityDate ?? z.string().parse(concept.createdAt).slice(0, 10),
+          dueAt: null,
           attendance: context?.attendance ?? {},
         };
-      }),
+        }),
+      students: z.array(z.record(z.string(), z.unknown())).parse(rawReport.students)
+        .map((student) => ({ ...student,
+          results: globalByStudent.get(z.string().uuid().parse(student.enrollmentId)) ?? student.results,
+        })),
     };
     return {
       ok: true,
       data: {
         assignments,
         selectedAssignmentId,
-        report: reportSchema.parse(enrichedReport),
+        report: await includeLinkedExercises(reportSchema.parse(enrichedReport), session.supabase),
       },
     };
   } catch (error) {

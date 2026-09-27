@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight, CircleHelp, PlayCircle, X } from 'lucide-rea
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
-const TOUR_STORAGE_KEY = 'academic-criteria-tour-seen-v2';
+const TOUR_STORAGE_KEY = 'academic-criteria-tour-seen-v3';
 
 interface TourStep {
   target: string;
@@ -18,32 +18,22 @@ const STEPS: readonly TourStep[] = [
   {
     target: 'scope',
     title: '1. Elige dónde aplicarás la evaluación',
-    description: 'Comienza seleccionando el ciclo, tu materia y grupo, y el periodo. Sólo verás las asignaciones que dirección te haya registrado.',
-  },
-  {
-    target: 'draft',
-    title: '2. Abre un borrador editable',
-    description: 'Pulsa “Nuevo borrador” para comenzar desde cero. Si tu evaluación ya está activa, pulsa “Editar criterios” en el recuadro de estado. Se prepara una copia para tus cambios y la evaluación actual sigue disponible mientras editas.',
-  },
-  {
-    target: 'rules',
-    title: '3. Ponle nombre a tu esquema',
-    description: 'Define el nombre, la aprobatoria y los decimales. Al comenzar, Guardar reglas prepara el conjunto para agregar criterios. Cuando los criterios guardados ya sean válidos, Guardar y activar evaluación también los deja disponibles en la libreta.',
-  },
-  {
-    target: 'new-criterion',
-    title: '4. Agrega tus criterios',
-    description: 'Escribe “Examen”, “Proyecto”, “Tareas” o cualquier criterio que necesites. Elige cómo se captura, asigna su porcentaje y pulsa Agregar.',
-  },
-  {
-    target: 'distribution',
-    title: '5. Comprueba los porcentajes',
-    description: 'Guarda cada criterio y subcriterio después de editarlo. Los criterios activos deben sumar 100%, y los subcriterios de cada criterio también. Un criterio de actividades debe tener subcriterios de actividades; si combinas tipos, usa Mixto con subcriterios.',
+    description: 'Selecciona la materia y el grupo que impartes. El ciclo y el periodo activo los define la escuela y ya vienen seleccionados.',
   },
   {
     target: 'activation',
-    title: '6. Usa tus criterios en la libreta',
-    description: 'En el recuadro de estado pulsa “Usar estos criterios en la libreta”. Guarda las reglas y activa los criterios guardados. El estado cambiará a Criterios activos. Si el botón está deshabilitado, el recuadro explica qué revisar. Para un cambio posterior, crea una copia editable y vuelve a aplicarla al terminar.',
+    title: '2. Comprueba si tus criterios ya están en uso',
+    description: 'Si están activos, pulsa “Editar criterios”. Si tienes cambios en preparación, completa sus porcentajes y pulsa “Guardar y aplicar”. Los criterios anteriores siguen disponibles hasta entonces.',
+  },
+  {
+    target: 'rules',
+    title: '3. Configura la evaluación de esta materia',
+    description: 'Puedes ajustar el nombre, la calificación aprobatoria y los decimales. Guarda la configuración para continuar.',
+  },
+  {
+    target: 'distribution',
+    title: '4. Comprueba los porcentajes y el tipo',
+    description: 'Los porcentajes deben sumar 100%. Para vincular ejercicios creados en Mis materias, el criterio correspondiente debe decir “Promedio de actividades”, no “Captura manual”.',
   },
 ];
 

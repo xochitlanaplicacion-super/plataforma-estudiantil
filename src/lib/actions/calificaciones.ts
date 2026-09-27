@@ -507,6 +507,12 @@ export async function deleteAcademicSubcriterionAction(
   return executeConfiguration((service) => service.deleteSubcriterion(input), { revalidate: true });
 }
 
+export async function deleteAcademicCriterionAction(
+  input: unknown,
+): Promise<AcademicActionResult<AcademicConfigurationDeletionDto>> {
+  return executeConfiguration((service) => service.deleteCriterion(input), { revalidate: true });
+}
+
 export async function activateAcademicSchemeAction(
   input: unknown,
 ): Promise<AcademicActionResult<AcademicSchemeVersionMutationDto>> {
@@ -521,4 +527,21 @@ export async function copyAcademicSchemeAction(
 
 export async function distributeAcademicSchemeAction(input: unknown) {
   return executeConfiguration((service) => service.distributeScheme(input), { revalidate: true });
+}
+
+export async function configureOverdueVirtualZerosAction(input: unknown): Promise<AcademicActionResult<boolean>> {
+  try {
+    const value = z.object({ schemeId: z.string().uuid(), enabled: z.boolean() }).strict().parse(input);
+    const session = await requireTenantSession(['profesor']);
+    const { data, error } = await session.supabase.rpc('configurar_ceros_virtuales_docente', {
+      p_esquema_id: value.schemeId,
+      p_activado: value.enabled,
+    });
+    if (error) throw error;
+    revalidateAcademicConfigurationRoutes();
+    revalidateAcademicRoutes();
+    return academicSuccessResult(data);
+  } catch (error) {
+    return academicFailureResult(error);
+  }
 }

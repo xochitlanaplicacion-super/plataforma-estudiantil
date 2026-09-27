@@ -119,6 +119,23 @@ function service(repo: AcademicResultsRepository, role: AcademicRepositoryContex
 }
 
 describe('Paso 13: proyección única provisional/final', () => {
+  it('aplica cero virtual sólo a una actividad vencida pasada explícitamente a la proyección', () => {
+    const criteriaTemplates = [{
+      id: ID.criterion, label: 'Actividades', type: 'actividades' as const,
+      weight: '100', order: 1, subcriteria: [],
+    }];
+    const pending = projectAcademicResult({
+      context: projectionContext, rows: [source], latestClosure: null, criteriaTemplates,
+    });
+    const overdue = projectAcademicResult({
+      context: projectionContext, rows: [source], latestClosure: null, criteriaTemplates,
+      overdueSources: [{ exerciseId: '13000000-0000-4000-8000-000000000099', criterionId: ID.criterion, subcriterionId: null }],
+    });
+    expect(pending.displayGrade).toBe('8.5');
+    expect(overdue.displayGrade).toBe('4.3');
+    expect(overdue.criteria[0].canonicalGrade).toBe('4.2500');
+    expect(source.valor_fuente).toBe(8.5);
+  });
   it('produce exactamente el mismo 8.5 para fila profesor/admin y fila alumno', () => {
     const admin = projectAcademicResult({ context: projectionContext, rows: [source], latestClosure: null });
     const studentSource: Tables<'vista_calificaciones_alumno'> = { ...source };
@@ -129,6 +146,20 @@ describe('Paso 13: proyección única provisional/final', () => {
     expect(admin.displayGrade).toBe('8.5');
     expect(student).toEqual(admin);
     expect(student.displayGrade).toBe(directEngine.displayGrade);
+  });
+
+  it('usa los pesos del esquema completo aunque un criterio aún no tenga capturas', () => {
+    const criteriaTemplates = [
+      { id: ID.criterion, label: 'Actividades', type: 'actividades' as const, weight: '60', order: 1, subcriteria: [] },
+      { id: '13000000-0000-4000-8000-000000000013', label: 'Examen', type: 'directo' as const, weight: '40', order: 2, subcriteria: [] },
+    ];
+    const result = projectAcademicResult({
+      context: projectionContext, rows: [source], latestClosure: null, criteriaTemplates,
+    });
+    expect(result.displayGrade).toBe('8.5');
+    expect(result.complete).toBe(false);
+    expect(result.criteria).toHaveLength(2);
+    expect(result.criteria[1].canonicalGrade).toBeNull();
   });
 
   it('usa el snapshot inmutable al cerrar y vuelve al cálculo vivo al reabrir', () => {

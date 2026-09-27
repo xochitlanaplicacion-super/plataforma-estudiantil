@@ -72,12 +72,12 @@ export class AcademicApplicationError extends Error {
   readonly kind: AcademicApplicationErrorKind;
   readonly publicError: AcademicPublicErrorDto;
 
-  constructor(kind: AcademicApplicationErrorKind, options?: { cause?: unknown }) {
+  constructor(kind: AcademicApplicationErrorKind, options?: { cause?: unknown; message?: string }) {
     const publicError = PUBLIC_ERROR_BY_KIND[kind];
-    super(publicError.message, options);
+    super(options?.message ?? publicError.message, options);
     this.name = 'AcademicApplicationError';
     this.kind = kind;
-    this.publicError = { ...publicError };
+    this.publicError = { ...publicError, message: options?.message ?? publicError.message };
   }
 }
 

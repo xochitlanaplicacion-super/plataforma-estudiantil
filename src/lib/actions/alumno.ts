@@ -162,10 +162,11 @@ export async function getAlumnoDashboardData(userId: string) {
           // las asignaciones exactas del grupo del alumno autenticado.
           const { data: visibleLinks, error: linksError } = await db
             .from('vinculos_evaluacion_ejercicio')
-            .select('ejercicio_id')
+            .select('ejercicio_id, periodos_evaluacion!inner(estado)')
             .eq('tenant_id', tenantId)
             .in('asignacion_profesor_id', asignacionIds)
-            .eq('activo', true);
+            .eq('activo', true)
+            .neq('periodos_evaluacion.estado', 'borrador');
           if (linksError) throw linksError;
           const visibleExerciseIds = [...new Set((visibleLinks || []).map((link) => link.ejercicio_id))];
 

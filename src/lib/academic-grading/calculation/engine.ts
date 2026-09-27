@@ -73,7 +73,7 @@ function sourceRatio(
   }
   if (source.state === 'no_entregado') {
     if (source.value !== null) throw new RangeError('Un resultado no entregado no admite valor.');
-    if (periodState === 'cerrado') {
+    if (periodState === 'cerrado' || source.virtualOverdue === true) {
       return { sourceId: source.id, state: source.state, included: true, ratio: '0.00000000', canonicalGrade: '0.0000', ratioUnits: 0n };
     }
     warnings.push({ code: 'NOT_SUBMITTED_OPEN_PERIOD', ...context });

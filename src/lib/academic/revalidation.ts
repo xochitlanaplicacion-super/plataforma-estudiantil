@@ -18,7 +18,7 @@ const ACADEMIC_CONFIGURATION_PATHS = Object.freeze([
   '/dashboard/admin/auditoria',
 ]);
 
-export function revalidateAcademicRoutes(_scope: AcademicActionRevalidationScope): void {
+export function revalidateAcademicRoutes(_scope?: AcademicActionRevalidationScope): void {
   for (const path of ACADEMIC_REVALIDATION_PATHS) revalidatePath(path);
 }
 
