@@ -118,6 +118,11 @@ export async function prepararCargaEntregaAlumno(input: StudentUploadInput) {
     if (!input.ejercicioId || !archivo) {
       return { error: `Archivo inválido o mayor a ${ACADEMIC_UPLOAD_MAX_MB} MB.` };
     }
+    // Una pestaña con el formulario anterior enviaba sólo files[0] por esta ruta.
+    // Las imágenes deben pasar por la galería, incluso si se eligió una sola foto.
+    if (archivo.mime.startsWith('image/')) {
+      return { error: 'Esta pantalla de entrega está desactualizada. Recarga la página y añade tus fotos en la galería antes de enviarlas.' };
+    }
 
     const contexto = await obtenerContextoEntrega(supabase, admin, tenantId, user.id, input.ejercicioId);
     if (contexto.error) return { error: contexto.error };
@@ -275,6 +280,11 @@ export async function confirmarCargaEntregaAlumno(input: ConfirmStudentUploadInp
       archivo_path: input.archivoPath,
       alreadyConfirmed: true,
     };
+  }
+  // Un formulario antiguo puede conservar una URL firmada de foto aun después
+  // del despliegue. No convertir esa foto aislada en una entrega incompleta.
+  if (archivo.mime.startsWith('image/')) {
+    return { error: 'Esta pantalla de entrega está desactualizada. Recarga la página y añade tus fotos en la galería antes de enviarlas.' };
   }
 
   const { data: intent } = await admin
