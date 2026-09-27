@@ -87,7 +87,7 @@ function CamaraContinua({ photos, error, onCapture, onClose, onNativeCamera }: {
       }
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false,
+          video: { facingMode: { ideal: 'environment' }, width: { ideal: 2592 }, height: { ideal: 1944 }, aspectRatio: { ideal: 4 / 3 } }, audio: false,
         });
         if (!mounted) { stream.getTracks().forEach((track) => track.stop()); return; }
         streamRef.current = stream;
@@ -166,6 +166,9 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
   const procesandoRef = useRef(false);
   const subiendoRef = useRef(false);
   const [subiendo, setSubiendo] = useState(false);
+  const [photoUploadProgress, setPhotoUploadProgress] = useState<{
+    uploaded: number; total: number; stage: 'preparing' | 'uploading' | 'confirming';
+  } | null>(null);
   const [camaraAbierta, setCamaraAbierta] = useState(false);
   const [procesandoFotos, setProcesandoFotos] = useState(false);
   const [errorLocal, setErrorLocal] = useState<string | null>(null);
@@ -222,7 +225,16 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
     setProcesandoFotos(true);
     try {
       const next: File[] = [];
-      for (const file of Array.from(selected)) next.push(await prepareSubmissionPhoto(file));
+      for (const [index, file] of Array.from(selected).entries()) {
+        try {
+          next.push(await prepareSubmissionPhoto(file));
+        } catch (error) {
+          const reason = /\.(heic|heif)$/i.test(file.name) || /image\/hei[cf]/i.test(file.type)
+            ? 'Este navegador no pudo abrir la foto HEIC/HEIF. Usa la cámara o conviértela a JPG.'
+            : error instanceof Error ? error.message : 'No se pudo procesar esta foto.';
+          throw new Error(`Foto ${fotosRef.current.length + index + 1} (${file.name}): ${reason}`);
+        }
+      }
       const combined = [...fotosRef.current, ...next];
       if (combined.reduce((sum, item) => sum + item.size, 0) > MAX_GALLERY_BYTES) {
         throw new Error('La galería supera 20 MB. Elimina algunas fotos.');
@@ -258,6 +270,7 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
       setErrorLocal(null);
       try {
         if (fotosParaSubir.length) {
+          setPhotoUploadProgress({ uploaded: 0, total: fotosParaSubir.length, stage: 'preparing' });
           const metadata = fotosParaSubir.map((file) => ({ ejercicioId, archivoNombre: file.name,
             archivoTipo: file.type, archivoTamano: file.size }));
           const prepared = await prepararCargaFotosAlumno(metadata);
@@ -267,15 +280,44 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
           if (prepared.uploads.length !== fotosParaSubir.length) {
             setErrorLocal('No se prepararon todas las fotos. No se guardó la entrega.'); return;
           }
-          for (let index = 0; index < fotosParaSubir.length; index++) {
-            const upload = prepared.uploads[index];
-            const { error } = await supabase.storage.from('entregas-alumnos')
-              .uploadToSignedUrl(upload.path, upload.token, fotosParaSubir[index], { contentType: 'image/jpeg' });
-            if (error) { setErrorLocal(`No se pudo subir la foto ${index + 1}: ${error.message}`); return; }
+          // Tres subidas a la vez mantienen razonable el tiempo en redes móviles,
+          // sin saturarlas. Los índices de metadata y rutas no cambian aunque las
+          // respuestas de Storage lleguen en otro orden.
+          let nextIndex = 0;
+          let completed = 0;
+          const failure: { current: { index: number; message: string } | null } = { current: null };
+          setPhotoUploadProgress({ uploaded: 0, total: fotosParaSubir.length, stage: 'uploading' });
+          const worker = async () => {
+            while (nextIndex < fotosParaSubir.length && !failure.current) {
+              const index = nextIndex++;
+              const upload = prepared.uploads[index];
+              try {
+                const { error } = await supabase.storage.from('entregas-alumnos')
+                  .uploadToSignedUrl(upload.path, upload.token, fotosParaSubir[index], { contentType: 'image/jpeg' });
+                if (error) throw error;
+                completed += 1;
+                setPhotoUploadProgress({ uploaded: completed, total: fotosParaSubir.length, stage: 'uploading' });
+              } catch (error) {
+                failure.current ??= { index, message: error instanceof Error ? error.message : String(error) };
+              }
+            }
+          };
+          await Promise.all(Array.from({ length: Math.min(3, fotosParaSubir.length) }, () => worker()));
+          if (failure.current) {
+            const { index, message } = failure.current;
+            setErrorLocal(`No se pudo subir la foto ${index + 1} (${fotosParaSubir[index].name}): ${message}. Se subieron ${completed} de ${fotosParaSubir.length}; la entrega no se guardó.`);
+            return;
           }
+          if (completed !== fotosParaSubir.length) {
+            setErrorLocal('No terminaron de subir todas las fotos. La entrega no se guardó.');
+            return;
+          }
+          setPhotoUploadProgress({ uploaded: completed, total: fotosParaSubir.length, stage: 'confirming' });
           const saved = await confirmarCargaFotosAlumno({ ejercicioId, uploadIntentId: prepared.uploadIntentId, fotos: metadata });
           if (saved.error) { setErrorLocal(saved.error); return; }
-          if (readSubmissionPhotos(saved.fotos_json).length !== fotosParaSubir.length) {
+          const confirmedPhotos = readSubmissionPhotos(saved.fotos_json);
+          if (confirmedPhotos.length !== fotosParaSubir.length || confirmedPhotos.some((photo, index) =>
+            photo.path !== prepared.uploads[index].path)) {
             setErrorLocal('El servidor no confirmó todas las fotos. Actualiza la página y revisa la entrega antes de volver a intentar.'); return;
           }
           setEntrega({ ...entrega, archivo_nombre: `${fotosParaSubir.length} fotos`, archivo_path: saved.archivo_path,
@@ -328,6 +370,7 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
       } finally {
         subiendoRef.current = false;
         setSubiendo(false);
+        setPhotoUploadProgress(null);
       }
     });
   };
@@ -550,6 +593,14 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
           </section>}
 
           {/* Error de validación */}
+          {subiendo && photoUploadProgress && <div role="status" aria-live="polite" className="space-y-2 rounded-xl border border-primary/30 bg-primary/5 p-3 text-sm font-semibold text-primary">
+            <p>{photoUploadProgress.stage === 'preparing'
+              ? `Preparando carga de ${photoUploadProgress.total} fotos…`
+              : photoUploadProgress.stage === 'confirming'
+                ? `Verificando y guardando ${photoUploadProgress.total} fotos…`
+                : `Fotos subidas: ${photoUploadProgress.uploaded} de ${photoUploadProgress.total}`}</p>
+            <progress aria-label="Progreso de fotos" max={photoUploadProgress.total} value={photoUploadProgress.uploaded} className="w-full accent-primary" />
+          </div>}
           {errorLocal && (
             <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm font-bold">
               <AlertTriangle className="w-4 h-4 shrink-0" />

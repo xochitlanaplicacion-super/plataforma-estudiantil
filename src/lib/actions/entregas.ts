@@ -25,6 +25,10 @@ const EXPIRY_DAYS = 10;
 
 const SIGNED_URL_SECONDS = 5 * 60;
 const UPLOAD_INTENT_TTL_MS = 10 * 60 * 1000;
+// Una galería de hasta 15 fotos puede tardar mucho más que un documento único
+// en una conexión móvil. El token firmado de Storage dura dos horas; el intento
+// de la galería necesita una ventana suficiente para terminar y confirmarse.
+const PHOTO_UPLOAD_INTENT_TTL_MS = 30 * 60 * 1000;
 const MAX_NEW_UPLOAD_INTENTS_PER_HOUR = 10;
 
 interface StudentUploadInput {
@@ -471,7 +475,7 @@ export async function prepararCargaFotosAlumno(input: PhotoUploadInput) {
         object_path: photoFiles[0].path, original_name: photoFiles[0].name,
         content_type: 'image/jpeg', size_bytes: photoFiles[0].size,
         photo_files: photoFiles, status: 'pending',
-        expires_at: new Date(now.getTime() + UPLOAD_INTENT_TTL_MS).toISOString(),
+        expires_at: new Date(now.getTime() + PHOTO_UPLOAD_INTENT_TTL_MS).toISOString(),
         updated_at: now.toISOString() })
       .select('id').single();
     if (insertError || !intent) return { error: insertError?.message || 'No se pudo preparar la galería.' };

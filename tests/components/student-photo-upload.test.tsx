@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -72,6 +72,71 @@ describe('EntregaAlumno: carga de varias fotos', () => {
     await waitFor(() => expect(mocks.upload).toHaveBeenCalledTimes(5));
     expect(mocks.confirm.mock.calls[0][0].fotos).toHaveLength(5);
     expect(await screen.findByText('5 fotos guardadas en esta entrega')).toBeVisible();
+  });
+
+  it('sube hasta tres fotos a la vez, informa el avance y conserva el orden al confirmar', async () => {
+    const pending = new Map<string, () => void>();
+    let active = 0;
+    let maxActive = 0;
+    mocks.upload.mockImplementation((path: string) => new Promise((resolve) => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      pending.set(path, () => { active -= 1; resolve({ error: null }); });
+    }));
+    let finishConfirm!: (value: unknown) => void;
+    mocks.confirm.mockImplementationOnce(() => new Promise((resolve) => { finishConfirm = resolve; }));
+    const { container } = render(<EntregaAlumno ejercicioId="ejercicio" />);
+    fireEvent.change(mainInput(container), { target: { files: Array.from({ length: 5 }, (_, i) => photo(`foto-${i + 1}.jpg`)) } });
+    await screen.findByText(/5\/15 fotos listas/);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Enviar Entrega' }));
+    await waitFor(() => expect(mocks.upload).toHaveBeenCalledTimes(3));
+    expect(screen.getByText('Fotos subidas: 0 de 5')).toBeVisible();
+    expect(screen.getByRole('progressbar', { name: 'Progreso de fotos' })).toHaveAttribute('value', '0');
+    expect(mocks.confirm).not.toHaveBeenCalled();
+
+    await act(async () => { pending.get('foto-2')!(); });
+    await waitFor(() => expect(mocks.upload).toHaveBeenCalledTimes(4));
+    expect(screen.getByText('Fotos subidas: 1 de 5')).toBeVisible();
+    await act(async () => { pending.get('foto-0')!(); });
+    await waitFor(() => expect(mocks.upload).toHaveBeenCalledTimes(5));
+    await act(async () => { pending.get('foto-1')!(); });
+    await act(async () => { pending.get('foto-4')!(); });
+    expect(mocks.confirm).not.toHaveBeenCalled();
+    await act(async () => { pending.get('foto-3')!(); });
+    await waitFor(() => expect(mocks.confirm).toHaveBeenCalledOnce());
+    expect(screen.getByText('Verificando y guardando 5 fotos…')).toBeVisible();
+    expect(screen.queryByText('5 fotos guardadas en esta entrega')).not.toBeInTheDocument();
+    expect(maxActive).toBe(3);
+    expect(mocks.confirm.mock.calls[0][0].fotos.map((file: { archivoNombre: string }) => file.archivoNombre))
+      .toEqual(['foto-1.jpg', 'foto-2.jpg', 'foto-3.jpg', 'foto-4.jpg', 'foto-5.jpg']);
+    await act(async () => { finishConfirm({ archivo_path: 'foto-0',
+      fotos_json: Array.from({ length: 5 }, (_, index) => ({ path: `foto-${index}`, name: `foto-${index + 1}.jpg` })),
+      caduca_el: '2026-10-10' }); });
+    expect(await screen.findByText('5 fotos guardadas en esta entrega')).toBeVisible();
+  });
+
+  it('no confirma una galería si falla cualquiera de las fotos', async () => {
+    mocks.upload.mockImplementation(async (path: string) => ({
+      error: path === 'foto-2' ? new Error('Se perdió la conexión') : null,
+    }));
+    const { container } = render(<EntregaAlumno ejercicioId="ejercicio" />);
+    fireEvent.change(mainInput(container), { target: { files: Array.from({ length: 5 }, (_, i) => photo(`foto-${i + 1}.jpg`)) } });
+    await screen.findByText(/5\/15 fotos listas/);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Enviar Entrega' }));
+    expect(await screen.findByText(/No se pudo subir la foto 3 \(foto-3.jpg\): Se perdió la conexión/)).toBeVisible();
+    expect(mocks.confirm).not.toHaveBeenCalled();
+    expect(screen.getByText(/5\/15 fotos listas/)).toBeVisible();
+    expect(screen.queryByText('5 fotos guardadas en esta entrega')).not.toBeInTheDocument();
+  });
+
+  it('identifica la foto que no se puede procesar sin reemplazar las demás', async () => {
+    const { container } = render(<EntregaAlumno ejercicioId="ejercicio" />);
+    fireEvent.change(mainInput(container), { target: { files: [photo('buena.jpg')] } });
+    await screen.findByText(/1\/15 fotos listas/);
+    mocks.preparePhoto.mockRejectedValueOnce(new Error('Formato no compatible'));
+    fireEvent.change(mainInput(container), { target: { files: [new File(['heic'], 'otra.heic', { type: 'image/heic' })] } });
+    expect(await screen.findByText(/Foto 2 \(otra.heic\): Este navegador no pudo abrir la foto HEIC\/HEIF/)).toBeVisible();
+    expect(screen.getByText(/1\/15 fotos listas/)).toBeVisible();
   });
 
   it('el botón de añadir varias fotos no abre también el selector principal', async () => {
