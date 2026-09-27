@@ -1,5 +1,11 @@
 import { createClient } from 'npm:@supabase/supabase-js@2.99.1';
 
+// Older single-image uploads predate fotos_json; keep them viewable as a one-photo gallery.
+function legacySubmissionPhoto(path: string | null, name: string | null): { path: string; name: string }[] {
+  if (!path || !name || !/\.(jpe?g|png|webp|heic|heif)$/i.test(name.trim())) return [];
+  return [{ path, name }];
+}
+
 Deno.serve(async request => {
   if (request.method !== 'POST') return new Response(null, { status: 405 });
   const authorization = request.headers.get('Authorization') ?? '';
@@ -29,10 +35,12 @@ Deno.serve(async request => {
     if (result.caduca_el && Date.parse(result.caduca_el) <= Date.now()) {
       return Response.json({ error: 'El archivo de esta entrega ya caducó.' }, { status: 410 });
     }
-    const photos = Array.isArray(result.fotos_json) ? result.fotos_json : [];
+    const photos = Array.isArray(result.fotos_json)
+      ? result.fotos_json
+      : legacySubmissionPhoto(result.archivo_path, result.archivo_nombre);
     if (gallery && photos.length) {
       const allowed = photos.filter((item: { path?: unknown; name?: unknown }) =>
-        typeof item.path === 'string' && item.path.startsWith(`${profile?.tenant_id}/entregas/${studentId}/${exerciseId}/`)
+        item && typeof item.path === 'string' && item.path.startsWith(`${profile?.tenant_id}/entregas/${studentId}/${exerciseId}/`)
           && typeof item.name === 'string').slice(0, 15);
       if (allowed.length !== photos.length) return Response.json({ error: 'Galería inválida.' }, { status: 422 });
       const signed = await Promise.all(allowed.map(async (item: { path: string; name: string }) => {

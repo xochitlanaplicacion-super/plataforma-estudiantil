@@ -1,8 +1,14 @@
+import { normalizeAcademicUpload, type AcademicUploadDescriptor } from './academic-uploads';
+
 export const MAX_SUBMISSION_PHOTOS = 15;
 export const MAX_PHOTO_BYTES = 2 * 1024 * 1024;
 export const MAX_GALLERY_BYTES = 20 * 1024 * 1024;
 
 export type SubmissionPhoto = { path: string; name: string };
+
+export function isSubmissionPhotoFile(file: AcademicUploadDescriptor): boolean {
+  return normalizeAcademicUpload(file, { allowImages: true })?.mime.startsWith('image/') ?? false;
+}
 
 export function readSubmissionPhotos(value: unknown): SubmissionPhoto[] {
   if (!Array.isArray(value) || value.length > MAX_SUBMISSION_PHOTOS) return [];
@@ -14,7 +20,7 @@ export function readSubmissionPhotos(value: unknown): SubmissionPhoto[] {
 
 /** Browser-only JPEG processing; preserve enough detail for legible homework. */
 export async function prepareSubmissionPhoto(file: File): Promise<File> {
-  if (!file.type.startsWith('image/')) throw new Error('Selecciona una imagen válida.');
+  if (!isSubmissionPhotoFile(file)) throw new Error('Selecciona una imagen válida.');
   const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
   try {
     const scale = Math.min(1, 2200 / Math.max(bitmap.width, bitmap.height));

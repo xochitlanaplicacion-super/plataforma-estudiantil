@@ -39,6 +39,14 @@ export async function dispatchSubmissionPush() {
   if (error) throw error;
   if (!rows?.length) return { enabled: true, submitted: 0 };
   try {
+    // The student is needed in the data payload so a photo notification opens
+    // that student's gallery, rather than only the group's task catalogue.
+    for (const row of rows) {
+      const { data: result, error: resultError } = await db.from('resultados_ejercicios')
+        .select('alumno_id').eq('id', row.resultado_id).eq('tenant_id', row.tenant_id).single();
+      if (resultError || !result) throw new Error('SUBMISSION_UNAVAILABLE');
+      row.studentId = result.alumno_id;
+    }
     const response = await expo('send', rows.map((row: any) => ({
       to: row.token, title: row.tipo_aviso === 'exercise_result' ? 'KIBO · Ejercicio completado' : 'KIBO · Nueva entrega',
       body: row.tipo_aviso === 'exercise_result' ? 'Se guardó la calificación de un ejercicio. Toca para ver el resultado.' : 'Un alumno entregó una tarea. Toca para revisarla.',
@@ -46,6 +54,7 @@ export async function dispatchSubmissionPush() {
       data: { type: row.tipo_aviso === 'exercise_result' ? 'exercise_result' : 'submission',
         notificationId: row.id, teacherId: row.profesor_id,
         tenantId: row.tenant_id, assignmentId: row.asignacion_id, exerciseId: row.ejercicio_id,
+        studentId: row.studentId,
         ...(row.tipo_aviso === 'exercise_result' ? { resultId: row.resultado_id } : {}) },
     })));
     if (!Array.isArray(response.data) || response.data.length !== rows.length) throw new Error('PUSH_RESPONSE_INVALID');

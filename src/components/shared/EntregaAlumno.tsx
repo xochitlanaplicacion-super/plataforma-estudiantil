@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 import { confirmarCargaEntregaAlumno, prepararCargaEntregaAlumno, confirmarCargaFotosAlumno, prepararCargaFotosAlumno } from '@/lib/actions/entregas';
 import { AccionesArchivoEntrega } from '@/components/shared/AccionesArchivoEntrega';
 import { GaleriaEntrega } from '@/components/shared/GaleriaEntrega';
-import { MAX_GALLERY_BYTES, MAX_SUBMISSION_PHOTOS, prepareSubmissionPhoto, readSubmissionPhotos } from '@/lib/storage/photo-gallery';
+import { MAX_GALLERY_BYTES, MAX_SUBMISSION_PHOTOS, isSubmissionPhotoFile, prepareSubmissionPhoto, readSubmissionPhotos } from '@/lib/storage/photo-gallery';
 import { createClient } from '@/lib/supabase/client';
 import {
   ACADEMIC_UPLOAD_MAX_MB,
@@ -73,12 +73,13 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
   const handleFile = (file: File) => {
     const err = validarArchivo(file);
     if (err) { setErrorLocal(err); setArchivoSeleccionado(null); return; }
+    if (isSubmissionPhotoFile(file)) { void addPhotos([file]); return; }
     setErrorLocal(null);
     setArchivoSeleccionado(file);
     setFotos([]);
   };
 
-  const addPhotos = async (selected: FileList | null) => {
+  const addPhotos = async (selected: FileList | File[] | null) => {
     if (!selected?.length) return;
     if (fotos.length + selected.length > MAX_SUBMISSION_PHOTOS) {
       setErrorLocal(`Máximo ${MAX_SUBMISSION_PHOTOS} fotos por entrega.`); return;
@@ -101,8 +102,10 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    const file = e.dataTransfer.files[0];
-    if (file) handleFile(file);
+    const files = Array.from(e.dataTransfer.files);
+    if (files.length && files.every((file) => isSubmissionPhotoFile(file))) void addPhotos(files);
+    else if (files.length === 1) handleFile(files[0]);
+    else if (files.length > 1) setErrorLocal('Arrastra solo fotos o un documento a la vez.');
   };
 
   const handleSubir = () => {

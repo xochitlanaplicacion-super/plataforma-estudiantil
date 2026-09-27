@@ -14,7 +14,7 @@ const assignmentId='11111111-1111-4111-8111-111111111111';
 const exerciseId='22222222-2222-4222-8222-222222222222';
 const studentId='33333333-3333-4333-8333-333333333333';
 const request=body=>new Request('https://example.test',{method:'POST',body:JSON.stringify(body)});
-test('sender includes the student and task destination and records the Expo ticket',async()=>{
+async function dispatchPushRow(tipo_aviso){
   const updates=[], exportsObject={}; let payload;
   const queue={select:()=>queue,eq:()=>queue,lte:()=>queue,limit:async()=>({data:[]}),
     update:value=>{updates.push(value);return {eq:()=>({eq:async()=>({error:null})})};}};
@@ -22,7 +22,7 @@ test('sender includes the student and task destination and records the Expo tick
   const db={from:table=>table==='cola_push_entregas'?queue:
     entity(table==='profiles'?{nombre:'Alumno',apellidos:'Prueba'}:{alumno_id:studentId}),
     rpc:async()=>({data:[{id:'event',token:'ExpoPushToken[test]',profesor_id:'teacher',tenant_id:'tenant',
-      asignacion_id:assignmentId,ejercicio_id:exerciseId,resultado_id:'result'}]})};
+      asignacion_id:assignmentId,ejercicio_id:exerciseId,resultado_id:'result',tipo_aviso}]})};
   const source=fs.readFileSync('supabase/functions/_shared/submission-push.ts','utf8').replace(/^import .*;$/gm,'');
   vm.runInNewContext(ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{
     exports:exportsObject,createClient:()=>db,Date,AbortSignal,
@@ -30,11 +30,26 @@ test('sender includes the student and task destination and records the Expo tick
     fetch:async(url,options)=>{payload=JSON.parse(options.body)[0];return {ok:true,json:async()=>({data:[{status:'ok',id:'ticket'}]})};},
   });
   assert.equal((await exportsObject.dispatchSubmissionPush()).submitted,1);
+  return {payload,updates};
+}
+test('sender includes the student and task destination and records the Expo ticket',async()=>{
+  const {payload,updates}=await dispatchPushRow('submission');
+  assert.equal(payload.data.type,'submission');
   assert.equal(payload.data.studentId,studentId);
   assert.equal(payload.data.exerciseId,exerciseId);
   assert.equal(payload.data.assignmentId,assignmentId);
   assert.equal(payload.data.tenantId,'tenant');
   assert.ok(payload.body.includes('Alumno Prueba'));
+  assert.equal(updates[0].estado,'ticket');
+});
+test('automatic result push opens the result instead of the submission panel',async()=>{
+  const {payload,updates}=await dispatchPushRow('exercise_result');
+  assert.equal(payload.data.type,'exercise_result');
+  assert.equal(payload.data.resultId,'result');
+  assert.equal(payload.data.studentId,studentId);
+  assert.equal(payload.data.exerciseId,exerciseId);
+  assert.match(payload.title,/Actividad completada/);
+  assert.match(payload.body,/completó una actividad/);
   assert.equal(updates[0].estado,'ticket');
 });
 test('worker requires its server secret',async()=>{
@@ -76,4 +91,21 @@ test('authorized teacher receives a short-lived URL only for the catalogue stude
   assert.equal((await result.json()).url,'https://storage.test/signed');
   assert.ok(filters.some(([key,value])=>key==='inscripcion_alumno_id'&&value==='enrollment'));
   assert.ok(filters.some(([key,value])=>key==='tenant_id'&&value==='tenant'));
+});
+test('a legacy single JPEG opens as a one-photo gallery without treating it as expired',async()=>{
+  const path=`tenant/entregas/${studentId}/${exerciseId}/photo-object`;
+  const chain={select:()=>chain,eq:()=>chain,single:async()=>({data:{tenant_id:'tenant'}}),
+    maybeSingle:async()=>({data:{archivo_path:path,archivo_nombre:'homework.jpg',fotos_json:null,
+      caduca_el:'2099-01-01T00:00:00Z'}})};
+  let calls=0;
+  const fn=handler('kibo-submission-file',()=>++calls===1?{
+    auth:{getUser:async()=>({data:{user:{id:'teacher'}}})},
+    rpc:async()=>({data:{tasks:[{id:exerciseId,students:[{studentId,enrollmentId:'enrollment'}]}]}}),
+  }:{from:()=>chain,storage:{from:()=>({createSignedUrl:async(signedPath,ttl)=>{
+    assert.equal(signedPath,path);assert.equal(ttl,300);
+    return {data:{signedUrl:'https://storage.test/fresh-photo'}};
+  }})}});
+  const response=await fn(request({assignmentId,exerciseId,studentId,gallery:true}));
+  assert.equal(response.status,200);
+  assert.deepEqual((await response.json()).photos,[{url:'https://storage.test/fresh-photo',name:'homework.jpg'}]);
 });

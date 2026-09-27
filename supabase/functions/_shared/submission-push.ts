@@ -54,10 +54,17 @@ export async function dispatchSubmissionPush() {
       row.studentName = student ? [student.nombre,student.apellidos].filter(Boolean).join(' ').slice(0,100) : 'Un alumno';
     }
     const response = await expo('send', rows.map((row: any) => ({
-      to: row.token, title: 'KIBO · Nueva entrega', body: `${row.studentName} entregó una tarea. Toca para revisarla.`,
+      to: row.token,
+      title: row.tipo_aviso === 'exercise_result' ? 'KIBO · Actividad completada' : 'KIBO · Nueva entrega',
+      body: row.tipo_aviso === 'exercise_result'
+        ? `${row.studentName} completó una actividad. Toca para ver su resultado.`
+        : `${row.studentName} entregó una tarea. Toca para revisarla.`,
       sound: 'default', priority: 'high', channelId: 'kibo-entregas-v1',
-      data: { type: 'submission', notificationId: row.id, teacherId: row.profesor_id,
-        tenantId: row.tenant_id, assignmentId: row.asignacion_id, exerciseId: row.ejercicio_id, studentId: row.studentId },
+      data: { type: row.tipo_aviso === 'exercise_result' ? 'exercise_result' : 'submission',
+        notificationId: row.id, teacherId: row.profesor_id,
+        tenantId: row.tenant_id, assignmentId: row.asignacion_id, exerciseId: row.ejercicio_id,
+        studentId: row.studentId,
+        ...(row.tipo_aviso === 'exercise_result' ? { resultId: row.resultado_id } : {}) },
     })));
     if (!Array.isArray(response.data) || response.data.length !== rows.length) throw new Error('PUSH_RESPONSE_INVALID');
     for (let i=0;i<rows.length;i++) {
