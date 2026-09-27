@@ -27,6 +27,18 @@ interface EntregaAlumnoProps {
   isPreview?: boolean;
 }
 
+type UploadedGallery = {
+  uploadIntentId: string;
+  metadata: { ejercicioId: string; archivoNombre: string; archivoTipo: string; archivoTamano: number }[];
+  paths: string[];
+};
+
+type UploadedDocument = {
+  uploadIntentId: string;
+  archivoPath: string;
+  metadata: { ejercicioId: string; archivoNombre: string; archivoTipo: string; archivoTamano: number };
+};
+
 function getIconForName(nombre: string) {
   const lower = nombre.toLowerCase();
   if (lower.endsWith('.pdf')) return <FileText className="w-8 h-8 text-red-500" />;
@@ -162,6 +174,8 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
   const [isPending, startTransition] = useTransition();
   const [archivoSeleccionado, setArchivoSeleccionado] = useState<File | null>(null);
   const [fotos, setFotos] = useState<File[]>([]);
+  const [uploadedGallery, setUploadedGallery] = useState<UploadedGallery | null>(null);
+  const [uploadedDocument, setUploadedDocument] = useState<UploadedDocument | null>(null);
   const fotosRef = useRef<File[]>([]);
   const procesandoRef = useRef(false);
   const subiendoRef = useRef(false);
@@ -189,6 +203,8 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
   const tieneArchivo = !!entrega?.archivo_nombre;
   const fotosConfirmadas = readSubmissionPhotos(entrega?.fotos_json).length;
   const bloqueado = isPending || subiendo || procesandoFotos;
+  const cargaPendiente = uploadedGallery !== null || uploadedDocument !== null;
+  const seleccionBloqueada = bloqueado || cargaPendiente;
   const { dias, horas, pct } = entrega?.caduca_el 
     ? getDiasRestantes(entrega.caduca_el) 
     : { dias: 0, horas: 0, pct: 0 };
@@ -199,6 +215,9 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
 
   const handleFile = (file: File) => {
     if (subiendoRef.current || procesandoRef.current) return;
+    if (cargaPendiente) {
+      setErrorLocal('El archivo ya se subió. Reintenta guardarlo o inicia una carga nueva antes de cambiar archivos.'); return;
+    }
     if (isSubmissionPhotoFile(file)) { void addPhotos([file]); return; }
     if (fotosRef.current.length) {
       setErrorLocal('Ya tienes fotos preparadas. Quítalas antes de elegir un documento.'); return;
@@ -212,6 +231,9 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
   const addPhotos = async (selected: FileList | File[] | null) => {
     if (!selected?.length) return;
     if (subiendoRef.current) return;
+    if (cargaPendiente) {
+      setErrorLocal('El archivo ya se subió. Reintenta guardarlo o inicia una carga nueva antes de añadir fotos.'); return;
+    }
     if (archivoSeleccionado) {
       setErrorLocal('Ya tienes un documento preparado. Quítalo antes de añadir fotos.'); return;
     }
@@ -257,14 +279,84 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    if (subiendoRef.current || procesandoRef.current) return;
+    if (subiendoRef.current || procesandoRef.current || cargaPendiente) return;
     handleSelectedFiles(e.dataTransfer.files);
   };
 
-  const handleSubir = () => {
-    if ((!archivoSeleccionado && !fotosRef.current.length) || procesandoRef.current || subiendoRef.current) return;
+  const confirmarFotosSubidas = async (gallery: UploadedGallery) => {
+    setPhotoUploadProgress({ uploaded: gallery.metadata.length, total: gallery.metadata.length, stage: 'confirming' });
+    const saved = await confirmarCargaFotosAlumno({ ejercicioId, uploadIntentId: gallery.uploadIntentId, fotos: gallery.metadata });
+    if (saved.error) {
+      setErrorLocal(`${saved.error} Las fotos ya están subidas. Pulsa «Reintentar guardar» para intentar registrar esta misma galería sin volver a cargarlas.`);
+      return;
+    }
+    const confirmedPhotos = readSubmissionPhotos(saved.fotos_json);
+    if (confirmedPhotos.length !== gallery.metadata.length || confirmedPhotos.some((photo, index) =>
+      photo.path !== gallery.paths[index])) {
+      setUploadedGallery(null);
+      setErrorLocal('El servidor no confirmó todas las fotos. Actualiza la página y revisa la entrega antes de volver a intentar.');
+      return;
+    }
+    setEntrega((current) => ({ ...current, archivo_nombre: `${gallery.metadata.length} foto${gallery.metadata.length === 1 ? '' : 's'}`, archivo_path: saved.archivo_path,
+      fotos_json: saved.fotos_json, caduca_el: saved.caduca_el,
+      primer_envio_en: current?.primer_envio_en || new Date().toISOString() }));
+    setUploadedGallery(null);
+    actualizarFotos([]);
+    setExito(true);
+  };
+
+  const confirmarDocumentoSubido = async (document: UploadedDocument) => {
+    const res = await confirmarCargaEntregaAlumno({
+      ...document.metadata,
+      archivoPath: document.archivoPath,
+      uploadIntentId: document.uploadIntentId,
+    });
+    if (res.error) {
+      setErrorLocal(`${res.error} El archivo ya está subido. Pulsa «Reintentar guardar» para registrar esta misma entrega sin volver a cargarlo.`);
+      return;
+    }
+    if (res.archivo_path !== document.archivoPath) {
+      setUploadedDocument(null);
+      setErrorLocal('El servidor confirmó otra ruta. Actualiza la página y revisa la entrega antes de volver a intentar.');
+      return;
+    }
+    setEntrega((current) => ({
+      ...current,
+      archivo_nombre: document.metadata.archivoNombre,
+      archivo_path: res.archivo_path,
+      fotos_json: null,
+      caduca_el: res.caduca_el,
+      primer_envio_en: current?.primer_envio_en || new Date().toISOString(),
+    }));
+    setUploadedDocument(null);
+    setArchivoSeleccionado(null);
+    setExito(true);
+  };
+
+  const handleReintentarGuardar = () => {
+    if ((!uploadedGallery && !uploadedDocument) || subiendoRef.current) return;
     subiendoRef.current = true;
     setSubiendo(true);
+    startTransition(async () => {
+      setErrorLocal(null);
+      try {
+        if (uploadedGallery) await confirmarFotosSubidas(uploadedGallery);
+        else if (uploadedDocument) await confirmarDocumentoSubido(uploadedDocument);
+      } catch (error) {
+        setErrorLocal(`${error instanceof Error ? error.message : 'No se pudo registrar la entrega.'} El archivo ya está subido; reintenta guardarlo sin volver a cargarlo.`);
+      } finally {
+        subiendoRef.current = false;
+        setSubiendo(false);
+        setPhotoUploadProgress(null);
+      }
+    });
+  };
+
+  const handleSubir = () => {
+    if ((!archivoSeleccionado && !fotosRef.current.length) || procesandoRef.current || subiendoRef.current || cargaPendiente) return;
+    subiendoRef.current = true;
+    setSubiendo(true);
+    setExito(false);
     const fotosParaSubir = fotosRef.current;
     startTransition(async () => {
       setErrorLocal(null);
@@ -312,18 +404,11 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
             setErrorLocal('No terminaron de subir todas las fotos. La entrega no se guardó.');
             return;
           }
-          setPhotoUploadProgress({ uploaded: completed, total: fotosParaSubir.length, stage: 'confirming' });
-          const saved = await confirmarCargaFotosAlumno({ ejercicioId, uploadIntentId: prepared.uploadIntentId, fotos: metadata });
-          if (saved.error) { setErrorLocal(saved.error); return; }
-          const confirmedPhotos = readSubmissionPhotos(saved.fotos_json);
-          if (confirmedPhotos.length !== fotosParaSubir.length || confirmedPhotos.some((photo, index) =>
-            photo.path !== prepared.uploads[index].path)) {
-            setErrorLocal('El servidor no confirmó todas las fotos. Actualiza la página y revisa la entrega antes de volver a intentar.'); return;
-          }
-          setEntrega({ ...entrega, archivo_nombre: `${fotosParaSubir.length} fotos`, archivo_path: saved.archivo_path,
-            fotos_json: saved.fotos_json, caduca_el: saved.caduca_el,
-            primer_envio_en: entrega?.primer_envio_en || new Date().toISOString() });
-          actualizarFotos([]); setExito(true); return;
+          const gallery = { uploadIntentId: prepared.uploadIntentId, metadata,
+            paths: prepared.uploads.map((upload) => upload.path) };
+          setUploadedGallery(gallery);
+          await confirmarFotosSubidas(gallery);
+          return;
         }
         if (!archivoSeleccionado) return;
         const metadata = {
@@ -346,25 +431,9 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
           setErrorLocal(`No se pudo subir el archivo: ${uploadError.message}`);
           return;
         }
-        const res = await confirmarCargaEntregaAlumno({
-          ...metadata,
-          archivoPath: prepared.archivoPath,
-          uploadIntentId: prepared.uploadIntentId,
-        });
-        if (res.error) {
-          setErrorLocal(res.error);
-          return;
-        }
-        setExito(true);
-        setEntrega({
-          ...entrega,
-          archivo_nombre: archivoSeleccionado.name,
-          archivo_path: res.archivo_path,
-          fotos_json: null,
-          caduca_el: res.caduca_el,
-          primer_envio_en: entrega?.primer_envio_en || new Date().toISOString(),
-        });
-        setArchivoSeleccionado(null);
+        const document = { metadata, archivoPath: prepared.archivoPath, uploadIntentId: prepared.uploadIntentId };
+        setUploadedDocument(document);
+        await confirmarDocumentoSubido(document);
       } catch (error: any) {
         setErrorLocal(error?.message || 'No se pudo completar la entrega.');
       } finally {
@@ -486,7 +555,7 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
             className="hidden"
             accept={STUDENT_SUBMISSION_ACCEPT}
             multiple
-            disabled={bloqueado}
+            disabled={seleccionBloqueada}
             onChange={(e) => { handleSelectedFiles(e.target.files); e.target.value = ''; }}
           />
           <input
@@ -495,20 +564,22 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
             className="hidden"
             accept="image/*"
             capture="environment"
-            disabled={bloqueado}
+            disabled={seleccionBloqueada}
             onChange={(e) => { void addPhotos(e.target.files); e.target.value = ''; }}
           />
-          <input ref={photosInputRef} type="file" className="hidden" accept="image/*" multiple disabled={bloqueado}
+          <input ref={photosInputRef} type="file" className="hidden" accept="image/*" multiple disabled={seleccionBloqueada}
             onChange={(e) => { void addPhotos(e.target.files); e.target.value = ''; }} />
           {/* Dropzone */}
           <div
             onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
             onDragLeave={() => setIsDragging(false)}
             onDrop={handleDrop}
-            onClick={() => { if (!bloqueado) inputRef.current?.click(); }}
+            onClick={() => { if (!seleccionBloqueada) inputRef.current?.click(); }}
             className={cn(
               "relative border-2 border-dashed rounded-2xl p-8 flex flex-col items-center gap-3 cursor-pointer transition-all",
-              isDragging
+              seleccionBloqueada
+                ? "cursor-not-allowed border-slate-200 bg-slate-50"
+                : isDragging
                 ? "border-primary bg-primary/5 scale-[1.01] shadow-lg"
                 : archivoSeleccionado
                 ? "border-emerald-400 bg-emerald-50"
@@ -525,7 +596,7 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); setArchivoSeleccionado(null); setErrorLocal(null); }}
-                  disabled={bloqueado}
+                  disabled={seleccionBloqueada}
                   aria-label="Quitar documento seleccionado"
                   className="absolute top-3 right-3 p-1 bg-slate-200 rounded-full hover:bg-red-100 hover:text-red-600 transition-all"
                 >
@@ -552,7 +623,7 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
                 if (archivoSeleccionado) setErrorLocal('Quita el documento preparado antes de tomar fotos.');
                 else { setErrorLocal(null); setCamaraAbierta(true); }
               }}
-              disabled={bloqueado || fotos.length >= MAX_SUBMISSION_PHOTOS}
+              disabled={seleccionBloqueada || fotos.length >= MAX_SUBMISSION_PHOTOS}
               className="flex h-12 items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/5 text-sm font-bold text-primary transition-colors hover:bg-primary/10"
             >
               <Camera className="h-4 w-4" /> Tomar fotos seguidas
@@ -560,12 +631,12 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
             <button
               type="button"
               onClick={() => inputRef.current?.click()}
-              disabled={bloqueado}
+              disabled={seleccionBloqueada}
               className="flex h-12 items-center justify-center gap-2 rounded-xl border border-border bg-background text-sm font-bold text-foreground transition-colors hover:bg-muted"
             >
               <Upload className="h-4 w-4" /> Elegir fotos o documento
             </button>
-            <button type="button" onClick={() => photosInputRef.current?.click()} disabled={bloqueado}
+            <button type="button" onClick={() => photosInputRef.current?.click()} disabled={seleccionBloqueada}
               className="flex h-12 items-center justify-center gap-2 rounded-xl border border-primary/30 bg-primary/5 text-sm font-bold text-primary">
               <ImageIcon className="h-4 w-4" /> Añadir varias fotos
             </button>
@@ -582,7 +653,7 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
                 </div>
                 <div className="mt-2 flex items-center justify-between gap-1">
                   <span className="min-w-0 truncate text-xs text-slate-600" title={file.name}>{file.name}</span>
-                  <button type="button" disabled={bloqueado}
+                  <button type="button" disabled={seleccionBloqueada}
                     onClick={() => actualizarFotos((current) => current.filter((_, position) => position !== index))}
                     aria-label={`Quitar foto ${index + 1}`} className="rounded p-1 text-slate-500 hover:bg-red-50 hover:text-red-600">
                     <X className="h-4 w-4" />
@@ -608,13 +679,24 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
             </div>
           )}
 
+          {cargaPendiente && !subiendo && <div className="space-y-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            <p role="status" className="font-bold">{uploadedGallery
+              ? `${uploadedGallery.metadata.length} ${uploadedGallery.metadata.length === 1 ? 'foto subida' : 'fotos subidas'}`
+              : 'Archivo subido'}; falta registrar la entrega. Reintentar guardar no volverá a subir {uploadedGallery ? 'las fotos' : 'el archivo'} ni reemplazará tu entrega anterior hasta que el guardado se confirme.</p>
+            <button type="button" disabled={bloqueado} onClick={() => { setUploadedGallery(null); setUploadedDocument(null); setErrorLocal(null); }}
+              className="text-xs font-semibold underline underline-offset-2 disabled:opacity-50">
+              Si el reintento caducó, iniciar una carga nueva con {uploadedGallery ? 'estas fotos' : 'este archivo'}
+            </button>
+          </div>}
+
           {/* Botón de subida */}
           <button
-            onClick={handleSubir}
-            disabled={(!archivoSeleccionado && !fotos.length) || bloqueado}
+            type="button"
+            onClick={cargaPendiente ? handleReintentarGuardar : handleSubir}
+            disabled={(!cargaPendiente && !archivoSeleccionado && !fotos.length) || bloqueado}
             className={cn(
               "w-full h-14 rounded-2xl font-black uppercase tracking-widest text-sm flex items-center justify-center gap-3 transition-all shadow-lg",
-              (archivoSeleccionado || fotos.length) && !bloqueado
+              (cargaPendiente || archivoSeleccionado || fotos.length) && !bloqueado
                 ? "bg-primary text-white hover:opacity-90 hover:shadow-xl hover:-translate-y-0.5 active:scale-[0.98]"
                 : "bg-slate-100 text-slate-400 cursor-not-allowed"
             )}
@@ -627,7 +709,7 @@ export function EntregaAlumno({ ejercicioId, entregaExistente, isPreview }: Entr
             ) : (
               <>
                 <Upload className="w-5 h-5" />
-                {tieneArchivo ? 'Actualizar Entrega' : 'Enviar Entrega'}
+                {cargaPendiente ? 'Reintentar guardar' : tieneArchivo ? 'Actualizar Entrega' : 'Enviar Entrega'}
               </>
             )}
           </button>

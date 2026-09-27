@@ -62,7 +62,7 @@ async function obtenerContextoEntrega(
 
   const { data: existing } = await admin
     .from('resultados_ejercicios')
-    .select('archivo_path, fotos_json, primer_envio_en, caduca_el, calificacion')
+    .select('id, row_version, archivo_path, fotos_json, primer_envio_en, caduca_el, calificacion')
     .eq('tenant_id', tenantId)
     .eq('alumno_id', alumnoId)
     .eq('ejercicio_id', ejercicioId)
@@ -346,13 +346,16 @@ export async function confirmarCargaEntregaAlumno(input: ConfirmStudentUploadInp
   if (contexto.error) {
     await admin
       .from('student_submission_upload_intents')
-      .update({ status: 'cancelled', updated_at: new Date().toISOString() })
+      .update({ status: 'pending', updated_at: new Date().toISOString() })
       .eq('id', intent.id)
       .eq('status', 'processing');
     return { error: contexto.error };
   }
   const { ejercicio, existing, link, enrollment, unitId } = contexto;
   if (existing?.calificacion !== null && existing?.calificacion !== undefined) {
+    await admin.from('student_submission_upload_intents')
+      .update({ status: 'pending', updated_at: new Date().toISOString() })
+      .eq('id', intent.id).eq('status', 'processing');
     return { error: 'Esta tarea ya fue calificada.' };
   }
   const ahora = new Date();
@@ -363,12 +366,7 @@ export async function confirmarCargaEntregaAlumno(input: ConfirmStudentUploadInp
     dueAt: ejercicio.fecha_entrega ? new Date(ejercicio.fecha_entrega) : null,
   });
 
-  const { error: dbError } = await admin
-    .from('resultados_ejercicios')
-    .upsert({
-      tenant_id: tenantId,
-      alumno_id: user.id,
-      ejercicio_id: input.ejercicioId,
+  const submissionData = {
       estado: submission.state,
       archivo_url: null,
       archivo_nombre: input.archivoNombre.slice(0, 255),
@@ -376,24 +374,45 @@ export async function confirmarCargaEntregaAlumno(input: ConfirmStudentUploadInp
       fotos_json: null,
       primer_envio_en: primerEnvio.toISOString(),
       caduca_el: caduca.toISOString(),
-      ...(existing ? {} : {
+  };
+  // Un UPSERT ejecuta el disparador BEFORE INSERT antes de resolver el
+  // conflicto. Al reemplazar una entrega, ese INSERT no tiene procedencia y
+  // se rechaza. Actualizar la fila existente conserva su vínculo académico.
+  const { data: saved, error: dbError } = existing
+    ? await admin.from('resultados_ejercicios')
+      .update(submissionData)
+      .eq('id', existing.id)
+      .eq('tenant_id', tenantId)
+      .eq('alumno_id', user.id)
+      .eq('ejercicio_id', input.ejercicioId)
+      .eq('row_version', existing.row_version)
+      .is('calificacion', null)
+      .select('id')
+      .maybeSingle()
+    : await admin.from('resultados_ejercicios')
+      .insert({
+        tenant_id: tenantId,
+        alumno_id: user.id,
+        ejercicio_id: input.ejercicioId,
+        ...submissionData,
         inscripcion_alumno_id: enrollment!.id,
         vinculo_evaluacion_id: link!.id,
         unidad_origen_id: unitId,
         origen: 'descriptiveSubmission' as const,
         registro_legacy: false,
-      }),
-    }, { onConflict: 'alumno_id, ejercicio_id' })
-    .select()
-    .single();
+      })
+      .select('id')
+      .maybeSingle();
 
-  if (dbError) {
+  if (dbError || !saved) {
     await admin
       .from('student_submission_upload_intents')
       .update({ status: 'pending', updated_at: new Date().toISOString() })
       .eq('id', intent.id)
       .eq('status', 'processing');
-    return { error: `Error al registrar: ${dbError.message}` };
+    return { error: dbError
+      ? `Error al registrar: ${dbError.message}`
+      : 'La entrega cambió mientras se guardaba. Actualiza la página y comprueba su estado antes de reintentar.' };
   }
   const confirmedAt = new Date().toISOString();
   const { error: confirmationError } = await admin
@@ -506,11 +525,31 @@ export async function confirmarCargaFotosAlumno(input: {
       .eq('id', input.uploadIntentId).eq('tenant_id', tenantId).eq('alumno_id', user.id)
       .eq('ejercicio_id', input.ejercicioId).maybeSingle();
     const files = Array.isArray(intent?.photo_files) ? intent.photo_files : [];
-    if (!intent || intent.status !== 'pending' || new Date(intent.expires_at).getTime() <= Date.now()
-      || files.length !== normalized.length || files.some((file: any, index: number) =>
+    if (!intent || files.length !== normalized.length || files.some((file: any, index: number) =>
         file.name !== normalized[index].name || file.mime !== normalized[index].mime
         || file.size !== normalized[index].size
         || !String(file.path).startsWith(`${tenantId}/entregas/${user.id}/${input.ejercicioId}/`))) {
+      return { error: 'La autorización de fotos ya no es válida.' };
+    }
+    const gallery = files.map((file: any) => ({ path: String(file.path), name: String(file.name) }));
+    // Si el resultado se guardó pero se perdió la respuesta, confirmar otra vez
+    // no debe crear otro evento ni exigir una nueva carga de las fotos.
+    const { data: alreadySaved } = await admin.from('resultados_ejercicios')
+      .select('archivo_path, fotos_json, caduca_el')
+      .eq('tenant_id', tenantId).eq('alumno_id', user.id)
+      .eq('ejercicio_id', input.ejercicioId).maybeSingle();
+    const savedGallery = readSubmissionPhotos(alreadySaved?.fotos_json);
+    if (alreadySaved?.archivo_path === gallery[0].path
+      && savedGallery.length === gallery.length
+      && savedGallery.every((photo, index) => photo.path === gallery[index].path
+        && photo.name === gallery[index].name)) {
+      await admin.from('student_submission_upload_intents').update({ status: 'confirmed',
+        confirmed_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+        .eq('id', intent.id).eq('tenant_id', tenantId).in('status', ['pending', 'processing']);
+      return { success: true, alreadyConfirmed: true, fotos_json: gallery,
+        archivo_path: gallery[0].path, caduca_el: alreadySaved.caduca_el };
+    }
+    if (intent.status !== 'pending' || new Date(intent.expires_at).getTime() <= Date.now()) {
       return { error: 'La autorización de fotos ya no es válida.' };
     }
     for (const file of files) {
@@ -528,8 +567,16 @@ export async function confirmarCargaFotosAlumno(input: {
       .eq('id', intent.id).eq('status', 'pending').select('id').maybeSingle();
     if (!claimed) return { error: 'Esta entrega ya se está confirmando.' };
     const context = await obtenerContextoEntrega(supabase, admin, tenantId, user.id, input.ejercicioId);
-    if (context.error) return { error: context.error };
+    if (context.error) {
+      await admin.from('student_submission_upload_intents')
+        .update({ status: 'pending', updated_at: new Date().toISOString() })
+        .eq('id', intent.id).eq('status', 'processing');
+      return { error: context.error };
+    }
     if (context.existing?.calificacion !== null && context.existing?.calificacion !== undefined) {
+      await admin.from('student_submission_upload_intents')
+        .update({ status: 'pending', updated_at: new Date().toISOString() })
+        .eq('id', intent.id).eq('status', 'processing');
       return { error: 'Esta tarea ya fue calificada.' };
     }
     const now = new Date();
@@ -537,23 +584,48 @@ export async function confirmarCargaFotosAlumno(input: {
     const expires = new Date(first.getTime() + EXPIRY_DAYS * 86400000);
     const submission = descriptiveSubmission({ submittedAt: now,
       dueAt: context.ejercicio.fecha_entrega ? new Date(context.ejercicio.fecha_entrega) : null });
-    const gallery = files.map((file: any) => ({ path: String(file.path), name: String(file.name) }));
-    const { error } = await admin.from('resultados_ejercicios').upsert({
-      tenant_id: tenantId, alumno_id: user.id, ejercicio_id: input.ejercicioId,
+    const submissionData = {
       estado: submission.state, archivo_url: null,
       archivo_nombre: `${gallery.length} foto${gallery.length === 1 ? '' : 's'}`,
       archivo_path: gallery[0].path, fotos_json: gallery,
       primer_envio_en: first.toISOString(), caduca_el: expires.toISOString(),
-      ...(context.existing ? {} : { inscripcion_alumno_id: context.enrollment!.id,
-        vinculo_evaluacion_id: context.link!.id, unidad_origen_id: context.unitId,
-        origen: 'descriptiveSubmission' as const, registro_legacy: false }),
-    }, { onConflict: 'alumno_id, ejercicio_id' });
-    if (error) {
-      await admin.from('student_submission_upload_intents').update({ status: 'pending' }).eq('id', intent.id).eq('status', 'processing');
-      return { error: `No se pudo registrar la galería: ${error.message}` };
+    };
+    const { data: saved, error } = context.existing
+      ? await admin.from('resultados_ejercicios')
+        .update(submissionData)
+        .eq('id', context.existing.id)
+        .eq('tenant_id', tenantId)
+        .eq('alumno_id', user.id)
+        .eq('ejercicio_id', input.ejercicioId)
+        .eq('row_version', context.existing.row_version)
+        .is('calificacion', null)
+        .select('id')
+        .maybeSingle()
+      : await admin.from('resultados_ejercicios')
+        .insert({
+          tenant_id: tenantId, alumno_id: user.id, ejercicio_id: input.ejercicioId,
+          ...submissionData,
+          inscripcion_alumno_id: context.enrollment!.id,
+          vinculo_evaluacion_id: context.link!.id,
+          unidad_origen_id: context.unitId,
+          origen: 'descriptiveSubmission' as const,
+          registro_legacy: false,
+        })
+        .select('id')
+        .maybeSingle();
+    if (error || !saved) {
+      await admin.from('student_submission_upload_intents')
+        .update({ status: 'pending', updated_at: new Date().toISOString() })
+        .eq('id', intent.id).eq('status', 'processing');
+      return { error: error
+        ? `No se pudo registrar la galería: ${error.message}`
+        : 'La entrega cambió mientras se guardaba. Actualiza la página y comprueba su estado antes de reintentar.' };
     }
-    await admin.from('student_submission_upload_intents').update({ status: 'confirmed',
+    const { error: confirmationError } = await admin.from('student_submission_upload_intents').update({ status: 'confirmed',
       confirmed_at: now.toISOString(), updated_at: now.toISOString() }).eq('id', intent.id).eq('status', 'processing');
+    if (confirmationError) {
+      console.error('[KIBO entrega] La galería se guardó, pero no se pudo cerrar el intento de carga:', confirmationError.message);
+    }
     const previous = Array.from(new Set([
       ...(context.existing?.archivo_path ? [context.existing.archivo_path] : []),
       ...readSubmissionPhotos(context.existing?.fotos_json).map((photo) => photo.path),

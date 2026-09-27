@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   prepare: vi.fn(),
   confirm: vi.fn(),
+  prepareDocument: vi.fn(),
+  confirmDocument: vi.fn(),
   upload: vi.fn(),
   preparePhoto: vi.fn(),
 }));
@@ -13,8 +15,8 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/actions/entregas', () => ({
   prepararCargaFotosAlumno: mocks.prepare,
   confirmarCargaFotosAlumno: mocks.confirm,
-  prepararCargaEntregaAlumno: vi.fn(),
-  confirmarCargaEntregaAlumno: vi.fn(),
+  prepararCargaEntregaAlumno: mocks.prepareDocument,
+  confirmarCargaEntregaAlumno: mocks.confirmDocument,
 }));
 vi.mock('@/lib/supabase/client', () => ({
   createClient: () => ({ storage: { from: () => ({ uploadToSignedUrl: mocks.upload }) } }),
@@ -49,6 +51,12 @@ beforeEach(() => {
     caduca_el: '2026-10-10',
   }));
   mocks.upload.mockReset().mockResolvedValue({ error: null });
+  mocks.prepareDocument.mockReset().mockResolvedValue({
+    uploadIntentId: 'intent-documento', archivoPath: 'documento-1', token: 'token-documento', contentType: 'application/pdf',
+  });
+  mocks.confirmDocument.mockReset().mockResolvedValue({
+    success: true, archivo_path: 'documento-1', caduca_el: '2026-10-10',
+  });
   mocks.preparePhoto.mockReset().mockImplementation(async (file: File) => file);
   URL.createObjectURL = vi.fn(() => `blob:preview-${Math.random()}`);
   URL.revokeObjectURL = vi.fn();
@@ -127,6 +135,58 @@ describe('EntregaAlumno: carga de varias fotos', () => {
     expect(mocks.confirm).not.toHaveBeenCalled();
     expect(screen.getByText(/5\/15 fotos listas/)).toBeVisible();
     expect(screen.queryByText('5 fotos guardadas en esta entrega')).not.toBeInTheDocument();
+  });
+
+  it('reintenta registrar una galería ya subida sin volver a preparar ni subir fotos', async () => {
+    mocks.confirm.mockResolvedValueOnce({ error: 'No se pudo registrar la galería.' });
+    const { container } = render(<EntregaAlumno ejercicioId="ejercicio" entregaExistente={{
+      archivo_nombre: 'foto anterior.jpg', archivo_path: 'foto-anterior', calificacion: null,
+    }} />);
+    fireEvent.change(mainInput(container), { target: { files: [photo('uno.jpg'), photo('dos.jpg')] } });
+    await screen.findByText(/2\/15 fotos listas/);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Actualizar Entrega' }));
+
+    expect(await screen.findByRole('button', { name: 'Reintentar guardar' })).toBeEnabled();
+    expect(screen.getByText(/2 fotos subidas; falta registrar la entrega/)).toBeVisible();
+    expect(screen.getByText('foto anterior.jpg')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Quitar foto 1' })).toBeDisabled();
+    expect(mocks.prepare).toHaveBeenCalledOnce();
+    expect(mocks.upload).toHaveBeenCalledTimes(2);
+    const firstConfirmation = mocks.confirm.mock.calls[0][0];
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Reintentar guardar' }));
+    expect(await screen.findByText('2 fotos guardadas en esta entrega')).toBeVisible();
+    expect(mocks.confirm).toHaveBeenCalledTimes(2);
+    expect(mocks.confirm.mock.calls[1][0]).toEqual(firstConfirmation);
+    expect(mocks.prepare).toHaveBeenCalledOnce();
+    expect(mocks.upload).toHaveBeenCalledTimes(2);
+    expect(screen.queryByRole('button', { name: 'Reintentar guardar' })).not.toBeInTheDocument();
+  });
+
+  it('reintenta guardar un PDF ya subido sin duplicar la carga y conserva el anterior hasta confirmar', async () => {
+    mocks.confirmDocument.mockResolvedValueOnce({ error: 'No se pudo registrar el PDF.' });
+    const { container } = render(<EntregaAlumno ejercicioId="ejercicio" entregaExistente={{
+      archivo_nombre: 'tarea anterior.pdf', archivo_path: 'documento-anterior', calificacion: null,
+    }} />);
+    fireEvent.change(mainInput(container), { target: { files: [new File(['pdf'], 'tarea nueva.pdf', { type: 'application/pdf' })] } });
+    expect(await screen.findByText('tarea nueva.pdf')).toBeVisible();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Actualizar Entrega' }));
+
+    expect(await screen.findByRole('button', { name: 'Reintentar guardar' })).toBeEnabled();
+    expect(screen.getByText('tarea anterior.pdf')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Quitar documento seleccionado' })).toBeDisabled();
+    expect(mocks.prepareDocument).toHaveBeenCalledOnce();
+    expect(mocks.upload).toHaveBeenCalledOnce();
+    const firstConfirmation = mocks.confirmDocument.mock.calls[0][0];
+
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Reintentar guardar' }));
+    await waitFor(() => expect(mocks.confirmDocument).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByText('tarea anterior.pdf')).not.toBeInTheDocument());
+    expect(screen.getByText('tarea nueva.pdf')).toBeVisible();
+    expect(mocks.confirmDocument.mock.calls[1][0]).toEqual(firstConfirmation);
+    expect(mocks.prepareDocument).toHaveBeenCalledOnce();
+    expect(mocks.upload).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('button', { name: 'Reintentar guardar' })).not.toBeInTheDocument();
   });
 
   it('identifica la foto que no se puede procesar sin reemplazar las demás', async () => {
