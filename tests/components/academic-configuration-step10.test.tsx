@@ -63,6 +63,19 @@ function baseConfiguration(): AcademicConfigurationDto {
   };
 }
 
+function schemeFixture(id: string, state: 'activo' | 'borrador', version: number, name: string): AcademicConfigurationDto['schemes'][number] {
+  return {
+    id, cycleId: ID.cycle, assignmentId: ID.assignment, periodId: ID.period,
+    name, scale: '0-10', passingGrade: 6, displayDecimals: 1,
+    roundingMode: 'half_up', missingRule: 'zero_on_close', missingValue: 0,
+    excusedRule: 'exclude', overduePendingAsZero: false, state, version, copiedFromId: null,
+    updatedAt: '2026-08-30T10:00:00.000Z', criteria: [{
+      id: `${id}-criterion`, schemeId: id, name: 'Examen', type: 'directo',
+      weight: 100, order: 1, active: true, updatedAt: '2026-08-30T10:00:00.000Z', subcriteria: [],
+    }],
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   window.localStorage.setItem('academic-criteria-tour-seen-v3', 'true');
@@ -221,9 +234,68 @@ describe('Paso 10: interfaz administrativa accesible', () => {
     render(<AcademicSchemesPage audience="teacher" />);
     expect(await screen.findByRole('heading', { name: 'Mis criterios de evaluación' })).toBeVisible();
     expect(await screen.findByLabelText('Mi materia y grupo')).toHaveTextContent('Matemáticas — Primero A');
+    expect(screen.getByRole('region', { name: 'Estado de los criterios de esta materia' })).toHaveTextContent('SIN CRITERIOS ACTIVOS');
     expect(screen.queryByLabelText('Nivel')).not.toBeInTheDocument();
     expect(screen.queryByText('Auditoría académica')).not.toBeInTheDocument();
     expect(actionMocks.audit).not.toHaveBeenCalled();
+  }, 20_000);
+
+  it('muestra la versión activa aunque exista un borrador y mantiene claro cuál se aplica', async () => {
+    const data = baseConfiguration();
+    const activeId = '10000000-0000-4000-8000-000000000020';
+    const draftId = '10000000-0000-4000-8000-000000000021';
+    data.schemes = [
+      schemeFixture(draftId, 'borrador', 3, 'Cambios propuestos'),
+      schemeFixture(activeId, 'activo', 2, 'Criterios vigentes'),
+    ];
+    actionMocks.load.mockResolvedValue({ ok: true, status: 'success', data });
+    const user = userEvent.setup();
+    render(<AcademicSchemesPage audience="teacher" />);
+
+    const status = await screen.findByRole('region', { name: 'Estado de los criterios de esta materia' });
+    expect(status).toHaveTextContent('CRITERIOS ACTIVOS');
+    expect(status).toHaveTextContent('Versión 2 guardada y en uso');
+    expect(status).toHaveTextContent('Hay cambios en borrador (versión 3)');
+    expect(screen.getByLabelText('Nombre')).toHaveValue('Criterios vigentes');
+    await user.click(screen.getByRole('button', { name: 'Editar criterios' }));
+    await waitFor(() => expect(screen.getByLabelText('Nombre')).toHaveValue('Cambios propuestos'));
+    expect(status).toHaveTextContent('CRITERIOS ACTIVOS');
+    expect(screen.getByText('Mientras editas este borrador, la versión activa 2 sigue aplicándose.')).toBeVisible();
+    expect(actionMocks.copy).not.toHaveBeenCalled();
+  }, 20_000);
+
+  it('actualiza el indicador al cambiar de materia', async () => {
+    const data = baseConfiguration();
+    const secondAssignment = '10000000-0000-4000-8000-000000000022';
+    data.assignments.push({
+      ...data.assignments[0], id: secondAssignment,
+      subjectId: '10000000-0000-4000-8000-000000000023', subjectName: 'Ciencias',
+    });
+    data.schemes = [schemeFixture(ID.scheme, 'activo', 1, 'Criterios de Matemáticas')];
+    actionMocks.load.mockResolvedValue({ ok: true, status: 'success', data });
+    window.localStorage.setItem('teacher-evaluation-assignment', ID.assignment);
+    const user = userEvent.setup();
+    render(<AcademicSchemesPage audience="teacher" />);
+
+    const status = await screen.findByRole('region', { name: 'Estado de los criterios de esta materia' });
+    expect(status).toHaveTextContent('CRITERIOS ACTIVOS');
+    await user.selectOptions(screen.getByLabelText('Mi materia y grupo'), secondAssignment);
+    expect(status).toHaveTextContent('SIN CRITERIOS ACTIVOS');
+    await user.selectOptions(screen.getByLabelText('Mi materia y grupo'), ID.assignment);
+    expect(status).toHaveTextContent('CRITERIOS ACTIVOS');
+  }, 20_000);
+
+  it('no anuncia criterios activos cuando el periodo de la escuela sigue en borrador', async () => {
+    const data = baseConfiguration();
+    data.periods[0].state = 'borrador';
+    data.schemes = [schemeFixture(ID.scheme, 'activo', 1, 'Esquema aún no aplicable')];
+    actionMocks.load.mockResolvedValue({ ok: true, status: 'success', data });
+    render(<AcademicSchemesPage audience="teacher" />);
+
+    const status = await screen.findByRole('region', { name: 'Estado de los criterios de esta materia' });
+    expect(status).toHaveTextContent('SIN CRITERIOS ACTIVOS');
+    expect(status).toHaveTextContent('Sin periodo activo');
+    expect(status).toHaveTextContent('Los criterios no se aplican hasta que la escuela active un periodo.');
   }, 20_000);
 
   it('guarda los ajustes de captura móvil por profesor y criterio', async () => {

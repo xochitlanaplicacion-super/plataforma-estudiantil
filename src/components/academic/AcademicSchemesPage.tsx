@@ -328,8 +328,8 @@ export function AcademicSchemesPage({ audience = 'administration' }: AcademicSch
       : preferredScheme?.periodId ?? result.data.periods.find((item) => item.cycleId === cycle && item.state === 'activo')?.id ?? result.data.periods.find((item) => item.cycleId === cycle)?.id ?? '';
     const schemesInScope = result.data.schemes.filter((item) => item.assignmentId === assignment?.id && item.periodId === period);
     const scheme = preferredScheme
-      ?? schemesInScope.find((item) => item.state === (teacherView ? 'borrador' : 'activo'))
-      ?? schemesInScope.find((item) => item.state === (teacherView ? 'activo' : 'borrador'));
+      ?? schemesInScope.find((item) => item.state === 'activo')
+      ?? schemesInScope.find((item) => item.state === 'borrador');
     setCycleId(cycle);
     if (assignment) {
       setLevelId(assignment.levelId); setCareerId(assignment.careerId);
@@ -352,6 +352,11 @@ export function AcademicSchemesPage({ audience = 'administration' }: AcademicSch
   const gradeAssignments = careerAssignments.filter((row) => !gradeId || row.gradeId === gradeId);
   const groupAssignments = gradeAssignments.filter((row) => !groupId || row.groupId === groupId);
   const availableSchemes = data?.schemes.filter((row) => row.assignmentId === assignmentId && row.periodId === periodId) ?? [];
+  const selectedPeriod = data?.periods.find((row) => row.id === periodId);
+  const appliedScheme = selectedPeriod?.state === 'activo'
+    ? availableSchemes.find((row) => row.state === 'activo')
+    : undefined;
+  const draftScheme = availableSchemes.find((row) => row.state === 'borrador');
   const selectedScheme = data?.schemes.find((row) => row.id === selectedSchemeId);
   const readOnly = Boolean(selectedScheme && selectedScheme.state !== 'borrador');
   const distribution = validateDistribution(selectedScheme?.criteria ?? []);
@@ -366,8 +371,8 @@ export function AcademicSchemesPage({ audience = 'administration' }: AcademicSch
       setGradeId(assignment.gradeId); setGroupId(assignment.groupId);
     }
     const schemesInScope = data?.schemes.filter((row) => row.assignmentId === id && row.periodId === periodId) ?? [];
-    const matching = schemesInScope.find((row) => row.state === (teacherView ? 'borrador' : 'activo'))
-      ?? schemesInScope.find((row) => row.state === (teacherView ? 'activo' : 'borrador'));
+    const matching = schemesInScope.find((row) => row.state === 'activo')
+      ?? schemesInScope.find((row) => row.state === 'borrador');
     if (matching) {
       setSelectedSchemeId(matching.id);
       setSchemeDraft(schemeForm(matching));
@@ -535,6 +540,14 @@ export function AcademicSchemesPage({ audience = 'administration' }: AcademicSch
                   <div className="space-y-2 sm:col-span-2"><Label htmlFor="scheme-assignment">Materia y profesor</Label><select id="scheme-assignment" className={fieldClassName} value={assignmentId} onChange={(event) => chooseAssignment(event.target.value)}><option value="">Selecciona asignación</option>{groupAssignments.map((row) => <option key={row.id} value={row.id}>{row.subjectName} — {row.teacherName}</option>)}</select></div>
                   </>}
                   <div className="space-y-2"><Label htmlFor="scheme-period">Periodo {teacherView ? 'actual de la escuela' : ''}</Label><select id="scheme-period" className={fieldClassName} disabled={teacherView} value={periodId} onChange={(event) => { const id = event.target.value; setPeriodId(id); setSelectedSchemeId(''); setSchemeDraft({ ...emptyScheme, cycleId, assignmentId, periodId: id }); }}><option value="">{teacherView ? 'Sin periodo activo' : 'Selecciona periodo'}</option>{data.periods.filter((row) => row.cycleId === cycleId && (!teacherView || row.state === 'activo')).map((period) => <option key={period.id} value={period.id}>{period.order}. {period.name}{teacherView ? '' : ` — ${period.state}`}</option>)}</select>{teacherView && !periodId ? <p className="text-sm text-amber-800">Pide al administrador que cree y active un periodo de evaluación antes de configurar criterios.</p> : null}</div>
+                  {assignmentId ? <section aria-label="Estado de los criterios de esta materia" className={`rounded-xl border-2 p-4 sm:col-span-2 lg:col-span-4 ${appliedScheme ? 'border-emerald-300 bg-emerald-50 text-emerald-950 dark:border-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-100' : 'border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-100'}`}>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {appliedScheme ? <Badge variant="outline" className="gap-1 border-emerald-600 bg-emerald-100 text-emerald-950 dark:border-emerald-400 dark:bg-emerald-950 dark:text-emerald-100"><CheckCircle2 className="size-4" aria-hidden="true" />CRITERIOS ACTIVOS</Badge> : <Badge variant="outline" className="border-amber-600 bg-amber-100 text-amber-950 dark:border-amber-400 dark:bg-amber-950 dark:text-amber-100">SIN CRITERIOS ACTIVOS</Badge>}
+                      <span className="text-sm font-semibold">{selectedPeriod ? `${selectedPeriod.name} · ${selectedPeriod.state === 'activo' ? 'periodo activo' : 'periodo no activo'}` : 'Sin periodo activo'}</span>
+                    </div>
+                    <p className="mt-2 text-sm">{appliedScheme ? `Versión ${appliedScheme.version} guardada y en uso: estos criterios ya se aplican al calificar esta materia.` : selectedPeriod?.state !== 'activo' ? 'Los criterios no se aplican hasta que la escuela active un periodo.' : draftScheme ? `Hay un borrador (versión ${draftScheme.version}), pero todavía no se usa para calificar. Pulsa “Guardar y aplicar” cuando esté completo.` : 'Todavía no hay criterios aplicados a esta materia. Usa “Definir criterios” para crearlos.'}</p>
+                    {appliedScheme && draftScheme ? <p className="mt-1 text-sm font-medium">Hay cambios en borrador (versión {draftScheme.version}) pendientes de aplicar. La versión activa sigue vigente.</p> : null}
+                  </section> : null}
                 </CardContent>
               </Card>
 
@@ -560,6 +573,7 @@ export function AcademicSchemesPage({ audience = 'administration' }: AcademicSch
                   {teacherView && selectedScheme.state === 'activo' ? <><p className="mt-1 text-sm">Los criterios actuales seguirán funcionando mientras haces cambios.</p><Button className="mt-3" disabled={feedback?.kind === 'saving'} onClick={() => void copyScheme()}><Copy />Editar criterios</Button></> : null}
                   {selectedScheme.state === 'borrador' ? <>
                     <p className="mt-1 text-sm">{teacherView ? 'Guarda los cambios de cada criterio. Cuando todos los porcentajes sumen 100%, pulsa “Guardar y aplicar” para que los alumnos y la libreta usen esta configuración.' : 'Guarda cada criterio y subcriterio que edites. Después pulsa el botón de abajo para usar el conjunto en las calificaciones.'}</p>
+                    {appliedScheme ? <p className="mt-1 text-sm font-medium">Mientras editas este borrador, la versión activa {appliedScheme.version} sigue aplicándose.</p> : null}
                     {!activationReady ? <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-destructive">{distribution.errors.map((error) => <li key={error}>{error}</li>)}</ul> : <p className="mt-2 text-sm text-primary">Los criterios guardados están listos para activarse.</p>}
                     {teacherView ? <Button className="mt-3" disabled={!activationReady || !schemeDraft.name.trim() || feedback?.kind === 'saving'} onClick={() => void saveScheme()}><CheckCircle2 />Guardar y aplicar</Button> : null}
                   </> : null}
