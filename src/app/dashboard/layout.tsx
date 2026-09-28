@@ -1,13 +1,13 @@
 
 import { redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
+import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 
-import { getEstadoPagoIA } from '@/lib/actions/pagos';
 import { AlumnoAIAssistant } from '@/components/shared/AlumnoAIAssistant';
 import { ProfesorAIAssistant } from '@/components/shared/ProfesorAIAssistant';
 import { AIAssistantWrapper } from '@/components/shared/AIAssistantWrapper';
-import { getTenantServiceState } from '@/lib/tenant/context';
+import { getTenantServiceState, isServiceExpired } from '@/lib/tenant/context';
 
 export default async function Layout({ children }: { children: React.ReactNode }) {
   const supabase = await createServerSupabaseClient();
@@ -29,14 +29,26 @@ export default async function Layout({ children }: { children: React.ReactNode }
   }
 
   const userName = `${profile.nombre} ${profile.apellidos}`.trim() || user.email || 'Usuario';
-  const pagoIA = profile.rol === 'encargado_filtro' ? false : await getEstadoPagoIA();
-  const { data: filterFeature } = ['superuser', 'admin', 'encargado_filtro'].includes(profile.rol)
-    ? await supabase.from('tenant_features').select('primary_filter_enabled').eq('tenant_id', profile.tenant_id).maybeSingle()
-    : { data: null };
-  const rawServiceState = ['profesor', 'encargado_filtro'].includes(profile.rol)
-    ? await getTenantServiceState(profile.tenant_id)
-    : null;
-  const serviceState = rawServiceState ? {
+  const assistantRole = profile.rol === 'alumno' || profile.rol === 'profesor';
+  const needsServiceState = ['alumno', 'profesor', 'encargado_filtro'].includes(profile.rol);
+  const needsFilterFeature = ['superuser', 'admin', 'encargado_filtro'].includes(profile.rol);
+  const [rawServiceState, filterFeatureResult, tenantResult] = await Promise.all([
+    needsServiceState ? getTenantServiceState(profile.tenant_id) : Promise.resolve(null),
+    needsFilterFeature
+      ? supabase.from('tenant_features').select('primary_filter_enabled').eq('tenant_id', profile.tenant_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    assistantRole && profile.tenant_id
+      ? createSupabaseAdminClient().from('tenants').select('estado').eq('id', profile.tenant_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  // El mismo estado del servicio alimenta la cuenta regresiva y el asistente.
+  // Se mantiene la comprobación de institución activa de getEstadoPagoIA(),
+  // pero en paralelo, sin repetir auth → perfil → tenant en serie.
+  const pagoIA = assistantRole
+    && tenantResult.data?.estado === 'activo'
+    && Boolean(rawServiceState?.ia_habilitada)
+    && !isServiceExpired(rawServiceState);
+  const serviceState = ['profesor', 'encargado_filtro'].includes(profile.rol) && rawServiceState ? {
     estado: rawServiceState.estado,
     fecha_inicio: rawServiceState.fecha_inicio,
     duracion_dias: rawServiceState.duracion_dias,
@@ -50,7 +62,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
         userName={userName}
         userId={user.id}
         userAvatar={profile.foto_perfil}
-        filterEnabled={Boolean(filterFeature?.primary_filter_enabled)}
+        filterEnabled={Boolean(filterFeatureResult.data?.primary_filter_enabled)}
         serviceState={serviceState}
       >
         {children}

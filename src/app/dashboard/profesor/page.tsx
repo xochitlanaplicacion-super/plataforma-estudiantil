@@ -113,7 +113,6 @@ import { useInstitucion } from '@/hooks/use-institucion';
 import SlideCanvasEditor, { parseSlideContent, serializeSlideContent } from '@/components/shared/slide-canvas-editor';
 import SlideViewer from '@/components/shared/slide-viewer';
 import { SLIDE_TEMPLATES } from '@/components/shared/slide-templates';
-import { exportSlidesToPptx } from '@/lib/export-pptx';
 import { ProfesorAIAssistant } from '@/components/shared/ProfesorAIAssistant';
 import { getEstadoPagoIA } from '@/lib/actions/pagos';
 import Image from "next/image";
@@ -1049,6 +1048,7 @@ export default function ProfesorDashboard() {
   const [activeSlideIndex, setActiveSlideIndex] = useState(0);
   const [presentationMode, setPresentationMode] = useState(false);
   const [slideDialogOpen, setSlideDialogOpen] = useState(false);
+  const [exportingSlides, setExportingSlides] = useState(false);
 
   const [resources, setResources] = useState<any[]>([]);
   const [isResourceDialogOpen, setIsResourceDialogOpen] = useState(false);
@@ -1330,19 +1330,29 @@ export default function ProfesorDashboard() {
 
   const fetchInitialData = async () => {
     setLoading(true);
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      setCurrentUserId(user.id);
-      const { data: profileData } = await supabase.from('profiles').select('nombre, apellidos').eq('id', user.id).single();
-      if (profileData) {
-        setCurrentUserName(`${profileData.nombre} ${profileData.apellidos}`.trim());
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        setCurrentUserId(user.id);
+        // Ninguna de estas lecturas depende de las otras; iniciarlas juntas
+        // evita bloquear las materias detrás de la consulta del nombre.
+        const [{ data: profileData }, { data: asignacionesData }, { data: agrupos }] = await Promise.all([
+          supabase.from('profiles').select('nombre, apellidos').eq('id', user.id).single(),
+          getMyAsignaciones(user.id),
+          getMisAgrupaciones(user.id),
+        ]);
+        if (profileData) {
+          setCurrentUserName(`${profileData.nombre} ${profileData.apellidos}`.trim());
+        }
+        if (asignacionesData) setAsignaciones(asignacionesData);
+        if (agrupos) setAgrupaciones(agrupos);
       }
-      const { data } = await getMyAsignaciones(user.id);
-      if (data) setAsignaciones(data);
-      const { data: agrupos } = await getMisAgrupaciones(user.id);
-      if (agrupos) setAgrupaciones(agrupos);
+    } catch (error) {
+      console.error('No se pudo cargar el inicio del profesor:', error);
+      toast({ title: 'No se pudieron cargar tus materias', description: 'Intenta actualizar la página.', variant: 'destructive' });
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => { 
@@ -2540,8 +2550,19 @@ export default function ProfesorDashboard() {
               </DialogTitle>
             </div>
             <div className="flex gap-3">
-              <Button variant="outline" className="rounded-xl font-bold bg-white/5 border-white/10 hover:bg-white/10 hover:text-white text-white shadow-sm h-11 px-4 gap-2" onClick={() => exportSlidesToPptx(slides, selectedTema?.titulo || 'Clase', inst?.logo_url)} disabled={slides.length === 0}>
-                <Download size={18} /> PPTX
+              <Button variant="outline" className="rounded-xl font-bold bg-white/5 border-white/10 hover:bg-white/10 hover:text-white text-white shadow-sm h-11 px-4 gap-2" onClick={async () => {
+                setExportingSlides(true);
+                try {
+                  const { exportSlidesToPptx } = await import('@/lib/export-pptx');
+                  await exportSlidesToPptx(slides, selectedTema?.titulo || 'Clase', inst?.logo_url);
+                } catch (error) {
+                  console.error('No se pudo exportar la presentación:', error);
+                  toast({ title: 'No se pudo exportar la presentación', variant: 'destructive' });
+                } finally {
+                  setExportingSlides(false);
+                }
+              }} disabled={slides.length === 0 || exportingSlides}>
+                {exportingSlides ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />} PPTX
               </Button>
               <Button variant="default" className="bg-blue-600 hover:bg-blue-700 rounded-xl font-black uppercase tracking-widest gap-2 shadow-lg h-11 px-6" onClick={() => setPresentationMode(true)} disabled={slides.length === 0}>
                 <Play size={18} fill="currentColor" /> Presentar

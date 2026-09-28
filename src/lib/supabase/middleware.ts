@@ -71,13 +71,12 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  const { data: platformAdmin } = await supabase
-    .from('platform_admins')
-    .select('user_id')
-    .eq('user_id', user.id)
-    .maybeSingle();
-
   if (pathname.startsWith('/platform')) {
+    const { data: platformAdmin } = await supabase
+      .from('platform_admins')
+      .select('user_id')
+      .eq('user_id', user.id)
+      .maybeSingle();
     if (!platformAdmin || !isPlatformHost) {
       const url = request.nextUrl.clone();
       url.pathname = platformAdmin ? '/dashboard/admin' : '/';
@@ -86,18 +85,24 @@ export async function updateSession(request: NextRequest) {
     return supabaseResponse;
   }
 
+  // Identity and profile are independent lookups. On a school domain the
+  // platform-admin check is unnecessary; it only guards the platform host.
+  const [{ data: platformAdmin }, { data: profile }] = await Promise.all([
+    isPlatformHost
+      ? supabase.from('platform_admins').select('user_id').eq('user_id', user.id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    supabase.from('profiles')
+      .select('tenant_id, rol, estatus, fecha_expiracion')
+      .eq('id', user.id)
+      .single(),
+  ]);
+
   // Una identidad global no hereda acceso a los datos de ninguna escuela.
   if (platformAdmin && isPlatformHost) {
     const url = request.nextUrl.clone();
     url.pathname = '/platform';
     return NextResponse.redirect(url);
   }
-
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('tenant_id, rol, estatus, fecha_expiracion')
-    .eq('id', user.id)
-    .single();
 
   // SI EL ESTATUS NO ES ACTIVO -> Redirigir a página de aviso institucional
   if (!profile || profile.estatus !== 'activo') {
@@ -106,8 +111,27 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  const { data: tenant } = await supabase.from('tenants')
-    .select('estado').eq('id', profile.tenant_id).single();
+  const checkService = profile.rol === 'profesor' || profile.rol === 'alumno';
+  const checkFilterFeature = profile.rol === 'encargado_filtro' || pathname.startsWith('/dashboard/filtro');
+  // All four checks depend on the profile, but not on one another. Running
+  // them together removes several network round trips from every navigation.
+  const [tenantResult, domainsResult, serviceResult, featureResult] = await Promise.all([
+    supabase.from('tenants').select('estado').eq('id', profile.tenant_id).single(),
+    isPlatformHost
+      ? Promise.resolve({ data: [] as { hostname: string }[] })
+      : supabase.from('tenant_domains').select('hostname')
+        .eq('tenant_id', profile.tenant_id).eq('estado', 'verificado'),
+    checkService
+      ? supabase.from('pago_de_servicios')
+        .select('estado, fecha_inicio, duracion_dias, bloquear_acceso_usuarios')
+        .eq('tenant_id', profile.tenant_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    checkService || checkFilterFeature
+      ? supabase.from('tenant_features').select('primary_filter_enabled, timezone')
+        .eq('tenant_id', profile.tenant_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+  const tenant = tenantResult.data;
   if (!tenant || tenant.estado !== 'activo') {
     const url = request.nextUrl.clone();
     url.pathname = '/expired';
@@ -115,8 +139,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  const { data: domains } = await supabase.from('tenant_domains')
-    .select('hostname').eq('tenant_id', profile.tenant_id).eq('estado', 'verificado');
+  const domains = domainsResult.data;
   const allowedHostnames = new Set((domains || []).map((domain) => normalizeHostname(domain.hostname)));
   const domainMatches = getHostnameCandidates(hostname).some((candidate) => allowedHostnames.has(candidate));
   if (!domainMatches && !isPlatformHost) {
@@ -137,14 +160,8 @@ export async function updateSession(request: NextRequest) {
   }
 
 
-  const [{ data: service }, { data: feature }] = await Promise.all([
-    supabase.from('pago_de_servicios')
-      .select('estado, fecha_inicio, duracion_dias, bloquear_acceso_usuarios')
-      .eq('tenant_id', profile.tenant_id).maybeSingle(),
-    supabase.from('tenant_features')
-      .select('primary_filter_enabled, timezone')
-      .eq('tenant_id', profile.tenant_id).maybeSingle(),
-  ]);
+  const service = serviceResult.data;
+  const feature = featureResult.data;
   const serviceEndsAt = service
     ? getPlatformServiceEndDate({ ...service, timezone: feature?.timezone || 'America/Mexico_City' })
     : null;

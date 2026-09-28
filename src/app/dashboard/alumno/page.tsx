@@ -64,10 +64,25 @@ export default async function AlumnoDashboard() {
 
   if (!user) redirect('/');
 
-  const [data, academicResults] = await Promise.all([
-    getAlumnoDashboardData(user.id),
+  // Contacto, avisos e institución no necesitan esperar el árbol académico.
+  // El material sólo depende del perfil y arranca apenas ese dato está listo.
+  const dataPromise = getAlumnoDashboardData(user.id);
+  const materialPromise = dataPromise.then((result) => {
+    const studentProfile = (result as any)?.profile;
+    const levelId = studentProfile?.carreras?.nivel_id;
+    return levelId
+      ? getMaterialPublicoPorNivel(levelId, studentProfile?.carrera_id)
+      : { data: [], error: null };
+  });
+  const [rawData, academicResults, contact, notificationsResult, inst, materialResult] = await Promise.all([
+    dataPromise,
     loadMyAcademicResultsAction(),
-  ]) as [any, Awaited<ReturnType<typeof loadMyAcademicResultsAction>>];
+    getDatosContactoFormateados(),
+    getNotificacionesAlumno(user.id),
+    getInstitucionConfig(),
+    materialPromise,
+  ]);
+  const data = rawData as any;
   const profile = data?.profile;
   const materias = data?.materiasAsignadas || [];
 
@@ -103,28 +118,13 @@ export default async function AlumnoDashboard() {
 
   const labelCompletados = "Completados";
 
-  const { telefono } = await getDatosContactoFormateados();
-  const rawNumber = telefono.replace(/\D/g, '');
-  
+  const rawNumber = contact.telefono.replace(/\D/g, '');
   const matricula = profile?.matricula || '(Sin Matrícula)';
   const preFilledText = encodeURIComponent(`Hola soy ${nombreCompleto} mi matrícula es ${matricula}: `);
   const whatsappUrl = `https://wa.me/${rawNumber.length === 10 ? '52' : ''}${rawNumber}?text=${preFilledText}`;
-
-  // Obtener material de apoyo público para el nivel del alumno
-  const nivelId = (profile?.carreras as any)?.nivel_id;
-  const carreraId = profile?.carrera_id;
-  
-  let materialesData: any[] = [];
-  if (nivelId) {
-    const { data } = await getMaterialPublicoPorNivel(nivelId, carreraId);
-    materialesData = data || [];
-  }
-
-  // Obtener última notificación de pagos
-  const { data: notifications } = await getNotificacionesAlumno(user.id);
+  const materialesData = materialResult.data || [];
+  const notifications = notificationsResult.data;
   const latestNotification = notifications && notifications.length > 0 ? notifications[0] : null;
-
-  const inst = await getInstitucionConfig();
 
   return (
     <div className="space-y-12 pb-16 w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

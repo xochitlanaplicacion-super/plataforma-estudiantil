@@ -68,6 +68,7 @@ import { useInstitucion } from '@/hooks/use-institucion';
 import { verificarMensajesClasePendientes } from '@/lib/actions/mensajes_clases';
 import { ServiceTimeRemaining } from '@/components/shared/ServiceTimeRemaining';
 import type { PlatformServiceSummary } from '@/lib/service-countdown';
+import { getActiveDashboardNavHref } from '@/lib/dashboard-navigation';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -81,6 +82,8 @@ interface DashboardLayoutProps {
 
 function SidebarNav({ activeMenus, pathname, hasUnreadClases }: { activeMenus: any[], pathname: string, hasUnreadClases: boolean }) {
   const { setOpenMobile, isMobile } = useSidebar();
+  const [prefetchHref, setPrefetchHref] = useState<string | null>(null);
+  const activeHref = getActiveDashboardNavHref(pathname, activeMenus);
 
   const handleLinkClick = () => {
     if (isMobile) {
@@ -95,7 +98,7 @@ function SidebarNav({ activeMenus, pathname, hasUnreadClases }: { activeMenus: a
           <SidebarGroupLabel className="text-[10px] uppercase tracking-[0.18em] font-extrabold text-sidebar-foreground/65 px-3 mb-2">{group.group}</SidebarGroupLabel>
           <SidebarMenu className="gap-1">
             {group.items.map((item: any) => {
-              const isActive = pathname === item.href || pathname.startsWith(`${item.href}/`);
+              const isActive = activeHref === item.href;
               return (
                 <SidebarMenuItem key={item.label}>
                   <SidebarMenuButton
@@ -109,7 +112,16 @@ function SidebarNav({ activeMenus, pathname, hasUnreadClases }: { activeMenus: a
                         : "text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-white/10"
                     )}
                   >
-                    <Link href={item.href} onClick={handleLinkClick} className="flex items-center gap-3 relative w-full">
+                    <Link
+                      href={item.href}
+                      aria-current={isActive ? 'page' : undefined}
+                      prefetch={prefetchHref === item.href ? null : false}
+                      onMouseEnter={() => setPrefetchHref(item.href)}
+                      onFocus={() => setPrefetchHref(item.href)}
+                      onTouchStart={() => setPrefetchHref(item.href)}
+                      onClick={handleLinkClick}
+                      className="flex items-center gap-3 relative w-full"
+                    >
                       <item.icon className={cn("h-5 w-5 shrink-0 transition-transform duration-200", isActive ? "text-sidebar-foreground scale-110 drop-shadow-sm" : "text-sidebar-foreground/75")} />
                       <span className="text-sm flex-1 font-medium tracking-tight">{item.label}</span>
                       {item.href.includes('mensajes-clases') && hasUnreadClases && (
@@ -328,7 +340,7 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
              </div>
           </header>
           <main className="flex-1 overflow-y-auto overflow-x-hidden p-6 md:p-10">
-            <div className={cn("max-w-full mx-auto animate-in fade-in slide-in-from-bottom-2", userRole === 'encargado_filtro' ? 'duration-150' : 'duration-700')}>
+            <div className="max-w-full mx-auto animate-in fade-in slide-in-from-bottom-2 duration-150">
               {serviceState && (userRole === 'profesor' || userRole === 'encargado_filtro') && (
                 <ServiceTimeRemaining service={serviceState} />
               )}

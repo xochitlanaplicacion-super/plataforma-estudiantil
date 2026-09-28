@@ -102,6 +102,24 @@ export async function getAlumnoDashboardData(userId: string) {
       };
     }
 
+    // No dependen del árbol materias → unidades → temas. Iniciarlas ahora
+    // permite que trabajen mientras se resuelve esa estructura.
+    const resultadosPromise = Promise.resolve(db
+      .from('resultados_ejercicios')
+      .select('ejercicio_id, calificacion, aciertos, total_preguntas, bloqueado')
+      .eq('tenant_id', tenantId)
+      .eq('alumno_id', userId));
+    const fechasPromise = Promise.resolve(db
+      .from('fechas_evaluacion')
+      .select('materia_id, fecha_evaluacion')
+      .eq('tenant_id', tenantId)
+      .eq('grupo_id', profile.grupo_id));
+    const videoProgressPromise = Promise.resolve(db
+      .from('video_progreso_alumno')
+      .select('*')
+      .eq('tenant_id', tenantId)
+      .eq('alumno_id', userId));
+
     // 2. MATERIAS ASIGNADAS AL GRUPO
     const { data: asignaciones, error: asigErr } = await db
       .from('asignaciones_profesor')
@@ -162,22 +180,32 @@ export async function getAlumnoDashboardData(userId: string) {
         if (temaIds.length > 0) {
           // Proyección autorizada del servidor: sólo vínculos del tenant y de
           // las asignaciones exactas del grupo del alumno autenticado.
-          const { data: visibleLinks, error: linksError } = await db
-            .from('vinculos_evaluacion_ejercicio')
-            .select('ejercicio_id, periodos_evaluacion!inner(estado)')
-            .eq('tenant_id', tenantId)
-            .in('asignacion_profesor_id', asignacionIds)
-            .eq('activo', true)
-            .neq('periodos_evaluacion.estado', 'borrador');
+          const [linksResult, resourcesResult, slidesResult] = await Promise.all([
+            db
+              .from('vinculos_evaluacion_ejercicio')
+              .select('ejercicio_id, periodos_evaluacion!inner(estado)')
+              .eq('tenant_id', tenantId)
+              .in('asignacion_profesor_id', asignacionIds)
+              .eq('activo', true)
+              .neq('periodos_evaluacion.estado', 'borrador'),
+            db
+              .from('resources')
+              .select('*')
+              .eq('tenant_id', tenantId)
+              .in('tema_id', temaIds),
+            db
+              .from('slides')
+              .select('*')
+              .eq('tenant_id', tenantId)
+              .in('tema_id', temaIds)
+              .order('orden'),
+          ]);
+          const { data: visibleLinks, error: linksError } = linksResult;
           if (linksError) throw linksError;
           const visibleExerciseIds = [...new Set((visibleLinks || []).map((link) => link.ejercicio_id))];
 
           // Obtener Recursos (Materiales)
-          const { data: recursosRaw } = await db
-            .from('resources')
-            .select('*')
-            .eq('tenant_id', tenantId)
-            .in('tema_id', temaIds);
+          const recursosRaw = resourcesResult.data;
 
           // Mapear campos de la BD (titulo, archivo_url, tipo) a los esperados por el frontend (nombre, url, tipo)
           const recursos = recursosRaw?.map(r => ({
@@ -212,13 +240,8 @@ export async function getAlumnoDashboardData(userId: string) {
           ejerciciosPublicados = ejercicios || [];
 
           // Obtener Presentaciones (Diapositivas)
-          const { data: slidesRaw } = await db
-            .from('slides')
-            .select('*')
-            .eq('tenant_id', tenantId)
-            .in('tema_id', temaIds)
-            .order('orden');
-          
+          const slidesRaw = slidesResult.data;
+
           const slides = slidesRaw || [];
 
           // Estructurar Árbol: Unidades -> Temas -> Recursos & Slides
@@ -235,11 +258,7 @@ export async function getAlumnoDashboardData(userId: string) {
       }
     }
 
-    const hechos = (await db
-      .from('resultados_ejercicios')
-      .select('ejercicio_id, calificacion, aciertos, total_preguntas, bloqueado')
-      .eq('tenant_id', tenantId)
-      .eq('alumno_id', userId)).data || [];
+    const hechos = (await resultadosPromise).data || [];
 
     const hechosMap = new Map(hechos.map(h => [h.ejercicio_id, h]));
 
@@ -268,11 +287,7 @@ export async function getAlumnoDashboardData(userId: string) {
     // Obtener fechas de evaluación del grupo del alumno
     let fechasEvaluacion: Record<string, string> = {};
     try {
-      const { data: fechasData } = await db
-        .from('fechas_evaluacion')
-        .select('materia_id, fecha_evaluacion')
-        .eq('tenant_id', tenantId)
-        .eq('grupo_id', profile.grupo_id);
+      const { data: fechasData } = await fechasPromise;
 
       if (fechasData) {
         // Buscar fecha global (materia_id = null)
@@ -293,11 +308,7 @@ export async function getAlumnoDashboardData(userId: string) {
     }
 
     // Obtener progreso de videos
-    const { data: videoProgressRaw } = await db
-      .from('video_progreso_alumno')
-      .select('*')
-      .eq('tenant_id', tenantId)
-      .eq('alumno_id', userId);
+    const { data: videoProgressRaw } = await videoProgressPromise;
     
     const videoProgress = videoProgressRaw || [];
 
