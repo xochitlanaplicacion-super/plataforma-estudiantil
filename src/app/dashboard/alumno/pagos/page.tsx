@@ -15,6 +15,7 @@ import {
   marcarNotificacionLeida, marcarTodasLeidas, getAbonosConcepto
 } from '@/lib/actions/pagos';
 import { getHorariosFormateados } from '@/lib/actions/horarios';
+import { InstitutionLoading } from '@/components/shared/InstitutionLoading';
 
 // ─── Círculo de Progreso ─────────────────────────────────────────────────────
 function CircularProgress({ pct }: { pct: number }) {
@@ -164,6 +165,10 @@ export default function MisPagosPage() {
     general: 'bg-gray-50 border-gray-200 text-gray-700',
   };
 
+  if (loading) {
+    return <InstitutionLoading title="Preparando información de pagos" />;
+  }
+
   return (
     <div className="space-y-8 max-w-3xl mx-auto">
 
@@ -216,9 +221,7 @@ export default function MisPagosPage() {
         </Card>
       )}
 
-      {loading ? (
-        <div className="flex justify-center py-16"><Loader2 className="animate-spin text-primary" size={32} /></div>
-      ) : pagos.length === 0 ? (
+      {pagos.length === 0 ? (
         <Card className="text-center py-16">
           <CardContent>
             <CreditCard size={40} className="mx-auto text-muted-foreground mb-4" />

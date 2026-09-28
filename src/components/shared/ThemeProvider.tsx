@@ -2,6 +2,14 @@
 
 import { useInstitucion } from "@/hooks/use-institucion";
 import { useEffect, useState } from "react";
+import { InstitutionLoadingView } from "@/components/shared/InstitutionLoading";
+
+type InitialBranding = {
+  hasTenant: boolean;
+  logo_url?: string;
+  nombre_corto?: string;
+  siglas?: string;
+};
 
 // Convierte un color HEX (ej. #8B2332 o #06b895) a HSL string 'H S% L%'
 function hexToHsl(hex: string, lightnessModifier?: number): string {
@@ -48,7 +56,7 @@ function getLuminance(hex: string): number {
   return 0.299 * r + 0.587 * g + 0.114 * b;
 }
 
-export function ThemeProvider({ children }: { children: React.ReactNode }) {
+export function ThemeProvider({ children, initialBranding }: { children: React.ReactNode; initialBranding?: InitialBranding }) {
   const { config, loading } = useInstitucion();
   const [mounted, setMounted] = useState(false);
 
@@ -93,8 +101,16 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     }
   }, [config.color_primario, config.color_secundario]);
 
-  // Si está montando o cargando datos iniciales sin caché previo, mostramos un loader neutral elegante
+  // El servidor ya conoce el tenant del hostname: úsalo en la primera carga.
+  // Sin tenant identificado se conserva el loader neutral, sin atribuir otra escuela.
   if (!mounted || (loading && !config.logo_url && config.color_primario === '#0f172a')) {
+    if (initialBranding?.hasTenant) {
+      return (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-background">
+          <InstitutionLoadingView title="Cargando plataforma" config={initialBranding} loading={false} />
+        </div>
+      );
+    }
     return (
       <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-slate-950 text-white select-none animate-in fade-in duration-200">
         <div className="flex flex-col items-center gap-5 p-8 rounded-3xl bg-slate-900/80 backdrop-blur-2xl border border-slate-800 shadow-2xl">

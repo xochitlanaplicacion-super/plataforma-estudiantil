@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { ClipboardList, Loader2, RefreshCw } from 'lucide-react';
+import { ClipboardList, RefreshCw } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { getEntregasGlobalesProfesor } from '@/lib/actions/entregas';
 import { PanelEntregasGlobales } from '@/components/shared/PanelEntregasGlobales';
+import { InstitutionLoading } from '@/components/shared/InstitutionLoading';
 
 export default function EntregasActividadesPage() {
   const supabase = createClient();
@@ -39,12 +40,7 @@ export default function EntregasActividadesPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20 gap-3 text-slate-400">
-        <Loader2 className="w-6 h-6 animate-spin" />
-        <span className="text-sm font-bold uppercase tracking-widest">Cargando entregas...</span>
-      </div>
-    );
+    return <InstitutionLoading title="Preparando entregas" />;
   }
 
   return (

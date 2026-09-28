@@ -110,6 +110,7 @@ import "mobile-drag-drop/default.css";
 import { ActivityPreview } from '@/components/shared/ActivityPreview';
 import { PanelEntregasProfesor } from '@/components/shared/PanelEntregasProfesor';
 import { useInstitucion } from '@/hooks/use-institucion';
+import { InstitutionLoadingView } from '@/components/shared/InstitutionLoading';
 import SlideCanvasEditor, { parseSlideContent, serializeSlideContent } from '@/components/shared/slide-canvas-editor';
 import SlideViewer from '@/components/shared/slide-viewer';
 import { SLIDE_TEMPLATES } from '@/components/shared/slide-templates';
@@ -1020,7 +1021,7 @@ export default function ProfesorDashboard() {
   const { toast } = useToast();
   const supabase = createClient();
 
-  const { config: inst } = useInstitucion();
+  const { config: inst, loading: institutionLoading } = useInstitucion();
   const [loading, setLoading] = useState(true);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserName, setCurrentUserName] = useState<string | null>(null);
@@ -1896,6 +1897,10 @@ export default function ProfesorDashboard() {
       console.error('Error inesperado al borrar imagen:', err.message);
     }
   };
+
+  if (loading) {
+    return <InstitutionLoadingView title="Preparando espacio docente" config={inst} loading={institutionLoading} />;
+  }
 
   if (presentationMode && slides.length > 0) {
     const slide = slides[activeSlideIndex];

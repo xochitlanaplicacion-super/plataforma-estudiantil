@@ -45,7 +45,12 @@ export default async function RootLayout({
       </head>
       <body className="font-body antialiased">
         <FirebaseClientProvider>
-          <ThemeProvider>
+          <ThemeProvider initialBranding={{
+            hasTenant: Boolean(config.tenant_id),
+            logo_url: config.logo_url,
+            nombre_corto: config.nombre_corto,
+            siglas: config.siglas,
+          }}>
             {children}
             <Toaster />
           </ThemeProvider>

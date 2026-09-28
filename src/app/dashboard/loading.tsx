@@ -1,4 +1,17 @@
+'use client';
+
+import { usePathname } from 'next/navigation';
+import { InstitutionLoading } from '@/components/shared/InstitutionLoading';
+
 export default function DashboardLoading() {
+  const pathname = usePathname();
+  if (pathname.startsWith('/dashboard/profesor')) {
+    return <InstitutionLoading title="Preparando espacio docente" />;
+  }
+  if (pathname.startsWith('/dashboard/alumno')) {
+    return <InstitutionLoading title="Preparando espacio del alumno" />;
+  }
+
   return (
     <div className="mx-auto w-full max-w-7xl space-y-6 px-4 py-6 sm:px-6" role="status" aria-live="polite">
       <p className="text-sm font-medium text-muted-foreground">Cargando sección…</p>

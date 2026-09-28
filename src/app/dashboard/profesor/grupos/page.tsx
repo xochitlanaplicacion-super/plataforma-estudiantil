@@ -37,6 +37,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useInstitucion } from '@/hooks/use-institucion';
+import { InstitutionLoadingView } from '@/components/shared/InstitutionLoading';
 import ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
@@ -45,7 +46,7 @@ import autoTable from 'jspdf-autotable';
 export default function GruposProfesorPage() {
   const { toast } = useToast();
   const supabase = createClient();
-  const { config: inst } = useInstitucion();
+  const { config: inst, loading: institutionLoading } = useInstitucion();
   const [loading, setLoading] = useState(true);
   const [loadingAlumnos, setLoadingAlumnos] = useState(false);
   const [asignaciones, setAsignaciones] = useState<any[]>([]);
@@ -345,12 +346,7 @@ export default function GruposProfesorPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <Loader2 className="h-12 w-12 animate-spin text-primary opacity-20" />
-        <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">Cargando información...</p>
-      </div>
-    );
+    return <InstitutionLoadingView title="Preparando listas de grupos" config={inst} loading={institutionLoading} />;
   }
 
   return (

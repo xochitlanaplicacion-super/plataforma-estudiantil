@@ -3,16 +3,17 @@
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { FileText, Download, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { FileText, Download, CheckCircle2, XCircle } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 import { generarDictamenPDF } from '@/lib/utils/pdfGenerator';
 import { useInstitucion } from '@/hooks/use-institucion';
 import { useToast } from '@/hooks/use-toast';
+import { InstitutionLoadingView } from '@/components/shared/InstitutionLoading';
 
 export default function AcreditacionAlumnoPage() {
   const supabase = createClient();
   const { toast } = useToast();
-  const { config: inst } = useInstitucion();
+  const { config: inst, loading: institutionLoading } = useInstitucion();
   
   const [loading, setLoading] = useState(true);
   const [acreditacion, setAcreditacion] = useState<any>(null);
@@ -90,11 +91,7 @@ export default function AcreditacionAlumnoPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex justify-center items-center h-[50vh]">
-        <Loader2 className="h-10 w-10 animate-spin text-primary" />
-      </div>
-    );
+    return <InstitutionLoadingView title="Preparando acreditación" config={inst} loading={institutionLoading} />;
   }
 
   return (
