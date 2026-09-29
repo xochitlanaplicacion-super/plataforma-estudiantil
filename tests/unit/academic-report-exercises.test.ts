@@ -19,6 +19,85 @@ const report = {
 } as unknown as AcademicReport;
 
 describe('academic report exercise evidence', () => {
+  const activityOnly = {
+    ...report,
+    concepts: [],
+    students: [{
+      ...report.students[0],
+      conceptGrades: {},
+      results: { 'criterion:root': {
+        grade: null, state: 'sin_capturar', participationPoints: 0, participationCount: 0,
+        expectedCount: 0, gradedCount: 0, missingCount: 0, complete: false,
+        missingConceptNames: [], calculationPolicy: 'direct_grade',
+      } },
+    }],
+  } as AcademicReport;
+
+  const delivered = {
+    id: 'delivered', criterionKey: 'criterion:root', name: 'Entrega virtual',
+    type: 'descriptiveSubmission', createdAt: '2026-09-15T12:00:00Z',
+    activityDate: '2026-09-15', dueAt: '2026-09-25T12:00:00Z',
+  };
+  const deliveredGrade = {
+    exerciseId: 'delivered', enrollmentId: 'student', grade: 8,
+    observation: 'Revisado', updatedAt: '2026-09-16T12:00:00Z',
+  };
+
+  it('calculates an activity-only criterion from delivered platform tasks, without manual concepts', () => {
+    const pending = { ...delivered, id: 'pending', name: 'Aún en plazo',
+      dueAt: '2026-09-30T12:00:00Z' };
+    const result = mergeReportExercises(activityOnly, [delivered, pending], [deliveredGrade]);
+    expect(result.students[0].results['criterion:root']).toMatchObject({
+      grade: 8, expectedCount: 2, gradedCount: 1, missingCount: 1,
+      complete: false, state: 'pendiente', calculationPolicy: 'explicit_grades_only_with_coverage',
+    });
+    expect(result.students[0].conceptGrades.delivered.grade).toBe(8);
+    expect(result.students[0].conceptGrades.pending).toBeUndefined();
+  });
+
+  it('calculates linked platform work under a hybrid criterion with no manual grade', () => {
+    const hybrid = { ...activityOnly,
+      criteria: [{ ...activityOnly.criteria[0], type: 'hibrido' }] } as AcademicReport;
+    const result = mergeReportExercises(hybrid, [delivered], [deliveredGrade]);
+    expect(result.students[0].results['criterion:root']).toMatchObject({
+      grade: 8, expectedCount: 1, gradedCount: 1, complete: true,
+    });
+  });
+
+  it('includes only expired missing tasks as virtual zeros in an activity-only average', () => {
+    const withZeros = { ...activityOnly,
+      calculationPolicy: { pendingCountsAsZero: true } } as AcademicReport;
+    const expired = { ...delivered, id: 'expired', name: 'Vencida' };
+    const inTime = { ...delivered, id: 'in-time', name: 'En plazo',
+      dueAt: '2026-09-30T12:00:00Z' };
+    const result = mergeReportExercises(withZeros, [delivered, expired, inTime], [deliveredGrade]);
+    expect(result.students[0].results['criterion:root']).toMatchObject({
+      grade: 4, expectedCount: 3, gradedCount: 1, missingCount: 2, complete: false,
+    });
+    expect(result.students[0].conceptGrades.expired).toBeUndefined();
+    expect(result.students[0].conceptGrades['in-time']).toBeUndefined();
+  });
+
+  it('does not double-count a linked activity repeated in the input', () => {
+    const result = mergeReportExercises(activityOnly,
+      [delivered, { ...delivered }], [deliveredGrade, { ...deliveredGrade }]);
+    expect(result.concepts.map((item) => item.id)).toEqual(['delivered']);
+    expect(result.students[0].results['criterion:root']).toMatchObject({
+      grade: 8, expectedCount: 1, gradedCount: 1, complete: true,
+    });
+  });
+
+  it('preserves an existing direct grade rather than replacing it with an activity average', () => {
+    const withDirectGrade = { ...activityOnly, students: [{
+      ...activityOnly.students[0], results: { 'criterion:root': {
+        ...activityOnly.students[0].results['criterion:root'], grade: 6,
+        state: 'calificado', complete: true,
+      } },
+    }] } as AcademicReport;
+    const result = mergeReportExercises(withDirectGrade, [delivered], [deliveredGrade]);
+    expect(result.students[0].results['criterion:root'].grade).toBe(6);
+  });
+
   it('includes automatic and descriptive marks in detailed evidence and criterion average', () => {
     const result = mergeReportExercises(report, [{ id: 'exercise', criterionKey: 'criterion:root',
       name: 'Actividad descriptiva', type: 'descriptiveSubmission',

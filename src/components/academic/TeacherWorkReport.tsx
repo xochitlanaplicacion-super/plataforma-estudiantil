@@ -6,6 +6,7 @@ import { saveAs } from 'file-saver';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { loadTeacherWorkReportAction, type TeacherWorkReport as WorkData } from '@/lib/actions/reportes-academicos';
+import { summarizeStudentPlatformWork } from '@/lib/academic/teacher-work-summary';
 import { Button } from '@/components/ui/button';
 
 export function TeacherWorkReport({ assignmentId, assignmentLabel }: {
@@ -21,8 +22,9 @@ export function TeacherWorkReport({ assignmentId, assignmentLabel }: {
     const date = row.completedAt?.slice(0, 10) ?? '';
     return (!from || date >= from) && (!to || date <= to);
   }), [data, from, to]);
+  const studentSummary = useMemo(() => summarizeStudentPlatformWork(rows), [rows]);
   const table = rows.map((row) => [row.studentName, row.exerciseTitle,
-    row.exerciseType === 'automaticExercise' ? 'Ejercicio automático' : 'Tarea descriptiva',
+    row.exerciseType === 'actividad_descriptiva' ? 'Tarea descriptiva' : 'Ejercicio automático',
     row.completedAt ? new Date(row.completedAt).toLocaleString('es-MX') : '—',
     row.state ?? '—', row.grade ?? '—', row.hits ?? '—', row.totalQuestions ?? '—',
     row.attempts ?? '—', row.weighted ? 'Sí' : 'No', row.photoCount]);
@@ -49,6 +51,24 @@ export function TeacherWorkReport({ assignmentId, assignmentLabel }: {
     doc.setFontSize(9); doc.text(assignmentLabel.slice(0, 110), 14, 23);
     autoTable(doc, { startY: 28, head: [headings], body: table.map((row) => row.map(String)),
       styles: { fontSize: 6 }, headStyles: { fillColor: [25, 42, 61] } });
+    doc.addPage();
+    doc.setFontSize(15); doc.text('Promedio informativo de trabajos de plataforma', 14, 16);
+    doc.setFontSize(9);
+    doc.text(assignmentLabel.slice(0, 110), 14, 23);
+    doc.text(`Fechas: ${from || 'inicio'} a ${to || 'hoy'}. Solo actividades calificadas; incluye las que no tienen peso.`, 14, 29);
+    doc.text('No es el promedio oficial del periodo. Las entregas pendientes no cuentan como cero en este resumen.', 14, 35);
+    autoTable(doc, {
+      startY: 40,
+      head: [['Alumno', 'Resultados registrados', 'Calificados', 'Promedio simple / 10']],
+      body: studentSummary.map((student) => [
+        student.studentName,
+        String(student.resultCount),
+        String(student.gradedCount),
+        student.averageGrade === null ? '—' : student.averageGrade.toFixed(2),
+      ]),
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [25, 42, 61] },
+    });
     doc.save('trabajos-entregados.pdf');
   }
   return <section className="space-y-4 rounded-2xl border bg-card p-5" aria-label="Reporte de trabajos entregados">
@@ -65,6 +85,19 @@ export function TeacherWorkReport({ assignmentId, assignmentLabel }: {
     </div>
     {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
     {data && <p className="text-sm font-semibold">{rows.length} resultados en el rango elegido. Las notas sin peso se muestran, pero no modifican el promedio.</p>}
+    {data && <div className="space-y-2">
+      <h3 className="text-base font-bold">Promedio informativo de trabajos de plataforma por alumno</h3>
+      <p className="text-xs text-muted-foreground">Promedio simple de actividades calificadas en el rango elegido, incluidas las que no tienen peso. No es la calificación oficial del periodo; las entregas aún sin calificar no se cuentan como cero aquí.</p>
+      <div className="max-h-80 overflow-auto rounded-lg border"><table className="w-full text-left text-xs">
+        <thead className="sticky top-0 bg-slate-100"><tr><th className="p-2">Alumno</th><th className="p-2">Resultados</th><th className="p-2">Calificados</th><th className="p-2">Promedio / 10</th></tr></thead>
+        <tbody>{studentSummary.map((student) => <tr className="border-t" key={student.enrollmentId}>
+          <td className="p-2">{student.studentName}</td>
+          <td className="p-2">{student.resultCount}</td>
+          <td className="p-2">{student.gradedCount}</td>
+          <td className="p-2">{student.averageGrade === null ? '—' : student.averageGrade.toFixed(2)}</td>
+        </tr>)}</tbody>
+      </table></div>
+    </div>}
     {data && <div className="max-h-80 overflow-auto rounded-lg border"><table className="w-full text-left text-xs"><thead className="sticky top-0 bg-slate-100"><tr>{headings.slice(0, 6).map((label) => <th className="p-2" key={label}>{label}</th>)}</tr></thead>
       <tbody>{table.slice(0, 100).map((row, index) => <tr className="border-t" key={index}>{row.slice(0, 6).map((value, cell) => <td className="p-2" key={cell}>{String(value)}</td>)}</tr>)}</tbody></table></div>}
   </section>;

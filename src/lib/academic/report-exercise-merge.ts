@@ -27,10 +27,14 @@ export function mergeReportExercises(
 ): AcademicReport {
   const criteria = new Set(report.criteria.map((item) => item.key));
   const existing = new Set(report.concepts.map((item) => item.id));
-  const globalExercises = exercises.filter((exercise) =>
-    criteria.has(exercise.criterionKey)
-    && !existing.has(exercise.id),
-  );
+  const seenExercises = new Set<string>();
+  const globalExercises = exercises.filter((exercise) => {
+    if (!criteria.has(exercise.criterionKey)
+      || existing.has(exercise.id)
+      || seenExercises.has(exercise.id)) return false;
+    seenExercises.add(exercise.id);
+    return true;
+  });
   if (!globalExercises.length) return report;
   const additions = globalExercises.filter((exercise) =>
     exercise.activityDate >= report.range.from && exercise.activityDate <= report.range.to);
@@ -62,7 +66,10 @@ export function mergeReportExercises(
       const evidence = globalExercises.filter((item) => item.criterionKey === criterion.key);
       if (!evidence.length) continue;
       const previous = results[criterion.key];
-      if (previous?.calculationPolicy === 'direct_grade') continue;
+      // With no manual concepts, the database reports an empty "direct_grade"
+      // placeholder even for a linked platform activity (including hybrid
+      // criteria). Preserve a real direct grade, not the empty placeholder.
+      if (previous?.calculationPolicy === 'direct_grade' && previous.grade !== null) continue;
       const values = evidence.map((item) => {
         const real = exerciseGrades[item.id]?.grade;
         if (typeof real === 'number') return real;
