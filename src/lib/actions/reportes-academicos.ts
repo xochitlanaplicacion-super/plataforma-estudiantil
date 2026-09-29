@@ -177,14 +177,17 @@ async function includeLinkedExercises(
   for (let index = 0; index < links.length; index += 100) {
     const group = links.slice(index, index + 100);
     const { data: tasks, error: taskError } = await supabase.from('ejercicios')
-      .select('id, titulo, fecha_entrega, publicado, visible')
+      .select('id, titulo, fecha_entrega')
       .eq('tenant_id', report.tenant.id)
       .in('id', group.map((link) => link.ejercicio_id));
     if (taskError) throw taskError;
     const byId = new Map((tasks ?? []).map((task) => [task.id, task]));
     for (const link of group) {
       const task = byId.get(link.ejercicio_id);
-      if (!task || task.publicado === false || task.visible === false) continue;
+      // A linked exercise remains academic evidence even when an older
+      // exercise row has `publicado = false` (or its display flag changes).
+      // Student access and grading are authorized by the active link.
+      if (!task) continue;
       const createdAt = link.created_at;
       exercises.push({
         id: task.id,

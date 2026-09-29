@@ -9,6 +9,10 @@ const dashboard = readFileSync(
   new URL('../../src/components/academic/AcademicReportsDashboard.tsx', import.meta.url),
   'utf8',
 );
+const reportAction = readFileSync(
+  new URL('../../src/lib/actions/reportes-academicos.ts', import.meta.url),
+  'utf8',
+);
 
 describe('teacher academic report contract', () => {
   it('authorizes reports by authenticated teacher and assignment ownership', () => {
@@ -32,5 +36,12 @@ describe('teacher academic report contract', () => {
     expect(dashboard).toContain("addWorksheet('Evidencias detalladas'");
     expect(dashboard).toContain('HISTORIAL DE ASISTENCIA');
     expect(dashboard).toContain('EVIDENCIA POR CRITERIOS');
+  });
+
+  it('keeps graded linked exercises in reports even if their publication flag changed', () => {
+    expect(reportAction).toContain(".eq('activo', true)");
+    expect(reportAction).toContain(".in('vinculo_evaluacion_id'");
+    expect(reportAction).not.toContain('task.publicado === false');
+    expect(reportAction).not.toContain('task.visible === false');
   });
 });
