@@ -332,10 +332,10 @@ export async function addFilterStudents(input: { groupId: string; names: string[
     if (!group) throw new Error('Grupo no encontrado en esta institución.');
     const unique = [...new Set(input.names.map((name) => name.trim()).filter((name) => name.length >= 2))];
     if (!unique.length || unique.length > 1000) throw new Error('Incluye entre 1 y 1000 alumnos por carga.');
-    const { data, error } = await context.admin.from('filter_students').upsert(unique.map((fullName) => ({ tenant_id: context.tenantId, group_id: group.id, full_name: fullName, normalized_name: normalizeFilterName(fullName), active: true, created_by: context.user.id, updated_by: context.user.id, updated_at: new Date().toISOString() })), { onConflict: 'tenant_id,group_id,normalized_name' }).select('id');
+    const { data, error } = await context.admin.from('filter_students').upsert(unique.map((fullName) => ({ tenant_id: context.tenantId, group_id: group.id, full_name: fullName, normalized_name: normalizeFilterName(fullName), active: true, created_by: context.user.id, updated_by: context.user.id, updated_at: new Date().toISOString() })), { onConflict: 'tenant_id,group_id,normalized_name' }).select('id,full_name,group_id');
     if (error) throw error;
     await audit(context, 'students.imported', 'student', undefined, { groupId: group.id, count: data?.length || 0 });
-    revalidatePath('/dashboard/filtro/alumnos'); return { success: true, count: data?.length || 0 };
+    revalidatePath('/dashboard/filtro/alumnos'); return { success: true, count: data?.length || 0, students: data || [] };
   } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'No se pudieron cargar alumnos.' }; }
 }
 

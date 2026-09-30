@@ -187,7 +187,7 @@ export function FilterEarlyDepartureWizard({ initialData, initialClock }: { init
   const addStudent = async () => {
     const result = await addFilterStudents({ groupId: newGroup, names: [newName] });
     if (!result.success) return toast({ variant: 'destructive', title: 'No se agregó el alumno', description: result.error });
-    const search = await searchFilterStudents(newName); if (search.success && search.data[0]) chooseStudent(search.data[0]);
+    if (result.students?.[0]) chooseStudent(result.students[0]);
     setAddOpen(false); setNewName(''); toast({ title: 'Alumno agregado al padrón' }); router.refresh();
   };
 
