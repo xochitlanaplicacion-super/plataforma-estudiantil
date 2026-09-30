@@ -87,7 +87,8 @@ describe('Control de Filtro multitenant', () => {
     expect(actions).toContain(".select('require_verified_guardian_contact')");
     expect(actions).toContain(".eq('tenant_id', context.tenantId)");
     expect(actions).toContain('guardian_contact_id: guardian?.id || null');
-    expect(actions).toContain('entryPayload.verified_guardian_contact_required = requireVerifiedGuardianContact');
+    expect(actions).toContain('sharedPayload.verified_guardian_contact_required = requireVerifiedGuardianContact');
+    expect(actions).toContain('guardianByStudent.get(student.id)');
     expect(alerts).toContain('Exigir contacto oficial verificado');
     expect(wizard).toContain('Autorización manual permitida por el plantel');
   });

@@ -14,6 +14,7 @@ export type EarlyDepartureDraft = {
   updatedAt: string;
   values: Record<string, string | boolean>;
   student: Record<string, unknown> | null;
+  students?: Array<Record<string, unknown>>;
   identificationEvidence: PersistedFile | null;
   pickupPersonPhoto: PersistedFile | null;
   finalHandoverPhoto: PersistedFile | null;
@@ -28,6 +29,7 @@ export type ExtraordinaryHandoffDraft = {
   updatedAt: string;
   values: Record<string, string | boolean>;
   student: Record<string, unknown> | null;
+  students?: Array<Record<string, unknown>>;
   files: Record<string, PersistedFile | null>;
 };
 
@@ -46,6 +48,7 @@ export type LateEntryDraft = {
   status: 'draft' | 'queued';
   updatedAt: string;
   student: Record<string, unknown> | null;
+  students?: Array<Record<string, unknown>>;
   values: {
     studentQuery: string;
     reason: string;

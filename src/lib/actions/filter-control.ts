@@ -1,7 +1,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { requireTenantSession } from '@/lib/tenant/context';
 import { FILTER_REASONS, normalizeFilterName } from '@/lib/filter-control';
 
@@ -16,6 +16,8 @@ const EXTRAORDINARY_RELATIONSHIPS = ['familiar', 'persona_confianza', 'transport
 const EXTRAORDINARY_ID_TYPES = ['ine', 'pasaporte', 'licencia', 'cedula', 'institucional', 'otro'] as const;
 const EXTRAORDINARY_AUTH_METHODS = ['llamada', 'videollamada', 'whatsapp', 'correo', 'documento', 'presencial'] as const;
 const EXTRAORDINARY_STATUSES = ['entregado', 'rechazado', 'cancelado'] as const;
+const FILTER_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+type FilterEntryTable = 'filter_late_entries' | 'filter_early_departures' | 'filter_extraordinary_handoffs';
 
 function isMissingSchemaColumn(error: { code?: string; message?: string } | null) {
   return Boolean(error && ['42703', 'PGRST204'].includes(String(error.code)));
@@ -23,6 +25,100 @@ function isMissingSchemaColumn(error: { code?: string; message?: string } | null
 
 function isMissingSchemaRoutine(error: { code?: string; message?: string } | null) {
   return Boolean(error && ['42883', 'PGRST202'].includes(String(error.code)));
+}
+
+function batchStudentIds(formData: FormData) {
+  const raw = formData.get('studentIds');
+  let ids: unknown;
+  if (raw === null) ids = [String(formData.get('studentId') || '')];
+  else {
+    try { ids = JSON.parse(String(raw)); }
+    catch { throw new Error('La lista de alumnos no es válida.'); }
+  }
+  if (!Array.isArray(ids) || ids.length < 1 || ids.length > 5 ||
+      !ids.every((id) => typeof id === 'string' && FILTER_UUID.test(id)) ||
+      new Set(ids).size !== ids.length) {
+    throw new Error('Selecciona de uno a cinco alumnos distintos.');
+  }
+  const legacyId = String(formData.get('studentId') || '');
+  if (legacyId && !ids.includes(legacyId)) throw new Error('La selección de alumnos no coincide con el borrador.');
+  return ids as string[];
+}
+
+function childRequestId(groupRequestId: string, studentId: string, count: number) {
+  if (count === 1) return groupRequestId;
+  const hash = createHash('sha256').update(`${groupRequestId}:${studentId}`).digest('hex');
+  return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-5${hash.slice(13, 16)}-a${hash.slice(17, 20)}-${hash.slice(20, 32)}`;
+}
+
+function normalizedGuardianPhone(value?: string | null) {
+  const digits = String(value || '').replace(/\D/g, '');
+  return digits.length === 12 && digits.startsWith('52') ? digits.slice(2) : digits;
+}
+
+async function activeStudentSnapshots(context: Awaited<ReturnType<typeof requireTenantSession>>, studentIds: string[]) {
+  const { data: students, error: studentsError } = await context.admin.from('filter_students')
+    .select('id,full_name,group_id').eq('tenant_id', context.tenantId).eq('active', true).in('id', studentIds);
+  if (studentsError) throw studentsError;
+  if ((students || []).length !== studentIds.length) throw new Error('Algún alumno no existe o ya no está activo en esta institución.');
+  const groupIds = [...new Set((students || []).map((student) => student.group_id))];
+  const { data: groups, error: groupsError } = await context.admin.from('filter_groups')
+    .select('id,level_id,grade_name,group_name').eq('tenant_id', context.tenantId).in('id', groupIds);
+  if (groupsError) throw groupsError;
+  const levelIds = [...new Set((groups || []).map((group) => group.level_id))];
+  const { data: levels, error: levelsError } = await context.admin.from('filter_levels')
+    .select('id,name').eq('tenant_id', context.tenantId).in('id', levelIds);
+  if (levelsError) throw levelsError;
+  const byStudent = new Map((students || []).map((student) => [student.id, student]));
+  const byGroup = new Map((groups || []).map((group) => [group.id, group]));
+  const byLevel = new Map((levels || []).map((level) => [level.id, level]));
+  return studentIds.map((studentId) => {
+    const student = byStudent.get(studentId)!;
+    const group = byGroup.get(student.group_id);
+    const level = group && byLevel.get(group.level_id);
+    if (!group || !level) throw new Error('No se encontró el grado, grupo o nivel actual de un alumno.');
+    return { student, group, level };
+  });
+}
+
+async function existingFilterBatch(context: Awaited<ReturnType<typeof requireTenantSession>>, table: FilterEntryTable, groupEventId: string, studentIds: string[]) {
+  const query = await context.admin.from(table).select('id,student_id').eq('tenant_id', context.tenantId).eq('group_event_id', groupEventId);
+  if (query.error && isMissingSchemaColumn(query.error)) {
+    if (studentIds.length > 1) throw new Error('La captura de grupos aún no está disponible. Aplica la migración de Control de Filtro.');
+    const legacy = await context.admin.from(table).select('id,student_id').eq('tenant_id', context.tenantId).eq('client_request_id', groupEventId).maybeSingle();
+    if (legacy.error) throw legacy.error;
+    return { rows: legacy.data ? [legacy.data] : [], groupColumnAvailable: false };
+  }
+  if (query.error) throw query.error;
+  let rows = query.data || [];
+  if (!rows.length && studentIds.length === 1) {
+    const legacy = await context.admin.from(table).select('id,student_id')
+      .eq('tenant_id', context.tenantId).eq('client_request_id', groupEventId).maybeSingle();
+    if (legacy.error) throw legacy.error;
+    if (legacy.data) rows = [legacy.data];
+  }
+  if (rows.length && (rows.length !== studentIds.length || rows.some((row) => !studentIds.includes(row.student_id)))) {
+    throw new Error('Este borrador ya se guardó con otra selección de alumnos. Inicia uno nuevo.');
+  }
+  return { rows, groupColumnAvailable: true };
+}
+
+async function auditFilterBatch(context: Awaited<ReturnType<typeof requireTenantSession>>, action: string, entityType: string, rows: Array<{ id: string; student_id: string }>, groupEventId: string, details: Record<string, unknown> = {}) {
+  for (const row of rows) {
+    const { data: previous, error } = await context.admin.from('filter_audit_log').select('id')
+      .eq('tenant_id', context.tenantId).eq('action', action).eq('entity_id', row.id).limit(1).maybeSingle();
+    if (error) throw error;
+    if (!previous) await audit(context, action, entityType, row.id, { ...details, studentId: row.student_id, groupEventId, clientRequestId: groupEventId });
+  }
+  if (rows.length > 1) {
+    const groupAction = action.replace(/\.created$/, '.group_created');
+    const { data: previous, error } = await context.admin.from('filter_audit_log').select('id')
+      .eq('tenant_id', context.tenantId).eq('action', groupAction).eq('entity_id', groupEventId).limit(1).maybeSingle();
+    if (error) throw error;
+    if (!previous) await audit(context, groupAction, 'filter_group_event', groupEventId, {
+      ...details, groupEventId, studentIds: rows.map((row) => row.student_id), count: rows.length,
+    });
+  }
 }
 
 async function requireFilterAccess() {
@@ -187,6 +283,19 @@ export async function reviewFamilyRegistration(input: { registrationId: string; 
   } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'No se pudo revisar la solicitud.' }; }
 }
 
+async function completeFilterReportGroups(context: Awaited<ReturnType<typeof requireTenantSession>>, table: 'filter_early_departures' | 'filter_extraordinary_handoffs', initialRows: any[]) {
+  const groupIds = [...new Set(initialRows.map((row) => row.group_event_id).filter((id): id is string => typeof id === 'string'))];
+  if (!groupIds.length) return initialRows;
+  const byId = new Map(initialRows.map((row) => [row.id, row]));
+  for (let offset = 0; offset < groupIds.length; offset += 100) {
+    const { data, error } = await context.admin.from(table).select('*')
+      .eq('tenant_id', context.tenantId).in('group_event_id', groupIds.slice(offset, offset + 100));
+    if (error) throw error;
+    for (const row of data || []) byId.set(row.id, row);
+  }
+  return [...byId.values()].sort((a, b) => String(b.registered_at).localeCompare(String(a.registered_at)));
+}
+
 export async function getFilterReportsData() {
   const context = await requireFilterAccess();
   const [{ data: early }, { data: extraordinary }, { data: institution }] = await Promise.all([
@@ -195,7 +304,11 @@ export async function getFilterReportsData() {
     context.admin.from('configuracion_sistema').select('nombre_completo,nombre_corto,logo_url,color_primario,direccion,telefono_contacto,correo_contacto')
       .eq('tenant_id', context.tenantId).maybeSingle(),
   ]);
-  return { tenantId: context.tenantId, early: early || [], extraordinary: extraordinary || [], institution: institution || {}, actorName: `${context.profile.nombre} ${context.profile.apellidos}`.trim() };
+  const [completeEarly, completeExtraordinary] = await Promise.all([
+    completeFilterReportGroups(context, 'filter_early_departures', early || []),
+    completeFilterReportGroups(context, 'filter_extraordinary_handoffs', extraordinary || []),
+  ]);
+  return { tenantId: context.tenantId, early: completeEarly, extraordinary: completeExtraordinary, institution: institution || {}, actorName: `${context.profile.nombre} ${context.profile.apellidos}`.trim() };
 }
 
 export async function upsertFilterStructure(input: { levelName: string; gradeName: string; groupName: string }) {
@@ -325,16 +438,13 @@ export async function createLateEntry(formData: FormData) {
   try {
     const context = await requireFilterAccess();
     const clientRequestId = String(formData.get('clientRequestId') || '');
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clientRequestId)) throw new Error('El identificador local no es válido. Recarga la pantalla.');
-    const { data: previousAudit } = await context.admin.from('filter_audit_log').select('entity_id').eq('tenant_id', context.tenantId).eq('action', 'late_entry.created').contains('details', { clientRequestId }).order('created_at', { ascending: false }).limit(1).maybeSingle();
-    if (previousAudit?.entity_id) return { success: true, duplicate: true, id: previousAudit.entity_id };
-    const previousRequest = await context.admin.from('filter_late_entries').select('id').eq('tenant_id', context.tenantId).eq('client_request_id', clientRequestId).maybeSingle();
-    const supportsRequestId = !previousRequest.error;
-    if (previousRequest.data) {
-      await audit(context, 'late_entry.created', 'late_entry', previousRequest.data.id, { clientRequestId, recoveredFromIdempotentRetry: true });
-      return { success: true, duplicate: true, id: previousRequest.data.id };
+    if (!FILTER_UUID.test(clientRequestId)) throw new Error('El identificador local no es válido. Recarga la pantalla.');
+    const studentIds = batchStudentIds(formData);
+    const previous = await existingFilterBatch(context, 'filter_late_entries', clientRequestId, studentIds);
+    if (previous.rows.length) {
+      await auditFilterBatch(context, 'late_entry.created', 'late_entry', previous.rows, clientRequestId, { recoveredFromIdempotentRetry: true });
+      return { success: true, duplicate: true, id: previous.rows[0].id, groupEventId: clientRequestId, count: previous.rows.length };
     }
-    const studentId = String(formData.get('studentId') || '');
     const automaticTime = String(formData.get('automaticTime') || 'true') === 'true';
     const { data: feature } = await context.admin.from('tenant_features').select('timezone').eq('tenant_id', context.tenantId).single();
     const arrivedAt = automaticTime ? new Date().toISOString() : tenantLocalDateTimeToIso(String(formData.get('arrivedAt') || ''), feature?.timezone || 'America/Mexico_City');
@@ -345,27 +455,30 @@ export async function createLateEntry(formData: FormData) {
     const { data: staff } = await context.admin.from('filter_staff_profiles').select('is_general').eq('tenant_id', context.tenantId).eq('user_id', context.user.id).maybeSingle();
     const actorName = `${context.profile.nombre} ${context.profile.apellidos}`.trim();
     const reporterName = staff?.is_general ? reporterInput : actorName;
-    if (!studentId || !arrivedAt || reporterName.length < 2) throw new Error('Alumno, hora y nombre de quien registra son obligatorios.');
-    const { data: student } = await context.admin.from('filter_students').select('id').eq('tenant_id', context.tenantId).eq('id', studentId).single();
-    if (!student) throw new Error('Alumno no encontrado.');
-    const baseEntry = { tenant_id: context.tenantId, student_id: studentId, arrived_at: arrivedAt, reason_code: reasonCode, reason_detail: reasonDetail || null, evidence_path: null, registered_by_user_id: context.user.id, reporter_name: reporterName };
-    let insertResult = await context.admin.from('filter_late_entries').insert(supportsRequestId ? { ...baseEntry, client_request_id: clientRequestId } : baseEntry).select('id').single();
-    if (insertResult.error && ['42703', 'PGRST204'].includes(insertResult.error.code || '')) insertResult = await context.admin.from('filter_late_entries').insert(baseEntry).select('id').single();
-    const { data: entry, error } = insertResult;
+    if (!arrivedAt || reporterName.length < 2) throw new Error('Hora y nombre de quien registra son obligatorios.');
+    const students = await activeStudentSnapshots(context, studentIds);
+    const entries = students.map(({ student }) => ({
+      tenant_id: context.tenantId, student_id: student.id, arrived_at: arrivedAt,
+      reason_code: reasonCode, reason_detail: reasonDetail || null, evidence_path: null,
+      registered_by_user_id: context.user.id, reporter_name: reporterName,
+      client_request_id: childRequestId(clientRequestId, student.id, studentIds.length),
+      ...(previous.groupColumnAvailable ? { group_event_id: clientRequestId } : {}),
+    }));
+    const { data: inserted, error } = await context.admin.from('filter_late_entries').insert(entries).select('id,student_id');
     if (error) {
       if (error.code === '23505') {
-        const { data: duplicate } = await context.admin.from('filter_late_entries').select('id').eq('tenant_id', context.tenantId).eq('client_request_id', clientRequestId).single();
-        if (duplicate) {
-          const { data: duplicateAudit } = await context.admin.from('filter_audit_log').select('id').eq('tenant_id', context.tenantId).eq('action', 'late_entry.created').eq('entity_id', duplicate.id).maybeSingle();
-          if (!duplicateAudit) await audit(context, 'late_entry.created', 'late_entry', duplicate.id, { clientRequestId, recoveredFromIdempotentRetry: true });
-          return { success: true, duplicate: true, id: duplicate.id };
+        const duplicate = await existingFilterBatch(context, 'filter_late_entries', clientRequestId, studentIds);
+        if (duplicate.rows.length) {
+          await auditFilterBatch(context, 'late_entry.created', 'late_entry', duplicate.rows, clientRequestId, { recoveredFromIdempotentRetry: true });
+          return { success: true, duplicate: true, id: duplicate.rows[0].id, groupEventId: clientRequestId, count: duplicate.rows.length };
         }
       }
       throw error;
     }
+    if (!inserted || inserted.length !== studentIds.length) throw new Error('No se pudo confirmar el registro de todos los alumnos.');
     await context.admin.from('filter_reporters').upsert({ tenant_id: context.tenantId, name: reporterName, normalized_name: normalizeFilterName(reporterName), last_used_at: new Date().toISOString(), created_by: context.user.id }, { onConflict: 'tenant_id,normalized_name' });
-    await audit(context, 'late_entry.created', 'late_entry', entry.id, { clientRequestId, studentId, reporterName, reasonCode });
-    revalidatePath('/dashboard/filtro/retardos'); return { success: true };
+    await auditFilterBatch(context, 'late_entry.created', 'late_entry', inserted, clientRequestId, { reporterName, reasonCode });
+    revalidatePath('/dashboard/filtro/retardos'); return { success: true, id: inserted[0].id, groupEventId: clientRequestId, count: inserted.length };
   } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'No se pudo guardar el retardo.' }; }
 }
 
@@ -393,28 +506,16 @@ export async function createEarlyDeparture(formData: FormData) {
   try {
     const context = await requireFilterAccess();
     const clientRequestId = String(formData.get('clientRequestId') || '');
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clientRequestId)) {
+    if (!FILTER_UUID.test(clientRequestId)) {
       throw new Error('El identificador del borrador no es válido. Reinicia el proceso.');
     }
-    const { data: previous } = await context.admin.from('filter_early_departures').select('id')
-      .eq('tenant_id', context.tenantId).eq('client_request_id', clientRequestId).maybeSingle();
-    if (previous) {
-      const { data: previousAudit } = await context.admin.from('filter_audit_log').select('id')
-        .eq('tenant_id', context.tenantId).eq('action', 'early_departure.created').eq('entity_id', previous.id).maybeSingle();
-      if (!previousAudit) await audit(context, 'early_departure.created', 'early_departure', previous.id, { recoveredFromIdempotentRetry: true });
-      return { success: true, duplicate: true, id: previous.id };
+    const studentIds = batchStudentIds(formData);
+    const previous = await existingFilterBatch(context, 'filter_early_departures', clientRequestId, studentIds);
+    if (previous.rows.length) {
+      await auditFilterBatch(context, 'early_departure.created', 'early_departure', previous.rows, clientRequestId, { recoveredFromIdempotentRetry: true });
+      return { success: true, duplicate: true, id: previous.rows[0].id, groupEventId: clientRequestId, count: previous.rows.length };
     }
-
-    const studentId = String(formData.get('studentId') || '');
-    const { data: student, error: studentError } = await context.admin.from('filter_students')
-      .select('id,full_name,group_id').eq('tenant_id', context.tenantId).eq('id', studentId).eq('active', true).single();
-    if (studentError || !student) throw new Error('El alumno no existe o ya no está activo en esta institución.');
-    const { data: group, error: groupError } = await context.admin.from('filter_groups')
-      .select('id,level_id,grade_name,group_name').eq('tenant_id', context.tenantId).eq('id', student.group_id).single();
-    if (groupError || !group) throw new Error('No se encontró el grado y grupo actual del alumno.');
-    const { data: level, error: levelError } = await context.admin.from('filter_levels')
-      .select('name').eq('tenant_id', context.tenantId).eq('id', group.level_id).single();
-    if (levelError || !level) throw new Error('No se encontró el nivel actual del alumno.');
+    const students = await activeStudentSnapshots(context, studentIds);
 
     const relationship = String(formData.get('relationship') || '') as typeof EARLY_RELATIONSHIPS[number];
     const notificationMethod = String(formData.get('notificationMethod') || '') as typeof EARLY_NOTIFICATION_METHODS[number];
@@ -434,12 +535,15 @@ export async function createEarlyDeparture(formData: FormData) {
     const departedAt = automaticTime ? new Date().toISOString() : tenantLocalDateTimeToIso(String(formData.get('departedAt') || ''), feature?.timezone || 'America/Mexico_City');
     const actorName = `${context.profile.nombre} ${context.profile.apellidos}`.trim();
     const reporterName = actorName;
+    const pickupPersonName = requiredFormText(formData, 'pickupPersonName', 'El nombre de quien retira', 220);
+    const notifiedStaffName = requiredFormText(formData, 'notifiedStaffName', 'El nombre del personal notificado', 220);
+    const deliveringTeacherName = requiredFormText(formData, 'deliveringTeacherName', 'El docente que entrega', 220);
 
     const identificationFile = validatedUpload(formData, 'identificationEvidence', 'La identificación presentada', EVIDENCE_MIME_TYPES);
     const pickupPhoto = validatedUpload(formData, 'pickupPersonPhoto', 'La foto de la persona que retira', IMAGE_MIME_TYPES);
     const handoverPhoto = validatedUpload(formData, 'finalHandoverPhoto', 'La foto final del adulto y el alumno', IMAGE_MIME_TYPES);
     const pickupSignature = validatedUpload(formData, 'pickupSignature', 'La firma de la persona que retira', ['image/png']);
-    const basePath = `${context.tenantId}/salidas/${clientRequestId}`;
+    const basePath = `${context.tenantId}/salidas/${clientRequestId}/${randomUUID()}`;
     const uploads = [
       { file: identificationFile, path: `${basePath}/identificacion.${extensionForFile(identificationFile)}` },
       { file: pickupPhoto, path: `${basePath}/persona.${extensionForFile(pickupPhoto)}` },
@@ -448,7 +552,7 @@ export async function createEarlyDeparture(formData: FormData) {
     ];
     const uploadedPaths: string[] = [];
     for (const upload of uploads) {
-      const { error } = await context.admin.storage.from('filtro-evidencias').upload(upload.path, upload.file, { upsert: true, contentType: upload.file.type });
+      const { error } = await context.admin.storage.from('filtro-evidencias').upload(upload.path, upload.file, { upsert: false, contentType: upload.file.type });
       if (error) {
         if (uploadedPaths.length) await context.admin.storage.from('filtro-evidencias').remove(uploadedPaths);
         throw new Error(`No se pudo guardar ${upload.file.name}: ${error.message}`);
@@ -456,58 +560,62 @@ export async function createEarlyDeparture(formData: FormData) {
       uploadedPaths.push(upload.path);
     }
 
-    const { data: entry, error } = await context.admin.from('filter_early_departures').insert({
+    const sharedEntry = {
       tenant_id: context.tenantId,
-      client_request_id: clientRequestId,
-      student_id: student.id,
-      student_name: student.full_name,
-      level_name: level.name,
-      grade_name: group.grade_name,
-      group_name: group.group_name,
       departed_at: departedAt,
-      pickup_person_name: requiredFormText(formData, 'pickupPersonName', 'El nombre de quien retira', 220),
+      pickup_person_name: pickupPersonName,
       relationship,
       relationship_other: relationshipOther,
       identification_evidence_path: uploads[0].path,
       pickup_person_photo_path: uploads[1].path,
       notified_party: notifiedParty,
-      notified_staff_name: requiredFormText(formData, 'notifiedStaffName', 'El nombre del personal notificado', 220),
+      notified_staff_name: notifiedStaffName,
       notification_method: notificationMethod,
       notification_method_other: notificationMethodOther,
       departure_reason: departureReason,
       departure_reason_other: departureReasonOther,
       description: String(formData.get('description') || '').trim().slice(0, 4000) || null,
-      delivering_teacher_name: requiredFormText(formData, 'deliveringTeacherName', 'El docente que entrega', 220),
+      delivering_teacher_name: deliveringTeacherName,
       registered_by_user_id: context.user.id,
       reporter_name: reporterName,
       final_handover_photo_path: uploads[2].path,
       pickup_signature_path: uploads[3].path,
       identity_and_notification_confirmed: true,
-    }).select('id').single();
+    };
+    const entries = students.map(({ student, group, level }) => ({
+      ...sharedEntry,
+      client_request_id: childRequestId(clientRequestId, student.id, studentIds.length),
+      ...(previous.groupColumnAvailable ? { group_event_id: clientRequestId } : {}),
+      student_id: student.id, student_name: student.full_name, level_name: level.name,
+      grade_name: group.grade_name, group_name: group.group_name,
+    }));
+    const { data: inserted, error } = await context.admin.from('filter_early_departures').insert(entries).select('id,student_id');
     if (error) {
       if (error.code === '23505') {
-        const { data: duplicate } = await context.admin.from('filter_early_departures').select('id')
-          .eq('tenant_id', context.tenantId).eq('client_request_id', clientRequestId).single();
-        if (duplicate) {
-          const { data: duplicateAudit } = await context.admin.from('filter_audit_log').select('id')
-            .eq('tenant_id', context.tenantId).eq('action', 'early_departure.created').eq('entity_id', duplicate.id).maybeSingle();
-          if (!duplicateAudit) await audit(context, 'early_departure.created', 'early_departure', duplicate.id, { recoveredFromIdempotentRetry: true });
-          return { success: true, duplicate: true, id: duplicate.id };
+        let duplicate: Awaited<ReturnType<typeof existingFilterBatch>>;
+        try { duplicate = await existingFilterBatch(context, 'filter_early_departures', clientRequestId, studentIds); }
+        catch (duplicateError) {
+          await context.admin.storage.from('filtro-evidencias').remove(uploads.map((upload) => upload.path));
+          throw duplicateError;
+        }
+        if (duplicate.rows.length) {
+          await context.admin.storage.from('filtro-evidencias').remove(uploads.map((upload) => upload.path));
+          await auditFilterBatch(context, 'early_departure.created', 'early_departure', duplicate.rows, clientRequestId, { recoveredFromIdempotentRetry: true });
+          return { success: true, duplicate: true, id: duplicate.rows[0].id, groupEventId: clientRequestId, count: duplicate.rows.length };
         }
       }
       await context.admin.storage.from('filtro-evidencias').remove(uploads.map((upload) => upload.path));
       throw error;
     }
+    if (!inserted || inserted.length !== studentIds.length) throw new Error('No se pudo confirmar la salida de todos los alumnos.');
     await context.admin.from('filter_reporters').upsert({
       tenant_id: context.tenantId, name: reporterName, normalized_name: normalizeFilterName(reporterName),
       last_used_at: new Date().toISOString(), created_by: context.user.id,
     }, { onConflict: 'tenant_id,normalized_name' });
-    await audit(context, 'early_departure.created', 'early_departure', entry.id, {
-      studentId: student.id, reporterName, relationship, notificationMethod, departureReason,
-      academicSnapshot: { level: level.name, grade: group.grade_name, group: group.group_name },
-    });
-    revalidatePath('/dashboard/filtro/salidas');
-    return { success: true, duplicate: false, id: entry.id };
+    await auditFilterBatch(context, 'early_departure.created', 'early_departure', inserted, clientRequestId,
+      { reporterName, relationship, notificationMethod, departureReason });
+    revalidatePath('/dashboard/filtro/salidas'); revalidatePath('/dashboard/filtro/reportes');
+    return { success: true, duplicate: false, id: inserted[0].id, groupEventId: clientRequestId, count: inserted.length };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'No se pudo guardar la salida anticipada.' };
   }
@@ -526,21 +634,17 @@ export async function createExtraordinaryHandoff(formData: FormData) {
   try {
     const context = await requireFilterAccess();
     const clientRequestId = String(formData.get('clientRequestId') || '');
-    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clientRequestId)) throw new Error('El identificador del borrador no es válido.');
-    const { data: previous } = await context.admin.from('filter_extraordinary_handoffs').select('id').eq('tenant_id', context.tenantId).eq('client_request_id', clientRequestId).maybeSingle();
-    if (previous) {
-      const { data: previousAudit } = await context.admin.from('filter_audit_log').select('id').eq('tenant_id', context.tenantId).eq('action', 'extraordinary_handoff.created').eq('entity_id', previous.id).maybeSingle();
-      if (!previousAudit) await audit(context, 'extraordinary_handoff.created', 'extraordinary_handoff', previous.id, { clientRequestId, recoveredFromIdempotentRetry: true });
-      return { success: true, duplicate: true, id: previous.id };
+    if (!FILTER_UUID.test(clientRequestId)) throw new Error('El identificador del borrador no es válido.');
+    const studentIds = batchStudentIds(formData);
+    const previous = await existingFilterBatch(context, 'filter_extraordinary_handoffs', clientRequestId, studentIds);
+    if (previous.rows.length) {
+      await auditFilterBatch(context, 'extraordinary_handoff.created', 'extraordinary_handoff', previous.rows, clientRequestId, { recoveredFromIdempotentRetry: true });
+      return { success: true, duplicate: true, id: previous.rows[0].id, groupEventId: clientRequestId, count: previous.rows.length };
     }
-
-    const studentId = String(formData.get('studentId') || '');
-    const { data: student } = await context.admin.from('filter_students').select('id,full_name,group_id').eq('tenant_id', context.tenantId).eq('id', studentId).eq('active', true).single();
-    if (!student) throw new Error('El alumno no existe o no está activo en esta institución.');
-    const { data: group } = await context.admin.from('filter_groups').select('id,level_id,grade_name,group_name').eq('tenant_id', context.tenantId).eq('id', student.group_id).single();
-    if (!group) throw new Error('No se encontró el grupo actual del alumno.');
-    const { data: level } = await context.admin.from('filter_levels').select('name').eq('tenant_id', context.tenantId).eq('id', group.level_id).single();
-    if (!level) throw new Error('No se encontró el nivel actual del alumno.');
+    if (studentIds.length > 1 && String(formData.get('sameGuardianConfirmed')) !== 'true') {
+      throw new Error('Confirma que la autorización del mismo adulto aplica a todos los alumnos seleccionados.');
+    }
+    const students = await activeStudentSnapshots(context, studentIds);
     const { data: handoffPolicy, error: handoffPolicyError } = await context.admin
       .from('filter_alert_settings')
       .select('require_verified_guardian_contact')
@@ -549,15 +653,56 @@ export async function createExtraordinaryHandoff(formData: FormData) {
     if (handoffPolicyError && !isMissingSchemaColumn(handoffPolicyError)) throw new Error('No se pudo comprobar la política institucional de entregas.');
     const verifiedGuardianPolicyAvailable = !handoffPolicyError;
     const requireVerifiedGuardianContact = handoffPolicy?.require_verified_guardian_contact !== false;
-    const guardianContactId = String(formData.get('guardianContactId') || '');
-    let guardian: { id: string; full_name: string; relationship: string; phone: string | null; email: string | null } | null = null;
-    if (guardianContactId) {
-      const { data } = await context.admin.from('filter_guardian_contacts').select('id,full_name,relationship,phone,email')
-        .eq('tenant_id', context.tenantId).eq('student_id', student.id).eq('id', guardianContactId).eq('active', true).eq('verification_status', 'verified').maybeSingle();
-      guardian = data;
-      if (!guardian) throw new Error('El contacto seleccionado no es un contacto verificado de este alumno e institución.');
-    } else if (requireVerifiedGuardianContact) {
-      throw new Error('Selecciona un contacto oficial verificado del alumno.');
+    const guardianContactIdsRaw = formData.get('guardianContactIds');
+    let guardianContactIds: Record<string, string> = {};
+    if (guardianContactIdsRaw !== null) {
+      try {
+        const parsed: unknown = JSON.parse(String(guardianContactIdsRaw));
+        if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed) ||
+            Object.entries(parsed).some(([studentId, contactId]) => !studentIds.includes(studentId) || typeof contactId !== 'string' || !FILTER_UUID.test(contactId))) {
+          throw new Error('Los contactos no corresponden a los alumnos seleccionados.');
+        }
+        guardianContactIds = parsed as Record<string, string>;
+      } catch {
+        throw new Error('La selección de contactos oficiales no es válida.');
+      }
+    } else if (studentIds.length === 1 && formData.get('guardianContactId')) {
+      guardianContactIds[studentIds[0]] = String(formData.get('guardianContactId'));
+    }
+    const selectedContactIds = Object.values(guardianContactIds);
+    if (selectedContactIds.length > 0 && selectedContactIds.length !== studentIds.length) {
+      throw new Error('Selecciona el mismo adulto autorizado para todos los alumnos del trámite.');
+    }
+    if (requireVerifiedGuardianContact && selectedContactIds.length !== studentIds.length) {
+      throw new Error('Selecciona un contacto oficial verificado para cada alumno.');
+    }
+    const { data: guardianRows, error: guardianError } = selectedContactIds.length
+      ? await context.admin.from('filter_guardian_contacts').select('id,student_id,full_name,relationship,phone,email')
+        .eq('tenant_id', context.tenantId).eq('active', true).eq('verification_status', 'verified').in('id', selectedContactIds)
+      : { data: [], error: null };
+    if (guardianError) throw guardianError;
+    const guardianByStudent = new Map((guardianRows || []).map((contact) => [contact.student_id, contact]));
+    if (selectedContactIds.length && (guardianRows || []).length !== studentIds.length) {
+      throw new Error('Falta un contacto oficial activo y verificado para uno de los alumnos.');
+    }
+    for (const studentId of studentIds) {
+      if (selectedContactIds.length && guardianByStudent.get(studentId)?.id !== guardianContactIds[studentId]) {
+        throw new Error('Cada contacto oficial debe pertenecer al alumno correspondiente.');
+      }
+    }
+    const guardians = studentIds.map((studentId) => guardianByStudent.get(studentId) || null);
+    if (guardians.length > 1 && guardians[0]) {
+      const commonName = normalizeFilterName(guardians[0].full_name);
+      const anchorPhone = normalizedGuardianPhone(guardians[0].phone);
+      const anchorEmail = guardians[0].email?.trim().toLowerCase() || '';
+      if (!guardians.every((guardian) => {
+        if (!guardian || normalizeFilterName(guardian.full_name) !== commonName) return false;
+        const samePhone = Boolean(anchorPhone && normalizedGuardianPhone(guardian.phone) === anchorPhone);
+        const sameEmail = Boolean(anchorEmail && guardian.email?.trim().toLowerCase() === anchorEmail);
+        return samePhone || sameEmail;
+      })) {
+        throw new Error('Los contactos de todos los alumnos deben corresponder al mismo adulto, con el mismo nombre y teléfono o correo.');
+      }
     }
 
     const deliveryContext = String(formData.get('deliveryContext') || '') as typeof EXTRAORDINARY_CONTEXTS[number];
@@ -572,14 +717,10 @@ export async function createExtraordinaryHandoff(formData: FormData) {
     if (!EXTRAORDINARY_STATUSES.includes(status)) throw new Error('La resolución no es válida.');
 
     const manualAuthorizerRelationship = String(formData.get('manualAuthorizerRelationship') || '');
-    if (!guardian && !['madre', 'padre', 'tutor'].includes(manualAuthorizerRelationship)) {
+    if (!guardians[0] && !['madre', 'padre', 'tutor'].includes(manualAuthorizerRelationship)) {
       throw new Error('Selecciona el parentesco de quien autorizó manualmente.');
     }
-    const authorizerName = guardian?.full_name || requiredFormText(formData, 'manualAuthorizerName', 'El nombre de quien autoriza', 220);
-    const authorizerRelationship = guardian?.relationship || manualAuthorizerRelationship;
-    const authorizerChannelSnapshot = guardian
-      ? maskedContact(guardian)
-      : `Autorización manual por ${authorizationMethod}`;
+    const manualAuthorizerName = guardians[0] ? null : requiredFormText(formData, 'manualAuthorizerName', 'El nombre de quien autoriza', 220);
 
     const deliveryContextOther = deliveryContext === 'otro' ? requiredFormText(formData, 'deliveryContextOther', 'El contexto', 120) : null;
     const pickupRelationshipOther = pickupRelationship === 'otro' ? requiredFormText(formData, 'pickupRelationshipOther', 'La relación', 120) : null;
@@ -608,6 +749,12 @@ export async function createExtraordinaryHandoff(formData: FormData) {
     const { data: staff } = await context.admin.from('filter_staff_profiles').select('is_general').eq('tenant_id', context.tenantId).eq('user_id', context.user.id).maybeSingle();
     const actorName = `${context.profile.nombre} ${context.profile.apellidos}`.trim();
     const reporterName = staff?.is_general ? requiredFormText(formData, 'reporterName', 'El nombre de quien registra', 180) : actorName;
+    const deliveryReasonText = requiredFormText(formData, 'deliveryReason', 'El motivo de la entrega', 1000);
+    const pickupPersonName = requiredFormText(formData, 'pickupPersonName', 'El nombre de la persona', 220);
+    const authorizationVerifierName = requiredFormText(formData, 'authorizationVerifierName', 'El personal que verificó', 220);
+    const approverName = delivered ? requiredFormText(formData, 'approverName', 'El responsable que aprueba', 220) : String(formData.get('approverName') || '').trim() || null;
+    const resolutionReason = delivered ? null : requiredFormText(formData, 'resolutionReason', 'El motivo de la resolución', 1000);
+    const deliveringTeacherName = delivered ? requiredFormText(formData, 'deliveringTeacherName', 'El docente que entrega', 220) : null;
 
     const identificationFront = validatedUpload(formData, 'identificationFront', 'El frente de la identificación', EVIDENCE_MIME_TYPES);
     const identificationBackValue = formData.get('identificationBack');
@@ -617,7 +764,7 @@ export async function createExtraordinaryHandoff(formData: FormData) {
     const authorizationEvidence = validatedUpload(formData, 'authorizationEvidence', 'La evidencia de autorización', EVIDENCE_MIME_TYPES);
     const finalPhoto = delivered ? validatedUpload(formData, 'finalHandoverPhoto', 'La fotografía final de entrega', IMAGE_MIME_TYPES) : null;
     const signature = delivered ? validatedUpload(formData, 'pickupSignature', 'La firma de quien recibe', ['image/png']) : null;
-    const basePath = `${context.tenantId}/entregas-extraordinarias/${clientRequestId}`;
+    const basePath = `${context.tenantId}/entregas-extraordinarias/${clientRequestId}/${randomUUID()}`;
     const uploads = [
       { key: 'identificationFront', file: identificationFront, path: `${basePath}/identificacion-frente.${extensionForFile(identificationFront)}` },
       ...(identificationBack ? [{ key: 'identificationBack', file: identificationBack, path: `${basePath}/identificacion-reverso.${extensionForFile(identificationBack)}` }] : []),
@@ -628,18 +775,17 @@ export async function createExtraordinaryHandoff(formData: FormData) {
     ];
     const paths = new Map<string, string>();
     for (const upload of uploads) {
-      const { error } = await context.admin.storage.from('filtro-evidencias').upload(upload.path, upload.file, { upsert: true, contentType: upload.file.type });
+      const { error } = await context.admin.storage.from('filtro-evidencias').upload(upload.path, upload.file, { upsert: false, contentType: upload.file.type });
       if (error) { if (paths.size) await context.admin.storage.from('filtro-evidencias').remove([...paths.values()]); throw new Error(`No se pudo guardar ${upload.file.name}: ${error.message}`); }
       paths.set(upload.key, upload.path);
     }
 
-    const entryPayload: Record<string, unknown> = {
-      tenant_id: context.tenantId, client_request_id: clientRequestId, student_id: student.id, guardian_contact_id: guardian?.id || null,
-      linked_early_departure_id: linkedEarlyDepartureId, student_name: student.full_name, level_name: level.name,
-      grade_name: group.grade_name, group_name: group.group_name, departed_at: departedAt,
+    const sharedPayload: Record<string, unknown> = {
+      tenant_id: context.tenantId,
+      linked_early_departure_id: linkedEarlyDepartureId, departed_at: departedAt,
       delivery_context: deliveryContext, delivery_context_other: deliveryContextOther,
-      delivery_reason: requiredFormText(formData, 'deliveryReason', 'El motivo de la entrega', 1000),
-      pickup_person_name: requiredFormText(formData, 'pickupPersonName', 'El nombre de la persona', 220),
+      delivery_reason: deliveryReasonText,
+      pickup_person_name: pickupPersonName,
       pickup_person_phone: String(formData.get('pickupPersonPhone') || '').trim() || null,
       pickup_relationship: pickupRelationship, pickup_relationship_other: pickupRelationshipOther,
       adult_confirmed: adultConfirmed, identification_type: identificationType, identification_type_other: identificationTypeOther,
@@ -647,38 +793,58 @@ export async function createExtraordinaryHandoff(formData: FormData) {
       identification_front_path: paths.get('identificationFront'), identification_back_path: paths.get('identificationBack') || null,
       pickup_person_photo_path: paths.get('pickupPersonPhoto'), vehicle_description: null,
       vehicle_photo_path: null, identity_matches: identityMatches, no_visible_impairment: noVisibleImpairment,
-      authorizer_name: authorizerName, authorizer_relationship: authorizerRelationship, authorizer_channel_snapshot: authorizerChannelSnapshot,
       authorization_method: authorizationMethod, authorized_at: authorizedAt, authorization_expires_at: authorizationExpiresAt,
       authorization_statement: null,
-      authorization_evidence_path: paths.get('authorizationEvidence'), authorization_verifier_name: requiredFormText(formData, 'authorizationVerifierName', 'El personal que verificó', 220),
+      authorization_evidence_path: paths.get('authorizationEvidence'), authorization_verifier_name: authorizationVerifierName,
       one_time_code: null,
       identity_status: identityStatus, consent_status: consentStatus, validator_name: actorName,
       witness_name: null,
-      approver_name: delivered ? requiredFormText(formData, 'approverName', 'El responsable que aprueba', 220) : String(formData.get('approverName') || '').trim() || null,
+      approver_name: approverName,
       institution_approved: institutionApproved, status,
-      resolution_reason: delivered ? null : requiredFormText(formData, 'resolutionReason', 'El motivo de la resolución', 1000),
-      delivering_teacher_name: delivered ? requiredFormText(formData, 'deliveringTeacherName', 'El docente que entrega', 220) : null,
+      resolution_reason: resolutionReason,
+      delivering_teacher_name: deliveringTeacherName,
       reporter_name: reporterName, registered_by_user_id: context.user.id,
       final_handover_photo_path: paths.get('finalHandoverPhoto') || null, pickup_signature_path: paths.get('pickupSignature') || null,
       final_observations: String(formData.get('finalObservations') || '').trim().slice(0, 4000) || null, protocol_confirmed: protocolConfirmed,
     };
-    if (verifiedGuardianPolicyAvailable) entryPayload.verified_guardian_contact_required = requireVerifiedGuardianContact;
-    const { data: entry, error } = await context.admin.from('filter_extraordinary_handoffs').insert(entryPayload).select('id').single();
+    if (verifiedGuardianPolicyAvailable) sharedPayload.verified_guardian_contact_required = requireVerifiedGuardianContact;
+    const entries = students.map(({ student, group, level }) => {
+      const guardian = guardianByStudent.get(student.id) || null;
+      return {
+        ...sharedPayload,
+        client_request_id: childRequestId(clientRequestId, student.id, studentIds.length),
+        ...(previous.groupColumnAvailable ? { group_event_id: clientRequestId } : {}),
+        student_id: student.id, guardian_contact_id: guardian?.id || null,
+        student_name: student.full_name, level_name: level.name,
+        grade_name: group.grade_name, group_name: group.group_name,
+        authorizer_name: guardian?.full_name || manualAuthorizerName,
+        authorizer_relationship: guardian?.relationship || manualAuthorizerRelationship,
+        authorizer_channel_snapshot: guardian ? maskedContact(guardian) : `Autorización manual por ${authorizationMethod}`,
+      };
+    });
+    const { data: inserted, error } = await context.admin.from('filter_extraordinary_handoffs').insert(entries).select('id,student_id');
     if (error) {
       if (error.code === '23505') {
-        const { data: duplicate } = await context.admin.from('filter_extraordinary_handoffs').select('id').eq('tenant_id', context.tenantId).eq('client_request_id', clientRequestId).single();
-        if (duplicate) {
-          const { data: duplicateAudit } = await context.admin.from('filter_audit_log').select('id').eq('tenant_id', context.tenantId).eq('action', 'extraordinary_handoff.created').eq('entity_id', duplicate.id).maybeSingle();
-          if (!duplicateAudit) await audit(context, 'extraordinary_handoff.created', 'extraordinary_handoff', duplicate.id, { clientRequestId, recoveredFromIdempotentRetry: true });
-          return { success: true, duplicate: true, id: duplicate.id };
+        let duplicate: Awaited<ReturnType<typeof existingFilterBatch>>;
+        try { duplicate = await existingFilterBatch(context, 'filter_extraordinary_handoffs', clientRequestId, studentIds); }
+        catch (duplicateError) {
+          await context.admin.storage.from('filtro-evidencias').remove([...paths.values()]);
+          throw duplicateError;
+        }
+        if (duplicate.rows.length) {
+          await context.admin.storage.from('filtro-evidencias').remove([...paths.values()]);
+          await auditFilterBatch(context, 'extraordinary_handoff.created', 'extraordinary_handoff', duplicate.rows, clientRequestId, { recoveredFromIdempotentRetry: true });
+          return { success: true, duplicate: true, id: duplicate.rows[0].id, groupEventId: clientRequestId, count: duplicate.rows.length };
         }
       }
       await context.admin.storage.from('filtro-evidencias').remove([...paths.values()]); throw error;
     }
+    if (!inserted || inserted.length !== studentIds.length) throw new Error('No se pudo confirmar la entrega de todos los alumnos.');
     await context.admin.from('filter_reporters').upsert({ tenant_id: context.tenantId, name: reporterName, normalized_name: normalizeFilterName(reporterName), last_used_at: new Date().toISOString(), created_by: context.user.id }, { onConflict: 'tenant_id,normalized_name' });
-    await audit(context, 'extraordinary_handoff.created', 'extraordinary_handoff', entry.id, { studentId: student.id, guardianContactId: guardian?.id || null, requireVerifiedGuardianContact, status, deliveryContext });
+    await auditFilterBatch(context, 'extraordinary_handoff.created', 'extraordinary_handoff', inserted, clientRequestId,
+      { requireVerifiedGuardianContact, status, deliveryContext, guardianContactIds });
     revalidatePath('/dashboard/filtro/entregas-extraordinarias'); revalidatePath('/dashboard/filtro/reportes');
-    return { success: true, duplicate: false, id: entry.id };
+    return { success: true, duplicate: false, id: inserted[0].id, groupEventId: clientRequestId, count: inserted.length };
   } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'No se pudo guardar la entrega extraordinaria.' }; }
 }
 
@@ -694,13 +860,17 @@ export async function getFilterReportPackets(selection: Array<{ type: 'early' | 
       extraordinaryIds.length ? context.admin.from('filter_extraordinary_handoffs').select('*').eq('tenant_id', context.tenantId).in('id', extraordinaryIds) : Promise.resolve({ data: [] }),
       context.admin.from('configuracion_sistema').select('nombre_completo,nombre_corto,logo_url,color_primario,direccion,telefono_contacto,correo_contacto').eq('tenant_id', context.tenantId).maybeSingle(),
     ]);
+    const [completeEarly, completeExtraordinary] = await Promise.all([
+      completeFilterReportGroups(context, 'filter_early_departures', early || []),
+      completeFilterReportGroups(context, 'filter_extraordinary_handoffs', extraordinary || []),
+    ]);
     const pathKeys = ['identification_evidence_path','pickup_person_photo_path','final_handover_photo_path','pickup_signature_path','identification_front_path','identification_back_path','vehicle_photo_path','authorization_evidence_path'];
-    const paths = [...new Set([...(early || []), ...(extraordinary || [])].flatMap((row: any) => pathKeys.map((key) => row[key]).filter(Boolean)))];
+    const paths = [...new Set([...completeEarly, ...completeExtraordinary].flatMap((row: any) => pathKeys.map((key) => row[key]).filter(Boolean)))];
     const signed = paths.length ? await context.admin.storage.from('filtro-evidencias').createSignedUrls(paths, 600) : { data: [], error: null };
     if (signed.error) throw signed.error;
     const urls = Object.fromEntries((signed.data || []).map((item: any) => [item.path, item.signedUrl]));
     await audit(context, 'filter_reports.exported', 'filter_report', undefined, { count: safe.length, ids: safe });
-    return { success: true, early: early || [], extraordinary: extraordinary || [], institution: institution || {}, urls };
+    return { success: true, early: completeEarly, extraordinary: completeExtraordinary, institution: institution || {}, urls };
   } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'No se pudieron preparar los reportes.' }; }
 }
 
