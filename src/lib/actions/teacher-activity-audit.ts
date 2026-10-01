@@ -3,6 +3,11 @@
 import { revalidatePath } from 'next/cache';
 import { requireTenantSession } from '@/lib/tenant/context';
 import {
+  buildPilotTeacherActivityReport,
+  pilotWindowForTenant,
+  type PilotExerciseRow,
+} from '@/lib/teacher-activity/pilot-report';
+import {
   addDays,
   buildTeacherActivityAuditReport,
   localDate,
@@ -37,6 +42,7 @@ const MAX_TEACHERS = 2_000;
 const MAX_PUBLICATIONS = 20_000;
 const MAX_RESULTS = 30_000;
 const MAX_EXERCISES = 5_000;
+const MAX_PILOT_ROWS = 10_000;
 
 class ReportLimitError extends Error {}
 
@@ -144,6 +150,103 @@ async function readPublications(
     group_ids: Array.isArray(row.group_ids_snapshot) ? row.group_ids_snapshot.filter((id): id is string => typeof id === 'string') : [],
     group_names: Array.isArray(row.group_names_snapshot) ? row.group_names_snapshot.filter((name): name is string => typeof name === 'string') : [],
   }));
+}
+
+async function readPilotExerciseRows(
+  admin: AdminClient,
+  tenantId: string,
+  from: string,
+  through: string,
+): Promise<PilotExerciseRow[]> {
+  const { lower, upper } = timeQueryBounds(from, through);
+  const columns = 'id, sync_id, created_by, created_at, titulo, tipo, publicado, visible';
+  const candidates = await readPagedById<PilotExerciseRow>(
+    'Las actividades del corte piloto', MAX_PILOT_ROWS, async (lastId) => {
+      let query = admin.from('ejercicios').select(columns)
+        .eq('tenant_id', tenantId)
+        .gte('created_at', lower)
+        .lt('created_at', upper)
+        .order('id')
+        .limit(PAGE_SIZE);
+      if (lastId) query = query.gt('id', lastId);
+      return query;
+    },
+  );
+  // A synchronized copy created during the pilot does not become a new
+  // original if another copy of the same logical activity predates the pilot.
+  const rows = new Map(candidates.map((row) => [row.id, row]));
+  const syncIds = [...new Set(candidates.map((row) => row.sync_id).filter((id): id is string => Boolean(id)))];
+  for (let index = 0; index < syncIds.length; index += 100) {
+    const batch = syncIds.slice(index, index + 100);
+    const [siblings, sourceRows] = await Promise.all([
+      readPagedById<PilotExerciseRow>(
+        'Las copias de actividades del corte piloto', MAX_PILOT_ROWS, async (lastId) => {
+          let query = admin.from('ejercicios').select(columns)
+            .eq('tenant_id', tenantId).in('sync_id', batch).order('id').limit(PAGE_SIZE);
+          if (lastId) query = query.gt('id', lastId);
+          return query;
+        },
+      ),
+      readPagedById<PilotExerciseRow>(
+        'Las actividades originales del corte piloto', MAX_PILOT_ROWS, async (lastId) => {
+          let query = admin.from('ejercicios').select(columns)
+            .eq('tenant_id', tenantId).in('id', batch).order('id').limit(PAGE_SIZE);
+          if (lastId) query = query.gt('id', lastId);
+          return query;
+        },
+      ),
+    ]);
+    for (const row of [...siblings, ...sourceRows]) rows.set(row.id, row);
+    if (rows.size > MAX_PILOT_ROWS) {
+      throw new ReportLimitError('El corte piloto supera el límite de actividades; solicita un informe más acotado.');
+    }
+  }
+  return [...rows.values()];
+}
+
+async function readVisiblePilotExerciseIds(
+  admin: AdminClient,
+  tenantId: string,
+  rows: PilotExerciseRow[],
+): Promise<Set<string>> {
+  const publishableIds = rows.filter((row) => row.publicado === true && row.visible !== false).map((row) => row.id);
+  type Link = RowWithId & { ejercicio_id: string; asignacion_profesor_id: string; periodo_evaluacion_id: string };
+  const links: Link[] = [];
+  for (let index = 0; index < publishableIds.length; index += 100) {
+    const batch = publishableIds.slice(index, index + 100);
+    const page = await readPagedById<Link>('Los vínculos del corte piloto', MAX_PILOT_ROWS, async (lastId) => {
+      let query = admin.from('vinculos_evaluacion_ejercicio')
+        .select('id, ejercicio_id, asignacion_profesor_id, periodo_evaluacion_id')
+        .eq('tenant_id', tenantId).eq('activo', true)
+        .in('ejercicio_id', batch).order('id').limit(PAGE_SIZE);
+      if (lastId) query = query.gt('id', lastId);
+      return query;
+    });
+    links.push(...page);
+    if (links.length > MAX_PILOT_ROWS) throw new ReportLimitError('El corte piloto tiene demasiados vínculos activos.');
+  }
+  if (!links.length) return new Set();
+
+  const activeAssignments = new Set<string>();
+  const availablePeriods = new Set<string>();
+  const assignmentIds = [...new Set(links.map((link) => link.asignacion_profesor_id))];
+  const periodIds = [...new Set(links.map((link) => link.periodo_evaluacion_id))];
+  for (let index = 0; index < assignmentIds.length; index += 100) {
+    const { data, error } = await admin.from('asignaciones_profesor').select('id')
+      .eq('tenant_id', tenantId).eq('activo', true)
+      .in('id', assignmentIds.slice(index, index + 100));
+    if (error) throw error;
+    for (const row of data ?? []) activeAssignments.add(row.id);
+  }
+  for (let index = 0; index < periodIds.length; index += 100) {
+    const { data, error } = await admin.from('periodos_evaluacion').select('id')
+      .eq('tenant_id', tenantId).neq('estado', 'borrador')
+      .in('id', periodIds.slice(index, index + 100));
+    if (error) throw error;
+    for (const row of data ?? []) availablePeriods.add(row.id);
+  }
+  return new Set(links.filter((link) => activeAssignments.has(link.asignacion_profesor_id)
+    && availablePeriods.has(link.periodo_evaluacion_id)).map((link) => link.ejercicio_id));
 }
 
 async function readExceptions(
@@ -265,6 +368,7 @@ export async function loadTeacherActivityAuditAction(
     const generatedAt = new Date().toISOString();
     const { timezone, trackingStartedAt } = await readTimezoneAndRollout(admin, tenantId);
     const today = localDate(generatedAt, timezone);
+    const pilotWindow = pilotWindowForTenant(tenant.slug, today);
     const { from, to } = parseDateRange(input, today);
     const [currentTeachers, publications, exceptions, assignedTeachers] = await Promise.all([
       readTeachers(admin, tenantId),
@@ -293,10 +397,36 @@ export async function loadTeacherActivityAuditAction(
     if (teachers.length > MAX_TEACHERS) {
       throw new ReportLimitError(`La lista de docentes supera el límite de ${MAX_TEACHERS} registros; reduce el rango del informe.`);
     }
-    const metrics = await readObservedMetrics(admin, tenantId, new Set(teachers.map((teacher) => teacher.id)), from, to);
+    const [metrics, pilotResult] = await Promise.all([
+      readObservedMetrics(admin, tenantId, new Set(teachers.map((teacher) => teacher.id)), from, to),
+      pilotWindow ? (async () => {
+        const [exerciseRows, pilotPublications] = await Promise.all([
+          readPilotExerciseRows(admin, tenantId, pilotWindow.from, pilotWindow.through),
+          readPublications(admin, tenantId, pilotWindow.from, pilotWindow.through),
+        ]);
+        const visibleExerciseIds = await readVisiblePilotExerciseIds(admin, tenantId, exerciseRows);
+        return {
+          data: buildPilotTeacherActivityReport({
+            ...pilotWindow,
+            asOf: generatedAt,
+            timezone,
+            teachers,
+            exerciseRows,
+            visibleExerciseIds,
+            publications: pilotPublications,
+            exceptions,
+          }),
+          error: null as string | null,
+        };
+      })().catch((error) => ({
+        data: null,
+        error: errorMessage(error, 'No se pudo reconstruir el corte piloto.'),
+      })) : Promise.resolve({ data: null, error: null }),
+    ]);
     return {
       ok: true,
-      data: buildTeacherActivityAuditReport({
+      data: {
+        ...buildTeacherActivityAuditReport({
         generatedAt,
         tenantId,
         tenantName: tenant.nombre,
@@ -310,7 +440,10 @@ export async function loadTeacherActivityAuditAction(
         reviews: metrics.reviews,
         pendingReviews: metrics.pendingReviews,
         exceptions,
-      }),
+        }),
+        pilot: pilotResult.data,
+        pilotError: pilotResult.error,
+      },
     };
   } catch (error) {
     return { ok: false, message: errorMessage(error, 'No se pudo cargar el informe semanal de docentes.') };

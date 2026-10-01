@@ -211,9 +211,58 @@ function TabProfesores() {
     if (eligibility === 'in_progress') return `${published}/3 · en curso`;
     return `${published}/3`;
   };
+  const pilotStatusLabel = (status: string) => {
+    if (status === 'visible_now') return 'Tiene actividad visible hoy';
+    if (status === 'published_then_hidden') return 'Publicó; hoy no está visible';
+    if (status === 'created_not_visible') return 'Creó, pero no está visible';
+    if (status === 'joined_during_pilot') return 'Ingreso reciente · revisar';
+    if (status === 'exception_review') return 'Excepción registrada · revisar';
+    if (status === 'not_applicable') return 'Meta no aplicable actualmente';
+    return 'Sin actividad localizable';
+  };
+  const pilotPriority: Record<string, number> = {
+    no_current_evidence: 0,
+    created_not_visible: 1,
+    published_then_hidden: 2,
+    visible_now: 3,
+    joined_during_pilot: 4,
+    exception_review: 5,
+    not_applicable: 6,
+  };
 
   return (
     <div className="space-y-8">
+      {weeklyReport?.pilotError && <p role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">Corte piloto: {weeklyReport.pilotError}</p>}
+      {weeklyReport?.pilot && <section aria-labelledby="pilot-activity-heading" className="space-y-4 rounded-2xl border border-amber-200 bg-amber-50/50 p-5 md:p-6">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h2 id="pilot-activity-heading" className="text-lg font-black text-foreground">Corte de prueba · desde el 27 de septiembre</h2>
+            <p className="mt-1 text-sm text-muted-foreground">Del {weekDate(weeklyReport.pilot.from)} al {weekDate(weeklyReport.pilot.through)} · datos al {new Date(weeklyReport.pilot.asOf).toLocaleString('es-MX', { timeZone: weeklyReport.pilot.timezone, dateStyle: 'medium', timeStyle: 'short' })}.</p>
+          </div>
+          <button type="button" onClick={() => void downloadPdf()} disabled={exporting !== null || weeklyLoading} className="inline-flex shrink-0 items-center gap-2 rounded-xl bg-primary px-3 py-2 text-xs font-bold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+            <Download className="h-4 w-4" /> Descargar PDF con corte
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {[
+            { label: 'Docentes con actividad visible hoy', value: weeklyReport.pilot.teachers.filter((row) => row.status === 'visible_now').length },
+            { label: 'Sin actividad localizable', value: weeklyReport.pilot.teachers.filter((row) => row.status === 'no_current_evidence').length },
+            { label: 'Crearon, pero no está visible', value: weeklyReport.pilot.teachers.filter((row) => row.status === 'created_not_visible').length },
+            { label: 'Autoría por revisar', value: weeklyReport.pilot.unattributed.length },
+          ].map((item) => <div key={item.label} className="rounded-xl border border-amber-200 bg-white p-3"><p className="text-[10px] font-bold uppercase text-muted-foreground">{item.label}</p><p className="text-2xl font-black text-foreground">{item.value}</p></div>)}
+        </div>
+        <div className="overflow-x-auto rounded-xl border border-border bg-white">
+          <table className="w-full min-w-[740px] text-left text-xs">
+            <thead className="bg-muted/40 text-[10px] uppercase text-muted-foreground"><tr><th className="p-3">Profesor</th><th className="p-3">Creadas desde el 27</th><th className="p-3">Visibles hoy</th><th className="p-3">Publicaciones verificadas</th><th className="p-3">Lectura</th></tr></thead>
+            <tbody>{weeklyReport.pilot.teachers.slice().sort((a, b) => pilotPriority[a.status] - pilotPriority[b.status] || a.name.localeCompare(b.name, 'es')).map((row) => <tr key={row.teacherId} className="border-t border-border align-top">
+              <td className="p-3"><p className="font-bold text-foreground">{row.name}</p><p className="text-muted-foreground">{row.email}</p>{row.evidence.length > 0 && <details className="mt-2"><summary className="cursor-pointer font-semibold text-primary">Ver {row.evidence.length} actividad(es)</summary><ul className="mt-2 space-y-1 text-muted-foreground">{row.evidence.map((item) => <li key={item.logicalId}>{item.title} · {new Date(item.createdAt).toLocaleString('es-MX', { timeZone: weeklyReport.pilot!.timezone, dateStyle: 'short', timeStyle: 'short' })} · {item.visibleNow ? 'visible hoy' : 'no visible hoy'}{item.mixedCurrentAuthors ? ' · autoría por revisar' : ''}</li>)}</ul></details>}</td>
+              <td className="p-3 text-center font-black">{row.createdExisting}</td><td className="p-3 text-center font-black">{row.visibleNow}</td><td className="p-3 text-center font-black">{row.verifiedPublications}</td>
+              <td className={cn('p-3 font-bold', row.status === 'no_current_evidence' ? 'text-red-700' : row.status === 'created_not_visible' ? 'text-amber-700' : 'text-foreground')}>{pilotStatusLabel(row.status)}</td>
+            </tr>)}</tbody>
+          </table>
+        </div>
+        <p className="text-xs leading-relaxed text-amber-900">{weeklyReport.pilot.caveat} Los ceros significan que no hay una actividad localizable en este corte; no prueban que nunca haya existido una actividad eliminada.</p>
+      </section>}
       <section className="bg-white rounded-2xl border border-border shadow-sm p-5 md:p-6 space-y-5" aria-labelledby="weekly-activity-heading">
         <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>

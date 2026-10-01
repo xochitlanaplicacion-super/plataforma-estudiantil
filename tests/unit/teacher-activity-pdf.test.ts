@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildTeacherActivityAuditReport } from '@/lib/teacher-activity/weekly-report';
+import { buildPilotTeacherActivityReport } from '@/lib/teacher-activity/pilot-report';
 import { buildTeacherActivityPdf } from '@/lib/reports/teacher-activity-pdf';
 
 describe('PDF de seguimiento docente', () => {
@@ -38,13 +39,26 @@ describe('PDF de seguimiento docente', () => {
       pendingReviews: { 'teacher-1': 4 },
       exceptions: [],
     });
+    report.pilot = buildPilotTeacherActivityReport({
+      from: '2026-09-27', through: '2026-10-04', asOf: '2026-10-05T04:00:00Z',
+      timezone: 'America/Mexico_City',
+      teachers: [{ id: 'teacher-1', nombre: 'María Josefina', apellidos: 'Hernández Rodríguez', email: 'docente@example.edu', estatus: 'activo', hasActiveAssignment: true }],
+      exerciseRows: Array.from({ length: 40 }, (_, index) => ({
+        id: `pilot-${index}`, sync_id: null, created_by: 'teacher-1',
+        created_at: '2026-09-28T18:00:00Z',
+        titulo: `Actividad del corte preliminar ${index} con un nombre suficientemente largo para probar que se conserve legible`,
+        tipo: 'actividad_descriptiva', publicado: true, visible: true,
+      })),
+      visibleExerciseIds: new Set(Array.from({ length: 40 }, (_, index) => `pilot-${index}`)),
+      publications: [],
+    });
 
     const pdf = await buildTeacherActivityPdf({
       report,
       institution: { name: 'Colegio de Prueba', logoUrl: null },
     });
 
-    expect(pdf.getNumberOfPages()).toBeGreaterThan(5);
+    expect(pdf.getNumberOfPages()).toBeGreaterThan(7);
     expect(pdf.output('arraybuffer').byteLength).toBeGreaterThan(10_000);
   });
 });

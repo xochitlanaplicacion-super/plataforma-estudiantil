@@ -85,6 +85,8 @@ export interface TeacherActivityAuditReport {
   currentWeek: { start: string; end: string };
   weeks: TeacherActivityWeek[];
   teachers: TeacherActivityTeacher[];
+  pilot?: import('./pilot-report').PilotTeacherActivityReport | null;
+  pilotError?: string | null;
   metricNotes: {
     studentSubmissions: string;
     teacherReviews: string;
