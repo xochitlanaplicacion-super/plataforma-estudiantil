@@ -36,6 +36,7 @@ import Image from 'next/image';
 import { getDatosContactoFormateados } from '@/lib/actions/horarios';
 import { loadMyAcademicResultsAction } from '@/lib/actions/calificaciones';
 import { averageAcademicResults } from '@/lib/academic/results-projector';
+import { getStudentWeeklyProgress } from '@/lib/academic/weekly-student-progress';
 
 // Helper for dynamic subject icons
 const getSubjectIcon = (nombre: string) => {
@@ -109,6 +110,7 @@ export default async function AlumnoDashboard() {
   // Calcular promedio y ejercicios completados reales
   const ejerciciosCompletados = data?.todosLosEjercicios?.filter((ej: any) => ej.completado) || [];
   const numeroCompletados = ejerciciosCompletados.length;
+  const weeklyProgress = getStudentWeeklyProgress(data?.todosLosEjercicios || [], now, data?.timezone || 'America/Mexico_City');
 
   // Sólo se agregan resultados producidos por el motor canónico; los ejercicios
   // ya no constituyen una segunda fórmula de calificación en el dashboard.
@@ -238,6 +240,23 @@ export default async function AlumnoDashboard() {
             <circle cx="20" cy="90" r="10" />
           </svg>
         </div>
+      </section>
+
+      {/* Avance privado del alumno; no es una comparación con compañeros. */}
+      <section aria-label="Avance de actividades de esta semana" className="flex flex-col gap-2 rounded-2xl border border-primary/15 bg-primary/5 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-sm font-bold text-primary">Tu avance de esta semana</p>
+          <p className="text-sm text-muted-foreground">
+            {!data?.weeklyProgressAvailable
+              ? 'No se pudo consultar este avance. Intenta actualizar la página.'
+              : weeklyProgress.total === 0
+              ? 'No tienes actividades con fecha de entrega esta semana.'
+              : `${weeklyProgress.completed} de ${weeklyProgress.total} actividades con fecha esta semana entregadas`}
+          </p>
+        </div>
+        <Link href="/dashboard/alumno/materias" className="text-sm font-semibold text-primary hover:underline">
+          Ver mis actividades
+        </Link>
       </section>
 
       {/* VIDEOS (CARRUSEL ESTILO NETFLIX) */}

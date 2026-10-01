@@ -1,6 +1,8 @@
 'use server';
 
 import { requireTenantSession } from '@/lib/tenant/context';
+import { DEFAULT_PLATFORM_TIMEZONE } from '@/lib/service-countdown';
+import { isDeliveredStudentResult } from '@/lib/academic/weekly-student-progress';
 
 import { randomUUID } from 'node:crypto';
 import { after } from 'next/server';
@@ -98,7 +100,10 @@ export async function getAlumnoDashboardData(userId: string) {
       return {
         profile,
         materiasAsignadas: [],
-        pendientes: []
+        pendientes: [],
+        todosLosEjercicios: [],
+        timezone: DEFAULT_PLATFORM_TIMEZONE,
+        weeklyProgressAvailable: true,
       };
     }
 
@@ -106,9 +111,14 @@ export async function getAlumnoDashboardData(userId: string) {
     // permite que trabajen mientras se resuelve esa estructura.
     const resultadosPromise = Promise.resolve(db
       .from('resultados_ejercicios')
-      .select('ejercicio_id, calificacion, aciertos, total_preguntas, bloqueado')
+      .select('ejercicio_id, calificacion, aciertos, total_preguntas, bloqueado, estado')
       .eq('tenant_id', tenantId)
       .eq('alumno_id', userId));
+    const timezonePromise = Promise.resolve(db
+      .from('tenant_features')
+      .select('timezone')
+      .eq('tenant_id', tenantId)
+      .maybeSingle());
     const fechasPromise = Promise.resolve(db
       .from('fechas_evaluacion')
       .select('materia_id, fecha_evaluacion')
@@ -153,6 +163,7 @@ export async function getAlumnoDashboardData(userId: string) {
     // 3. OBTENER ESTRUCTURA COMPLETA (Unidades, Temas, Recursos y Ejercicios)
     let todasLasUnidades: any[] = [];
     let ejerciciosPublicados: any[] = [];
+    let activitiesQueryFailed = false;
 
     if (materiaIds.length > 0) {
       // Obtener Unidades
@@ -218,7 +229,7 @@ export async function getAlumnoDashboardData(userId: string) {
           })) || [];
 
           // Obtener Ejercicios
-          const { data: ejercicios } = visibleExerciseIds.length > 0
+          const { data: ejercicios, error: ejerciciosError } = visibleExerciseIds.length > 0
             ? await db
               .from('ejercicios')
               .select(`
@@ -235,7 +246,9 @@ export async function getAlumnoDashboardData(userId: string) {
               .in('tema_id', temaIds)
               .in('id', visibleExerciseIds)
               .order('fecha_entrega', { ascending: true })
-            : { data: [] };
+            : { data: [], error: null };
+
+          activitiesQueryFailed = Boolean(ejerciciosError);
 
           ejerciciosPublicados = ejercicios || [];
 
@@ -258,7 +271,8 @@ export async function getAlumnoDashboardData(userId: string) {
       }
     }
 
-    const hechos = (await resultadosPromise).data || [];
+    const resultadosResponse = await resultadosPromise;
+    const hechos = resultadosResponse.data || [];
 
     const hechosMap = new Map(hechos.map(h => [h.ejercicio_id, h]));
 
@@ -275,6 +289,7 @@ export async function getAlumnoDashboardData(userId: string) {
         materia_id: ej.temas?.unidades?.materia_id,
         tema: ej.temas?.titulo || '',
         completado: !!resultado,
+        haEntregado: isDeliveredStudentResult(resultado),
         calificacion: resultado?.calificacion ?? null,
         aciertos: resultado?.aciertos || 0,
         total_preguntas: resultado?.total_preguntas || 0,
@@ -309,6 +324,7 @@ export async function getAlumnoDashboardData(userId: string) {
 
     // Obtener progreso de videos
     const { data: videoProgressRaw } = await videoProgressPromise;
+    const { data: tenantFeatures } = await timezonePromise;
     
     const videoProgress = videoProgressRaw || [];
 
@@ -317,6 +333,8 @@ export async function getAlumnoDashboardData(userId: string) {
       materiasAsignadas,
       pendientes,
       todosLosEjercicios,
+      timezone: tenantFeatures?.timezone || DEFAULT_PLATFORM_TIMEZONE,
+      weeklyProgressAvailable: !resultadosResponse.error && !activitiesQueryFailed,
       unidades: todasLasUnidades,
       fechasEvaluacion,
       videoProgress

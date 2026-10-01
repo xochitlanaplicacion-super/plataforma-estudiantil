@@ -60,6 +60,7 @@ import {
 } from 'lucide-react';
 
 import TrackedVideoPlayer from '@/components/shared/TrackedVideoPlayer';
+import { TeacherWeeklyGoalMarker } from '@/components/academic/TeacherWeeklyGoalMarker';
 import { 
   getMyAsignaciones, 
   getMisAgrupaciones,
@@ -1943,6 +1944,11 @@ export default function ProfesorDashboard() {
         </div>
       </div>
 
+      <TeacherWeeklyGoalMarker onCreate={() => {
+        setCurrentTab('materias');
+        document.getElementById('mis-clases')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }} />
+
       {asignaciones.length === 0 ? (
         <Card className="border-2 border-dashed rounded-[40px] p-20 text-center bg-white shadow-inner">
           <BookOpen className="mx-auto h-20 w-20 text-slate-200 mb-6" />
@@ -1950,7 +1956,7 @@ export default function ProfesorDashboard() {
         </Card>
       ) : (
         <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-5 h-14 bg-muted/50 rounded-2xl p-1 shadow-sm border mb-8">
+          <TabsList id="mis-clases" className="grid w-full grid-cols-5 h-14 bg-muted/50 rounded-2xl p-1 shadow-sm border mb-8">
             <TabsTrigger value="materias" className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white font-bold uppercase text-[10px] tracking-widest">Mis Materias</TabsTrigger>
             <TabsTrigger value="unidades" disabled={!selectedMateria} className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white font-bold uppercase text-[10px] tracking-widest">Unidades</TabsTrigger>
             <TabsTrigger value="temas" disabled={!selectedUnidad} className="rounded-xl data-[state=active]:bg-primary data-[state=active]:text-white font-bold uppercase text-[10px] tracking-widest">Temas</TabsTrigger>

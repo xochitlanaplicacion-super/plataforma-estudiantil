@@ -9,13 +9,14 @@ import { revalidatePath } from 'next/cache';
 // 1. GRUPOS ACTIVOS (con al menos 1 alumno activo vigente)
 // ────────────────────────────────────────────────────────────────────
 export async function getGruposActivos() {
-  const { supabase: supabaseAdmin } = await requireTenantSession();
+  const { admin: supabaseAdmin, tenantId } = await requireTenantSession(['admin', 'superuser']);
   const hoy = new Date().toISOString().split('T')[0];
 
   // Obtener todos los grupos
   const { data: grupos } = await supabaseAdmin
     .from('grupos')
     .select('id, nombre, turno, carrera_id, grado_id, carreras(nombre), grados(nombre)')
+    .eq('tenant_id', tenantId)
     .eq('activo', true)
     .order('nombre');
 
@@ -25,6 +26,7 @@ export async function getGruposActivos() {
   const { data: alumnos } = await supabaseAdmin
     .from('profiles')
     .select('grupo_id')
+    .eq('tenant_id', tenantId)
     .eq('rol', 'alumno')
     .eq('estatus', 'activo')
     .gte('fecha_expiracion', hoy);
@@ -47,13 +49,14 @@ export async function getGruposActivos() {
 // 3. ACTIVIDAD DE PROFESORES
 // ────────────────────────────────────────────────────────────────────
 export async function getActividadProfesores() {
-  const { supabase: supabaseAdmin } = await requireTenantSession();
+  const { admin: supabaseAdmin, tenantId } = await requireTenantSession(['admin', 'superuser']);
   const hace30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
   // Profesores activos
   const { data: profesores } = await supabaseAdmin
     .from('profiles')
     .select('id, nombre, apellidos, email, estatus')
+    .eq('tenant_id', tenantId)
     .eq('rol', 'profesor')
     .eq('estatus', 'activo')
     .order('apellidos');
@@ -66,6 +69,7 @@ export async function getActividadProfesores() {
   const { data: asignaciones } = await supabaseAdmin
     .from('asignaciones_profesor')
     .select('profesor_id, materia_id, grupo_id, materias(id, nombre), grupos(id, nombre)')
+    .eq('tenant_id', tenantId)
     .in('profesor_id', profIds)
     .eq('activo', true);
 
@@ -73,18 +77,21 @@ export async function getActividadProfesores() {
   const { data: ejercicios } = await supabaseAdmin
     .from('ejercicios')
     .select('id, tema_id, created_by, created_at, updated_at, tipo')
+    .eq('tenant_id', tenantId)
     .in('created_by', profIds);
 
   // Slides
   const { data: slides } = await supabaseAdmin
     .from('slides')
     .select('id, created_by, created_at')
+    .eq('tenant_id', tenantId)
     .in('created_by', profIds);
 
   // Resources
   const { data: resources } = await supabaseAdmin
     .from('resources')
     .select('id, created_by, created_at')
+    .eq('tenant_id', tenantId)
     .in('created_by', profIds);
 
   // Para verificar cobertura: temas por materia de cada profesor
@@ -94,6 +101,7 @@ export async function getActividadProfesores() {
   const { data: unidades } = await supabaseAdmin
     .from('unidades')
     .select('id, materia_id')
+    .eq('tenant_id', tenantId)
     .in('materia_id', materiasIds.length > 0 ? materiasIds : ['__none__'])
     .eq('activo', true);
 
@@ -102,6 +110,7 @@ export async function getActividadProfesores() {
   const { data: temas } = await supabaseAdmin
     .from('temas')
     .select('id, unidad_id, titulo')
+    .eq('tenant_id', tenantId)
     .in('unidad_id', unidadIds.length > 0 ? unidadIds : ['__none__']);
 
   // Mapa: tema → unidad → materia
@@ -115,6 +124,7 @@ export async function getActividadProfesores() {
   const { data: resultadosDesc } = await supabaseAdmin
     .from('resultados_ejercicios')
     .select('ejercicio_id, calificacion, caduca_el, estado')
+    .eq('tenant_id', tenantId)
     .in('ejercicio_id', ejDescIds.length > 0 ? ejDescIds : ['__none__']);
 
   const ahora = new Date();
@@ -200,10 +210,11 @@ export async function getActividadProfesores() {
 // 4. FECHAS DE EVALUACIÓN
 // ────────────────────────────────────────────────────────────────────
 export async function getFechasEvaluacion(grupoId: string) {
-  const { supabase: supabaseAdmin } = await requireTenantSession();
+  const { admin: supabaseAdmin, tenantId } = await requireTenantSession(['admin', 'superuser']);
   const { data, error } = await supabaseAdmin
     .from('fechas_evaluacion')
     .select('id, grupo_id, materia_id, fecha_evaluacion, descripcion, materias(nombre)')
+    .eq('tenant_id', tenantId)
     .eq('grupo_id', grupoId)
     .order('fecha_evaluacion');
 
@@ -219,8 +230,18 @@ export async function upsertFechaEvaluacion(input: {
   descripcion?: string;
   created_by?: string;
 }) {
-  const { supabase: supabaseAdmin } = await requireTenantSession();
+  const { admin: supabaseAdmin, tenantId, user } = await requireTenantSession(['admin', 'superuser']);
+  const { data: group } = await supabaseAdmin.from('grupos')
+    .select('id').eq('id', input.grupo_id).eq('tenant_id', tenantId).maybeSingle();
+  if (!group) return { error: 'El grupo no pertenece a la institución.' };
+  if (input.materia_id) {
+    const { data: subject } = await supabaseAdmin.from('materias')
+      .select('id').eq('id', input.materia_id).eq('tenant_id', tenantId).maybeSingle();
+    if (!subject) return { error: 'La materia no pertenece a la institución.' };
+  }
+  if (input.created_by && input.created_by !== user.id) return { error: 'Creador no autorizado.' };
   const payload: any = {
+    tenant_id: tenantId,
     grupo_id: input.grupo_id,
     materia_id: input.materia_id,
     fecha_evaluacion: input.fecha_evaluacion,
@@ -244,10 +265,11 @@ export async function upsertFechaEvaluacion(input: {
 }
 
 export async function deleteFechaEvaluacion(id: string) {
-  const { supabase: supabaseAdmin } = await requireTenantSession();
+  const { admin: supabaseAdmin, tenantId } = await requireTenantSession(['admin', 'superuser']);
   const { error } = await supabaseAdmin
     .from('fechas_evaluacion')
     .delete()
+    .eq('tenant_id', tenantId)
     .eq('id', id);
 
   if (error) return { error: error.message };
@@ -260,10 +282,11 @@ export async function deleteFechaEvaluacion(id: string) {
 // 5. OBTENER MATERIAS DE UN GRUPO
 // ────────────────────────────────────────────────────────────────────
 export async function getMateriasDeGrupo(grupoId: string) {
-  const { supabase: supabaseAdmin } = await requireTenantSession();
+  const { admin: supabaseAdmin, tenantId } = await requireTenantSession(['admin', 'superuser']);
   const { data } = await supabaseAdmin
     .from('asignaciones_profesor')
     .select('materia_id, materias(id, nombre), profiles!asignaciones_profesor_profesor_id_fkey(nombre, apellidos)')
+    .eq('tenant_id', tenantId)
     .eq('grupo_id', grupoId)
     .eq('activo', true);
 

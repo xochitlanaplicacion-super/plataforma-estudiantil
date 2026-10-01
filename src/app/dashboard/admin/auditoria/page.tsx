@@ -6,7 +6,7 @@ import {
   Zap, AlertTriangle,
   Calendar, Save, Loader2, CheckCircle2,
   Presentation, FolderOpen, Clock,
-  Flame, ChevronRight, Globe, Edit3, RotateCcw
+  Flame, ChevronRight, Globe, Edit3, RotateCcw, Download, RefreshCw
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import {
@@ -18,6 +18,13 @@ import {
   getMateriasDeGrupo
 } from '@/lib/actions/auditoria';
 import { useToast } from '@/hooks/use-toast';
+import { useInstitucion } from '@/hooks/use-institucion';
+import {
+  loadTeacherActivityAuditAction,
+  setTeacherWeeklyExceptionAction,
+  clearTeacherWeeklyExceptionAction,
+  type TeacherActivityAuditReport,
+} from '@/lib/actions/teacher-activity-audit';
 import { AcademicTenantResultsPage } from '@/components/academic/AcademicTenantResultsPage';
 
 // ═══════════════════════════════════════════════════════════════
@@ -87,34 +94,199 @@ function TabAlumnos() {
 // TAB 2: ACTIVIDAD DE PROFESORES
 // ═══════════════════════════════════════════════════════════════
 function TabProfesores() {
+  const { toast } = useToast();
+  const { config: institution } = useInstitucion();
   const [profesores, setProfesores] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandido, setExpandido] = useState<string | null>(null);
+  const [weeklyReport, setWeeklyReport] = useState<TeacherActivityAuditReport | null>(null);
+  const [weeklyLoading, setWeeklyLoading] = useState(true);
+  const [weeklyError, setWeeklyError] = useState('');
+  const [exporting, setExporting] = useState<string | null>(null);
+  const [savingException, setSavingException] = useState(false);
+  const [exceptionEditor, setExceptionEditor] = useState<{
+    teacherId: string;
+    weekStart: string;
+    kind: 'vacaciones' | 'ausencia_autorizada' | 'ingreso_tardio' | 'otra';
+    note: string;
+    teacherStartedOn: string | null;
+  } | null>(null);
 
   useEffect(() => {
-    getActividadProfesores().then(data => {
-      setProfesores(data);
-      setLoading(false);
-    });
+    getActividadProfesores().then(setProfesores).catch(() => setProfesores([])).finally(() => setLoading(false));
+    loadTeacherActivityAuditAction().then(result => {
+      if (result.ok) setWeeklyReport(result.data);
+      else setWeeklyError(result.message);
+    }).catch(() => setWeeklyError('No se pudo cargar la auditoría semanal.')).finally(() => setWeeklyLoading(false));
   }, []);
 
-  if (loading) return (
-    <div className="flex items-center justify-center py-16 gap-3 text-muted-foreground">
-      <Loader2 className="w-6 h-6 animate-spin" />
-      <span className="text-sm font-bold uppercase tracking-widest">Cargando actividad de profesores...</span>
-    </div>
-  );
+  const refreshWeekly = async () => {
+    setWeeklyLoading(true);
+    setWeeklyError('');
+    try {
+      const result = await loadTeacherActivityAuditAction();
+      if (result.ok) setWeeklyReport(result.data);
+      else setWeeklyError(result.message);
+    } catch {
+      setWeeklyError('No se pudo cargar la auditoría semanal.');
+    } finally {
+      setWeeklyLoading(false);
+    }
+  };
 
-  if (profesores.length === 0) return (
-    <div className="text-center py-16 text-muted-foreground">
-      <BookOpen className="w-16 h-16 mx-auto opacity-20 mb-4" />
-      <p className="font-bold text-lg">No hay profesores activos registrados</p>
-    </div>
-  );
+  const downloadPdf = async (teacherId?: string) => {
+    if (!weeklyReport) return;
+    setExporting(teacherId ?? 'general');
+    try {
+      const { buildTeacherActivityPdf, teacherActivityPdfFilename } = await import('@/lib/reports/teacher-activity-pdf');
+      const teacher = teacherId ? weeklyReport.teachers.find(row => row.id === teacherId) : undefined;
+      const pdf = await buildTeacherActivityPdf({
+        report: weeklyReport,
+        teacherId,
+        institution: {
+          name: institution.nombre_completo === 'Mi Institución' ? weeklyReport.scope.tenantName : institution.nombre_completo,
+          primaryColor: institution.color_primario,
+          secondaryColor: institution.color_secundario,
+          logoUrl: institution.logo_url,
+        },
+      });
+      pdf.save(teacherActivityPdfFilename(weeklyReport, teacher?.name));
+      toast({ title: 'PDF generado', description: teacher ? `Reporte de ${teacher.name}.` : 'Reporte general de profesores.' });
+    } catch {
+      toast({ title: 'No se pudo generar el PDF', description: 'Vuelve a intentarlo.', variant: 'destructive' });
+    } finally {
+      setExporting(null);
+    }
+  };
+
+  const saveException = async () => {
+    if (!exceptionEditor) return;
+    setSavingException(true);
+    try {
+      const result = await setTeacherWeeklyExceptionAction(exceptionEditor);
+      if (!result.ok) throw new Error(result.message);
+      setExceptionEditor(null);
+      await refreshWeekly();
+      toast({ title: 'Excepción guardada' });
+    } catch (error) {
+      toast({ title: 'No se pudo guardar la excepción', description: error instanceof Error ? error.message : 'Vuelve a intentarlo.', variant: 'destructive' });
+    } finally {
+      setSavingException(false);
+    }
+  };
+
+  const removeException = async (teacherId: string, weekStart: string) => {
+    setSavingException(true);
+    try {
+      const result = await clearTeacherWeeklyExceptionAction({ teacherId, weekStart });
+      if (!result.ok) throw new Error(result.message);
+      setExceptionEditor(null);
+      await refreshWeekly();
+      toast({ title: 'Excepción eliminada' });
+    } catch (error) {
+      toast({ title: 'No se pudo eliminar la excepción', description: error instanceof Error ? error.message : 'Vuelve a intentarlo.', variant: 'destructive' });
+    } finally {
+      setSavingException(false);
+    }
+  };
+
+  const weekDate = (date: string) => new Date(`${date}T12:00:00Z`).toLocaleDateString('es-MX', { day: '2-digit', month: 'short', timeZone: 'UTC' });
+  const weekLabel = (status: string, eligibility: string, reason?: string | null) => {
+    if (status === 'excused') return 'Justificada';
+    if (reason === 'inactive') return 'No aplica · inactivo';
+    if (reason === 'no_assignment') return 'No aplica · sin materias';
+    if (reason === 'before_registration') return 'Anterior al alta';
+    if (reason === 'registration_week') return 'Semana de alta';
+    if (eligibility === 'historical') return 'Histórica · informativa';
+    if (eligibility === 'rollout') return 'Inicio de seguimiento';
+    if (eligibility === 'partial_range') return 'Rango parcial';
+    if (eligibility === 'in_progress' || status === 'in_progress') return 'En curso';
+    if (status === 'met') return 'Meta alcanzada';
+    if (status === 'below_goal') return 'Bajo meta';
+    return 'Informativa';
+  };
+  const publishedLabel = (published: number, eligibility: string) => {
+    if (eligibility === 'historical') return 'Sin medición';
+    if (eligibility === 'rollout' || eligibility === 'partial_range') return `${published} observadas · parcial`;
+    if (eligibility === 'in_progress') return `${published}/3 · en curso`;
+    return `${published}/3`;
+  };
 
   return (
-    <div className="space-y-4">
-      {profesores.map(prof => {
+    <div className="space-y-8">
+      <section className="bg-white rounded-2xl border border-border shadow-sm p-5 md:p-6 space-y-5" aria-labelledby="weekly-activity-heading">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <BookOpen className="w-5 h-5 text-primary" />
+              <h2 id="weekly-activity-heading" className="text-lg font-black text-foreground">Seguimiento semanal · 3 publicaciones por profesor</h2>
+            </div>
+            <p className="text-sm text-muted-foreground">Publicaciones registradas por primera vez. El histórico de 8 semanas es informativo donde no había seguimiento completo.</p>
+            {weeklyReport && <p className="text-xs font-semibold text-muted-foreground mt-2">Semana actual: {weekDate(weeklyReport.currentWeek.start)} – {weekDate(weeklyReport.currentWeek.end)} · {weeklyReport.scope.timezone}</p>}
+          </div>
+          <div className="flex gap-2 shrink-0">
+            <button type="button" onClick={() => void refreshWeekly()} disabled={weeklyLoading} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl border border-border text-xs font-bold text-foreground hover:bg-muted disabled:opacity-50" aria-label="Actualizar actividad semanal">
+              <RefreshCw className={cn('w-4 h-4', weeklyLoading && 'animate-spin')} /> Actualizar
+            </button>
+            <button type="button" onClick={() => void downloadPdf()} disabled={!weeklyReport || weeklyLoading || exporting !== null} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-primary text-primary-foreground text-xs font-bold hover:bg-primary/90 disabled:opacity-50">
+              {exporting === 'general' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Descargar PDF general
+            </button>
+          </div>
+        </div>
+        {weeklyLoading && <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground"><Loader2 className="w-4 h-4 animate-spin" /> Cargando seguimiento semanal...</div>}
+        {weeklyError && <p role="alert" className="rounded-xl bg-red-50 border border-red-200 text-red-700 px-4 py-3 text-sm">{weeklyError}</p>}
+        {!weeklyLoading && weeklyReport && <>
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            {[
+              { label: 'Profesores', value: weeklyReport.teachers.length },
+              { label: 'Publicaciones observadas esta semana', value: weeklyReport.teachers.reduce((sum, teacher) => sum + (teacher.weeks.find(week => week.weekStart === weeklyReport.currentWeek.start)?.published ?? 0), 0) },
+              { label: 'Docentes con actividad esta semana', value: weeklyReport.teachers.filter(teacher => (teacher.weeks.find(week => week.weekStart === weeklyReport.currentWeek.start)?.published ?? 0) > 0).length },
+              { label: 'Entregas por revisar hoy', value: weeklyReport.teachers.reduce((sum, teacher) => sum + teacher.pendingReviews, 0) },
+              { label: 'Semanas justificadas', value: weeklyReport.teachers.reduce((sum, teacher) => sum + teacher.weeks.filter(week => week.exception).length, 0) },
+            ].map(item => <div key={item.label} className="bg-muted/30 border border-border rounded-xl p-3"><p className="text-[10px] uppercase font-bold text-muted-foreground">{item.label}</p><p className="text-2xl font-black text-foreground">{item.value}</p></div>)}
+          </div>
+          {weeklyReport.teachers.length === 0 ? <p className="text-sm text-muted-foreground">No hay profesores registrados en el alcance.</p> : (
+            <div className="space-y-3">
+              {weeklyReport.teachers.map(teacher => {
+                const current = teacher.weeks.find(week => week.weekStart === weeklyReport.currentWeek.start);
+                return <details key={teacher.id} className="rounded-xl border border-border bg-muted/10 group">
+                  <summary className="cursor-pointer px-4 py-3 flex flex-wrap items-center justify-between gap-2 font-bold text-sm text-foreground">
+                    <span>{teacher.name} <span className="font-normal text-muted-foreground ml-1">{teacher.email}</span></span>
+                    <span className="text-xs text-primary">Esta semana: {current?.nonApplicableReason ? `${current.published} observadas · meta no aplicable` : publishedLabel(current?.published ?? 0, weeklyReport.weeks.find(week => week.start === weeklyReport.currentWeek.start)?.eligibility ?? 'tracked')} · {teacher.weeksMet}/{teacher.trackedWeeks} semanas evaluables con meta</span>
+                  </summary>
+                  <div className="px-4 pb-4 space-y-4">
+                    <div className="flex justify-end">
+                      <button type="button" onClick={() => void downloadPdf(teacher.id)} disabled={exporting !== null} className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-primary/30 text-primary text-xs font-bold hover:bg-primary/5 disabled:opacity-50">
+                        {exporting === teacher.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />} Descargar PDF del profesor
+                      </button>
+                    </div>
+                    <div className="overflow-x-auto rounded-lg border border-border">
+                      <table className="w-full text-xs text-left">
+                        <thead className="bg-muted/40 text-muted-foreground uppercase text-[10px]"><tr><th className="p-2">Semana</th><th className="p-2">Publicadas</th><th className="p-2">Entregas</th><th className="p-2">Revisiones</th><th className="p-2">Estado</th><th className="p-2">Excepción autorizada</th></tr></thead>
+                        <tbody>{teacher.weeks.map(week => {
+                          const eligibility = weeklyReport.weeks.find(item => item.start === week.weekStart)?.eligibility ?? 'tracked';
+                          const canEdit = eligibility === 'tracked' || eligibility === 'in_progress';
+                          const isEditing = exceptionEditor?.teacherId === teacher.id && exceptionEditor?.weekStart === week.weekStart;
+                          return <React.Fragment key={week.weekStart}>
+                            <tr className="border-t border-border align-top"><td className="p-2 whitespace-nowrap">{weekDate(week.weekStart)} – {weekDate(week.weekEnd)}</td><td className="p-2 font-bold">{week.nonApplicableReason ? `${week.published} observadas` : publishedLabel(week.published, eligibility)}</td><td className="p-2">{week.studentSubmissions === null ? 'Sin seguimiento' : week.studentSubmissions}</td><td className="p-2">{week.teacherReviews === null ? 'Sin seguimiento' : week.teacherReviews}</td><td className="p-2">{weekLabel(week.status, eligibility, week.nonApplicableReason)}</td><td className="p-2 min-w-40">{week.exception ? <p className="mb-1">{week.exception.kind.replaceAll('_', ' ')}{week.exception.teacherStartedOn ? ` · ingreso ${weekDate(week.exception.teacherStartedOn)}` : ''}{week.exception.note ? ` · ${week.exception.note}` : ''}</p> : null}{canEdit && <span className="flex gap-2"><button type="button" onClick={() => setExceptionEditor({ teacherId: teacher.id, weekStart: week.weekStart, kind: week.exception?.kind ?? 'vacaciones', note: week.exception?.note ?? '', teacherStartedOn: week.exception?.teacherStartedOn ?? null })} className="text-primary font-bold underline-offset-2 hover:underline">{week.exception ? 'Editar' : 'Justificar'}</button>{week.exception && <button type="button" onClick={() => void removeException(teacher.id, week.weekStart)} disabled={savingException} className="text-red-600 font-bold underline-offset-2 hover:underline disabled:opacity-50">Quitar</button>}</span>}</td></tr>
+                            {isEditing && <tr className="border-t border-border bg-primary/5"><td colSpan={6} className="p-3"><div className="flex flex-col sm:flex-row gap-2 sm:items-center"><select aria-label="Motivo de excepción" value={exceptionEditor.kind} onChange={event => setExceptionEditor({ ...exceptionEditor, kind: event.target.value as typeof exceptionEditor.kind, teacherStartedOn: event.target.value === 'ingreso_tardio' ? exceptionEditor.teacherStartedOn : null })} className="rounded-lg border border-border bg-white px-2 py-2 text-xs"><option value="vacaciones">Vacaciones</option><option value="ausencia_autorizada">Ausencia autorizada</option><option value="ingreso_tardio">Ingreso a mitad de semana</option><option value="otra">Otra</option></select>{exceptionEditor.kind === 'ingreso_tardio' && <input aria-label="Fecha de ingreso" title="Fecha de ingreso en esta semana" type="date" min={week.weekStart} max={week.weekEnd} value={exceptionEditor.teacherStartedOn ?? ''} onChange={event => setExceptionEditor({ ...exceptionEditor, teacherStartedOn: event.target.value || null })} className="rounded-lg border border-border bg-white px-2 py-2 text-xs" />}<input aria-label="Nota de excepción" value={exceptionEditor.note} onChange={event => setExceptionEditor({ ...exceptionEditor, note: event.target.value })} placeholder="Motivo y autorización" className="min-w-0 flex-1 rounded-lg border border-border bg-white px-3 py-2 text-xs" /><button type="button" onClick={() => void saveException()} disabled={savingException || !exceptionEditor.note.trim() || (exceptionEditor.kind === 'ingreso_tardio' && !exceptionEditor.teacherStartedOn)} className="rounded-lg bg-primary text-primary-foreground px-3 py-2 font-bold disabled:opacity-50">Guardar</button><button type="button" onClick={() => setExceptionEditor(null)} className="rounded-lg border border-border px-3 py-2 font-bold">Cancelar</button></div></td></tr>}
+                          </React.Fragment>;
+                        })}</tbody>
+                      </table>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{weeklyReport.metricNotes.studentSubmissions} {weeklyReport.metricNotes.teacherReviews} {weeklyReport.metricNotes.pendingReviews}</p>
+                    {teacher.exceptions.length > 0 && <div className="rounded-lg border border-amber-200 bg-amber-50 p-3"><p className="font-bold text-amber-800 text-xs mb-1">Observaciones de datos</p><ul className="list-disc pl-4 text-xs text-amber-900 space-y-1">{teacher.exceptions.map((item, index) => <li key={index}>{item}</li>)}</ul></div>}
+                  </div>
+                </details>;
+              })}
+            </div>
+          )}
+        </>}
+      </section>
+
+      <section aria-labelledby="legacy-coverage-heading" className="space-y-4">
+        <div><h2 id="legacy-coverage-heading" className="text-lg font-black text-foreground">Cobertura temática · 5 ejercicios por tema</h2><p className="text-xs text-muted-foreground">Medición de contenido por tema, independiente de la meta semanal de publicaciones.</p></div>
+        {loading ? <div className="flex items-center justify-center py-12 gap-3 text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin" /> Cargando cobertura temática...</div> : profesores.length === 0 ? <p className="text-sm text-muted-foreground py-6">No hay profesores activos registrados.</p> : profesores.map(prof => {
         const isOpen = expandido === prof.id;
         const tieneUrgentes = prof.metricas.urgentes > 0;
         const coberturaCumple = prof.cobertura.every((c: any) => c.cumpleTotal);
@@ -248,6 +420,7 @@ function TabProfesores() {
           </div>
         );
       })}
+      </section>
     </div>
   );
 }
