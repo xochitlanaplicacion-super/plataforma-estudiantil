@@ -212,9 +212,10 @@ function TabProfesores() {
     return `${published}/3`;
   };
   const pilotStatusLabel = (status: string) => {
-    if (status === 'visible_now') return 'Tiene actividad visible hoy';
-    if (status === 'published_then_hidden') return 'Publicó; hoy no está visible';
-    if (status === 'created_not_visible') return 'Creó, pero no está visible';
+    if (status === 'visible_now') return 'Tiene actividad con vínculo hoy';
+    if (status === 'published_then_hidden') return 'Publicó; hoy sin vínculo activo';
+    if (status === 'created_not_visible') return 'Creó, pero hoy sin vínculo activo';
+    if (status === 'copy_review') return 'Posible copia · revisar origen';
     if (status === 'joined_during_pilot') return 'Ingreso reciente · revisar';
     if (status === 'exception_review') return 'Excepción registrada · revisar';
     if (status === 'not_applicable') return 'Meta no aplicable actualmente';
@@ -223,11 +224,12 @@ function TabProfesores() {
   const pilotPriority: Record<string, number> = {
     no_current_evidence: 0,
     created_not_visible: 1,
-    published_then_hidden: 2,
-    visible_now: 3,
-    joined_during_pilot: 4,
-    exception_review: 5,
-    not_applicable: 6,
+    copy_review: 2,
+    published_then_hidden: 3,
+    visible_now: 4,
+    joined_during_pilot: 5,
+    exception_review: 6,
+    not_applicable: 7,
   };
 
   return (
@@ -245,19 +247,19 @@ function TabProfesores() {
         </div>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {[
-            { label: 'Docentes con actividad visible hoy', value: weeklyReport.pilot.teachers.filter((row) => row.status === 'visible_now').length },
+            { label: 'Docentes con actividad vinculada hoy', value: weeklyReport.pilot.teachers.filter((row) => row.status === 'visible_now').length },
             { label: 'Sin actividad localizable', value: weeklyReport.pilot.teachers.filter((row) => row.status === 'no_current_evidence').length },
-            { label: 'Crearon, pero no está visible', value: weeklyReport.pilot.teachers.filter((row) => row.status === 'created_not_visible').length },
-            { label: 'Autoría por revisar', value: weeklyReport.pilot.unattributed.length },
+            { label: 'Crearon, pero sin vínculo hoy', value: weeklyReport.pilot.teachers.filter((row) => row.status === 'created_not_visible').length },
+            { label: 'Origen o autoría por revisar', value: weeklyReport.pilot.unattributed.length + weeklyReport.pilot.teachers.reduce((total, teacher) => total + teacher.evidence.filter((item) => item.possibleCopy).length, 0) },
           ].map((item) => <div key={item.label} className="rounded-xl border border-amber-200 bg-white p-3"><p className="text-[10px] font-bold uppercase text-muted-foreground">{item.label}</p><p className="text-2xl font-black text-foreground">{item.value}</p></div>)}
         </div>
         <div className="overflow-x-auto rounded-xl border border-border bg-white">
           <table className="w-full min-w-[740px] text-left text-xs">
-            <thead className="bg-muted/40 text-[10px] uppercase text-muted-foreground"><tr><th className="p-3">Profesor</th><th className="p-3">Creadas desde el 27</th><th className="p-3">Visibles hoy</th><th className="p-3">Publicaciones verificadas</th><th className="p-3">Lectura</th></tr></thead>
+            <thead className="bg-muted/40 text-[10px] uppercase text-muted-foreground"><tr><th className="p-3">Profesor</th><th className="p-3">Creadas identificables</th><th className="p-3">Con vínculo hoy</th><th className="p-3">Publicaciones verificadas</th><th className="p-3">Lectura</th></tr></thead>
             <tbody>{weeklyReport.pilot.teachers.slice().sort((a, b) => pilotPriority[a.status] - pilotPriority[b.status] || a.name.localeCompare(b.name, 'es')).map((row) => <tr key={row.teacherId} className="border-t border-border align-top">
-              <td className="p-3"><p className="font-bold text-foreground">{row.name}</p><p className="text-muted-foreground">{row.email}</p>{row.evidence.length > 0 && <details className="mt-2"><summary className="cursor-pointer font-semibold text-primary">Ver {row.evidence.length} actividad(es)</summary><ul className="mt-2 space-y-1 text-muted-foreground">{row.evidence.map((item) => <li key={item.logicalId}>{item.title} · {new Date(item.createdAt).toLocaleString('es-MX', { timeZone: weeklyReport.pilot!.timezone, dateStyle: 'short', timeStyle: 'short' })} · {item.visibleNow ? 'visible hoy' : 'no visible hoy'}{item.mixedCurrentAuthors ? ' · autoría por revisar' : ''}</li>)}</ul></details>}</td>
+              <td className="p-3"><p className="font-bold text-foreground">{row.name}</p><p className="text-muted-foreground">{row.email}</p>{row.evidence.length > 0 && <details className="mt-2"><summary className="cursor-pointer font-semibold text-primary">Ver {row.evidence.length} actividad(es)</summary><ul className="mt-2 space-y-1 text-muted-foreground">{row.evidence.map((item) => <li key={item.logicalId}>{item.title} · {new Date(item.createdAt).toLocaleString('es-MX', { timeZone: weeklyReport.pilot!.timezone, dateStyle: 'short', timeStyle: 'short' })} · {item.visibleNow ? 'con vínculo hoy' : 'sin vínculo hoy'}{item.possibleCopy ? ' · posible copia; origen por revisar' : ''}{item.mixedCurrentAuthors ? ' · autoría por revisar' : ''}</li>)}</ul></details>}</td>
               <td className="p-3 text-center font-black">{row.createdExisting}</td><td className="p-3 text-center font-black">{row.visibleNow}</td><td className="p-3 text-center font-black">{row.verifiedPublications}</td>
-              <td className={cn('p-3 font-bold', row.status === 'no_current_evidence' ? 'text-red-700' : row.status === 'created_not_visible' ? 'text-amber-700' : 'text-foreground')}>{pilotStatusLabel(row.status)}</td>
+              <td className={cn('p-3 font-bold', row.status === 'no_current_evidence' ? 'text-red-700' : row.status === 'created_not_visible' || row.status === 'copy_review' ? 'text-amber-700' : 'text-foreground')}>{pilotStatusLabel(row.status)}{row.status !== 'copy_review' && row.evidence.some((item) => item.possibleCopy) && <p className="mt-1 text-amber-700">Origen de copia por revisar</p>}</td>
             </tr>)}</tbody>
           </table>
         </div>

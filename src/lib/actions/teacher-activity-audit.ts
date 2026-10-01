@@ -157,9 +157,10 @@ async function readPilotExerciseRows(
   tenantId: string,
   from: string,
   through: string,
+  publications: PublicationRow[],
 ): Promise<PilotExerciseRow[]> {
   const { lower, upper } = timeQueryBounds(from, through);
-  const columns = 'id, sync_id, created_by, created_at, titulo, tipo, publicado, visible';
+  const columns = 'id, sync_id, created_by, created_at, titulo, tipo';
   const candidates = await readPagedById<PilotExerciseRow>(
     'Las actividades del corte piloto', MAX_PILOT_ROWS, async (lastId) => {
       let query = admin.from('ejercicios').select(columns)
@@ -172,10 +173,32 @@ async function readPilotExerciseRows(
       return query;
     },
   );
+  // Read publication sources even when they were created before the pilot;
+  // their current links may still make them visible to students today.
+  const rows = new Map(candidates.map((row) => [row.id, row]));
+  const publicationExerciseIds = [...new Set(publications.map((row) => row.exercise_id))];
+  for (let index = 0; index < publicationExerciseIds.length; index += 100) {
+    const batch = publicationExerciseIds.slice(index, index + 100);
+    const sourceRows = await readPagedById<PilotExerciseRow>(
+      'Las actividades publicadas del corte piloto', MAX_PILOT_ROWS, async (lastId) => {
+        let query = admin.from('ejercicios').select(columns)
+          .eq('tenant_id', tenantId).in('id', batch).order('id').limit(PAGE_SIZE);
+        if (lastId) query = query.gt('id', lastId);
+        return query;
+      },
+    );
+    for (const row of sourceRows) rows.set(row.id, row);
+    if (rows.size > MAX_PILOT_ROWS) {
+      throw new ReportLimitError('El corte piloto supera el límite de actividades; solicita un informe más acotado.');
+    }
+  }
+
   // A synchronized copy created during the pilot does not become a new
   // original if another copy of the same logical activity predates the pilot.
-  const rows = new Map(candidates.map((row) => [row.id, row]));
-  const syncIds = [...new Set(candidates.map((row) => row.sync_id).filter((id): id is string => Boolean(id)))];
+  const syncIds = [...new Set([
+    ...[...rows.values()].map((row) => row.sync_id).filter((id): id is string => Boolean(id)),
+    ...publications.map((row) => row.logical_activity_id),
+  ])];
   for (let index = 0; index < syncIds.length; index += 100) {
     const batch = syncIds.slice(index, index + 100);
     const [siblings, sourceRows] = await Promise.all([
@@ -209,11 +232,11 @@ async function readVisiblePilotExerciseIds(
   tenantId: string,
   rows: PilotExerciseRow[],
 ): Promise<Set<string>> {
-  const publishableIds = rows.filter((row) => row.publicado === true && row.visible !== false).map((row) => row.id);
+  const exerciseIds = rows.map((row) => row.id);
   type Link = RowWithId & { ejercicio_id: string; asignacion_profesor_id: string; periodo_evaluacion_id: string };
   const links: Link[] = [];
-  for (let index = 0; index < publishableIds.length; index += 100) {
-    const batch = publishableIds.slice(index, index + 100);
+  for (let index = 0; index < exerciseIds.length; index += 100) {
+    const batch = exerciseIds.slice(index, index + 100);
     const page = await readPagedById<Link>('Los vínculos del corte piloto', MAX_PILOT_ROWS, async (lastId) => {
       let query = admin.from('vinculos_evaluacion_ejercicio')
         .select('id, ejercicio_id, asignacion_profesor_id, periodo_evaluacion_id')
@@ -360,6 +383,30 @@ async function readTimezoneAndRollout(admin: AdminClient, tenantId: string) {
   return { timezone, trackingStartedAt: rollout.data.activated_at as string };
 }
 
+function includeRetiredPublicationAuthors(
+  currentTeachers: TeacherRow[],
+  publications: PublicationRow[],
+): TeacherRow[] {
+  const knownIds = new Set(currentTeachers.map((teacher) => teacher.id));
+  const teachers = [...currentTeachers];
+  for (const publication of publications) {
+    if (knownIds.has(publication.credited_teacher_id)) continue;
+    knownIds.add(publication.credited_teacher_id);
+    teachers.push({
+      id: publication.credited_teacher_id,
+      nombre: 'Docente retirado',
+      apellidos: null,
+      email: null,
+      estatus: 'retirado',
+      hasActiveAssignment: false,
+    });
+  }
+  if (teachers.length > MAX_TEACHERS) {
+    throw new ReportLimitError(`La lista de docentes supera el límite de ${MAX_TEACHERS} registros; reduce el rango del informe.`);
+  }
+  return teachers;
+}
+
 export async function loadTeacherActivityAuditAction(
   input?: { from?: string; to?: string },
 ): Promise<ActionResult<TeacherActivityAuditReport>> {
@@ -379,42 +426,29 @@ export async function loadTeacherActivityAuditAction(
     for (const teacher of currentTeachers) teacher.hasActiveAssignment = assignedTeachers.has(teacher.id);
     // An author may later be deactivated, deleted, or changed to another role.
     // The immutable event still belongs in a historical audit export.
-    const knownIds = new Set(currentTeachers.map((teacher) => teacher.id));
-    const retiredAuthors: TeacherRow[] = [];
-    for (const publication of publications) {
-      if (knownIds.has(publication.credited_teacher_id)) continue;
-      knownIds.add(publication.credited_teacher_id);
-      retiredAuthors.push({
-        id: publication.credited_teacher_id,
-        nombre: 'Docente retirado',
-        apellidos: null,
-        email: null,
-        estatus: 'retirado',
-        hasActiveAssignment: false,
-      });
-    }
-    const teachers = [...currentTeachers, ...retiredAuthors];
-    if (teachers.length > MAX_TEACHERS) {
-      throw new ReportLimitError(`La lista de docentes supera el límite de ${MAX_TEACHERS} registros; reduce el rango del informe.`);
-    }
+    const teachers = includeRetiredPublicationAuthors(currentTeachers, publications);
     const [metrics, pilotResult] = await Promise.all([
       readObservedMetrics(admin, tenantId, new Set(teachers.map((teacher) => teacher.id)), from, to),
       pilotWindow ? (async () => {
-        const [exerciseRows, pilotPublications] = await Promise.all([
-          readPilotExerciseRows(admin, tenantId, pilotWindow.from, pilotWindow.through),
+        const [pilotPublications, pilotExceptions] = await Promise.all([
           readPublications(admin, tenantId, pilotWindow.from, pilotWindow.through),
+          readExceptions(admin, tenantId, pilotWindow.from, pilotWindow.through),
         ]);
+        const pilotTeachers = includeRetiredPublicationAuthors(currentTeachers, pilotPublications);
+        const exerciseRows = await readPilotExerciseRows(
+          admin, tenantId, pilotWindow.from, pilotWindow.through, pilotPublications,
+        );
         const visibleExerciseIds = await readVisiblePilotExerciseIds(admin, tenantId, exerciseRows);
         return {
           data: buildPilotTeacherActivityReport({
             ...pilotWindow,
             asOf: generatedAt,
             timezone,
-            teachers,
+            teachers: pilotTeachers,
             exerciseRows,
             visibleExerciseIds,
             publications: pilotPublications,
-            exceptions,
+            exceptions: pilotExceptions,
           }),
           error: null as string | null,
         };

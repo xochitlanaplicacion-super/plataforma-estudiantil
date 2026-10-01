@@ -1425,7 +1425,7 @@ export async function analyzeGroupSync(materiaIds: string[]) {
 }
 
 export async function syncGroupFromBaseGroup(sourceMateriaId: string, targetMateriaIds: string[]) {
-  const { supabase: supabaseAdmin } = await requireTenantSession();
+  const { supabase: supabaseAdmin, tenantId } = await requireTenantSession();
   if (!targetMateriaIds || targetMateriaIds.length === 0) return { success: true };
   
   try {
@@ -1452,9 +1452,34 @@ export async function syncGroupFromBaseGroup(sourceMateriaId: string, targetMate
     const { data: sourceSlides } = await supabaseAdmin.from('slides').select('*').in('tema_id', sourceTemaIds.length > 0 ? sourceTemaIds : ['__none__']);
     const { data: sourceResources } = await supabaseAdmin.from('resources').select('*').in('tema_id', sourceTemaIds.length > 0 ? sourceTemaIds : ['__none__']);
     
-    // Función auxiliar para asegurar que tenga sync_id
-    const ensureSyncId = (item: any) => {
-      if (!item.sync_id) return crypto.randomUUID();
+    // Persist the source ID before cloning so all copies share one logical item.
+    const ensureSyncId = async (table: 'unidades' | 'temas' | 'ejercicios' | 'slides' | 'resources', item: any) => {
+      if (item.sync_id) return item.sync_id;
+
+      const syncId = crypto.randomUUID();
+      const { data, error } = await supabaseAdmin.from(table)
+        .update({ sync_id: syncId })
+        .eq('tenant_id', tenantId)
+        .eq('id', item.id)
+        .is('sync_id', null)
+        .select('sync_id')
+        .maybeSingle();
+      if (error) throw error;
+
+      // Another sync may have populated this row after we read the hierarchy.
+      if (!data?.sync_id) {
+        const { data: current, error: readError } = await supabaseAdmin.from(table)
+          .select('sync_id')
+          .eq('tenant_id', tenantId)
+          .eq('id', item.id)
+          .single();
+        if (readError) throw readError;
+        if (!current?.sync_id) throw new Error(`No se pudo sincronizar ${table} ${item.id}`);
+        item.sync_id = current.sync_id;
+      } else {
+        item.sync_id = data.sync_id;
+      }
+
       return item.sync_id;
     };
 
@@ -1469,7 +1494,7 @@ export async function syncGroupFromBaseGroup(sourceMateriaId: string, targetMate
         delete uToInsert.created_at;
         delete uToInsert.updated_at;
         uToInsert.materia_id = targetMId;
-        uToInsert.sync_id = ensureSyncId(oldU);
+        uToInsert.sync_id = await ensureSyncId('unidades', oldU);
         
         const { data: newU } = await supabaseAdmin.from('unidades').insert(uToInsert).select('id').single();
         if (newU) {
@@ -1489,7 +1514,7 @@ export async function syncGroupFromBaseGroup(sourceMateriaId: string, targetMate
         delete tToInsert.created_at;
         delete tToInsert.updated_at;
         tToInsert.unidad_id = newUnidadId;
-        tToInsert.sync_id = ensureSyncId(oldT);
+        tToInsert.sync_id = await ensureSyncId('temas', oldT);
         
         const { data: newT } = await supabaseAdmin.from('temas').insert(tToInsert).select('id').single();
         if (newT) {
@@ -1509,7 +1534,7 @@ export async function syncGroupFromBaseGroup(sourceMateriaId: string, targetMate
           delete eToInsert.created_at;
           delete eToInsert.updated_at;
           eToInsert.tema_id = newTemaId;
-          eToInsert.sync_id = ensureSyncId(oldE);
+          eToInsert.sync_id = await ensureSyncId('ejercicios', oldE);
           ejToInsert.push(eToInsert);
         }
         if (ejToInsert.length > 0) await supabaseAdmin.from('ejercicios').insert(ejToInsert);
@@ -1527,7 +1552,7 @@ export async function syncGroupFromBaseGroup(sourceMateriaId: string, targetMate
           delete sToInsert.created_at;
           delete sToInsert.updated_at;
           sToInsert.tema_id = newTemaId;
-          sToInsert.sync_id = ensureSyncId(oldS);
+          sToInsert.sync_id = await ensureSyncId('slides', oldS);
           slidesToInsert.push(sToInsert);
         }
         if (slidesToInsert.length > 0) await supabaseAdmin.from('slides').insert(slidesToInsert);
@@ -1545,7 +1570,7 @@ export async function syncGroupFromBaseGroup(sourceMateriaId: string, targetMate
           delete rToInsert.created_at;
           delete rToInsert.updated_at;
           rToInsert.tema_id = newTemaId;
-          rToInsert.sync_id = ensureSyncId(oldR);
+          rToInsert.sync_id = await ensureSyncId('resources', oldR);
           resToInsert.push(rToInsert);
         }
         if (resToInsert.length > 0) await supabaseAdmin.from('resources').insert(resToInsert);

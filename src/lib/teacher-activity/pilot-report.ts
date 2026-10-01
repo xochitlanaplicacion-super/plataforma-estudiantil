@@ -14,8 +14,6 @@ export interface PilotExerciseRow {
   created_at: string | null;
   titulo: string;
   tipo: string | null;
-  publicado: boolean | null;
-  visible: boolean | null;
 }
 
 export interface PilotActivityEvidence {
@@ -27,12 +25,14 @@ export interface PilotActivityEvidence {
   visibleNow: boolean;
   currentAuthorId: string | null;
   mixedCurrentAuthors: boolean;
+  possibleCopy: boolean;
 }
 
 export type PilotTeacherStatus =
   | 'visible_now'
   | 'published_then_hidden'
   | 'created_not_visible'
+  | 'copy_review'
   | 'joined_during_pilot'
   | 'exception_review'
   | 'no_current_evidence'
@@ -98,6 +98,8 @@ export function buildPilotTeacherActivityReport(input: {
     const localCreated = localDate(createdAt, input.timezone);
     if (localCreated < input.from || localCreated > input.through || createdAt > input.asOf) continue;
     const currentAuthors = new Set(siblings.map((row) => row.created_by).filter(Boolean));
+    const possibleCopy = original.sync_id !== null
+      && !siblings.some((row) => row.id === logicalId);
     evidence.push({
       logicalId,
       exerciseId: original.id,
@@ -107,43 +109,60 @@ export function buildPilotTeacherActivityReport(input: {
       visibleNow: siblings.some((row) => input.visibleExerciseIds.has(row.id)),
       currentAuthorId: original.created_by,
       mixedCurrentAuthors: currentAuthors.size > 1,
+      possibleCopy,
     });
   }
   evidence.sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.logicalId.localeCompare(b.logicalId));
 
   const verified = new Map<string, Set<string>>();
+  const currentLogicalByExerciseId = new Map(input.exerciseRows
+    .map((row) => [row.id, row.sync_id || row.id] as const));
+  const visibleLogicalIds = new Set(input.exerciseRows
+    .filter((row) => input.visibleExerciseIds.has(row.id))
+    .flatMap((row) => row.sync_id ? [row.id, row.sync_id] : [row.id]));
+  const visibleVerified = new Map<string, Set<string>>();
   for (const event of input.publications) {
     const day = localDate(event.published_at, input.timezone);
     if (day < input.from || day > input.through || event.published_at > input.asOf) continue;
     const logical = verified.get(event.credited_teacher_id) ?? new Set<string>();
     logical.add(event.logical_activity_id);
     verified.set(event.credited_teacher_id, logical);
+    if (input.visibleExerciseIds.has(event.exercise_id) || visibleLogicalIds.has(event.logical_activity_id)) {
+      const visible = visibleVerified.get(event.credited_teacher_id) ?? new Set<string>();
+      visible.add(currentLogicalByExerciseId.get(event.exercise_id) ?? event.logical_activity_id);
+      visibleVerified.set(event.credited_teacher_id, visible);
+    }
   }
 
   const teachers = input.teachers.map((teacher): PilotTeacherActivity => {
     const own = evidence.filter((row) => row.currentAuthorId === teacher.id);
-    const visibleNow = own.filter((row) => row.visibleNow).length;
+    const identifiableCreations = own.filter((row) => !row.possibleCopy);
+    const visibleActivities = new Set(own.filter((row) => row.visibleNow).map((row) => row.logicalId));
+    for (const logicalId of visibleVerified.get(teacher.id) ?? []) visibleActivities.add(logicalId);
+    const visibleNow = visibleActivities.size;
     const verifiedPublications = verified.get(teacher.id)?.size ?? 0;
-    const joinedDuringPilot = teacher.created_at
-      ? localDate(teacher.created_at, input.timezone) > input.from
-      : false;
+    const registeredDay = teacher.created_at ? localDate(teacher.created_at, input.timezone) : null;
+    const joinedAfterPilot = registeredDay !== null && registeredDay > input.through;
+    const joinedDuringPilot = registeredDay !== null && registeredDay > input.from
+      && registeredDay <= input.through;
     const hasException = input.exceptions?.some((exception) => exception.teacher_id === teacher.id
       && exception.week_start <= input.through
       && addDays(exception.week_start, 6) >= input.from) ?? false;
-    const status: PilotTeacherStatus = teacher.estatus !== 'activo' || teacher.hasActiveAssignment === false
+    const status: PilotTeacherStatus = teacher.estatus !== 'activo' || teacher.hasActiveAssignment === false || joinedAfterPilot
       ? 'not_applicable'
       : visibleNow > 0 ? 'visible_now'
         : verifiedPublications > 0 ? 'published_then_hidden'
-          : own.length > 0 ? 'created_not_visible'
-            : hasException ? 'exception_review'
-              : joinedDuringPilot ? 'joined_during_pilot'
-                : 'no_current_evidence';
+          : identifiableCreations.length > 0 ? 'created_not_visible'
+            : own.length > 0 ? 'copy_review'
+              : hasException ? 'exception_review'
+                : joinedDuringPilot ? 'joined_during_pilot'
+                  : 'no_current_evidence';
     return {
       teacherId: teacher.id,
       name: [teacher.nombre, teacher.apellidos].filter(Boolean).join(' ').trim() || teacher.email || teacher.id,
       email: teacher.email ?? '',
       status,
-      createdExisting: own.length,
+      createdExisting: identifiableCreations.length,
       visibleNow,
       verifiedPublications,
       evidence: own,
@@ -157,6 +176,6 @@ export function buildPilotTeacherActivityReport(input: {
     timezone: input.timezone,
     teachers,
     unattributed: evidence.filter((row) => !row.currentAuthorId || !knownTeachers.has(row.currentAuthorId)),
-    caveat: 'Corte preliminar, distinto de la meta oficial de 3 publicaciones por semana. La fecha de creación proviene de filas que aún existen; una edición o copia no acredita una nueva publicación. «Visible hoy» describe el estado actual, no la fecha en que se publicó. Antes del registro inmutable no puede certificarse cuándo se hizo visible, y una sustitución docente puede cambiar la autoría actual.',
+    caveat: 'Corte preliminar, distinto de la meta oficial de 3 publicaciones por semana. «Creadas» cuenta originales identificables que aún existen; las posibles copias sin origen localizable se muestran aparte y no se suman. Una copia sin vínculo de sincronización puede parecer una creación. «Con vínculo hoy» indica acceso directo del alumno mediante evaluación activa, no presencia en su catálogo: una unidad inactiva puede ocultarla. Antes del registro inmutable no puede certificarse cuándo se publicó, y una sustitución docente puede cambiar la autoría actual.',
   };
 }

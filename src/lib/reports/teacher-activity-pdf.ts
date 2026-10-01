@@ -167,9 +167,10 @@ function weeklyStatus(status: string, eligibility: string, nonApplicableReason?:
 }
 
 function pilotStatus(status: string) {
-  if (status === 'visible_now') return 'Visible hoy';
-  if (status === 'published_then_hidden') return 'Publicó; no visible hoy';
-  if (status === 'created_not_visible') return 'Creó; no visible hoy';
+  if (status === 'visible_now') return 'Con vínculo hoy';
+  if (status === 'published_then_hidden') return 'Publicó; sin vínculo hoy';
+  if (status === 'created_not_visible') return 'Creó; sin vínculo hoy';
+  if (status === 'copy_review') return 'Posible copia; revisar origen';
   if (status === 'joined_during_pilot') return 'Ingreso reciente; revisar';
   if (status === 'exception_review') return 'Excepción registrada; revisar';
   if (status === 'not_applicable') return 'No aplica actualmente';
@@ -304,22 +305,22 @@ export async function buildTeacherActivityPdf(input: TeacherActivityPdfInput) {
     const pilotHeader = () => {
       header(doc, input, 'CORTE PRELIMINAR · DESDE 27 SEP', pilotSubtitle, logo, primary);
       text(doc, pilot.caveat, 14, 46, 269, 7.5, MUTED, 'normal', 3);
-      text(doc, 'Creadas = originales aún existentes. Visibles = estado actual. Verificadas = eventos inmutables desde la activación.', 14, 65, 269, 7.5, INK, 'bold', 1);
+      text(doc, 'Creadas = originales localizables. Posibles copias = origen por revisar. Con vínculo hoy = acceso directo actual. Verificadas = eventos inmutables.', 14, 65, 269, 7.5, INK, 'bold', 1);
     };
     const priority: Record<string, number> = {
       no_current_evidence: 0, created_not_visible: 1,
-      published_then_hidden: 2, visible_now: 3,
-      joined_during_pilot: 4, exception_review: 5, not_applicable: 6,
+      copy_review: 2, published_then_hidden: 3, visible_now: 4,
+      joined_during_pilot: 5, exception_review: 6, not_applicable: 7,
     };
     autoTable(doc, {
       ...tableConfig(doc, input, 'CORTE PRELIMINAR · DESDE 27 SEP', pilotSubtitle, logo, primary),
       startY: 72,
       margin: { top: 72, right: 14, bottom: 17, left: 14 },
       didDrawPage: pilotHeader,
-      head: [['Profesor', 'Creadas', 'Visibles hoy', 'Verificadas', 'Lectura']],
+      head: [['Profesor', 'Creadas', 'Con vínculo hoy', 'Verificadas', 'Lectura']],
       body: pilotTeachers.slice().sort((a, b) => priority[a.status] - priority[b.status] || a.name.localeCompare(b.name, 'es')).map((teacher) => [
         clean(teacher.name), String(teacher.createdExisting), String(teacher.visibleNow),
-        String(teacher.verifiedPublications), pilotStatus(teacher.status),
+        String(teacher.verifiedPublications), `${pilotStatus(teacher.status)}${teacher.status !== 'copy_review' && teacher.evidence.some((activity) => activity.possibleCopy) ? '; origen de copia por revisar' : ''}`,
       ]),
       columnStyles: { 0: { cellWidth: 90 }, 1: { cellWidth: 30 }, 2: { cellWidth: 37 }, 3: { cellWidth: 36 }, 4: { cellWidth: 76 } },
     });
@@ -327,20 +328,22 @@ export async function buildTeacherActivityPdf(input: TeacherActivityPdfInput) {
 
     const pilotEvidence = pilotTeachers.flatMap((teacher) => teacher.evidence.map((activity) => [
       clean(teacher.name), timestampLabel(activity.createdAt, pilot.timezone),
-      clean(activity.title), activity.visibleNow ? 'Sí, hoy' : 'No, hoy',
-      activity.mixedCurrentAuthors ? 'Autoría de copias distinta; revisar' : 'Autor actual de la fila',
+      clean(activity.title), activity.visibleNow ? 'Sí' : 'No',
+      activity.possibleCopy
+        ? 'Posible copia; origen por revisar'
+        : activity.mixedCurrentAuthors ? 'Autoría de copias distinta; revisar' : 'Autor actual de la fila',
     ]));
     if (!input.teacherId) {
       pilotEvidence.push(...pilot.unattributed.map((activity) => [
         'Sin docente actual identificable', timestampLabel(activity.createdAt, pilot.timezone),
-        clean(activity.title), activity.visibleNow ? 'Sí, hoy' : 'No, hoy',
+        clean(activity.title), activity.visibleNow ? 'Sí' : 'No',
         'Autoría por revisar',
       ]));
     }
     doc.addPage();
     autoTable(doc, {
-      ...tableConfig(doc, input, 'ANEXO · CORTE PRELIMINAR', 'Fecha de creación y visibilidad actual; no es historial certificado de publicaciones', logo, primary),
-      head: [['Profesor actual', 'Creada', 'Actividad', 'Visible hoy', 'Atribución']],
+      ...tableConfig(doc, input, 'ANEXO · CORTE PRELIMINAR', 'Fecha de creación y acceso por vínculo actual; no es historial certificado de publicaciones', logo, primary),
+      head: [['Profesor actual', 'Creada', 'Actividad', 'Con vínculo hoy', 'Atribución']],
       body: pilotEvidence,
       columnStyles: { 0: { cellWidth: 55 }, 1: { cellWidth: 39 }, 2: { cellWidth: 95 }, 3: { cellWidth: 30 }, 4: { cellWidth: 50 } },
     });

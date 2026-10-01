@@ -1,5 +1,5 @@
--- Run after the academic fixture, step 14, step 15, and the publication event
--- migration. Fixture exercise ...0012 is published before the migration.
+-- Run after the academic fixture and teacher activity migrations.
+-- Fixture exercise ...0012 was accessible before tracking began.
 begin;
 
 do $teacher_activity_events_test$
@@ -53,7 +53,8 @@ begin
     raise exception 'Migration backfilled publication events';
   end if;
 
-  update public.ejercicios set visible = false where id = historical_id;
+  update public.ejercicios set visible = false, publicado = false
+  where id = historical_id;
   update public.ejercicios set visible = true where id = historical_id;
   update public.vinculos_evaluacion_ejercicio set activo = false
     where id = source_link.id;
@@ -68,7 +69,7 @@ begin
   insert into public.ejercicios
     (id, tenant_id, tema_id, titulo, tipo, created_by, publicado, visible, sync_id)
   values (historical_copy_id, tenant_a, topic_a, 'Historical copy',
-    'opcion_multiple', teacher_a, true, true, historical_logical_id);
+    'opcion_multiple', teacher_a, false, false, historical_logical_id);
   insert into public.vinculos_evaluacion_ejercicio
     (tenant_id, ciclo_escolar_id, asignacion_profesor_id,
      periodo_evaluacion_id, criterio_evaluacion_id, ejercicio_id, origen,
@@ -85,7 +86,7 @@ begin
     (id, tenant_id, tema_id, titulo, tipo, created_by, publicado, visible,
      sync_id, fecha_entrega)
   values (published_id, tenant_a, topic_a, 'Original task',
-    'actividad_descriptiva', teacher_a, false, true, logical_id,
+    'actividad_descriptiva', teacher_a, false, false, logical_id,
     '2026-10-09T23:59:00Z');
   insert into public.vinculos_evaluacion_ejercicio
     (tenant_id, ciclo_escolar_id, asignacion_profesor_id,
@@ -95,14 +96,15 @@ begin
     source_link.asignacion_profesor_id, active_period_id,
     source_link.criterio_evaluacion_id, published_id,
     'descriptiveSubmission', teacher_a);
-  if exists (
+  if not exists (
     select 1 from public.teacher_activity_publication_events
     where exercise_id = published_id
-  ) then raise exception 'Draft activity emitted an event'; end if;
-  update public.ejercicios set publicado = true where id = published_id;
+  ) then raise exception 'Active link did not publish an unflagged activity'; end if;
   select * into strict original_event
   from public.teacher_activity_publication_events
   where exercise_id = published_id;
+  update public.ejercicios set publicado = true, visible = true
+  where id = published_id;
   if original_event.credited_teacher_id <> teacher_a
      or original_event.logical_activity_id <> logical_id
      or original_event.title_snapshot <> 'Original task'
@@ -159,7 +161,7 @@ begin
 
   insert into public.ejercicios
     (id, tenant_id, tema_id, titulo, created_by, publicado, visible)
-  values (link_later_id, tenant_a, topic_a, 'Link later', teacher_a, true, true);
+  values (link_later_id, tenant_a, topic_a, 'Link later', teacher_a, false, false);
   if exists (select 1 from public.teacher_activity_publication_events
     where exercise_id = link_later_id) then
     raise exception 'Unlinked activity emitted an event';
@@ -180,7 +182,9 @@ begin
   insert into public.ejercicios
     (id, tenant_id, tema_id, titulo, created_by, publicado, visible)
   values (assignment_later_id, tenant_a, topic_a, 'Assignment later',
-    teacher_a, false, true);
+    teacher_a, false, false);
+  update public.asignaciones_profesor set activo = false
+  where id = source_link.asignacion_profesor_id;
   insert into public.vinculos_evaluacion_ejercicio
     (tenant_id, ciclo_escolar_id, asignacion_profesor_id,
      periodo_evaluacion_id, criterio_evaluacion_id, ejercicio_id, origen,
@@ -189,9 +193,6 @@ begin
     source_link.asignacion_profesor_id, active_period_id,
     source_link.criterio_evaluacion_id, assignment_later_id,
     source_link.origen, teacher_a);
-  update public.asignaciones_profesor set activo = false
-  where id = source_link.asignacion_profesor_id;
-  update public.ejercicios set publicado = true where id = assignment_later_id;
   if exists (select 1 from public.teacher_activity_publication_events
     where exercise_id = assignment_later_id) then
     raise exception 'Inactive assignment emitted an event';
@@ -206,7 +207,7 @@ begin
   insert into public.ejercicios
     (id, tenant_id, tema_id, titulo, created_by, publicado, visible)
   values (period_later_id, tenant_a, topic_a, 'Period later',
-    teacher_a, true, true);
+    teacher_a, false, false);
   insert into public.vinculos_evaluacion_ejercicio
     (tenant_id, ciclo_escolar_id, asignacion_profesor_id,
      periodo_evaluacion_id, criterio_evaluacion_id, ejercicio_id, origen,

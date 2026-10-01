@@ -47,7 +47,7 @@ describe('PDF de seguimiento docente', () => {
         id: `pilot-${index}`, sync_id: null, created_by: 'teacher-1',
         created_at: '2026-09-28T18:00:00Z',
         titulo: `Actividad del corte preliminar ${index} con un nombre suficientemente largo para probar que se conserve legible`,
-        tipo: 'actividad_descriptiva', publicado: true, visible: true,
+        tipo: 'actividad_descriptiva',
       })),
       visibleExerciseIds: new Set(Array.from({ length: 40 }, (_, index) => `pilot-${index}`)),
       publications: [],

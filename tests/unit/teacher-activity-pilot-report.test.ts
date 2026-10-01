@@ -17,8 +17,6 @@ function exercise(input: Partial<PilotExerciseRow> & Pick<PilotExerciseRow, 'id'
     created_by: teacher.id,
     titulo: input.id,
     tipo: 'actividad_descriptiva',
-    publicado: true,
-    visible: true,
     ...input,
   };
 }
@@ -57,19 +55,20 @@ describe('corte preliminar docente', () => {
         exercise({ id: 'new-copy', sync_id: 'new-sync', created_at: '2026-09-29T18:00:00Z' }),
         exercise({ id: 'old-original', sync_id: 'old-sync', created_at: '2026-09-26T18:00:00Z' }),
         exercise({ id: 'old-copy', sync_id: 'old-sync', created_at: '2026-09-29T19:00:00Z' }),
-        exercise({ id: 'draft', created_at: '2026-09-30T18:00:00Z', publicado: false }),
+        exercise({ id: 'draft', created_at: '2026-09-30T18:00:00Z' }),
         exercise({ id: 'pre-local-day', created_at: '2026-09-27T04:00:00Z' }),
       ],
       visibleExerciseIds: new Set(['new-copy', 'old-copy']),
       publications: [publication('older-activity-published-now', '2026-09-30T18:00:00Z')],
     });
     expect(report.teachers[0]).toMatchObject({
-      createdExisting: 2,
+      createdExisting: 1,
       visibleNow: 1,
       verifiedPublications: 1,
       status: 'visible_now',
     });
     expect(report.teachers[0].evidence.map((item) => item.logicalId)).toEqual(['new-sync', 'draft']);
+    expect(report.teachers[0].evidence[0].possibleCopy).toBe(true);
     expect(report.teachers[1]).toMatchObject({
       createdExisting: 0,
       visibleNow: 0,
@@ -78,13 +77,41 @@ describe('corte preliminar docente', () => {
     });
   });
 
+  it('keeps an unlinked synchronized copy visible for review without crediting a new original', () => {
+    const report = buildPilotTeacherActivityReport({
+      from: '2026-09-27', through: '2026-09-30', asOf: '2026-10-01T04:00:00Z',
+      timezone: 'America/Mexico_City', teachers: [teacher],
+      exerciseRows: [exercise({ id: 'copied-row', sync_id: 'new-sync', created_at: '2026-09-29T18:00:00Z' })],
+      visibleExerciseIds: new Set(), publications: [],
+    });
+    expect(report.teachers[0]).toMatchObject({ createdExisting: 0, status: 'copy_review' });
+    expect(report.teachers[0].evidence[0]).toMatchObject({
+      exerciseId: 'copied-row', possibleCopy: true,
+    });
+  });
+
+  it('counts a synchronized copy once when its source row is identifiable', () => {
+    const report = buildPilotTeacherActivityReport({
+      from: '2026-09-27', through: '2026-09-30', asOf: '2026-10-01T04:00:00Z',
+      timezone: 'America/Mexico_City', teachers: [teacher],
+      exerciseRows: [
+        exercise({ id: 'source', created_at: '2026-09-27T18:00:00Z' }),
+        exercise({ id: 'copy', sync_id: 'source', created_at: '2026-09-29T18:00:00Z' }),
+      ],
+      visibleExerciseIds: new Set(['copy']), publications: [],
+    });
+    expect(report.teachers[0]).toMatchObject({ createdExisting: 1, visibleNow: 1, status: 'visible_now' });
+    expect(report.teachers[0].evidence).toHaveLength(1);
+    expect(report.teachers[0].evidence[0].possibleCopy).toBe(false);
+  });
+
   it('separates previously created tasks published now, current hidden tasks, and non-applicable teachers', () => {
     const report = buildPilotTeacherActivityReport({
       from: '2026-09-27', through: '2026-10-04', asOf: '2026-10-01T04:00:00Z',
       timezone: 'America/Mexico_City',
       teachers: [teacher, { ...teacher, id: 'teacher-c', estatus: 'inactivo' }],
       exerciseRows: [
-        exercise({ id: 'hidden', created_at: '2026-09-28T18:00:00Z', visible: false }),
+        exercise({ id: 'hidden', created_at: '2026-09-28T18:00:00Z' }),
         exercise({ id: 'outside-owner', created_by: 'admin-id', created_at: '2026-09-29T18:00:00Z' }),
       ],
       visibleExerciseIds: new Set(),
@@ -113,6 +140,33 @@ describe('corte preliminar docente', () => {
     expect(report.teachers[0].evidence[0].mixedCurrentAuthors).toBe(true);
   });
 
+  it('counts a still-visible older draft published during the pilot without counting its creation', () => {
+    const report = buildPilotTeacherActivityReport({
+      from: '2026-09-27', through: '2026-09-30', asOf: '2026-10-01T04:00:00Z',
+      timezone: 'America/Mexico_City', teachers: [teacher],
+      exerciseRows: [exercise({ id: 'older-draft', sync_id: 'later-sync', created_at: '2026-09-20T18:00:00Z' })],
+      visibleExerciseIds: new Set(['older-draft']),
+      publications: [publication('older-draft', '2026-09-29T18:00:00Z')],
+    });
+    expect(report.teachers[0]).toMatchObject({
+      createdExisting: 0,
+      visibleNow: 1,
+      verifiedPublications: 1,
+      status: 'visible_now',
+    });
+  });
+
+  it('does not double-count an activity whose sync ID changed after its publication event', () => {
+    const report = buildPilotTeacherActivityReport({
+      from: '2026-09-27', through: '2026-09-30', asOf: '2026-10-01T04:00:00Z',
+      timezone: 'America/Mexico_City', teachers: [teacher],
+      exerciseRows: [exercise({ id: 'source', sync_id: 'later-sync', created_at: '2026-09-27T18:00:00Z' })],
+      visibleExerciseIds: new Set(['source']),
+      publications: [{ ...publication('source', '2026-09-29T18:00:00Z'), exercise_id: 'source' }],
+    });
+    expect(report.teachers[0]).toMatchObject({ visibleNow: 1, verifiedPublications: 1 });
+  });
+
   it('does not present a new teacher or a justified week as ordinary missing activity', () => {
     const report = buildPilotTeacherActivityReport({
       from: '2026-09-27', through: '2026-09-30', asOf: '2026-10-01T04:00:00Z',
@@ -120,6 +174,7 @@ describe('corte preliminar docente', () => {
       teachers: [
         { ...teacher, id: 'new', created_at: '2026-09-29T18:00:00Z' },
         { ...teacher, id: 'excused' },
+        { ...teacher, id: 'later', created_at: '2026-10-10T18:00:00Z' },
       ],
       exerciseRows: [], visibleExerciseIds: new Set(), publications: [],
       exceptions: [{
@@ -130,5 +185,6 @@ describe('corte preliminar docente', () => {
     });
     expect(report.teachers.find((row) => row.teacherId === 'new')?.status).toBe('joined_during_pilot');
     expect(report.teachers.find((row) => row.teacherId === 'excused')?.status).toBe('exception_review');
+    expect(report.teachers.find((row) => row.teacherId === 'later')?.status).toBe('not_applicable');
   });
 });
