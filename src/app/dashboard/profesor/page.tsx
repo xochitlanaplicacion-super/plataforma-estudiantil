@@ -10,6 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { UNWEIGHTED_PLATFORM_CRITERION_ID } from '@/lib/academic/platform-category';
+import { createSingleFlightGate } from '@/lib/ui/single-flight-gate';
 import { 
   BookOpen, 
   ListTree, 
@@ -1058,6 +1059,9 @@ export default function ProfesorDashboard() {
 
   const [currentTab, setCurrentTab] = useState('materias');
   const [dialog, setDialog] = useState<any>({ open: false, type: '', data: {} });
+  // El candado bloquea otro clic inmediatamente, antes de que React actualice el botón.
+  const [saveGate] = useState(createSingleFlightGate);
+  const [savingDialog, setSavingDialog] = useState(false);
   const [evaluationOptions, setEvaluationOptions] = useState<any[]>([]);
   const [evaluationTimezone, setEvaluationTimezone] = useState('America/Mexico_City');
   const [evaluationOptionsLoading, setEvaluationOptionsLoading] = useState(false);
@@ -1065,6 +1069,13 @@ export default function ProfesorDashboard() {
   const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<any>(null);
   const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
   const [slideToDelete, setSlideToDelete] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!dialog.open) {
+      saveGate.release();
+      setSavingDialog(false);
+    }
+  }, [dialog.open, saveGate]);
 
   const evaluationAssignmentIds: string[] = dialog.data?.syncToAll !== false
     && isGroupMode && selectedAgrupacion
@@ -1427,44 +1438,47 @@ export default function ProfesorDashboard() {
   };
 
   const handleSave = async () => {
-    let result;
-    const d = dialog.data;
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (dialog.type === 'agrupacion') {
-      if (!d.nombre || d.nombre.trim() === '') {
-        toast({ variant: "destructive", title: "Campo requerido", description: "El nombre de la agrupación es obligatorio." });
-        return;
-      }
-    } else {
-      if (!d.titulo || d.titulo.trim() === '') {
-        toast({ variant: "destructive", title: "Campo requerido", description: "El título principal es obligatorio para guardar." });
-        return;
-      }
-    }
-
-    // Validación obligatoria: fecha de entrega en ejercicios
-    if (dialog.type === 'ejercicio' && (!d.fecha_entrega || d.fecha_entrega.trim() === '')) {
-      toast({ variant: "destructive", title: "Fecha de entrega requerida", description: "Debes establecer una fecha límite de entrega para la actividad. Este campo es obligatorio." });
-      return;
-    }
-    if (dialog.type === 'ejercicio') {
-      const links = Array.isArray(d.evaluationLinks) ? d.evaluationLinks : [];
-      const completos = evaluationAssignmentIds.every((assignmentId) => {
-        const link = links.find((item: any) => item.assignmentId === assignmentId);
-        return Boolean(link?.periodId && link?.criterionId);
-      });
-      if (!completos) {
-        toast({
-          variant: 'destructive',
-          title: 'Evaluación requerida',
-          description: 'Cada grupo debe tener un periodo activo y una categoría de actividades disponible.',
-        });
-        return;
-      }
-    }
+    if (!saveGate.tryAcquire()) return;
+    setSavingDialog(true);
+    let saved = false;
 
     try {
+      let result;
+      const d = dialog.data;
+      if (dialog.type === 'agrupacion') {
+        if (!d.nombre || d.nombre.trim() === '') {
+          toast({ variant: "destructive", title: "Campo requerido", description: "El nombre de la agrupación es obligatorio." });
+          return;
+        }
+      } else {
+        if (!d.titulo || d.titulo.trim() === '') {
+          toast({ variant: "destructive", title: "Campo requerido", description: "El título principal es obligatorio para guardar." });
+          return;
+        }
+      }
+
+      // Validación obligatoria: fecha de entrega en ejercicios
+      if (dialog.type === 'ejercicio' && (!d.fecha_entrega || d.fecha_entrega.trim() === '')) {
+        toast({ variant: "destructive", title: "Fecha de entrega requerida", description: "Debes establecer una fecha límite de entrega para la actividad. Este campo es obligatorio." });
+        return;
+      }
+      if (dialog.type === 'ejercicio') {
+        const links = Array.isArray(d.evaluationLinks) ? d.evaluationLinks : [];
+        const completos = evaluationAssignmentIds.every((assignmentId) => {
+          const link = links.find((item: any) => item.assignmentId === assignmentId);
+          return Boolean(link?.periodId && link?.criterionId);
+        });
+        if (!completos) {
+          toast({
+            variant: 'destructive',
+            title: 'Evaluación requerida',
+            description: 'Cada grupo debe tener un periodo activo y una categoría de actividades disponible.',
+          });
+          return;
+        }
+      }
+
+      const { data: { user } } = await supabase.auth.getUser();
       if (dialog.type === 'agrupacion') {
         const ag = { ...d, profesor_id: currentUserId };
         result = await upsertAgrupacion(ag);
@@ -1516,6 +1530,7 @@ export default function ProfesorDashboard() {
       }
 
       if (result && !result.error) {
+        saved = true;
         toast({ title: "Guardado con éxito" });
         setDialog({ ...dialog, open: false });
         if (dialog.type === 'unidad') fetchUnidades(selectedMateria.id);
@@ -1524,7 +1539,17 @@ export default function ProfesorDashboard() {
       } else if (result?.error) {
         toast({ variant: "destructive", title: "Error al guardar", description: result.error.message || "Ocurrió un error inesperado." });
       }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+      console.error(e);
+      toast({ variant: 'destructive', title: 'Error al guardar', description: 'No se pudo completar el guardado. Inténtalo de nuevo.' });
+    } finally {
+      // Si se guardó, el candado permanece hasta que el diálogo se cierre.
+      // Ante errores o validaciones fallidas se permite un nuevo intento.
+      if (!saved) {
+        saveGate.release();
+        setSavingDialog(false);
+      }
+    }
   };
 
   const handleDelete = async (type: string, id: string, title?: string, sync_id?: string) => {
@@ -2235,7 +2260,9 @@ export default function ProfesorDashboard() {
       )}
 
       {/* DIALOGO DE EDICIÓN DE ACTIVIDAD */}
-      <Dialog open={dialog.open} onOpenChange={o => setDialog({...dialog, open: o})}>
+      <Dialog open={dialog.open} onOpenChange={o => {
+        if (!saveGate.isLocked()) setDialog({ ...dialog, open: o });
+      }}>
         <DialogContent className={cn("w-[95vw] max-h-[90vh] flex flex-col p-0 rounded-[32px] overflow-hidden", dialog.type === 'ejercicio' ? 'max-w-4xl' : 'max-w-xl')}>
           <DialogHeader className="p-8 bg-slate-50 border-b shrink-0 flex flex-row items-center justify-between space-y-0">
             <div className="flex items-center gap-4">
@@ -2542,8 +2569,10 @@ export default function ProfesorDashboard() {
           </div>
 
           <DialogFooter className="p-8 shrink-0 border-t bg-slate-50 gap-2">
-            <Button variant="outline" className="rounded-2xl px-8 font-black uppercase text-[10px]" onClick={() => setDialog({...dialog, open: false})}>Cancelar</Button>
-            <Button className="bg-primary px-10 rounded-2xl font-black uppercase tracking-widest shadow-lg" onClick={handleSave}>Guardar Cambios</Button>
+            <Button variant="outline" className="rounded-2xl px-8 font-black uppercase text-[10px]" disabled={savingDialog} onClick={() => setDialog({...dialog, open: false})}>Cancelar</Button>
+            <Button className="bg-primary px-10 rounded-2xl font-black uppercase tracking-widest shadow-lg" disabled={savingDialog} aria-busy={savingDialog} onClick={handleSave}>
+              {savingDialog ? <><Loader2 size={16} className="mr-2 animate-spin" />Guardando…</> : 'Guardar Cambios'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
