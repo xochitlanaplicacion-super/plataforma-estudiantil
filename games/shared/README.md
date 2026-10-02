@@ -4,6 +4,8 @@
 existentes de cada juego. No altera preguntas, resultados ni permisos del tenant.
 
 - Se habilita en dispositivos con `navigator.maxTouchPoints > 0`.
+- En equipos híbridos se mantienen tanto los controles táctiles como la captura
+  del ratón. Un gesto táctil no solicita capturar el ratón; un clic de mouse sí.
 - Movimiento, cámara y acciones admiten punteros independientes.
 - El botón `PAUSA` permanece visible durante la partida y abre el menú desde
   el que se entra a la personalización. `SHIFT` activa el sprint táctil.
@@ -15,7 +17,7 @@ existentes de cada juego. No altera preguntas, resultados ni permisos del tenant
 
 ## Verificación
 
-Prueba automatizada: `npx vitest run tests/unit/game-touch-controls.test.ts`.
+Pruebas automatizadas: `npx vitest run tests/unit/game-touch-controls.test.ts tests/unit/parkour-input-regressions.test.ts tests/unit/backrooms-input-regressions.test.ts tests/components/parkour-embedded-load.test.tsx`.
 Los dos proyectos tienen su propia comprobación TypeScript y compilación Vite.
 Tras modificar el módulo compartido se deben recompilar **ambos** juegos para
 actualizar `public/games/parkour-race` y `public/games/backrooms-scape`.
@@ -29,6 +31,11 @@ Antes de publicar, probar ambos juegos en Safari y Chrome de iPad y en Android:
 5. Cambiar de aplicación y regresar sin acciones que queden presionadas.
 6. Responder preguntas y finalizar la actividad en modo alumno y previsualización.
 7. Verificar teclado y ratón en PC sin pantalla táctil.
+8. Repetir respuestas correctas e incorrectas con y sin retroalimentación.
+   Un doble toque no debe sumar dos respuestas ni omitir la siguiente estación.
+9. En PC híbrida comprobar que la cámara vuelve a responder después de cada
+   pregunta. Si el navegador rechaza la captura, debe aparecer la pausa con
+   opción de reanudar, conservando el avance.
 
 La resolución interna puede ajustarse al rendimiento; no se eliminan los
 efectos o elementos del escenario. Las pruebas emuladas de controles no miden

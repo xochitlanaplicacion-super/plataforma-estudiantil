@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { randomSeed, validateImported } from "./lib/core";
 import { useStore } from "./store";
 import Home from "./components/Home";
@@ -11,6 +11,7 @@ export default function App() {
   const activity = useStore((s) => s.activity);
   const gameKey = useStore((s) => s.gameKey);
   const embedded = new URLSearchParams(window.location.search).get("embed") === "1";
+  const loadedActivityKey = useRef("");
 
   useEffect(() => {
     if (!embedded) return;
@@ -27,6 +28,11 @@ export default function App() {
         window.parent.postMessage({ type: "parkour-race:error", payload: { message: "Preset de actividad inválido" } }, window.location.origin);
         return;
       }
+      // The parent deliberately sends the preset on iframe load and on :ready.
+      // Processing both would restart an active run and remount its controls.
+      const loadKey = JSON.stringify(loaded);
+      if (loadedActivityKey.current === loadKey) return;
+      loadedActivityKey.current = loadKey;
       const configuredSeed = parseInt(loaded.settings.fixedSeed.replace(/\D/g, ""), 10);
       const seed = loaded.settings.seedMode === "unique" || !configuredSeed ? randomSeed() : configuredSeed;
       const board = event.data?.payload?.leaderboard;

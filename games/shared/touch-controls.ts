@@ -1,5 +1,10 @@
 export const hasTouchControls = () => navigator.maxTouchPoints > 0;
 
+/** A touchscreen laptop can still have a mouse that needs pointer lock. */
+export const hasMousePointer = () =>
+  !hasTouchControls() ||
+  (typeof window.matchMedia === 'function' && window.matchMedia('(any-pointer: fine)').matches);
+
 type Options = {
   id: string;
   canvas: HTMLCanvasElement;
@@ -145,6 +150,9 @@ export function installTouchControls(options: Options): () => void {
   });
   const down = (event: PointerEvent) => {
     if (!options.playing() || lookPointer !== null || (event.pointerType === 'mouse' && event.button !== 0)) return;
+    // On hybrid devices the game's pointer-lock handler owns the mouse. Capturing
+    // it here would make a single movement rotate the camera twice.
+    if (event.pointerType === 'mouse' && hasMousePointer()) return;
     event.preventDefault(); lookPointer = event.pointerId; lastX = event.clientX; lastY = event.clientY;
     options.canvas.setPointerCapture(event.pointerId);
   };

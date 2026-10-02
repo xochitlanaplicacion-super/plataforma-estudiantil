@@ -118,8 +118,8 @@ export default function App() {
     };
   }, [activity, gameVersion, initialSeed]);
 
-  const start = useCallback(() => {
-    gameRef.current?.startRun(diff, initialSeed);
+  const start = useCallback((pointerType?: string) => {
+    gameRef.current?.startRun(diff, initialSeed, pointerType);
   }, [diff, initialSeed]);
 
   const restart = useCallback(() => {

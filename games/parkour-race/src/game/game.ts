@@ -21,7 +21,7 @@ import { generateCourse, GeneratedCourse } from "./generator";
 import { Player, PlayerInput } from "./player";
 import { sfx } from "./sfx";
 import { gameMusic } from "./music";
-import { hasTouchControls, installTouchControls } from '../../../shared/touch-controls';
+import { hasMousePointer, hasTouchControls, installTouchControls } from '../../../shared/touch-controls';
 
 const BODY_PALETTES: [string, string][] = [
   ["#FF6B8A", "#D84F74"],
@@ -54,6 +54,8 @@ export class AdventureGame {
   private camYaw = 0;
   private camPitch = 0.42;
   private locked = false;
+  private touchInputActive = !hasMousePointer();
+  private lastAnswerPointerType = "";
   private t = 0;
   private time = 0;
   private hudTimer = 0;
@@ -70,8 +72,10 @@ export class AdventureGame {
   private onKeyUp: (e: KeyboardEvent) => void;
   private onMouseMove: (e: MouseEvent) => void;
   private onLockChange: () => void;
-  private onCanvasClick: () => void;
+  private onLockError: () => void;
+  private onCanvasClick: (event: MouseEvent) => void;
   private beforeUnload: (e: BeforeUnloadEvent) => void;
+  private questionCloseTimer: number | null = null;
 
   constructor(canvas: HTMLCanvasElement, activity: Activity, seed: number, callbacks: AdventureCallbacks = {}) {
     this.canvas = canvas;
@@ -145,20 +149,31 @@ export class AdventureGame {
     this.onLockChange = () => {
       this.locked = document.pointerLockElement === this.canvas;
       const s = useStore.getState();
-      if (!this.locked && s.playing && !s.question && !s.results && !this.finished) {
+      if (!this.locked && !this.touchInputActive && s.playing && !s.question && !s.results && !this.finished) {
         s.setPaused(true);
         gameMusic.pause();
       } else if (this.locked) {
+        if (s.question || s.results || this.finished || !s.playing) {
+          document.exitPointerLock();
+          return;
+        }
         s.setPaused(false);
         if (s.playing && !s.results && !this.finished) {
           gameMusic.resume(this.seed, s.musicMuted);
         }
       }
     };
-    this.onCanvasClick = () => {
+    this.onLockError = () => {
+      const s = useStore.getState();
+      if (!this.disposed && document.pointerLockElement !== this.canvas && !this.touchInputActive && s.playing && !s.question && !s.results && !this.finished) {
+        s.setPaused(true);
+        gameMusic.pause();
+      }
+    };
+    this.onCanvasClick = (event) => {
       const s = useStore.getState();
       if (!this.locked && s.playing && !s.question && !s.results && !s.paused) {
-        this.requestLock();
+        this.requestLock((event as PointerEvent).pointerType);
       }
     };
     this.beforeUnload = () => this.dispose();
@@ -167,6 +182,7 @@ export class AdventureGame {
     window.addEventListener("keyup", this.onKeyUp);
     document.addEventListener("mousemove", this.onMouseMove);
     document.addEventListener("pointerlockchange", this.onLockChange);
+    document.addEventListener("pointerlockerror", this.onLockError);
     canvas.addEventListener("click", this.onCanvasClick);
     window.addEventListener("beforeunload", this.beforeUnload);
     window.addEventListener("resize", this.onResize);
@@ -225,24 +241,29 @@ export class AdventureGame {
 
   /* ================== API pública para la UI ================== */
 
-  requestLock(): void {
-    if (hasTouchControls()) {
+  requestLock(pointerType = ""): void {
+    this.touchInputActive = !hasMousePointer() || pointerType === "touch";
+    if (this.touchInputActive || document.pointerLockElement === this.canvas) {
       useStore.getState().setPaused(false);
       gameMusic.resume(this.seed, useStore.getState().musicMuted);
       return;
     }
+    this.canvas.tabIndex = -1;
+    this.canvas.focus({ preventScroll: true });
     try {
-      this.canvas.requestPointerLock();
+      // La solicitud puede rechazarse (por ejemplo, después de salir del
+      // pointer lock). No dejar al alumno avanzando con la cámara inmóvil.
+      void Promise.resolve(this.canvas.requestPointerLock()).catch(() => this.onLockError());
     } catch {
-      /* noop */
+      this.onLockError();
     }
   }
 
-  begin(): void {
+  begin(pointerType = ""): void {
     const store = useStore.getState();
     store.setPlaying(true);
     gameMusic.start(this.seed, store.musicMuted);
-    this.requestLock();
+    this.requestLock(pointerType);
   }
 
   get questionOpen(): boolean {
@@ -250,12 +271,16 @@ export class AdventureGame {
   }
 
   /** La UI envía la respuesta elegida. Devuelve "correct" | "wrong" */
-  submitAnswer(choice: number): "correct" | "wrong" {
+  submitAnswer(choice: number, pointerType = ""): "correct" | "wrong" | "ignored" {
     const store = useStore.getState();
     const q = store.question;
-    if (!q) return "wrong";
+    // Zustand se actualiza inmediatamente, mientras React puede tardar un
+    // render en deshabilitar los botones. Esto impide que un doble toque
+    // califique dos veces la misma estación y salte la siguiente pregunta.
+    if (!q || store.questionFeedback !== "idle" || q.index !== this.stats.answered) return "ignored";
     const question = this.course.orderedQuestions[q.index];
-    if (!question) return "wrong";
+    if (!question || !Number.isInteger(choice) || choice < 0 || choice >= question.answers.length) return "ignored";
+    this.lastAnswerPointerType = pointerType;
     const attemptNumber = (this.answerAttemptsByStation.get(q.index) ?? 0) + 1;
     this.answerAttemptsByStation.set(q.index, attemptNumber);
     this.answerTrace = appendParkourAnswer(
@@ -274,14 +299,17 @@ export class AdventureGame {
     return ok ? "correct" : "wrong";
   }
 
-  continueAfterFeedback(): void {
+  continueAfterFeedback(pointerType = ""): void {
     const store = useStore.getState();
+    if (!store.question || store.questionFeedback !== "correct") return;
     store.closeQuestion();
-    this.requestLock();
+    if (hasMousePointer() && pointerType !== "touch") store.setPaused(true);
+    this.requestLock(pointerType);
   }
 
   retryAfterFeedback(): void {
-    useStore.getState().setQuestionFeedback("idle");
+    const store = useStore.getState();
+    if (store.question && store.questionFeedback === "wrong") store.setQuestionFeedback("idle");
   }
 
   respawn(): void {
@@ -302,9 +330,11 @@ export class AdventureGame {
     window.removeEventListener("keyup", this.onKeyUp);
     document.removeEventListener("mousemove", this.onMouseMove);
     document.removeEventListener("pointerlockchange", this.onLockChange);
+    document.removeEventListener("pointerlockerror", this.onLockError);
     this.canvas.removeEventListener("click", this.onCanvasClick);
     window.removeEventListener("beforeunload", this.beforeUnload);
     window.removeEventListener("resize", this.onResize);
+    if (this.questionCloseTimer !== null) window.clearTimeout(this.questionCloseTimer);
     try {
       if (document.pointerLockElement === this.canvas) document.exitPointerLock();
     } catch {
@@ -336,16 +366,20 @@ export class AdventureGame {
     const d = Vector3.Distance(this.player.position, station.center);
     if (d < 4.2) {
       sfx.ui();
-      if (document.pointerLockElement) document.exitPointerLock();
       this.firstTry = true;
       s.openQuestion(idx, this.course.stations.length);
       s.setPrompt(false);
+      // Registrar la pregunta antes de liberar el ratón: algunos navegadores
+      // emiten pointerlockchange inmediatamente y no deben interpretarlo
+      // como una pausa manual.
+      if (document.pointerLockElement) document.exitPointerLock();
     }
   }
 
   private completeStation(index: number): void {
     const station = this.course.stations[index];
     const store = useStore.getState();
+    if (!station || station.completed || index !== this.stats.answered) return;
     station.completed = true;
     station.open();
     // siguiente haz guía
@@ -368,11 +402,16 @@ export class AdventureGame {
       checkpoint: index,
     });
     store.setQuestionFeedback("correct");
-    // cerrar y reanudar (estamos dentro del gesto de click)
+    // La animación termina fuera del gesto de clic; si el navegador rechaza
+    // recuperar el ratón, queda visible el menú de reanudación.
     if (!this.activity.settings.showFeedback) {
-      setTimeout(() => {
-        store.closeQuestion();
-        this.requestLock();
+      this.questionCloseTimer = window.setTimeout(() => {
+        this.questionCloseTimer = null;
+        const current = useStore.getState();
+        if (this.disposed || current.question?.index !== index || current.questionFeedback !== "correct") return;
+        current.closeQuestion();
+        if (hasMousePointer() && this.lastAnswerPointerType !== "touch") current.setPaused(true);
+        this.requestLock(this.lastAnswerPointerType);
       }, 420);
     }
   }

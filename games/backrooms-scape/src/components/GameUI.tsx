@@ -30,6 +30,7 @@ import {
 import type { BackroomsGame, Difficulty, BoostId, MouseConfig, Snapshot } from "../game/BackroomsGame";
 import type { PlatformActivity } from "../platform";
 import { leaderboardTime, rankedEntries, type GameLeaderboard, type LeaderboardCategory } from "../../../shared/leaderboard";
+import { hasMousePointer } from "../../../shared/touch-controls";
 
 const fmtTime = (s: number): string => {
   const m = Math.floor(s / 60);
@@ -303,7 +304,7 @@ function Toasts({ snap }: { snap: Snapshot }): ReactNode {
 
 // --------------------------- Pregunta ---------------------------
 
-function QuestionModal({ snap, onAnswer, onContinue }: { snap: Snapshot; onAnswer: (i: number) => void; onContinue: () => void }): ReactNode {
+function QuestionModal({ snap, onAnswer, onContinue }: { snap: Snapshot; onAnswer: (i: number, pointerType?: string) => void; onContinue: (pointerType?: string) => void }): ReactNode {
   const scrollRef = useRef<HTMLDivElement>(null);
   const continueRef = useRef<HTMLButtonElement>(null);
   const q = snap.question;
@@ -342,7 +343,7 @@ function QuestionModal({ snap, onAnswer, onContinue }: { snap: Snapshot; onAnswe
         </h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {q.options.map((op, i) => (
-            <button key={i} type="button" className="opt-btn" disabled={Boolean(snap.answerFeedback)} onClick={() => onAnswer(i)}>
+            <button key={i} type="button" className="opt-btn" disabled={Boolean(snap.answerFeedback)} onClick={(event) => onAnswer(i, (event.nativeEvent as PointerEvent).pointerType)}>
               <span className="opt-num">{i + 1}</span>
               <span>{op}</span>
             </button>
@@ -356,7 +357,7 @@ function QuestionModal({ snap, onAnswer, onContinue }: { snap: Snapshot; onAnswe
             <p className="mt-2 text-sm leading-relaxed text-white/75">
               {snap.answerFeedback.explanation || `La respuesta correcta es: ${snap.answerFeedback.correctAnswer}.`}
             </p>
-            <button ref={continueRef} type="button" className="btn-main mt-4 !px-6 !py-3" onClick={onContinue}>
+            <button ref={continueRef} type="button" className="btn-main mt-4 !px-6 !py-3" onClick={(event) => onContinue((event.nativeEvent as PointerEvent).pointerType)}>
               {snap.answerFeedback.correct ? "CONTINUAR EXPLORANDO" : "SALIR DE LA SALA"}
             </button>
           </div>
@@ -429,7 +430,7 @@ function Menu({
   onMouseConfigChange: (changes: Partial<MouseConfig>) => void;
   musicMuted: boolean;
   onMusicMutedChange: (muted: boolean) => void;
-  onStart: () => void;
+  onStart: (pointerType?: string) => void;
   onClose: () => void;
   leaderboard: GameLeaderboard | null;
 }): ReactNode {
@@ -462,7 +463,7 @@ function Menu({
       <ControlSettings mouseConfig={mouseConfig} onMouseConfigChange={onMouseConfigChange}
         musicMuted={musicMuted} onMusicMutedChange={onMusicMutedChange} />
 
-      <button onClick={onStart} className="btn-main mt-5">
+      <button onClick={(event) => onStart((event.nativeEvent as PointerEvent).pointerType)} className="btn-main mt-5">
         <Play size={22} fill="currentColor" />
         ENTRAR A LOS BACKROOMS
       </button>
@@ -485,7 +486,7 @@ function Menu({
 // --------------------------- Pausa / Fin ---------------------------
 
 function PauseOverlay({ onResume, onMenu, mouseConfig, onMouseConfigChange, musicMuted, onMusicMutedChange }: {
-  onResume: () => void;
+  onResume: (pointerType?: string) => void;
   onMenu: () => void;
   mouseConfig: MouseConfig;
   onMouseConfigChange: (changes: Partial<MouseConfig>) => void;
@@ -500,7 +501,7 @@ function PauseOverlay({ onResume, onMenu, mouseConfig, onMouseConfigChange, musi
         {navigator.maxTouchPoints > 0 && <button className="w-full rounded-xl border-2 border-cyan-200 bg-cyan-300 p-4 font-extrabold text-slate-950 shadow-[0_0_24px_rgba(34,211,238,.3)]" onClick={() => window.dispatchEvent(new Event('touch-settings:backrooms-scape'))}>Ajustar controles táctiles · Tamaño y posición</button>}
         <ControlSettings mouseConfig={mouseConfig} onMouseConfigChange={onMouseConfigChange}
           musicMuted={musicMuted} onMusicMutedChange={onMusicMutedChange} />
-        <button onClick={onResume} className="btn-main mb-3 mt-4 w-full justify-center">
+        <button onClick={(event) => onResume((event.nativeEvent as PointerEvent).pointerType)} className="btn-main mb-3 mt-4 w-full justify-center">
           <Play size={18} fill="currentColor" /> CONTINUAR
         </button>
         <button onClick={onMenu} className="btn-ghost w-full justify-center">
@@ -599,7 +600,7 @@ export default function GameUI({
   onMouseConfigChange: (changes: Partial<MouseConfig>) => void;
   musicMuted: boolean;
   onMusicMutedChange: (muted: boolean) => void;
-  onStart: () => void;
+  onStart: (pointerType?: string) => void;
   onRestart: () => void;
   onMenu: () => void;
   onClose: () => void;
@@ -638,7 +639,7 @@ export default function GameUI({
         </>
       )}
 
-      {mode === "play" && !locked && navigator.maxTouchPoints === 0 && (
+      {mode === "play" && !locked && hasMousePointer() && (
         <div className="absolute bottom-24 left-1/2 -translate-x-1/2">
           <div className="chip animate-pulse">
             <MousePointerClick size={13} className="text-amber-300" />
@@ -647,8 +648,8 @@ export default function GameUI({
         </div>
       )}
 
-      {(mode === "question" || mode === "feedback") && snap && <QuestionModal snap={snap} onAnswer={(i) => game?.answer(i)} onContinue={() => game?.continueAfterAnswer()} />}
-      {mode === "paused" && <PauseOverlay onResume={() => game?.resume()} onMenu={onMenu}
+      {(mode === "question" || mode === "feedback") && snap && <QuestionModal snap={snap} onAnswer={(i, pointerType) => game?.answer(i, pointerType)} onContinue={(pointerType) => game?.continueAfterAnswer(pointerType)} />}
+      {mode === "paused" && <PauseOverlay onResume={(pointerType) => game?.resume(pointerType)} onMenu={onMenu}
         mouseConfig={mouseConfig} onMouseConfigChange={onMouseConfigChange}
         musicMuted={musicMuted} onMusicMutedChange={onMusicMutedChange} />}
       {(mode === "dead" || mode === "win") && snap && (

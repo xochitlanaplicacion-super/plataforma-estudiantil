@@ -325,9 +325,9 @@ function IntroOverlay() {
         </div>
         <LeaderboardPanel />
         <button
-          onClick={() => {
+          onClick={(event) => {
             sfx.ui();
-            gameRef.current?.begin();
+            gameRef.current?.begin((event.nativeEvent as PointerEvent).pointerType);
           }}
           className="btn-candy font-display mt-6 w-full rounded-2xl bg-gradient-to-r from-[#4DD6C1] to-[#5DB9FF] px-6 py-4 text-lg font-extrabold text-[#06281F] shadow-xl shadow-[#4DD6C1]/30"
         >
@@ -363,7 +363,7 @@ function PauseMenu() {
         <p className="mt-1 text-xs text-slate-400">Mapa <span className="font-mono font-bold text-[#7BE3D1]">#{seedCode(seed)}</span></p>
         <div className="mt-5 space-y-2">
           <button
-            onClick={() => gameRef.current?.requestLock()}
+            onClick={(event) => gameRef.current?.requestLock((event.nativeEvent as PointerEvent).pointerType)}
             className="btn-candy font-display flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#4DD6C1] to-[#5DB9FF] px-5 py-3.5 font-extrabold text-[#06281F]"
           >
             <Play size={18} /> Reanudar
@@ -425,10 +425,10 @@ function QuestionModal() {
   if (!q) return null;
   const showExplainedFeedback = !!useStore.getState().activity?.settings.showFeedback && feedback !== "idle";
 
-  const choose = (i: number) => {
+  const choose = (i: number, pointerType = "") => {
     if (feedback !== "idle") return;
     setPicked(i);
-    const res = gameRef.current?.submitAnswer(i);
+    const res = gameRef.current?.submitAnswer(i, pointerType);
     if (res === "wrong" && !useStore.getState().activity?.settings.showFeedback) {
       setTimeout(() => {
         if (useStore.getState().question?.index !== question.index) return;
@@ -468,7 +468,8 @@ function QuestionModal() {
               <button
                 key={i}
                 type="button"
-                onClick={() => choose(i)}
+                onClick={(event) => choose(i, (event.nativeEvent as PointerEvent).pointerType)}
+                disabled={feedback !== "idle"}
                 className={cn(
                   "btn-candy flex min-w-0 items-center gap-3 rounded-2xl border px-4 py-4 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7BE3D1]",
                   feedback === "correct" && i === q.correctIndex
@@ -512,8 +513,8 @@ function QuestionModal() {
             <button
               ref={feedbackActionRef}
               type="button"
-              onClick={() => {
-                if (feedback === "correct") gameRef.current?.continueAfterFeedback();
+              onClick={(event) => {
+                if (feedback === "correct") gameRef.current?.continueAfterFeedback((event.nativeEvent as PointerEvent).pointerType);
                 else {
                   setPicked(null);
                   gameRef.current?.retryAfterFeedback();

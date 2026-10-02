@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { installTouchControls } from '../../games/shared/touch-controls';
+import { hasMousePointer, installTouchControls } from '../../games/shared/touch-controls';
 
 afterEach(() => { document.body.replaceChildren(); localStorage.clear(); vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
@@ -11,9 +11,10 @@ function mount(initiallyPaused = true) {
   host.append(canvas); document.body.append(host);
   let paused = initiallyPaused;
   const key = vi.fn();
+  const look = vi.fn();
   const dispose = installTouchControls({ id: 'test', canvas, playing: () => !paused, paused: () => paused,
-    pause: () => { paused = true; }, key, look: vi.fn(), actions: [{ code: 'Space', label: 'Saltar' }] });
-  return { host, canvas, dispose, key, setPaused: (value: boolean) => { paused = value; } };
+    pause: () => { paused = true; }, key, look, actions: [{ code: 'Space', label: 'Saltar' }] });
+  return { host, canvas, dispose, key, look, setPaused: (value: boolean) => { paused = value; } };
 }
 
 describe('touch preferences and lifecycle', () => {
@@ -104,5 +105,25 @@ describe('touch preferences and lifecycle', () => {
     const canvas = document.createElement('canvas');
     expect(() => installTouchControls({ id: 'desktop', canvas, playing: () => true, paused: () => false,
       pause: vi.fn(), key: vi.fn(), look: vi.fn(), actions: [] })()).not.toThrow();
+  });
+  it('keeps mouse pointer lock separate from touch camera on hybrid devices', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(any-pointer: fine)' }));
+    const { canvas, look, dispose } = mount(false);
+    canvas.setPointerCapture = vi.fn();
+    expect(hasMousePointer()).toBe(true);
+    const pointer = (type: string, pointerType: string, x: number) =>
+      Object.assign(new Event(type, { cancelable: true }), { pointerId: 7, pointerType, button: 0, clientX: x, clientY: 100 });
+    canvas.dispatchEvent(pointer('pointerdown', 'mouse', 100));
+    canvas.dispatchEvent(pointer('pointermove', 'mouse', 130));
+    expect(look).not.toHaveBeenCalled();
+    canvas.dispatchEvent(pointer('pointerdown', 'touch', 100));
+    canvas.dispatchEvent(pointer('pointermove', 'touch', 130));
+    expect(look).toHaveBeenCalledWith(30, 0);
+    dispose();
+  });
+  it('does not request mouse lock on a touch-only device', () => {
+    Object.defineProperty(navigator, 'maxTouchPoints', { configurable: true, value: 5 });
+    vi.stubGlobal('matchMedia', () => ({ matches: false }));
+    expect(hasMousePointer()).toBe(false);
   });
 });

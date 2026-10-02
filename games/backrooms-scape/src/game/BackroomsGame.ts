@@ -2,7 +2,7 @@
 // Backrooms Scape — núcleo del juego (Babylon.js)
 // ------------------------------------------------------------------
 import "@babylonjs/core/Engines/Extensions/engine.dynamicTexture";
-import { hasTouchControls, installTouchControls } from '../../../shared/touch-controls';
+import { hasMousePointer, installTouchControls } from '../../../shared/touch-controls';
 import "@babylonjs/core/Engines/Extensions/engine.multiRender";
 import "@babylonjs/core/Meshes/instancedMesh";
 import "@babylonjs/core/Culling/ray";
@@ -299,6 +299,8 @@ export class BackroomsGame {
   private mapUntil = 0;
 
   private keys = new Set<string>();
+  private intentionalPointerUnlock = false;
+  private touchInputActive = !hasMousePointer();
   private removeTouch: () => void = () => {};
   private flicker = 1;
   private emitAcc = 0;
@@ -410,6 +412,7 @@ export class BackroomsGame {
     window.addEventListener("keyup", this.onKeyUp);
     window.addEventListener("mousemove", this.onMouseMove);
     document.addEventListener("pointerlockchange", this.onLockChange);
+    document.addEventListener("pointerlockerror", this.onLockError);
     this.canvas.addEventListener("click", this.onCanvasClick);
     window.addEventListener("resize", this.onResize);
 
@@ -448,17 +451,21 @@ export class BackroomsGame {
 
   private onKeyDown = (e: KeyboardEvent): void => {
     if (e.repeat) return;
-    this.keys.add(e.code);
-    // En preguntas y resultados, estas teclas deben desplazar el diálogo o activar
-    // el botón enfocado. Sólo se reservan para los controles durante el juego.
-    if (this.mode === "play" && ["Space", "ArrowUp", "ArrowDown"].includes(e.code)) e.preventDefault();
-    if (e.code.startsWith("Digit")) {
-      const n = parseInt(e.code.slice(5), 10) - 1;
-      if (this.mode === "play") this.useBoost(n);
-      else if (this.mode === "question") this.answer(n);
+    const target = e.target instanceof Element ? e.target : null;
+    if (this.mode === "question") {
+      if (/^Digit[1-9]$/.test(e.code)) this.answer(Number(e.code.slice(5)) - 1);
+      return;
     }
-    if (e.code === "KeyP" && this.mode === "play") this.pause();
-    else if (e.code === "KeyP" && this.mode === "paused") this.resume();
+    if (target?.closest('button, input, select, textarea, [role="dialog"]')) return;
+    if (this.mode === "paused") {
+      if (e.code === "KeyP") this.resume();
+      return;
+    }
+    if (this.mode !== "play") return;
+    if (["Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.code)) e.preventDefault();
+    if (["Space", "KeyW", "KeyA", "KeyS", "KeyD", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "ShiftLeft", "ShiftRight"].includes(e.code)) this.keys.add(e.code);
+    if (/^Digit[1-4]$/.test(e.code)) this.useBoost(Number(e.code.slice(5)) - 1);
+    if (e.code === "KeyP") this.pause();
   };
   private onKeyUp = (e: KeyboardEvent): void => {
     this.keys.delete(e.code);
@@ -471,29 +478,46 @@ export class BackroomsGame {
     this.camPitch = clamp(this.camPitch + e.movementY * 0.0021 * sensitivity * (invertY ? -1 : 1), 0.04, 0.95);
   };
   private onLockChange = (): void => {
-    if (document.pointerLockElement !== this.canvas && this.mode === "play" && !this.question) {
-      // pérdida del lock fuera de pregunta → pausa
-      this.pause();
+    if (document.pointerLockElement === this.canvas) {
+      this.intentionalPointerUnlock = false;
+      // Una solicitud anterior puede completarse después de abrir una pregunta.
+      if (this.mode !== "play") this.unlock();
+      return;
     }
+    if (this.intentionalPointerUnlock) {
+      this.intentionalPointerUnlock = false;
+      return;
+    }
+    // Escape o pérdida real del ratón durante el juego.
+    if (!this.touchInputActive && this.mode === "play" && !this.question) this.pause();
   };
-  private onCanvasClick = (): void => {
-    if (this.mode === "play" && document.pointerLockElement !== this.canvas) this.lock();
+  private onCanvasClick = (event: MouseEvent): void => {
+    if (this.mode === "play" && document.pointerLockElement !== this.canvas) this.lock((event as PointerEvent).pointerType || 'mouse');
+  };
+  private onLockError = (): void => {
+    if (!this.disposed && document.pointerLockElement !== this.canvas && !this.touchInputActive && this.mode === 'play') this.pause();
   };
   private onResize = (): void => this.engine.resize();
 
-  private lock(): void {
-    if (hasTouchControls()) return;
+  private lock(pointerType = ""): void {
+    if (pointerType) this.touchInputActive = pointerType === 'touch' || !hasMousePointer();
+    if (this.touchInputActive || document.pointerLockElement === this.canvas) return;
+    this.canvas.tabIndex = -1;
+    this.canvas.focus({ preventScroll: true });
     try {
-      this.canvas.requestPointerLock();
+      const request = this.canvas.requestPointerLock();
+      if (request && typeof request.catch === "function") void request.catch(this.onLockError);
     } catch {
-      /* noop */
+      this.onLockError();
     }
   }
   private unlock(): void {
+    if (document.pointerLockElement !== this.canvas) return;
     try {
-      if (document.pointerLockElement) document.exitPointerLock();
+      this.intentionalPointerUnlock = true;
+      document.exitPointerLock();
     } catch {
-      /* noop */
+      this.intentionalPointerUnlock = false;
     }
   }
 
@@ -868,7 +892,8 @@ export class BackroomsGame {
     backroomsMusic.setMuted(muted);
   }
 
-  startRun(diff: Difficulty, seed = Math.floor(Math.random() * 1e9)): void {
+  startRun(diff: Difficulty, seed = Math.floor(Math.random() * 1e9), pointerType = ""): void {
+    this.keys.clear();
     this.difficulty = diff;
     this.cfg = {
       ...DIFFS[diff],
@@ -922,12 +947,13 @@ export class BackroomsGame {
     this.toast("¡El Merodeador ya te está buscando!", "bad");
     this.audio.init();
     backroomsMusic.start(diff);
-    this.lock();
+    this.lock(pointerType);
     this.emit(true);
   }
 
   toMenu(): void {
     backroomsMusic.stop();
+    this.keys.clear();
     this.mode = "menu";
     this.unlock();
     this.menuNext = this.camera.globalPosition.clone();
@@ -936,16 +962,18 @@ export class BackroomsGame {
 
   pause(): void {
     if (this.mode !== "play") return;
+    this.keys.clear();
     this.mode = "paused";
     backroomsMusic.pause();
     this.unlock();
     this.emit(true);
   }
-  resume(): void {
+  resume(pointerType = ""): void {
     if (this.mode !== "paused") return;
+    this.keys.clear();
     this.mode = "play";
     backroomsMusic.resume();
-    this.lock();
+    this.lock(pointerType);
     this.emit(true);
   }
 
@@ -1001,9 +1029,11 @@ export class BackroomsGame {
     this.emit(true);
   }
 
-  answer(i: number): void {
+  answer(i: number, pointerType = ""): void {
     if (this.mode !== "question" || !this.question) return;
     const { q, room } = this.question;
+    if (!Number.isInteger(i) || i < 0 || i >= q.options.length) return;
+    if (pointerType) this.touchInputActive = pointerType === 'touch' || !hasMousePointer();
     const correct = i === q.correct;
     this.recordAnswer(q, i);
     backroomsMusic.leaveQuestion();
@@ -1024,9 +1054,10 @@ export class BackroomsGame {
     this.emit(true);
   }
 
-  continueAfterAnswer(): void {
+  continueAfterAnswer(pointerType = ""): void {
     const pending = this.pendingAnswer;
     if (!pending || !this.question) return;
+    if (pointerType) this.touchInputActive = pointerType === 'touch' || !hasMousePointer();
     this.pendingAnswer = null;
     this.answerFeedback = null;
     if (pending.correct) this.onCorrect(pending.room);
@@ -1054,6 +1085,7 @@ export class BackroomsGame {
     window.removeEventListener("keyup", this.onKeyUp);
     window.removeEventListener("mousemove", this.onMouseMove);
     document.removeEventListener("pointerlockchange", this.onLockChange);
+    document.removeEventListener("pointerlockerror", this.onLockError);
     this.canvas.removeEventListener("click", this.onCanvasClick);
     window.removeEventListener("resize", this.onResize);
     this.disposeLevel();
@@ -1110,6 +1142,7 @@ export class BackroomsGame {
     const q = shuffleQuestion(questions[idx], this.activity.subject, rand);
     room.state = "active";
     this.question = { q, left: this.cfg.qtime, total: this.cfg.qtime, room };
+    this.keys.clear();
     this.mode = "question";
     this.unlock();
     this.updateRoomVisual(room);
@@ -1120,6 +1153,7 @@ export class BackroomsGame {
 
   private onCorrect(room: Room): void {
     backroomsMusic.leaveQuestion();
+    this.keys.clear();
     room.state = "done";
     this.question = null;
     this.mode = "play";
@@ -1144,6 +1178,7 @@ export class BackroomsGame {
 
   private onWrong(room: Room, timeout: boolean): void {
     backroomsMusic.leaveQuestion();
+    this.keys.clear();
     this.question = null;
     this.mode = "play";
     this.wrongN++;
