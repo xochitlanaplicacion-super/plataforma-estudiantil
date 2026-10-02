@@ -398,11 +398,27 @@ function QuestionModal() {
   const question = useStore((s) => s.question);
   const runQuestions = useStore((s) => s.runQuestions);
   const feedback = useStore((s) => s.questionFeedback);
+  const questionIndex = question?.index;
   const [picked, setPicked] = useState<number | null>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const feedbackActionRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     setPicked(null);
-  }, [question?.index]);
+    if (questionIndex !== undefined) {
+      dialogRef.current?.scrollTo?.({ top: 0 });
+      dialogRef.current?.focus({ preventScroll: true });
+    }
+  }, [questionIndex]);
+
+  useEffect(() => {
+    if (feedback === "idle") {
+      if (questionIndex !== undefined) dialogRef.current?.focus({ preventScroll: true });
+    } else if (feedbackActionRef.current) {
+      feedbackActionRef.current.scrollIntoView?.({ block: "nearest" });
+      feedbackActionRef.current.focus({ preventScroll: true });
+    }
+  }, [feedback, questionIndex]);
 
   if (!question) return null;
   const q = runQuestions[question.index];
@@ -414,27 +430,36 @@ function QuestionModal() {
     setPicked(i);
     const res = gameRef.current?.submitAnswer(i);
     if (res === "wrong" && !useStore.getState().activity?.settings.showFeedback) {
-      setTimeout(() => setPicked(null), 500);
+      setTimeout(() => {
+        if (useStore.getState().question?.index !== question.index) return;
+        setPicked(null);
+        gameRef.current?.retryAfterFeedback();
+      }, 500);
     }
   };
 
   return (
-    <div className="absolute inset-0 z-30 grid place-items-center bg-[#0B1026]/60 backdrop-blur-[4px]">
+    <div className="absolute inset-0 z-[70] flex items-center justify-center bg-[#0B1026]/60 p-2 backdrop-blur-[4px] sm:p-4">
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="parkour-question-title"
+        tabIndex={-1}
         className={cn(
-          "anim-pop-in mx-4 w-full max-w-2xl rounded-[28px] border bg-gradient-to-b from-[#171D42] to-[#0E1330] p-7 shadow-2xl transition-colors",
+          "nice-scroll anim-pop-in max-h-full w-full max-w-2xl overflow-y-auto overscroll-contain touch-pan-y rounded-[28px] border bg-gradient-to-b from-[#171D42] to-[#0E1330] p-4 shadow-2xl transition-colors sm:p-7",
           feedback === "correct" ? "border-emerald-400/60" : feedback === "wrong" ? "border-red-400/60" : "border-white/15",
           feedback === "wrong" && "anim-shake"
         )}
       >
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <span className="font-display rounded-xl bg-gradient-to-r from-[#8A7CFF] to-[#5DB9FF] px-3.5 py-1.5 text-xs font-extrabold uppercase tracking-widest">
             Pregunta {question.index + 1} / {question.total}
           </span>
           <span className="text-[11px] font-bold text-slate-400">Responde para abrir el portal</span>
         </div>
 
-        <h2 className="font-display text-2xl font-extrabold leading-snug text-white md:text-[28px]">{q.prompt}</h2>
+        <h2 id="parkour-question-title" className="font-display break-words text-xl font-extrabold leading-snug text-white sm:text-2xl md:text-[28px]">{q.prompt}</h2>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
           {q.answers.map((ans, i) => {
@@ -442,9 +467,10 @@ function QuestionModal() {
             return (
               <button
                 key={i}
+                type="button"
                 onClick={() => choose(i)}
                 className={cn(
-                  "btn-candy flex items-center gap-3 rounded-2xl border px-4 py-4 text-left transition",
+                  "btn-candy flex min-w-0 items-center gap-3 rounded-2xl border px-4 py-4 text-left transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7BE3D1]",
                   feedback === "correct" && i === q.correctIndex
                     ? "border-emerald-400 bg-emerald-500/20"
                     : isPicked && feedback === "wrong"
@@ -462,9 +488,9 @@ function QuestionModal() {
                         : "bg-white/10 text-white"
                   )}
                 >
-                  {["A", "B", "C", "D"][i]}
+                  {i < 26 ? String.fromCharCode(65 + i) : i + 1}
                 </span>
-                <span className="text-[15px] font-bold text-white">{ans}</span>
+                <span className="min-w-0 break-words text-[15px] font-bold text-white">{ans}</span>
                 {feedback === "correct" && i === q.correctIndex && <CheckCircle2 size={20} className="ml-auto shrink-0 text-emerald-300" />}
                 {isPicked && feedback === "wrong" && <XCircle size={20} className="ml-auto shrink-0 text-red-300" />}
               </button>
@@ -484,6 +510,8 @@ function QuestionModal() {
               {q.feedback?.trim() || `La respuesta correcta es: ${q.answers[q.correctIndex]}.`}
             </p>
             <button
+              ref={feedbackActionRef}
+              type="button"
               onClick={() => {
                 if (feedback === "correct") gameRef.current?.continueAfterFeedback();
                 else {
@@ -492,7 +520,7 @@ function QuestionModal() {
                 }
               }}
               className={cn(
-                "btn-candy font-display mt-4 w-full rounded-2xl px-5 py-3 font-extrabold",
+                "btn-candy font-display mt-4 w-full rounded-2xl px-5 py-3 font-extrabold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#7BE3D1]",
                 feedback === "correct" ? "bg-emerald-400 text-[#06281F]" : "bg-white/10 text-white"
               )}
             >

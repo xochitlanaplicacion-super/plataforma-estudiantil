@@ -449,8 +449,22 @@ body {
   backdrop-filter: blur(14px);
 }
 
+.question-card {
+  overflow-wrap: anywhere;
+}
+
+.question-card .chip {
+  min-width: 0;
+}
+
+.question-card .chip span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 .opt-btn {
   display: flex;
+  min-width: 0;
   align-items: center;
   gap: 12px;
   text-align: left;
@@ -463,6 +477,10 @@ body {
   padding: 13px 16px;
   cursor: pointer;
   transition: all 0.13s ease;
+}
+.opt-btn span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .opt-btn:hover {
   background: rgba(255, 216, 77, 0.16);

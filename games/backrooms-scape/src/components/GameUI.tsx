@@ -304,19 +304,32 @@ function Toasts({ snap }: { snap: Snapshot }): ReactNode {
 // --------------------------- Pregunta ---------------------------
 
 function QuestionModal({ snap, onAnswer, onContinue }: { snap: Snapshot; onAnswer: (i: number) => void; onContinue: () => void }): ReactNode {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const continueRef = useRef<HTMLButtonElement>(null);
   const q = snap.question;
+  useEffect(() => {
+    if (!q || snap.answerFeedback) return;
+    scrollRef.current?.scrollTo({ top: 0 });
+    scrollRef.current?.focus({ preventScroll: true });
+  }, [q?.text, snap.answerFeedback]);
+  useEffect(() => {
+    if (!snap.answerFeedback) return;
+    continueRef.current?.focus({ preventScroll: true });
+    continueRef.current?.scrollIntoView({ block: "nearest" });
+  }, [snap.answerFeedback]);
   if (!q) return null;
   const pct = (q.timeLeft / q.total) * 100;
   const low = q.timeLeft < 6;
   return (
-    <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/45 backdrop-blur-[2px]">
-      <div className="modal-card w-[min(620px,92vw)]">
-        <div className="mb-3 flex items-center justify-between">
+    <div ref={scrollRef} role="dialog" aria-modal="true" aria-labelledby="backrooms-question-title" tabIndex={0}
+      className="pointer-events-auto absolute inset-0 z-[70] flex flex-col items-center overflow-y-auto overscroll-contain bg-black/45 px-3 py-3 backdrop-blur-[2px] touch-pan-y sm:py-5">
+      <div className="modal-card question-card my-auto w-full max-w-[620px] shrink-0">
+        <div className="mb-3 flex min-w-0 items-center justify-between gap-2">
           <span className="chip !border-cyan-400/50 text-cyan-300">
             <DoorOpen size={13} />
             <span className="text-[10px] font-bold tracking-widest">{q.roomLabel.toUpperCase()} — ESTÁS A SALVO</span>
           </span>
-          <span className="chip text-white/60">{q.cat}</span>
+          <span className="chip min-w-0 max-w-[45%] shrink-0 text-white/60">{q.cat}</span>
         </div>
         <div className="mb-4 h-2 w-full overflow-hidden rounded-full bg-white/10">
           <div
@@ -324,12 +337,12 @@ function QuestionModal({ snap, onAnswer, onContinue }: { snap: Snapshot; onAnswe
             style={{ width: `${pct}%` }}
           />
         </div>
-        <h2 className="mb-6 text-center text-2xl font-bold leading-snug text-white md:text-[1.7rem]">
+        <h2 id="backrooms-question-title" className="mb-6 text-center text-2xl font-bold leading-snug text-white md:text-[1.7rem]">
           {q.text}
         </h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {q.options.map((op, i) => (
-            <button key={i} className="opt-btn" disabled={Boolean(snap.answerFeedback)} onClick={() => onAnswer(i)}>
+            <button key={i} type="button" className="opt-btn" disabled={Boolean(snap.answerFeedback)} onClick={() => onAnswer(i)}>
               <span className="opt-num">{i + 1}</span>
               <span>{op}</span>
             </button>
@@ -343,7 +356,7 @@ function QuestionModal({ snap, onAnswer, onContinue }: { snap: Snapshot; onAnswe
             <p className="mt-2 text-sm leading-relaxed text-white/75">
               {snap.answerFeedback.explanation || `La respuesta correcta es: ${snap.answerFeedback.correctAnswer}.`}
             </p>
-            <button className="btn-main mt-4 !px-6 !py-3" onClick={onContinue}>
+            <button ref={continueRef} type="button" className="btn-main mt-4 !px-6 !py-3" onClick={onContinue}>
               {snap.answerFeedback.correct ? "CONTINUAR EXPLORANDO" : "SALIR DE LA SALA"}
             </button>
           </div>

@@ -114,6 +114,11 @@ export class AdventureGame {
 
     /* ---------- listeners ---------- */
     this.onKeyDown = (e) => {
+      // Mientras se muestra una pregunta o un menú, las teclas pertenecen a la UI.
+      // En particular, no bloquear Espacio: debe activar el botón enfocado y
+      // permitir desplazar el diálogo cuando hay muchas respuestas.
+      const target = e.target instanceof Element ? e.target : null;
+      if (this.isSuspended() || target?.closest('button, input, select, textarea, [role="dialog"]')) return;
       if (["Space", "KeyW", "KeyA", "KeyS", "KeyD", "KeyE", "KeyR", "ShiftLeft", "ShiftRight"].includes(e.code)) {
         e.preventDefault();
       }

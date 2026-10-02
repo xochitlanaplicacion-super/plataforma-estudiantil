@@ -449,7 +449,9 @@ export class BackroomsGame {
   private onKeyDown = (e: KeyboardEvent): void => {
     if (e.repeat) return;
     this.keys.add(e.code);
-    if (["Space", "ArrowUp", "ArrowDown"].includes(e.code)) e.preventDefault();
+    // En preguntas y resultados, estas teclas deben desplazar el diálogo o activar
+    // el botón enfocado. Sólo se reservan para los controles durante el juego.
+    if (this.mode === "play" && ["Space", "ArrowUp", "ArrowDown"].includes(e.code)) e.preventDefault();
     if (e.code.startsWith("Digit")) {
       const n = parseInt(e.code.slice(5), 10) - 1;
       if (this.mode === "play") this.useBoost(n);
