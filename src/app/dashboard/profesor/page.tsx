@@ -11,6 +11,7 @@ import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { UNWEIGHTED_PLATFORM_CRITERION_ID } from '@/lib/academic/platform-category';
 import { createSingleFlightGate } from '@/lib/ui/single-flight-gate';
+import { createAbortableRequestGate } from '@/lib/ui/abortable-request-gate';
 import { 
   BookOpen, 
   ListTree, 
@@ -332,8 +333,38 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiGenerating, setAiGenerating] = useState(false);
   const [fillBlankRetryPrompt, setFillBlankRetryPrompt] = useState('');
+  const aiRequests = useRef(createAbortableRequestGate());
+  const editorType = useRef(type);
+  const editorContent = useRef(content);
+  const applyEditorContent = useRef(updateContent);
+  editorType.current = type;
+  editorContent.current = content;
+  applyEditorContent.current = updateContent;
+
+  const cancelGeneration = useCallback(() => {
+    aiRequests.current.cancel();
+    setAiGenerating(false);
+  }, []);
+
+  const changeAiModal = useCallback((open: boolean) => {
+    if (!open) cancelGeneration();
+    setAiModalOpen(open);
+  }, [cancelGeneration]);
+
+  useEffect(() => {
+    setAiGenerating(false);
+    setAiModalOpen(false);
+    return () => {
+      // A closed activity or a changed template must never receive a stale
+      // generation response. Cleanup also suppresses its error notification.
+      aiRequests.current.cancel();
+    };
+  }, [type]);
 
   const generateAI = async (promptOverride?: string | React.MouseEvent) => {
+    // A ref closes the same-event-loop double-click window before React paints
+    // the disabled button, without discarding the previous questions.
+    if (aiRequests.current.busy) return;
     const isStringOverride = typeof promptOverride === 'string';
     let effectivePrompt = (isStringOverride ? promptOverride : aiPrompt).trim();
     if (!effectivePrompt && type === 'completar_espacios') {
@@ -344,9 +375,13 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
       toast({ variant: "destructive", title: "Error", description: "El prompt no puede estar vacío." });
       return;
     }
+    const request = aiRequests.current.start();
+    if (!request) return;
+    const isCurrentRequest = () => request.isCurrent() && editorType.current === type;
     setAiGenerating(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      if (!isCurrentRequest()) return;
       let endpoint = '';
       let payload: any = { prompt: effectivePrompt, userId: user?.id };
       
@@ -385,27 +420,31 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
+        signal: request.signal,
       });
       const data = await res.json().catch(() => ({}));
+      if (!isCurrentRequest()) return;
       if (!res.ok) throw new Error(data.error || 'No se pudo generar la actividad con IA.');
+      const currentContent = editorContent.current;
+      const applyContent = applyEditorContent.current;
       
       if (type === 'crucigrama') {
-        updateContent({ ...content, words: data.words || [], clues: data.clues || [] });
+        applyContent({ ...currentContent, words: data.words || [], clues: data.clues || [] });
       } else if (type === 'sopa_letras') {
-        updateContent({ ...content, words: data.words || [], clues: data.clues || [], sopaFeedback: data.feedback || '' });
+        applyContent({ ...currentContent, words: data.words || [], clues: data.clues || [], sopaFeedback: data.feedback || '' });
       } else if (type === 'flying_cat') {
-        const generated = normalizeFlyingCatContent({ ...content, items: data.items });
+        const generated = normalizeFlyingCatContent({ ...currentContent, items: data.items });
         const validation = validateFlyingCatContent(generated);
         if (validation) throw new Error(validation);
-        updateContent(generated);
+        applyContent(generated);
       } else if (type === 'opcion_multiple' || type === 'parkour_race' || type === 'backrooms_scape' || type === 'verdadero_falso' || type === 'emparejamiento' || type === 'flashcards') {
-        updateContent({ ...content, items: data.items || [] });
+        applyContent({ ...currentContent, items: data.items || [] });
       } else if (type === 'ordenar_secuencia') {
-        updateContent({ ...content, items: data.items || [], feedback: data.feedback || '' });
+        applyContent({ ...currentContent, items: data.items || [], feedback: data.feedback || '' });
       } else if (type === 'completar_espacios') {
         // Inyectar el texto en el editor — el profesor selecciona las palabras ocultas manualmente
-        updateContent({ ...content, text: data.text || '', aiSuggestedWords: data.suggestedWords || [], feedback: data.feedback || '' });
+        applyContent({ ...currentContent, text: data.text || '', aiSuggestedWords: data.suggestedWords || [], feedback: data.feedback || '' });
         setFillBlankRetryPrompt(effectivePrompt);
       }
       
@@ -413,9 +452,10 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
       setAiPrompt("");
       toast({ title: "¡Generación exitosa!", description: "La información se ha inyectado en el formulario." });
     } catch (e: any) {
+      if (!isCurrentRequest()) return;
       toast({ variant: "destructive", title: "Error", description: e.message || "No se pudo generar la actividad." });
     } finally {
-      setAiGenerating(false);
+      if (request.finish()) setAiGenerating(false);
     }
   };
 
@@ -443,8 +483,8 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
     const secondary = inst?.color_secundario || '#064e3b';
 
     return (
-      <Dialog open={aiModalOpen} onOpenChange={setAiModalOpen}>
-        <DialogContent className="sm:max-w-[950px] p-0 border-white/10 bg-slate-950 text-slate-200 overflow-hidden rounded-[32px] shadow-2xl">
+      <Dialog open={aiModalOpen} onOpenChange={changeAiModal}>
+        <DialogContent className="sm:max-w-[950px] max-h-[90dvh] overflow-y-auto p-0 border-white/10 bg-slate-950 text-slate-200 rounded-[32px] shadow-2xl">
           <div className="flex flex-col md:flex-row">
             <div className="flex-1 p-8 space-y-6">
             <div className="flex items-center gap-4 border-b border-white/10 pb-6">
@@ -496,6 +536,7 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
                   min={type === 'flying_cat' ? 1 : 2}
                   max={20}
                   value={aiNumWords}
+                  disabled={aiGenerating}
                   onChange={(e) => setAiNumWords(parseInt(e.target.value) || 5)}
                   className="h-12 bg-black/40 border-white/10 focus-visible:ring-1 text-white rounded-xl"
                 />
@@ -510,11 +551,12 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
                 <textarea 
                   rows={6}
                   value={aiPrompt}
+                  disabled={aiGenerating}
                   onChange={(e) => setAiPrompt(e.target.value)}
                   placeholder="Pega aquí un texto sobre el tema o escribe las instrucciones específicas para la IA..."
                   className="w-full p-4 bg-black/40 border-2 border-white/10 rounded-2xl text-sm outline-none focus:border-white/30 focus:ring-4 transition-all text-white placeholder-slate-600 resize-none"
                 />
-                {type === 'flying_cat' && <p className="text-xs text-slate-300">Pide definiciones detalladas o casos de uso, como en crucigramas. La IA generará 2–4 conceptos por definición, de máximo dos palabras, con explicación y orden aleatorio.</p>}
+                {type === 'flying_cat' && <p className="text-xs text-slate-300">Indica el tema, nivel e idiomas. Por ejemplo: profesiones, descripciones en español y conceptos en inglés. La IA adapta las preguntas, opciones y explicaciones al juego.</p>}
               </div>
             </div>
 
@@ -522,7 +564,7 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
               <Button 
                 variant="outline" 
                 className="flex-1 rounded-2xl h-12 bg-transparent border-white/10 text-slate-300 hover:bg-white/5 hover:text-white"
-                onClick={() => setAiModalOpen(false)}
+                onClick={() => changeAiModal(false)}
               >
                 CANCELAR
               </Button>
@@ -2589,7 +2631,7 @@ export default function ProfesorDashboard() {
                   </div>
                 </div>
                 <Separator />
-                <TemplateEditor type={dialog.data.tipo} content={dialog.data.contenido || {}} updateContent={(newContent) => setDialog({ ...dialog, data: { ...dialog.data, contenido: newContent } })} pagoIA={pagoIA} />
+                <TemplateEditor key={`${dialog.data.id || 'new'}:${dialog.data.tipo}`} type={dialog.data.tipo} content={dialog.data.contenido || {}} updateContent={(newContent) => setDialog((current: typeof dialog) => ({ ...current, data: { ...current.data, contenido: newContent } }))} pagoIA={pagoIA} />
               </div>
             )}
               </>

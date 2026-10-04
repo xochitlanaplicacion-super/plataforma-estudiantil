@@ -16,7 +16,7 @@ beforeEach(() => {
   mocks.session.mockResolvedValue({ user: { id: 'teacher-a' }, tenantId: 'tenant-a', supabase: { from: () => ({ insert: mocks.insert }) } });
   mocks.insert.mockResolvedValue({ error: null }); mocks.enabled.mockResolvedValue(true);
   vi.stubEnv('OPENROUTER_API_KEY', 'test-not-a-secret');
-  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ items: [aiItem] }) } }], usage: { prompt_tokens: 100, completion_tokens: 200 } }))));
+  vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ items: [aiItem] }) } }], usage: { prompt_tokens: 100, completion_tokens: 200 } }))));
 });
 afterEach(() => { vi.unstubAllGlobals(); vi.unstubAllEnvs(); });
 
@@ -42,11 +42,24 @@ describe('Flying Cat AI uses server identity and strict response validation', ()
     expect(fetch).not.toHaveBeenCalled();
   });
 
-  it('rejects invalid option counts instead of truncating away the correct answer', async () => {
-    vi.mocked(fetch).mockResolvedValue(new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ items: [{ ...aiItem, options: [...aiItem.options, 'Doctor'], correctIndex: 4 }] }) } }] })));
+  it('repairs AI options automatically and logs both calls to the authenticated tenant', async () => {
+    const reply = (item: unknown) => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ items: [item] }) } }], usage: { prompt_tokens: 100, completion_tokens: 200 } }));
+    vi.mocked(fetch).mockResolvedValueOnce(reply({ ...aiItem, options: ['Un veterinario de animales', 'Piloto'] }))
+      .mockResolvedValueOnce(reply(aiItem));
+    const response = await POST(request({ prompt: 'profesiones', numPreguntas: 1, userId: 'attacker', tenantId: 'another-school' }));
+    expect(response.status).toBe(200);
+    const { items } = await response.json();
+    expect(items[0].options[items[0].correctIndex]).toBe('Veterinario');
+    expect(mocks.insert).toHaveBeenCalledTimes(2);
+    for (const [row] of mocks.insert.mock.calls) expect(row).toMatchObject({ tenant_id: 'tenant-a', user_id: 'teacher-a', total_tokens: 300 });
+  });
+
+  it('tries an internal repair, then rejects invalid counts without truncating away the correct answer or blaming the teacher', async () => {
+    vi.mocked(fetch).mockImplementation(async () => new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ items: [{ ...aiItem, options: [...aiItem.options, 'Doctor'], correctIndex: 4 }] }) } }] })));
     const response = await POST(request({ prompt: 'Tema', numPreguntas: 1 }));
     expect(response.status).toBe(502);
-    expect((await response.json()).error).toContain('2 y 4');
+    expect((await response.json()).error).toContain('corregirla automáticamente');
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it('rejects wrong number of definitions and invalid requested counts', async () => {

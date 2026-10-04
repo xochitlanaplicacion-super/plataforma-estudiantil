@@ -54,6 +54,23 @@ describe('Flying Cat server-side exercise save validation', () => {
     expect(content.items[0].correctIndex).toBe(0);
   });
 
+  it.each([true, false])('saves a simple manual definition without explanation with showFeedback=%s', async (showFeedback) => {
+    const content: any = fixture();
+    content.showFeedback = showFeedback;
+    content.items[0] = { id: 'doctor', prompt: 'Es in trabajo donde usan medicina', options: ['Doctor', 'Chef', 'Journalist'], correctIndex: 0 };
+    const response = await upsertEjercicio({ tipo: 'flying_cat', titulo: 'Jobs', contenido: JSON.stringify(content) });
+    expect(response.error).toBeNull();
+    const saved = JSON.parse(mocks.upsert.mock.calls[0][0].contenido);
+    expect(saved).toMatchObject({ showFeedback, items: [{ prompt: 'Es in trabajo donde usan medicina', correctIndex: 0, options: ['Doctor', 'Chef', 'Journalist'], feedback: '' }] });
+  });
+
+  it.each([42, null, 'x'.repeat(2001)])('rejects malformed or overlong explanation at the server: %s', async (feedback) => {
+    const content: any = fixture(); content.items[0].feedback = feedback;
+    const response = await upsertEjercicio({ tipo: 'flying_cat', contenido: JSON.stringify(content) });
+    expect(response.error?.message).toContain('explicación opcional');
+    expect(mocks.from).not.toHaveBeenCalled();
+  });
+
   it('does not impose the new schema on any other existing exercise type', async () => {
     const response = await upsertEjercicio({ tipo: 'opcion_multiple', titulo: 'Repaso', contenido: '{"items":[]}' });
     expect(response.error).toBeNull();

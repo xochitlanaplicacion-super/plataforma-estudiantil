@@ -32,6 +32,20 @@ describe('Flying Cat teacher editor', () => {
     expect(update).not.toHaveBeenCalled();
   });
 
+  it('labels the manual explanation optional and imports a simple question without inventing one', () => {
+    const update = vi.fn();
+    const content: any = fixture();
+    content.items[0] = { id: 'doctor', prompt: 'Es in trabajo donde usan medicina', options: ['Doctor', 'Chef', 'Journalist'], correctIndex: 0 };
+    render(<FlyingCatEditor content={fixture()} updateContent={update} />);
+    expect(screen.getByRole('textbox', { name: /Explicación de la respuesta \(opcional\)/ })).toBeVisible();
+    expect(screen.getByText(/el alumno verá el concepto correcto sin explicación adicional/)).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Importar JSON' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'JSON de Flying Cat' }), { target: { value: JSON.stringify(content) } });
+    fireEvent.click(screen.getByRole('button', { name: 'Validar e importar' }));
+    expect(update).toHaveBeenCalledWith(expect.objectContaining({ items: [expect.objectContaining({ prompt: 'Es in trabajo donde usan medicina', options: ['Doctor', 'Chef', 'Journalist'], correctIndex: 0, feedback: '' })] }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('requires explicit choice when the correct concept is removed, not a silent reassignment', () => {
     const changed = vi.fn();
     function EditorHarness() {

@@ -290,14 +290,14 @@ export default function FlyingCatGame({ exercise, onComplete, onClose }: {
       </>}
       {view && ['reading', 'feedback', 'paused'].includes(view.mode) && <div className="fc-overlay">
         <section className="fc-dialog" role="dialog" aria-modal="true" aria-labelledby="fc-dialog-heading">
-          <p className="fc-kicker">{view.mode === 'feedback' ? 'Explicación · vuelo en pausa' : 'Lee con calma · el cielo está en pausa'}</p>
+          <p className="fc-kicker">{view.mode === 'feedback' ? (view.explanation.trim() ? 'Explicación · vuelo en pausa' : 'Respuesta · vuelo en pausa') : 'Lee con calma · el cielo está en pausa'}</p>
           <h2 id="fc-dialog-heading">{view.mode === 'feedback' ? (view.feedback?.isCorrect ? '¡Concepto correcto!' : 'Vamos a aprenderlo')
             : view.mode === 'paused' ? 'Vuelo en pausa' : `Definición ${view.index + 1}`}</h2>
           <div className="fc-dialog-body">
             {view.mode === 'feedback' ? <>
               <p>Tu elección: <strong>{view.feedback?.selectedAnswer}</strong></p>
               <p>Concepto correcto: <strong>{view.feedback?.correctAnswer}</strong></p>
-              <p className="fc-explanation">{view.explanation || 'Relaciona las características de la definición con el concepto correcto.'}</p>
+              {view.explanation.trim() && <p className="fc-explanation">{view.explanation}</p>}
             </> : <><p>{view.prompt}</p><p className="fc-help">Toca con tu avión el concepto correcto. Deja pasar los otros y esquiva los obstáculos. Si una tarjeta se va, volverá a aparecer.</p></>}
           </div>
           <p className="fc-shield-note">Al reanudar tendrás 3 segundos de protección contra obstáculos.</p>

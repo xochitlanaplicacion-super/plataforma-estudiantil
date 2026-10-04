@@ -51,7 +51,9 @@ export function normalizeFlyingCatContent(input: unknown): FlyingCatContent {
         prompt: typeof item.prompt === 'string' ? item.prompt : '',
         options: Array.isArray(item.options) ? item.options.map((option) => typeof option === 'string' ? option : '') : [],
         correctIndex: typeof item.correctIndex === 'number' ? item.correctIndex : -1,
-        feedback: typeof item.feedback === 'string' ? item.feedback : '',
+        // An omitted manual explanation is valid; keep malformed explicit
+        // values visible to validation instead of quietly converting them.
+        feedback: item.feedback === undefined ? '' : item.feedback as string,
       };
     }) : defaults.items,
   };
@@ -78,8 +80,8 @@ export function validateFlyingCatContent(input: unknown): string | null {
       return `${prefix}cada id debe ser único, tener entre 1 y 80 caracteres y no llevar espacios al inicio o al final.`;
     }
     ids.add(item.id);
-    if (typeof item.prompt !== 'string' || item.prompt.trim().length < 30 || item.prompt.length > 1600) {
-      return `${prefix}escribe una descripción, definición o caso de uso de 30 a 1600 caracteres.`;
+    if (typeof item.prompt !== 'string' || item.prompt.trim().length < 5 || item.prompt.length > 1600) {
+      return `${prefix}escribe una descripción, definición o caso de uso de 5 a 1600 caracteres.`;
     }
     if (!Array.isArray(item.options) || item.options.length < 2 || item.options.length > 4) {
       return `${prefix}necesita entre 2 y 4 conceptos, sin recortarlos.`;
@@ -98,8 +100,8 @@ export function validateFlyingCatContent(input: unknown): string | null {
     if (!Number.isInteger(item.correctIndex) || item.correctIndex < 0 || item.correctIndex >= item.options.length) {
       return `${prefix}selecciona una respuesta correcta existente (correctIndex inicia en 0).`;
     }
-    if (typeof item.feedback !== 'string' || !item.feedback.trim() || item.feedback.length > 2000) {
-      return `${prefix}agrega una explicación de la respuesta (máximo 2000 caracteres).`;
+    if (item.feedback !== undefined && (typeof item.feedback !== 'string' || item.feedback.length > 2000)) {
+      return `${prefix}la explicación opcional debe ser texto de máximo 2000 caracteres.`;
     }
   }
   return null;

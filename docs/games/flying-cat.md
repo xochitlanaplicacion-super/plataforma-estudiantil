@@ -7,9 +7,12 @@ intacto como referencia; la versión integrada vive en `src/components/activitie
 
 ## Contenido
 
-De 1 a 20 definiciones, descripciones o casos de uso (30–1600 caracteres). Cada
+De 1 a 20 definiciones, descripciones o casos de uso (5–1600 caracteres). Cada
 reactivo lleva entre 2 y 4 conceptos distintos, de **máximo dos palabras y 24
-caracteres**, una respuesta correcta y explicación (hasta 2000 caracteres).
+caracteres**, una respuesta correcta y explicación opcional (hasta 2000 caracteres).
+La captura manual admite frases simples y explicaciones vacías u omitidas: se
+muestra el concepto correcto sin inventar una explicación. Las actividades
+generadas con IA sí deben traer una explicación educativa por reactivo.
 No se truncan opciones al importar ni se cambia una respuesta correcta inválida
 por otra: el profesor debe corregir el contenido antes de guardarlo.
 
@@ -36,6 +39,18 @@ La IA recibe indicaciones para distribuir las opciones y el servidor vuelve a
 barajarlas, conservando la identidad de la correcta. En cada partida se barajan
 también las opciones y definiciones con aleatoriedad del navegador. La explicación
 no debe mencionar «opción A» ni una posición: éstas cambian al barajar.
+
+El profesor puede dar instrucciones normales, sin JSON ni restricciones técnicas:
+por ejemplo, «profesiones, descripciones en español y conceptos en inglés». El
+prompt interno separa los idiomas por campo, admite faltas de escritura y adapta
+el texto a tarjetas cortas. Las definiciones IA son detalladas por defecto, pero
+se pueden pedir simples. El número del formulario define la cantidad exacta.
+La generación usa JSON Schema estructurado y validación local; si la respuesta
+incumple límites, cantidad, índice o explicaciones, se hace una sola petición
+correctiva, dentro de un plazo total acotado. No se recortan conceptos ni se
+adivina una respuesta correcta. Si tampoco se logra corregir, se conservan las
+preguntas anteriores. Cancelar o cerrar el editor invalida la petición pendiente;
+el doble clic no genera dos solicitudes.
 
 ## Vuelo y calificación
 
@@ -86,3 +101,10 @@ usar un navegador ya instalado con `FLYING_CAT_BROWSER_PATH=/usr/bin/google-chro
 Comprueba 390×844, 320×568, 844×390 y 1280×800; portada, definición y explicación
 largas, controles, avance de dos preguntas, escudo, guardado único y reintento de
 conexión. Conserva capturas en la carpeta temporal que imprime al terminar.
+
+Prueba opcional con el proveedor real (consume tokens con la clave local existente,
+sin imprimirla ni escribir actividades o notas en Supabase):
+
+```sh
+node scripts/games/test-flying-cat-ai.mjs
+```

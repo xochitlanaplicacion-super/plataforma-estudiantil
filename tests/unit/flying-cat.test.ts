@@ -26,16 +26,35 @@ describe('Flying Cat definitions, compact concepts and safe JSON', () => {
     expect(validateFlyingCatContent(content)).toContain('correctIndex');
   });
 
-  it('rejects long cards, duplicate concepts, short prompts and missing feedback', () => {
+  it('rejects long cards, duplicate concepts and prompts shorter than five characters', () => {
     const content = fixture();
     content.items[0].options[1] = 'Persona que vuela';
     expect(validateFlyingCatContent(content)).toContain('2 palabras');
     content.items[0].options[1] = 'VETERINARIO';
     expect(validateFlyingCatContent(content)).toContain('repetirse');
-    content.items[0].options[1] = 'Ingeniero'; content.items[0].prompt = '¿Animal?';
-    expect(validateFlyingCatContent(content)).toContain('30 a 1600');
-    content.items[0].prompt = fixture().items[0].prompt; content.items[0].feedback = '';
-    expect(validateFlyingCatContent(content)).toContain('explicación');
+    content.items[0].options[1] = 'Ingeniero'; content.items[0].prompt = '¿A?';
+    expect(validateFlyingCatContent(content)).toContain('5 a 1600');
+    content.items[0].prompt = '¿Animal?';
+    expect(validateFlyingCatContent(content)).toBeNull();
+  });
+
+  it.each([true, false])('accepts manual explanations left empty or omitted with showFeedback=%s', (showFeedback) => {
+    const content: any = fixture();
+    content.showFeedback = showFeedback;
+    content.items[0] = { id: 'doctor', prompt: 'Es in trabajo donde usan medicina', options: ['Doctor', 'Chef', 'Journalist'], correctIndex: 0, feedback: '' };
+    expect(validateFlyingCatContent(content)).toBeNull();
+    expect(normalizeFlyingCatContent(content).items[0].feedback).toBe('');
+    delete content.items[0].feedback;
+    expect(validateFlyingCatContent(content)).toBeNull();
+    const normalized = normalizeFlyingCatContent(content);
+    expect(normalized.items[0]).toMatchObject({ feedback: '', correctIndex: 0, options: ['Doctor', 'Chef', 'Journalist'] });
+    expect(validateFlyingCatContent(normalized)).toBeNull();
+  });
+
+  it.each([null, false, 42, ['explanation'], 'x'.repeat(2001)])('still rejects a malformed or overlong explicit explanation: %s', (feedback) => {
+    const content: any = fixture(); content.items[0].feedback = feedback;
+    expect(validateFlyingCatContent(content)).toContain('explicación opcional');
+    expect(validateFlyingCatContent(normalizeFlyingCatContent(content))).toContain('explicación opcional');
   });
 
   it('rejects malformed raw JSON rather than filling in an answer or IDs', () => {

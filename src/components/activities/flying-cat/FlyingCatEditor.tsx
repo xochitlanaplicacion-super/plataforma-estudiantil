@@ -66,7 +66,7 @@ export function FlyingCatEditor({ content: rawContent, updateContent, aiControls
     {aiControls}
     <section className="space-y-4 rounded-3xl border-2 border-orange-100 bg-orange-50/40 p-5">
       <div><h3 className="text-lg font-black text-slate-800">Flying Cat · definiciones y conceptos</h3>
-        <p className="mt-1 text-sm text-slate-600">Describe una definición o caso de uso completo. El alumno pilota hacia el concepto correcto; los conceptos aparecen espaciados, no todos juntos.</p></div>
+        <p className="mt-1 text-sm text-slate-600">Escribe una descripción breve, una definición o un caso de uso. El alumno pilota hacia el concepto correcto; los conceptos aparecen espaciados, no todos juntos.</p></div>
       <label className="block text-sm font-bold">Instrucciones para el alumno
         <textarea rows={2} maxLength={1000} value={content.instructions} onChange={(event) => patch({ instructions: event.target.value })}
           className="mt-2 w-full rounded-xl border bg-white p-3 font-normal" /></label>
@@ -76,10 +76,10 @@ export function FlyingCatEditor({ content: rawContent, updateContent, aiControls
             className="ml-3 rounded-xl border bg-white p-2 font-normal">
             <option value="easy">Fácil</option><option value="normal">Normal</option><option value="hard">Difícil</option>
           </select></label>
-        <label className="flex items-center gap-3 text-sm font-bold">Explicación al responder
+        <label className="flex items-center gap-3 text-sm font-bold">Mostrar respuesta y explicación
           <Switch checked={content.showFeedback} onCheckedChange={(checked) => patch({ showFeedback: checked })} /></label>
       </div>
-      <p className="text-xs text-slate-600">La velocidad aumenta al avanzar. Durante la explicación el vuelo se pausa; al continuar hay 3 segundos de protección. Las posiciones cambian en cada intento.</p>
+      <p className="text-xs text-slate-600">La velocidad aumenta al avanzar. Durante el resumen de respuesta el vuelo se pausa; al continuar hay 3 segundos de protección. Las posiciones cambian en cada intento.</p>
     </section>
 
     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -92,7 +92,7 @@ export function FlyingCatEditor({ content: rawContent, updateContent, aiControls
     </div>
 
     {jsonOpen && <section className="space-y-3 rounded-2xl border bg-slate-50 p-4">
-      <p className="text-sm">Importa el JSON completo: versión 1, instrucciones, showFeedback, dificultad e items. correctIndex empieza en 0. Se reemplazan las definiciones sólo si todo el archivo es válido.</p>
+      <p className="text-sm">Importa el JSON completo: versión 1, instrucciones, showFeedback, dificultad e items. correctIndex empieza en 0. feedback es opcional en preguntas manuales. Se reemplazan las definiciones sólo si todo el archivo es válido.</p>
       <div className="flex flex-wrap gap-2">
         <Button type="button" variant="outline" onClick={() => { setJsonText(JSON.stringify(JSON_EXAMPLE, null, 2)); setJsonError(''); }}>Ver ejemplo JSON</Button>
         <Button type="button" variant="outline" onClick={() => fileInput.current?.click()}>Elegir archivo .json</Button>
@@ -126,7 +126,7 @@ export function FlyingCatEditor({ content: rawContent, updateContent, aiControls
         <textarea rows={4} maxLength={1600} value={item.prompt} onChange={(event) => updateItem(questionIndex, { prompt: event.target.value })}
           placeholder="Describe las características o un caso completo para que el alumno identifique el concepto…"
           className="mt-2 w-full rounded-xl border bg-slate-50 p-3 font-normal" />
-        <span className="mt-1 block text-xs font-normal text-slate-500">30–1600 caracteres. Aquí puedes explicar ampliamente; las tarjetas llevan sólo conceptos cortos.</span>
+        <span className="mt-1 block text-xs font-normal text-slate-500">5–1600 caracteres. Puede ser breve o detallada; las tarjetas llevan sólo conceptos cortos.</span>
       </label>
       <p className="text-sm font-bold">Conceptos · marca la respuesta correcta</p>
       <div className="grid gap-3 md:grid-cols-2">
@@ -145,10 +145,12 @@ export function FlyingCatEditor({ content: rawContent, updateContent, aiControls
         <Button type="button" variant="outline" disabled={item.options.length >= 4} onClick={() => updateItem(questionIndex, { options: [...item.options, ''] })}><Plus size={14} className="mr-2" />Concepto</Button>
         <span className="text-xs text-slate-500">2–4 conceptos · máximo 2 palabras y 24 caracteres cada uno.</span>
       </div>
-      <label className="block text-sm font-bold">Explicación de la respuesta
+      <label className="block text-sm font-bold">Explicación de la respuesta (opcional)
         <textarea rows={3} maxLength={2000} value={item.feedback} onChange={(event) => updateItem(questionIndex, { feedback: event.target.value })}
-          placeholder="Explica por qué ese concepto corresponde a la definición. La IA también genera esta explicación."
-          className="mt-2 w-full rounded-xl border bg-slate-50 p-3 font-normal" /></label>
+          placeholder="Si quieres, explica por qué ese concepto corresponde a la definición."
+          className="mt-2 w-full rounded-xl border bg-slate-50 p-3 font-normal" />
+        <span className="mt-1 block text-xs font-normal text-slate-500">Si activas el resumen y dejas este campo vacío, el alumno verá el concepto correcto sin explicación adicional. No se genera texto automáticamente.</span>
+      </label>
     </section>)}
   </div>;
 }
