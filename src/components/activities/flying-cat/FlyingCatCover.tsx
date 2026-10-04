@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
+import type { FlyingCatDifficulty } from '@/lib/activities/flying-cat';
 import { PilotCat } from './PilotCat';
 import './flying-cat-art.css';
 
@@ -10,10 +11,26 @@ type FlyingCatCoverProps = {
   touch: boolean;
   onStart: () => void;
   onClose?: () => void;
+  difficulty?: FlyingCatDifficulty;
+  onDifficultyChange?: (difficulty: FlyingCatDifficulty) => void;
 };
 
-export function FlyingCatCover({ title, instructions, touch, onStart, onClose }: FlyingCatCoverProps) {
+const difficulties: { value: FlyingCatDifficulty; label: string; description: string }[] = [
+  { value: 'easy', label: 'Fácil', description: 'Vuelo tranquilo' },
+  { value: 'normal', label: 'Normal', description: 'Ritmo equilibrado' },
+  { value: 'hard', label: 'Difícil', description: 'Más desafío' },
+];
+
+export function FlyingCatCover({ title, instructions, touch, onStart, onClose, difficulty, onDifficultyChange }: FlyingCatCoverProps) {
   const [imageFailed, setImageFailed] = useState(false);
+  const [localDifficulty, setLocalDifficulty] = useState<FlyingCatDifficulty>('normal');
+  const selectedDifficulty = difficulty ?? localDifficulty;
+  const difficultyId = useId();
+
+  const changeDifficulty = (next: FlyingCatDifficulty) => {
+    if (difficulty === undefined) setLocalDifficulty(next);
+    onDifficultyChange?.(next);
+  };
 
   return (
     <section className="fc-cover" aria-label="Portada de Flying Cat">
@@ -35,6 +52,20 @@ export function FlyingCatCover({ title, instructions, touch, onStart, onClose }:
           </div>
 
           <div className="fc-cover-actions">
+            <fieldset className="fc-cover-difficulty" role="radiogroup" aria-label="Dificultad del vuelo" aria-describedby={`${difficultyId}-hint`}>
+              <legend>Dificultad del vuelo</legend>
+              <div className="fc-cover-difficulty-options">
+                {difficulties.map((option) => (
+                  <label key={option.value} className={`fc-cover-difficulty-option ${selectedDifficulty === option.value ? 'fc-cover-difficulty-option--selected' : ''}`}>
+                    <input type="radio" name={`${difficultyId}-difficulty`} value={option.value} aria-label={option.label}
+                      checked={selectedDifficulty === option.value} onChange={() => changeDifficulty(option.value)} />
+                    <span><strong>{option.label}</strong><small>{option.description}</small></span>
+                  </label>
+                ))}
+              </div>
+              <p id={`${difficultyId}-hint`}>Sólo cambia el reto de vuelo. La calificación depende de tus respuestas, sin puntos extra por dificultad.</p>
+            </fieldset>
+
             <button type="button" className="fc-cover-start" onClick={onStart}>
               Comenzar vuelo <span aria-hidden="true">→</span>
             </button>
@@ -42,8 +73,8 @@ export function FlyingCatCover({ title, instructions, touch, onStart, onClose }:
             <div className="fc-cover-help">
               <div>
                 <span className="fc-cover-help-icon" aria-hidden="true">{touch ? '☝' : '⌨'}</span>
-                <strong>{touch ? 'Control táctil' : 'WASD o flechas'}</strong>
-                <p>{touch ? 'Usa las flechas en pantalla para pilotar.' : 'Mueve el avión con el teclado.'}</p>
+                <strong>{touch ? 'Control táctil' : 'Teclado WASD'}</strong>
+                <p>{touch ? 'Mantén presionados los botones de dirección en pantalla para pilotar.' : 'Usa W, A, S y D para mover el avión.'}</p>
               </div>
               <div>
                 <span className="fc-cover-help-icon fc-cover-help-icon--answer" aria-hidden="true">✓</span>

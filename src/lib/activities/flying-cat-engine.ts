@@ -30,6 +30,8 @@ export interface FlightState {
   obstacleDelay: number;
   obstacleSerial: number;
   immunity: number;
+  impactSeconds: number;
+  impactSerial: number;
   activeSeconds: number;
   lives: number;
   hits: number;
@@ -45,6 +47,8 @@ export interface FlightState {
 
 export const RESUME_IMMUNITY_SECONDS = 3;
 export const CRASH_ANIMATION_SECONDS = 2.4;
+export const IMPACT_ANIMATION_SECONDS = 0.65;
+export const MAX_FLIGHT_OBSTACLES = 8;
 const clamp = (n: number, low: number, high: number) => Math.max(low, Math.min(high, n));
 export const emptyFlightControls = (): FlightControls => ({ up: false, down: false, left: false, right: false });
 
@@ -60,8 +64,8 @@ export function createFlight(content: FlyingCatContent, width: number, height: n
     mode: 'reading', resumeMode: 'reading', questions, questionIndex: 0,
     width: Math.max(180, width), height: Math.max(100, height),
     player: { x: 0, y: 0, width: 80, height: 60 }, card: null, obstacles: [],
-    nextOption: 0, cardDelay: 0.6, obstacleDelay: 3, obstacleSerial: 0,
-    immunity: 3, activeSeconds: 0, lives: 3, hits: 0, wrongAttempts: 0,
+    nextOption: 0, cardDelay: 0.6, obstacleDelay: 0.75, obstacleSerial: 0,
+    immunity: 3, impactSeconds: 0, impactSerial: 0, activeSeconds: 0, lives: 3, hits: 0, wrongAttempts: 0,
     score: 0, answers: [], feedback: null, difficulty: content.settings.difficulty,
     showFeedback: content.showFeedback, crashed: false, crashSeconds: 0,
   };
@@ -84,7 +88,20 @@ export function resizeFlight(state: FlightState, width: number, height: number) 
     object.x = object.x / oldWidth * state.width;
     object.y = object.y / oldHeight * state.height;
   }
-  if (state.card) state.card.width = clamp(state.width * 0.25, 82, 128);
+  for (const obstacle of state.obstacles) {
+    obstacle.width = clamp(state.width * 0.12, 42, 76);
+    obstacle.height = clamp(state.height * 0.14, 44, 58);
+  }
+  if (state.card) {
+    state.card.width = clamp(state.width * 0.25, 82, 128);
+    state.card.y = clamp(state.card.y, state.player.height / 2 + 3, state.height - state.player.height / 2 - 3);
+  }
+  // A rotation or a shorter arena must not shrink a previously safe corridor
+  // into a wall. Offending obstacles are retired, not teleported into the pilot.
+  state.obstacles = state.obstacles.filter((obstacle) =>
+    clearObstacleCorridor(state, state.height / 2, obstacle)
+    && (!state.card || clearObstacleCorridor(state, state.card.y, obstacle)))
+    .slice(0, flightDifficulty(state).maximumObstacles);
   moveFlightPlayer(state, state.player.x, state.player.y);
 }
 
@@ -98,12 +115,15 @@ export function flightDifficulty(state: FlightState) {
   const level = 1 + Math.floor(state.questionIndex / 2);
   const factor = state.difficulty === 'easy' ? 0.8 : state.difficulty === 'hard' ? 1.18 : 1;
   const progression = Math.min(1.8, 1 + (level - 1) * 0.13);
+  const interval = state.difficulty === 'easy' ? 1.55 : state.difficulty === 'hard' ? 0.88 : 1.15;
+  const density = state.difficulty === 'easy' ? 4 : state.difficulty === 'hard' ? MAX_FLIGHT_OBSTACLES : 6;
+  const arenaCap = state.height < 150 ? 3 : state.width < 300 ? 4 : MAX_FLIGHT_OBSTACLES;
   return {
     level,
     cardSpeed: clamp(state.width * 0.22, 60, 220) * factor * progression,
-    obstacleSpeed: clamp(state.width * 0.13, 46, 165) * factor * progression,
-    obstacleInterval: Math.max(1.8, 4.2 / (factor * progression)),
-    maximumObstacles: state.width < 600 ? 2 : 3,
+    obstacleSpeed: clamp(state.width * 0.14, 46, 175) * factor * progression,
+    obstacleInterval: Math.max(0.72, interval / progression),
+    maximumObstacles: Math.min(density, arenaCap),
   };
 }
 
@@ -122,9 +142,9 @@ export function resumeFlight(state: FlightState) {
   } else if (state.mode === 'reading') {
     state.mode = 'flying';
   }
-  state.immunity = RESUME_IMMUNITY_SECONDS;
+  state.immunity = state.impactSeconds > 0 ? 0 : RESUME_IMMUNITY_SECONDS;
   state.cardDelay = Math.max(state.cardDelay, 0.6);
-  state.obstacleDelay = Math.max(state.obstacleDelay, 3);
+  state.obstacleDelay = Math.max(state.obstacleDelay, 0.65);
 }
 
 export function pauseFlight(state: FlightState) {
@@ -139,9 +159,57 @@ function intersects(player: FlightBody, target: FlightBody) {
     && Math.abs(player.y - target.y) < player.height * 0.25 + target.height * 0.4;
 }
 
+function obstacleCorridorRadius(state: FlightState, obstacle: FlightBody) {
+  // Reserve the actual pilot hitbox plus breathing room, even in a 100px arena.
+  const margin = clamp((state.height - state.player.height) * 0.12, 4, 12);
+  return state.player.height * 0.25 + obstacle.height * 0.4 + margin;
+}
+
+function clearObstacleCorridor(state: FlightState, y: number, obstacle: FlightBody) {
+  return Math.abs(y - obstacle.y) >= obstacleCorridorRadius(state, obstacle);
+}
+
+function nextCardHeight(state: FlightState, random: () => number) {
+  const minimum = state.player.height / 2 + 3;
+  const maximum = state.height - minimum;
+  const lanes = [...new Set([0.22, 0.5, 0.78].map((fraction) => clamp(state.height * fraction, minimum, maximum)))];
+  const available = lanes.filter((lane) => state.obstacles.every((obstacle) => clearObstacleCorridor(state, lane, obstacle)));
+  // The centre is always reserved by the obstacle spawner. Other lanes stay
+  // available whenever their whole approach is also clear.
+  const safe = available.length ? available : [state.height / 2];
+  return safe[Math.floor(clamp(random(), 0, 1 - Number.EPSILON) * safe.length)];
+}
+
+function nextObstacleHeight(state: FlightState, obstacle: FlightBody, random: () => number): number | null {
+  // Peripheral objects may be slightly cropped in exceptionally short arenas,
+  // while the middle and the active answer lane remain continuously reachable.
+  let bands = [[obstacle.height * 0.12, state.height - obstacle.height * 0.12]];
+  const radius = obstacleCorridorRadius(state, obstacle);
+  const protectedLanes = [state.height / 2, ...(state.card ? [state.card.y] : [])];
+  for (const lane of protectedLanes) {
+    const lower = lane - radius;
+    const upper = lane + radius;
+    bands = bands.flatMap(([start, end]) => {
+      if (upper <= start || lower >= end) return [[start, end]];
+      const remaining: number[][] = [];
+      if (lower > start) remaining.push([start, Math.min(lower, end)]);
+      if (upper < end) remaining.push([Math.max(upper, start), end]);
+      return remaining;
+    });
+  }
+  const space = bands.reduce((total, [start, end]) => total + end - start, 0);
+  if (space <= 0) return null;
+  let position = clamp(random(), 0, 1 - Number.EPSILON) * space;
+  for (const [start, end] of bands) {
+    if (position <= end - start) return start + position;
+    position -= end - start;
+  }
+  return bands[bands.length - 1][1];
+}
+
 export function answerFlight(state: FlightState, index: number) {
   const question = state.questions[state.questionIndex];
-  if (state.mode !== 'flying' || !question || !Number.isInteger(index) || index < 0 || index >= question.options.length) return;
+  if (state.mode !== 'flying' || state.impactSeconds > 0 || !question || !Number.isInteger(index) || index < 0 || index >= question.options.length) return;
   const isCorrect = index === question.correctIndex;
   const event: GameAnswerEvent = {
     questionId: question.id, prompt: question.prompt, selectedAnswer: question.options[index],
@@ -166,6 +234,13 @@ export function stepFlight(state: FlightState, delta: number, controls: FlightCo
   }
   if (state.mode !== 'flying') return;
   state.activeSeconds += dt;
+  if (state.impactSeconds > 0) {
+    // React visibly before showing the shield. Freeze the world during this
+    // brief reaction so no card is accidentally answered and no second hit lands.
+    state.impactSeconds = Math.max(0, state.impactSeconds - dt);
+    if (state.impactSeconds === 0) state.immunity = RESUME_IMMUNITY_SECONDS;
+    return;
+  }
   state.immunity = Math.max(0, state.immunity - dt);
   const dx = Number(controls.right) - Number(controls.left);
   const dy = Number(controls.down) - Number(controls.up);
@@ -181,11 +256,10 @@ export function stepFlight(state: FlightState, delta: number, controls: FlightCo
     if (state.cardDelay <= 0) {
       const index = state.nextOption % question.options.length;
       state.nextOption++;
-      const lane = Math.floor(random() * 3);
       const cardWidth = clamp(state.width * 0.25, 82, 128);
       state.card = {
         index, text: question.options[index], x: state.width + cardWidth / 2,
-        y: state.height * (0.22 + lane * 0.28), width: cardWidth, height: 44,
+        y: nextCardHeight(state, random), width: cardWidth, height: 44,
       };
     }
   }
@@ -197,31 +271,33 @@ export function stepFlight(state: FlightState, delta: number, controls: FlightCo
 
   state.obstacleDelay -= dt;
   if (state.obstacleDelay <= 0 && state.obstacles.length < difficulty.maximumObstacles) {
-    let y = state.height * (0.16 + random() * 0.68);
-    // Don't block the same corridor as the answer card. A safe route always remains.
-    if (state.card && Math.abs(y - state.card.y) < 72) y = state.card.y < state.height / 2 ? state.height * 0.82 : state.height * 0.18;
-    state.obstacles.push({
-      id: ++state.obstacleSerial, kind: Math.floor(random() * 3), x: state.width + 40,
-      y, width: clamp(state.width * 0.1, 34, 66), height: 40,
-      speed: difficulty.obstacleSpeed * (0.9 + random() * 0.2),
+    const width = clamp(state.width * 0.12, 42, 76);
+    const height = clamp(state.height * 0.14, 44, 58);
+    const y = nextObstacleHeight(state, { x: 0, y: 0, width, height }, random);
+    if (y !== null) state.obstacles.push({
+      id: ++state.obstacleSerial, kind: Math.floor(clamp(random(), 0, 1 - Number.EPSILON) * 3), x: state.width + width / 2,
+      y, width, height, speed: difficulty.obstacleSpeed * (0.9 + random() * 0.2),
     });
     state.obstacleDelay = difficulty.obstacleInterval;
   }
   for (const obstacle of state.obstacles) {
     obstacle.x -= obstacle.speed * dt;
-    if (state.immunity <= 0 && intersects(state.player, obstacle)) {
+    if (state.immunity <= 0 && state.impactSeconds <= 0 && intersects(state.player, obstacle)) {
       obstacle.x = -200;
       state.lives--;
       state.score = Math.max(0, state.score - 25);
-      state.immunity = RESUME_IMMUNITY_SECONDS;
+      state.immunity = 0;
       if (state.lives <= 0) {
         state.crashed = true;
         state.mode = 'crashing';
         state.crashSeconds = 0;
+        state.impactSeconds = 0;
         state.card = null;
         state.obstacles = [];
         return;
       }
+      state.impactSerial += 1;
+      state.impactSeconds = IMPACT_ANIMATION_SECONDS;
     }
   }
   state.obstacles = state.obstacles.filter((object) => object.x > -object.width);

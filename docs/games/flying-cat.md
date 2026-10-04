@@ -55,18 +55,38 @@ el doble clic no genera dos solicitudes.
 ## Vuelo y calificación
 
 - Portada original de acuarela antes de empezar; fallback SVG si falla la imagen.
+- Antes de comenzar, el alumno elige **Fácil, Normal o Difícil**. Se ofrece primero
+  la dificultad configurada por el profesor. La elección sólo modifica la partida:
+  no cambia el ejercicio guardado ni la fórmula de calificación académica.
 - Se lee cada definición con el cielo detenido. Durante el vuelo permanece arriba,
   en un panel que se puede desplazar. En pantalla aparece **una tarjeta por vez**;
-  las opciones omitidas vuelven a circular. Dos obstáculos como máximo en pantallas
-  estrechas y tres en las amplias.
+  las opciones omitidas vuelven a circular. Los obstáculos son más grandes y
+  aparecen en oleadas limitadas por dificultad y espacio disponible, dejando
+  corredores libres. Fácil ya presenta varios obstáculos; no llena la pantalla
+  de golpe ni crea una lista creciente de objetos.
 - Al tocar un concepto se registra una sola respuesta y, si está habilitada, se
   pausa para leer la explicación (acierto o error). Después se pasa a la siguiente
   definición. No se permite responder dos veces por una misma colisión.
-- Tres segundos de protección contra obstáculos al despegar, continuar después
-  de una pausa o recibir un golpe, visibles como una esfera de energía azul.
+- Tres segundos de protección contra obstáculos al despegar o continuar después
+  de una pausa, visibles como una esfera de energía azul. Un choque no fatal muestra
+  primero al gato preocupado, un tambaleo del avión y una breve sacudida del cielo;
+  después aparecen los tres segundos de escudo. No se pierden vidas adicionales
+  durante esa reacción. La sacudida no mueve los botones y se elimina al activar
+  «reducir movimiento» en el dispositivo.
   Los obstáculos también se detienen en las pausas.
-- Flechas táctiles y arrastre sólo como guía móvil; instrucciones WASD/flechas en PC.
+- En móviles y iPad, sólo los **botones de dirección** dentro del escenario, abajo
+  a la izquierda, guían el avión. Admiten dos dedos para desplazarse en diagonal.
+  Tocar o arrastrar el cielo no mueve ni teletransporta al gato. En PC se pilota
+  exclusivamente con **WASD**: ni el ratón ni las teclas de flecha lo guían.
+  En arenas horizontales bajas se reserva una franja izquierda dentro del cielo
+  para los controles; el avión y los objetos se mueven sólo en el espacio no tapado.
   Cambiar de pestaña o perder el foco pausa y libera controles presionados.
+- En teléfonos compactos se exige orientación horizontal. En vertical se muestra
+  «Gira tu teléfono para jugar», con instrucciones sobre el bloqueo de orientación.
+  No se rota la página por CSS ni se fuerza una API de orientación que Safari no
+  admita: se detectan las dimensiones reales del navegador. Volver a vertical
+  pausa y conserva la partida; al girar de nuevo se pide continuar. Los iPad
+  amplios admiten ambas orientaciones. El resumen final sí se puede leer en vertical.
 - Cada dos definiciones aumenta el nivel y, de forma acotada, la velocidad. Tres
   choques agotan las vidas. Se muestra el avión rompiéndose y el gato cayendo durante
   2.4 segundos, sin nuevas respuestas; después se presenta el resumen. El resultado usa el total original de preguntas: las
@@ -98,9 +118,12 @@ node scripts/games/test-flying-cat-ui.mjs
 
 El smoke test compila una página temporal y usa Chromium de Playwright; se puede
 usar un navegador ya instalado con `FLYING_CAT_BROWSER_PATH=/usr/bin/google-chrome`.
-Comprueba 390×844, 320×568, 844×390 y 1280×800; portada, definición y explicación
-largas, controles, avance de dos preguntas, escudo, guardado único y reintento de
-conexión. Conserva capturas en la carpeta temporal que imprime al terminar.
+Comprueba 390×844, 320×568, 844×390, iPad 768×1024 y 1024×768, y PC 1280×800:
+portada y selección de dificultad, definición persistente y explicación largas,
+controles digitales dentro del escenario y WASD exclusivos, avance de dos preguntas,
+reacción al choque, escudo, guardado único y reintento de conexión. Conserva capturas
+en la carpeta temporal que imprime al terminar. No escribe en Supabase ni envía
+notificaciones reales.
 
 Prueba opcional con el proveedor real (consume tokens con la clave local existente,
 sin imprimirla ni escribir actividades o notas en Supabase):

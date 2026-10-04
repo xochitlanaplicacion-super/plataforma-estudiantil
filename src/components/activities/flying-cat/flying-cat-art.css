@@ -24,6 +24,7 @@
 .fc-art-pilot--flying .fc-art-propeller { animation: fc-art-propeller 0.14s linear infinite; }
 .fc-art-scarf { transform-origin: 58% 46%; }
 .fc-art-pilot--flying .fc-art-scarf { animation: fc-art-scarf 1.6s ease-in-out infinite alternate; }
+.fc-art-pilot--worried .fc-art-face { transform-box: fill-box; transform-origin: center; animation: fc-art-worry .3s ease-in-out 2; }
 
 @keyframes fc-art-smoke {
   0% { opacity: .62; transform: translate(0, 0) scale(.5); }
@@ -44,6 +45,7 @@
 @keyframes fc-art-wreck-wing { from { transform: translate(0, 0) rotate(0); } to { transform: translate(-3px, 32px) rotate(-28deg); } }
 @keyframes fc-art-crash-smoke { from { transform: scale(.3); opacity: .7; } to { transform: translate(-22px, -28px) scale(2.2); opacity: 0; } }
 @keyframes fc-art-crash-flash { from { transform: scale(.3); opacity: 1; } to { transform: scale(1.7); opacity: 0; } }
+@keyframes fc-art-worry { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(1px) rotate(-1deg); } }
 
 .fc-cover {
   --fc-ink: #263e50;
@@ -65,7 +67,7 @@
 .fc-cover-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .fc-cover-eyebrow { font-size: 10px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; color: #476879; }
 .fc-cover-close { color: var(--fc-ink); background: #fffbf1; border: 1px solid #263e503d; border-radius: 10px; padding: 8px 12px; font-size: 12px; cursor: pointer; white-space: nowrap; }
-.fc-cover-grid { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: 'intro' 'art' 'actions'; gap: 22px; margin: 28px auto 0; max-width: 1180px; }
+.fc-cover-grid { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: 'intro' 'actions' 'art'; gap: 22px; margin: 28px auto 0; max-width: 1180px; }
 .fc-cover-copy { display: contents; }
 .fc-cover-intro { grid-area: intro; min-width: 0; }
 .fc-cover-actions { grid-area: actions; min-width: 0; }
@@ -75,6 +77,17 @@
 .fc-cover h2 { margin: 0; font-size: clamp(17px, 2.4vw, 24px); line-height: 1.4; overflow-wrap: anywhere; }
 .fc-cover-description { max-width: 550px; margin: 15px 0 0; font-size: clamp(15px, 2vw, 18px); line-height: 1.65; }
 .fc-cover-teacher-note { max-height: 170px; overflow-y: auto; overflow-wrap: anywhere; margin: 14px 0 0; padding: 12px 14px; background: #fff8e5; border-left: 3px solid #cf9e5e; border-radius: 4px; font-size: 14px; line-height: 1.6; }
+.fc-cover-difficulty { min-width: 0; margin: 0 0 18px; padding: 0; border: 0; }
+.fc-cover-difficulty legend { margin-bottom: 8px; font-size: 13px; font-weight: 800; }
+.fc-cover-difficulty-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.fc-cover-difficulty-option { display: flex; align-items: center; gap: 7px; min-height: 56px; padding: 9px; border: 1px solid #263e5038; border-radius: 12px; background: #fff9ecb3; cursor: pointer; }
+.fc-cover-difficulty-option--selected { border-color: #548aa5; background: #deecea; box-shadow: inset 0 0 0 1px #548aa5; }
+.fc-cover-difficulty-option input { flex: 0 0 auto; width: 16px; height: 16px; margin: 0; accent-color: #476879; cursor: pointer; }
+.fc-cover-difficulty-option span { min-width: 0; }
+.fc-cover-difficulty-option strong { display: block; font-size: 13px; }
+.fc-cover-difficulty-option small { display: block; margin-top: 3px; color: #486070; font-size: 10px; line-height: 1.4; }
+.fc-cover-difficulty-option:focus-within { outline: 3px solid #548aa5; outline-offset: 3px; }
+.fc-cover-difficulty > p { margin: 8px 0 0; color: #486070; font-size: 11px; line-height: 1.5; }
 .fc-cover-start { display: inline-flex; align-items: center; justify-content: center; gap: 22px; min-height: 54px; margin: 0; padding: 16px 24px; border: 2px solid #8d3d27; border-radius: 15px; color: #fff8eb; background: var(--fc-terra); box-shadow: 0 5px 0 #843c28; font-size: 18px; font-weight: 800; cursor: pointer; transition: transform .15s, box-shadow .15s; }
 .fc-cover-start:hover { transform: translateY(-2px); box-shadow: 0 7px 0 #843c28; }
 .fc-cover-start:active { transform: translateY(3px); box-shadow: 0 2px 0 #843c28; }
@@ -117,12 +130,22 @@
 @media (max-width: 360px) {
   .fc-cover-start { width: 100%; padding-inline: 15px; font-size: 16px; }
   .fc-cover-eyebrow { max-width: 150px; font-size: 9px; }
+  .fc-cover-difficulty-options { gap: 5px; }
+  .fc-cover-difficulty-option { gap: 5px; padding: 8px 6px; }
+}
+@media (max-height: 600px) {
+  .fc-cover { padding: 16px; }
+  .fc-cover-grid { gap: 16px; margin-top: 16px; }
+  .fc-cover h1 { font-size: 50px; margin: 10px 0 12px; }
+  .fc-cover-description { font-size: 14px; line-height: 1.5; }
+  .fc-cover-teacher-note { max-height: 72px; font-size: 12px; }
+  .fc-cover-help { margin-top: 18px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .fc-art-pilot--flying .fc-art-puff, .fc-art-pilot--flying .fc-art-propeller, .fc-art-pilot--flying .fc-art-scarf, .fc-cover-illustration, .fc-cover-sky-puffs i { animation: none; }
   .fc-art-pilot--flying .fc-art-puff, .fc-cover-sky-puffs i { opacity: 0; }
   .fc-cover-start { transition: none; }
-  .fc-art-energy-sphere, .fc-art-wreck-tail, .fc-art-wreck-nose, .fc-art-wreck-wing, .fc-art-wreck-smoke, .fc-art-crash-flash, .fc-art-fall-scarf { animation: none; }
+  .fc-art-energy-sphere, .fc-art-wreck-tail, .fc-art-wreck-nose, .fc-art-wreck-wing, .fc-art-wreck-smoke, .fc-art-crash-flash, .fc-art-fall-scarf, .fc-art-pilot--worried .fc-art-face { animation: none; }
   .fc-art-wreck-tail { transform: translate(-12px, 8px) rotate(-8deg); }
   .fc-art-wreck-nose { transform: translate(12px, 15px) rotate(9deg); }
   .fc-art-wreck-wing { transform: translate(0, 20px) rotate(-15deg); }

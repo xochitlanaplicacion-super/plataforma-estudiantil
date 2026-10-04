@@ -556,7 +556,6 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
                   placeholder="Pega aquí un texto sobre el tema o escribe las instrucciones específicas para la IA..."
                   className="w-full p-4 bg-black/40 border-2 border-white/10 rounded-2xl text-sm outline-none focus:border-white/30 focus:ring-4 transition-all text-white placeholder-slate-600 resize-none"
                 />
-                {type === 'flying_cat' && <p className="text-xs text-slate-300">Indica el tema, nivel e idiomas. Por ejemplo: profesiones, descripciones en español y conceptos en inglés. La IA adapta las preguntas, opciones y explicaciones al juego.</p>}
               </div>
             </div>
 

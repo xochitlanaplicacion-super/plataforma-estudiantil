@@ -7,10 +7,11 @@ type PilotCatProps = {
   className?: string;
   flying?: boolean;
   protected?: boolean;
+  worried?: boolean;
 };
 
 /** Lightweight paper-cut illustration: the same pilot on the cover and in flight. */
-export function PilotCat({ className = '', flying = true, protected: shielded = false }: PilotCatProps) {
+export function PilotCat({ className = '', flying = true, protected: shielded = false, worried = false }: PilotCatProps) {
   const id = useId().replace(/:/g, '');
   const orange = `${id}-orange`;
   const fur = `${id}-fur`;
@@ -19,7 +20,7 @@ export function PilotCat({ className = '', flying = true, protected: shielded = 
   return (
     <svg
       viewBox="75 30 340 230"
-      className={`fc-art-pilot ${flying ? 'fc-art-pilot--flying' : ''} ${shielded ? 'fc-art-pilot--protected' : ''} ${className}`}
+      className={`fc-art-pilot ${flying ? 'fc-art-pilot--flying' : ''} ${shielded ? 'fc-art-pilot--protected' : ''} ${worried ? 'fc-art-pilot--worried' : ''} ${className}`}
       aria-hidden="true"
       focusable="false"
     >
@@ -84,13 +85,25 @@ export function PilotCat({ className = '', flying = true, protected: shielded = 
         <path d="M253 69 Q260 50 285 50 Q309 48 325 67 L322 91 Q302 68 275 77 L254 96Z" fill="#7c5237" />
         <path d="M254 75 249 111 255 122 264 110 264 81" fill="#835636" stroke="#efdbb6" strokeWidth="2" />
         <path d="m269 81 5 13m12-18 3 16m13-15 4 14m-49 20 14 3m-10 8 12 1m38-20-12 4m10 8-10 3" fill="none" stroke="#6a603f" strokeWidth="5" />
-        <path d="M269 98 Q275 88 283 98 L283 106 270 107Z M295 97 Q303 87 310 98 L309 106 296 106Z" fill="#faf4da" />
-        <ellipse cx="279" cy="99" rx="3.4" ry="7" fill="#283c35" />
-        <ellipse cx="305" cy="98" rx="3.4" ry="7" fill="#283c35" />
-        <ellipse cx="291" cy="119" rx="20" ry="13" fill="#f4e2bb" />
-        <path d="m285 108 12-1-5 7Z" fill="#70533e" />
-        <path d="m292 114 1 5q-5 6-11 0m11 0q6 5 11-2" fill="none" stroke="#614c3a" strokeWidth="2.3" />
-        <path d="M268 113 249 109m19 11-21 4m60-12 20-4m-21 11 20 4" fill="none" stroke="#4b4536" strokeWidth="1.8" />
+        <g className="fc-art-face" data-testid={worried ? 'flying-cat-worried-face' : undefined}>
+          {worried ? <>
+            <path d="m269 88 12-4m17-1 13 4" fill="none" stroke="#65513a" strokeWidth="2.5" />
+            <ellipse cx="278" cy="100" rx="10" ry="9" fill="#faf4da" />
+            <ellipse cx="304" cy="99" rx="10" ry="9" fill="#faf4da" />
+            <ellipse cx="280" cy="101" rx="3.4" ry="6.5" fill="#283c35" />
+            <ellipse cx="302" cy="100" rx="3.4" ry="6.5" fill="#283c35" />
+          </> : <>
+            <path d="M269 98 Q275 88 283 98 L283 106 270 107Z M295 97 Q303 87 310 98 L309 106 296 106Z" fill="#faf4da" />
+            <ellipse cx="279" cy="99" rx="3.4" ry="7" fill="#283c35" />
+            <ellipse cx="305" cy="98" rx="3.4" ry="7" fill="#283c35" />
+          </>}
+          <ellipse cx="291" cy="119" rx="20" ry="13" fill="#f4e2bb" />
+          <path d="m285 108 12-1-5 7Z" fill="#70533e" />
+          {worried ? <ellipse cx="292" cy="121" rx="4.5" ry="5" fill="#614c3a" />
+            : <path d="m292 114 1 5q-5 6-11 0m11 0q6 5 11-2" fill="none" stroke="#614c3a" strokeWidth="2.3" />}
+          <path d="M268 113 249 109m19 11-21 4m60-12 20-4m-21 11 20 4" fill="none" stroke="#4b4536" strokeWidth="1.8" />
+          {worried && <path d="M320 90q-7 10-3 13 5 3 7-2 1-3-4-11Z" fill="#9cdae2" stroke="#476879" strokeWidth="1" />}
+        </g>
         <path d="M258 68 Q289 58 321 65" fill="none" stroke="#213f55" strokeWidth="7" />
         <ellipse cx="277" cy="65" rx="14" ry="10" fill="#efdeb5" stroke="#544633" strokeWidth="4" transform="rotate(-10 277 65)" />
         <ellipse cx="307" cy="62" rx="12" ry="10" fill="#efdeb5" stroke="#544633" strokeWidth="4" transform="rotate(8 307 62)" />
