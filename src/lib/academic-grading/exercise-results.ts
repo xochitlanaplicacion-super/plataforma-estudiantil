@@ -19,6 +19,21 @@ const exerciseResultResponseSchema = z.object({
 
 export type ExerciseResultResponse = z.infer<typeof exerciseResultResponseSchema>;
 
+export function validateExerciseAttemptKey(value: unknown): string {
+  const result = z.string().uuid().safeParse(value);
+  if (!result.success) throw new RangeError('El identificador del intento debe ser un UUID válido.');
+  return result.data;
+}
+
+/** Recover the same optimistic version used by a committed retry request. */
+export function originalExerciseAttemptVersion(value: unknown): number {
+  const response = parseExerciseResultResponse(value);
+  if (response.rowVersion === undefined || response.status === 'expired') {
+    throw new RangeError('No se pudo recuperar la versión del intento anterior.');
+  }
+  return response.saved ? response.rowVersion - 1 : response.rowVersion;
+}
+
 export function validateAutomaticAttempt(input: {
   hits: number;
   total: number;

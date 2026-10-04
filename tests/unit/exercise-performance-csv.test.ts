@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { exerciseAttemptDetailCsv, exercisePerformanceCsv } from '@/lib/academic/exercise-performance-csv';
+import { gameAttemptDetails } from '@/lib/academic/game-attempt-details';
 
 describe('exercise results export', () => {
   it('includes automatic results and neutralizes spreadsheet formulas in names', () => {
@@ -37,5 +38,20 @@ describe('exercise results export', () => {
     expect(csv).toContain('"Incorrecta"');
     expect(csv).toContain('"Correcta"');
     expect(csv.match(/Juan Prueba/g)).toHaveLength(3);
+  });
+
+  it('exports Flying Cat answers and metrics through the existing automatic-game report', () => {
+    const csv = exerciseAttemptDetailCsv([{
+      name: 'Juan Prueba', history: [{ intento: 1, calificacion_10: 10, aciertos: 1, total_preguntas: 1,
+        detalles: gameAttemptDetails('flying_cat', { intentos_incorrectos: 0, tiempo_segundos: 40, puntos_juego: 100 }, [{
+          questionId: 'q1', prompt: 'Persona que conduce una aeronave y transporta pasajeros.',
+          selectedAnswer: 'Pilot', correctAnswer: 'Pilot', isCorrect: true, attemptNumber: 1,
+        }]) }],
+    }]);
+    expect(csv).toContain('"flying_cat"');
+    expect(csv).toContain('Persona que conduce una aeronave');
+    expect(csv).toContain('"Pilot","Pilot","Correcta"');
+    expect(csv).toContain('"40"');
+    expect(csv).toContain('"Completo"');
   });
 });

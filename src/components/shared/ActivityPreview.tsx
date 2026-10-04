@@ -14,24 +14,16 @@ import { EntregaAlumno } from './EntregaAlumno';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { ParkourRaceFrame } from '@/components/activities/parkour-race/ParkourRaceFrame';
 import { BackroomsScapeFrame } from '@/components/activities/backrooms-scape/BackroomsScapeFrame';
+import dynamic from 'next/dynamic';
 import type { GameLeaderboard } from '@/lib/game-leaderboard';
-import { normalizeGameAnswerDetails } from '@/lib/academic/game-answer-details';
+import { gameAttemptDetails } from '@/lib/academic/game-attempt-details';
 
-function gameAttemptDetails(
-  gameType: 'parkour_race' | 'backrooms_scape',
-  metrics: Record<string, unknown>,
-  answers: unknown,
-  answersTruncated = false,
-) {
-  const { details, omitted } = normalizeGameAnswerDetails(answers);
-  return [{
-    tipo: gameType,
-    ...metrics,
-    detalle_respuestas_disponible: Array.isArray(answers),
-    respuestas_omitidas: omitted,
-    traza_truncada: answersTruncated || omitted > 0,
-  }, ...details];
-}
+const FlyingCatGame = dynamic(() => import('@/components/activities/flying-cat/FlyingCatGame'), {
+  ssr: false,
+  loading: () => <div role="status" className="flex h-full items-center justify-center bg-sky-100 p-6 font-bold text-sky-900">Preparando Flying Cat…</div>,
+});
+
+export type ActivityCompletion = GameLeaderboard | null | undefined | { practice: true; message: string };
 
 // --- MOBILE DRAG INSTRUCTIONS POPUP ---
 function MobileDragTip({ type, onDismiss }: { type: string; onDismiss: () => void }) {
@@ -265,7 +257,7 @@ function generateCrossword(inputs: WordInput[]): CrosswordData {
 export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistente, isPreview, gameLeaderboard }: {
   exercise: any; 
   onClose: () => void; 
-  onComplete?: (score: number, total: number, detallesErrores?: any[]) => Promise<GameLeaderboard | null | undefined> | GameLeaderboard | null | undefined;
+  onComplete?: (score: number, total: number, detallesErrores?: any[]) => Promise<ActivityCompletion> | ActivityCompletion;
   entregaExistente?: any;
   isPreview?: boolean;
   gameLeaderboard?: GameLeaderboard | null;
@@ -311,6 +303,10 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const content = useMemo(() => {
+    if (exercise.tipo === 'flying_cat' && typeof exercise.contenido === 'string') {
+      try { return JSON.parse(exercise.contenido || '{}'); }
+      catch { return {}; } // Let Flying Cat show its validation alert, not crash the page.
+    }
     return typeof exercise.contenido === 'string' ? JSON.parse(exercise.contenido || '{}') : exercise.contenido;
   }, [exercise]);
 
@@ -649,6 +645,23 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
   };
 
   const renderContent = () => {
+    if (exercise.tipo === 'flying_cat') {
+      return (
+        <div className="h-full min-h-0 w-full overflow-hidden bg-sky-100">
+          <FlyingCatGame
+            key={exercise.id || 'flying-cat-preview'}
+            exercise={exercise}
+            onClose={onClose}
+            onComplete={onComplete ? (result) => onComplete(result.hits, result.total, gameAttemptDetails('flying_cat', {
+              intentos_incorrectos: result.wrongAttempts,
+              tiempo_segundos: result.time,
+              puntos_juego: result.score,
+            }, result.answers, result.answersTruncated)) : undefined}
+          />
+        </div>
+      );
+    }
+
     if (exercise.tipo === 'backrooms_scape') {
       return (
         <div className="h-full min-h-0 w-full overflow-hidden bg-[#101416]">
@@ -656,14 +669,17 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
             exercise={exercise}
             leaderboard={gameLeaderboard}
             onClose={onClose}
-            onComplete={onComplete ? (result) => onComplete(result.hits, result.total, gameAttemptDetails('backrooms_scape', {
-              intentos_incorrectos: result.wrongAttempts,
-              tiempo_segundos: result.time,
-              capturas: result.captures,
-              fragmentos: result.fragments,
-              puntos_juego: result.score,
-              codigo_mapa: result.seedCode,
-            }, result.answers, result.answersTruncated)) : undefined}
+            onComplete={onComplete ? async (result) => {
+              const completion = await onComplete(result.hits, result.total, gameAttemptDetails('backrooms_scape', {
+                intentos_incorrectos: result.wrongAttempts,
+                tiempo_segundos: result.time,
+                capturas: result.captures,
+                fragmentos: result.fragments,
+                puntos_juego: result.score,
+                codigo_mapa: result.seedCode,
+              }, result.answers, result.answersTruncated));
+              return completion && 'practice' in completion ? null : completion;
+            } : undefined}
           />
         </div>
       );
@@ -676,13 +692,16 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
             exercise={exercise}
             leaderboard={gameLeaderboard}
             onClose={onClose}
-            onComplete={onComplete ? (result) => onComplete(result.hits, result.total, gameAttemptDetails('parkour_race', {
-              intentos_incorrectos: result.wrongAttempts,
-              tiempo_segundos: result.time,
-              caidas: result.falls,
-              puntos_juego: result.score,
-              codigo_mapa: result.seedCode,
-            }, result.answers, result.answersTruncated)) : undefined}
+            onComplete={onComplete ? async (result) => {
+              const completion = await onComplete(result.hits, result.total, gameAttemptDetails('parkour_race', {
+                intentos_incorrectos: result.wrongAttempts,
+                tiempo_segundos: result.time,
+                caidas: result.falls,
+                puntos_juego: result.score,
+                codigo_mapa: result.seedCode,
+              }, result.answers, result.answersTruncated));
+              return completion && 'practice' in completion ? null : completion;
+            } : undefined}
           />
         </div>
       );
@@ -1211,7 +1230,7 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
     return <div className="p-20 text-center opacity-20 italic">Vista previa no disponible.</div>;
   };
 
-  if (exercise.tipo === 'parkour_race' || exercise.tipo === 'backrooms_scape') {
+  if (exercise.tipo === 'parkour_race' || exercise.tipo === 'backrooms_scape' || exercise.tipo === 'flying_cat') {
     return (
       <div className="fixed inset-0 z-[100] flex h-[100dvh] flex-col overflow-hidden bg-slate-950">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/15 px-3 py-2 text-white" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>

@@ -11,7 +11,9 @@ import { createServerSupabaseClient } from '@/lib/supabase/server';
 import {
   academicExerciseErrorMessage,
   parseExerciseResultResponse,
+  originalExerciseAttemptVersion,
   validateAutomaticAttempt,
+  validateExerciseAttemptKey,
 } from '@/lib/academic-grading/exercise-results';
 import {
   buildGameLeaderboard,
@@ -351,14 +353,36 @@ export async function saveExerciseResult(
   aciertos: number, 
   total: number, 
   calificacionIntento: number,
-  detallesErrores?: any
+  detallesErrores?: any,
+  idempotencyKey?: string,
 ) {
   const context = await requireTenantSession(['alumno']);
   const { supabase } = context;
   try {
     validateAutomaticAttempt({ hits: aciertos, total, rawPercentage: calificacionIntento });
+    if (idempotencyKey !== undefined) validateExerciseAttemptKey(idempotencyKey);
   } catch (error) {
     return { error: error instanceof Error ? error.message : 'Resultado inválido' };
+  }
+
+  let originalVersion: number | undefined;
+  if (idempotencyKey !== undefined) {
+    // The mutation ledger is deliberately not exposed to students. This
+    // narrowly scoped server read recovers only this student's request version;
+    // the normal authenticated RPC still validates its payload hash and access.
+    const { data: priorRequest, error: requestError } = await context.admin
+      .from('solicitudes_mutacion_academica')
+      .select('respuesta')
+      .eq('tenant_id', context.tenantId)
+      .eq('actor_id', context.user.id)
+      .eq('operacion', 'exercise_result')
+      .eq('idempotency_key', idempotencyKey)
+      .maybeSingle();
+    if (requestError) return { error: 'No se pudo verificar si esta partida ya se guardó. Reintenta cuando vuelva la conexión.' };
+    if (priorRequest?.respuesta) {
+      try { originalVersion = originalExerciseAttemptVersion(priorRequest.respuesta); }
+      catch { return { error: 'No se pudo verificar el intento anterior; no guardamos una copia duplicada.' }; }
+    }
   }
 
   const { data: existing, error: readError } = await supabase
@@ -371,8 +395,8 @@ export async function saveExerciseResult(
   const { data, error } = await supabase.rpc('guardar_resultado_ejercicio_academico', {
     p_ejercicio_id: ejercicioId,
     p_operacion: 'automatic_attempt',
-    p_idempotency_key: randomUUID(),
-    p_expected_row_version: existing?.row_version ?? 0,
+    p_idempotency_key: idempotencyKey ?? randomUUID(),
+    p_expected_row_version: originalVersion ?? existing?.row_version ?? 0,
     p_aciertos: aciertos,
     p_total_preguntas: total,
     p_porcentaje_bruto: calificacionIntento,
@@ -389,6 +413,7 @@ export async function saveExerciseResult(
     return {
       success: true,
       isExpired: response.status === 'expired',
+      isLocked: response.status === 'locked',
       message: response.message,
       data: response.grade === undefined ? undefined : {
         calificacion: response.grade,

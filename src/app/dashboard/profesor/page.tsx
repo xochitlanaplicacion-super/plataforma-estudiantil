@@ -123,6 +123,8 @@ import { ParkourRaceEditor } from '@/components/activities/parkour-race/ParkourR
 import { createParkourRaceContent, normalizeParkourRaceContent, validateParkourRaceContent } from '@/lib/activities/parkour-race';
 import { BackroomsScapeEditor } from '@/components/activities/backrooms-scape/BackroomsScapeEditor';
 import { createBackroomsScapeContent, normalizeBackroomsScapeContent, validateBackroomsScapeContent } from '@/lib/activities/backrooms-scape';
+import { FlyingCatEditor } from '@/components/activities/flying-cat/FlyingCatEditor';
+import { createFlyingCatContent, normalizeFlyingCatContent, validateFlyingCatContent } from '@/lib/activities/flying-cat';
 import {
   ACADEMIC_UPLOAD_MAX_MB,
   EDUCATIONAL_RESOURCE_ACCEPT,
@@ -136,6 +138,7 @@ const LOGO_FALLBACK = '/images/logo_placeholder.svg';
 
 // --- CONFIGURACIÓN DE PLANTILLAS ---
 const ACTIVITY_TEMPLATES = [
+  { id: 'flying_cat', label: 'Flying Cat', icon: <Gamepad2 size={18} />, color: 'bg-orange-600', featured: true },
   { id: 'parkour_race', label: 'Parkour Race', icon: <Gamepad2 size={18} />, color: 'bg-cyan-600', featured: true },
   { id: 'backrooms_scape', label: 'Backrooms Scape', icon: <Gamepad2 size={18} />, color: 'bg-amber-700', featured: true },
   { id: 'actividad_descriptiva', label: 'Actividad Descriptiva', icon: <FileSearch size={16} />, color: 'bg-slate-700' },
@@ -151,6 +154,7 @@ const ACTIVITY_TEMPLATES = [
 
 const initActivityContent = (type: string) => {
   switch(type) {
+    case 'flying_cat': return createFlyingCatContent();
     case 'parkour_race': return createParkourRaceContent();
     case 'backrooms_scape': return createBackroomsScapeContent();
     case 'actividad_descriptiva': return { fileUrl: '', fileName: '' };
@@ -349,6 +353,9 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
       if (type === 'crucigrama') {
         endpoint = '/api/exercises/generate-crossword';
         payload.numPalabras = aiNumWords;
+      } else if (type === 'flying_cat') {
+        endpoint = '/api/exercises/generate-flying-cat';
+        payload.numPreguntas = aiNumWords;
       } else if (type === 'backrooms_scape') {
         endpoint = '/api/exercises/generate-backrooms-scape';
         payload.numPreguntas = aiNumWords;
@@ -380,13 +387,18 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      if (!res.ok) throw new Error("Error en la IA");
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'No se pudo generar la actividad con IA.');
       
       if (type === 'crucigrama') {
         updateContent({ ...content, words: data.words || [], clues: data.clues || [] });
       } else if (type === 'sopa_letras') {
         updateContent({ ...content, words: data.words || [], clues: data.clues || [], sopaFeedback: data.feedback || '' });
+      } else if (type === 'flying_cat') {
+        const generated = normalizeFlyingCatContent({ ...content, items: data.items });
+        const validation = validateFlyingCatContent(generated);
+        if (validation) throw new Error(validation);
+        updateContent(generated);
       } else if (type === 'opcion_multiple' || type === 'parkour_race' || type === 'backrooms_scape' || type === 'verdadero_falso' || type === 'emparejamiento' || type === 'flashcards') {
         updateContent({ ...content, items: data.items || [] });
       } else if (type === 'ordenar_secuencia') {
@@ -448,6 +460,7 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
                     : type === 'opcion_multiple' ? 'Opción Múltiple IA'
                     : type === 'parkour_race' ? 'Parkour Race IA'
                     : type === 'backrooms_scape' ? 'Backrooms Scape IA'
+                    : type === 'flying_cat' ? 'Flying Cat IA'
                     : type === 'verdadero_falso' ? 'Verdadero/Falso IA'
                     : type === 'emparejamiento' ? 'Emparejamiento IA'
                     : type === 'completar_espacios' ? 'Completar Espacios IA'
@@ -469,6 +482,7 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
                   className="text-[10px] font-black uppercase tracking-widest text-slate-300"
                 >
                   {type === 'crucigrama' ? 'N° de Palabras'
+                    : type === 'flying_cat' ? 'N° de Definiciones'
                     : type === 'opcion_multiple' || type === 'parkour_race' || type === 'backrooms_scape' ? 'N° de Preguntas'
                     : type === 'verdadero_falso' ? 'N° de Enunciados'
                     : type === 'emparejamiento' ? 'N° de Pares'
@@ -479,7 +493,7 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
                 </label>
                 <Input 
                   type="number" 
-                  min={2} 
+                  min={type === 'flying_cat' ? 1 : 2}
                   max={20}
                   value={aiNumWords}
                   onChange={(e) => setAiNumWords(parseInt(e.target.value) || 5)}
@@ -500,6 +514,7 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
                   placeholder="Pega aquí un texto sobre el tema o escribe las instrucciones específicas para la IA..."
                   className="w-full p-4 bg-black/40 border-2 border-white/10 rounded-2xl text-sm outline-none focus:border-white/30 focus:ring-4 transition-all text-white placeholder-slate-600 resize-none"
                 />
+                {type === 'flying_cat' && <p className="text-xs text-slate-300">Pide definiciones detalladas o casos de uso, como en crucigramas. La IA generará 2–4 conceptos por definición, de máximo dos palabras, con explicación y orden aleatorio.</p>}
               </div>
             </div>
 
@@ -553,6 +568,10 @@ const TemplateEditor = ({ type, content, updateContent, pagoIA }: { type: string
   };
 
   if (!type) return <div className="p-8 text-center opacity-30 italic">Selecciona una plantilla para comenzar.</div>;
+
+  if (type === 'flying_cat') {
+    return <FlyingCatEditor content={content} updateContent={updateContent} aiControls={<>{renderAiButton()}{renderAiModal()}</>} />;
+  }
 
   if (type === 'parkour_race') {
     return (
@@ -1507,6 +1526,15 @@ export default function ProfesorDashboard() {
       
       if (dialog.type === 'ejercicio') {
         if (!selectedTema?.id) { toast({ variant: "destructive", title: "Error", description: "No hay tema seleccionado." }); return; }
+        if (d.tipo === 'flying_cat') {
+          const flyingCatContent = normalizeFlyingCatContent(d.contenido);
+          const validationError = validateFlyingCatContent(flyingCatContent);
+          if (validationError) {
+            toast({ variant: 'destructive', title: 'Revisa Flying Cat', description: validationError });
+            return;
+          }
+          d.contenido = flyingCatContent;
+        }
         if (d.tipo === 'parkour_race') {
           const parkourContent = normalizeParkourRaceContent(d.contenido);
           const validationError = validateParkourRaceContent(parkourContent);

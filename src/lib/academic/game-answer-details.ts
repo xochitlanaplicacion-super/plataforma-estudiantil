@@ -1,4 +1,4 @@
-/** Evidence sent by the isolated game iframe after a completed run. */
+/** Evidence sent by a game after a completed run. */
 export interface GameAnswerEvent {
   questionId: string;
   prompt: string;
@@ -30,12 +30,15 @@ function trimmedText(value: unknown, maximum: number): string {
 }
 
 /** Never let an unusually long run or malformed iframe payload lose the grade. */
-export function normalizeGameAnswerDetails(value: unknown): {
+export function normalizeGameAnswerDetails(value: unknown, options: { maxPromptCharacters?: number } = {}): {
   details: GameAnswerDetail[];
   omitted: number;
 } {
   if (!Array.isArray(value)) return { details: [], omitted: 0 };
 
+  const requestedPromptLimit = options.maxPromptCharacters;
+  const promptLimit = typeof requestedPromptLimit === 'number' && Number.isFinite(requestedPromptLimit)
+    ? Math.max(1, Math.min(1600, Math.floor(requestedPromptLimit))) : 240;
   const details: GameAnswerDetail[] = [];
   const encoder = new TextEncoder();
   let usedBytes = 0;
@@ -45,7 +48,7 @@ export function normalizeGameAnswerDetails(value: unknown): {
     const item = raw as Record<string, unknown>;
     const attemptNumber = Number(item.attemptNumber);
     const questionId = trimmedText(item.questionId, 80);
-    const prompt = trimmedText(item.prompt, 240);
+    const prompt = trimmedText(item.prompt, promptLimit);
     const correctAnswer = trimmedText(item.correctAnswer, 160);
     if (!questionId || !prompt || !correctAnswer || typeof item.isCorrect !== 'boolean'
       || !Number.isInteger(attemptNumber) || attemptNumber < 1 || attemptNumber > 10_000) continue;

@@ -1,0 +1,130 @@
+.fc-art-pilot {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.fc-art-pilot .fc-art-airplane { transform-origin: 63% 57%; }
+.fc-art-energy-sphere { transform-box: fill-box; transform-origin: center; animation: fc-art-shield-pulse .75s ease-in-out infinite alternate; }
+.fc-art-wreck, .fc-art-falling-cat { display: block; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.fc-art-wreck-tail, .fc-art-wreck-nose, .fc-art-wreck-wing, .fc-art-wreck-smoke, .fc-art-crash-flash { transform-box: fill-box; transform-origin: center; }
+.fc-art-wreck-tail { animation: fc-art-wreck-tail .65s ease-out both; }
+.fc-art-wreck-nose { animation: fc-art-wreck-nose .7s ease-out both; }
+.fc-art-wreck-wing { animation: fc-art-wreck-wing .8s ease-out both; }
+.fc-art-wreck-smoke { animation: fc-art-crash-smoke 1.8s ease-out both; }
+.fc-art-crash-flash { animation: fc-art-crash-flash .35s ease-out both; }
+.fc-art-fall-scarf { transform-box: fill-box; transform-origin: right bottom; animation: fc-art-scarf .55s ease-in-out infinite alternate; }
+.fc-art-puff { transform-box: fill-box; transform-origin: center; opacity: 0; }
+.fc-art-pilot--flying .fc-art-puff { animation: fc-art-smoke 1.6s linear infinite; }
+.fc-art-pilot--flying .fc-art-puff--two { animation-delay: -0.54s; }
+.fc-art-pilot--flying .fc-art-puff--three { animation-delay: -1.08s; }
+.fc-art-propeller { transform-box: fill-box; transform-origin: center; }
+.fc-art-pilot--flying .fc-art-propeller { animation: fc-art-propeller 0.14s linear infinite; }
+.fc-art-scarf { transform-origin: 58% 46%; }
+.fc-art-pilot--flying .fc-art-scarf { animation: fc-art-scarf 1.6s ease-in-out infinite alternate; }
+
+@keyframes fc-art-smoke {
+  0% { opacity: .62; transform: translate(0, 0) scale(.5); }
+  70% { opacity: .25; }
+  100% { opacity: 0; transform: translate(-74px, -16px) scale(1.8); }
+}
+@keyframes fc-art-propeller {
+  0%, 100% { transform: scaleX(.75); }
+  50% { transform: scaleX(1.5) scaleY(.78); }
+}
+@keyframes fc-art-scarf {
+  from { transform: rotate(-1.5deg); }
+  to { transform: rotate(1.5deg); }
+}
+@keyframes fc-art-shield-pulse { from { transform: scale(.99); opacity: .84; } to { transform: scale(1.025); opacity: 1; } }
+@keyframes fc-art-wreck-tail { from { transform: translate(0, 0) rotate(0); } to { transform: translate(-20px, 13px) rotate(-12deg); } }
+@keyframes fc-art-wreck-nose { from { transform: translate(0, 0) rotate(0); } to { transform: translate(19px, 24px) rotate(14deg); } }
+@keyframes fc-art-wreck-wing { from { transform: translate(0, 0) rotate(0); } to { transform: translate(-3px, 32px) rotate(-28deg); } }
+@keyframes fc-art-crash-smoke { from { transform: scale(.3); opacity: .7; } to { transform: translate(-22px, -28px) scale(2.2); opacity: 0; } }
+@keyframes fc-art-crash-flash { from { transform: scale(.3); opacity: 1; } to { transform: scale(1.7); opacity: 0; } }
+
+.fc-cover {
+  --fc-ink: #263e50;
+  --fc-terra: #bb5538;
+  --fc-paper: #f7efdf;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+  padding: clamp(16px, 3vw, 36px);
+  color: var(--fc-ink);
+  background-color: var(--fc-paper);
+  background-image: linear-gradient(#f7efdfc9, #f7efdfc9), url('/games/flying-cat/images/paper.jpg');
+  background-size: auto, 640px;
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  isolation: isolate;
+}
+.fc-cover *, .fc-cover *::before, .fc-cover *::after { box-sizing: border-box; }
+.fc-cover-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.fc-cover-eyebrow { font-size: 10px; font-weight: 800; letter-spacing: .18em; text-transform: uppercase; color: #476879; }
+.fc-cover-close { color: var(--fc-ink); background: #fffbf1; border: 1px solid #263e503d; border-radius: 10px; padding: 8px 12px; font-size: 12px; cursor: pointer; white-space: nowrap; }
+.fc-cover-grid { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-areas: 'intro' 'art' 'actions'; gap: 22px; margin: 28px auto 0; max-width: 1180px; }
+.fc-cover-copy { display: contents; }
+.fc-cover-intro { grid-area: intro; min-width: 0; }
+.fc-cover-actions { grid-area: actions; min-width: 0; }
+.fc-cover-kicker { display: block; color: var(--fc-terra); font-size: 11px; letter-spacing: .17em; text-transform: uppercase; font-weight: 800; }
+.fc-cover h1 { margin: 12px 0 16px; color: var(--fc-terra); font-family: Georgia, 'Times New Roman', serif; font-size: clamp(48px, 9vw, 102px); line-height: .88; letter-spacing: -.05em; font-weight: 900; }
+.fc-cover h1 span { color: #548aa5; }
+.fc-cover h2 { margin: 0; font-size: clamp(17px, 2.4vw, 24px); line-height: 1.4; overflow-wrap: anywhere; }
+.fc-cover-description { max-width: 550px; margin: 15px 0 0; font-size: clamp(15px, 2vw, 18px); line-height: 1.65; }
+.fc-cover-teacher-note { max-height: 170px; overflow-y: auto; overflow-wrap: anywhere; margin: 14px 0 0; padding: 12px 14px; background: #fff8e5; border-left: 3px solid #cf9e5e; border-radius: 4px; font-size: 14px; line-height: 1.6; }
+.fc-cover-start { display: inline-flex; align-items: center; justify-content: center; gap: 22px; min-height: 54px; margin: 0; padding: 16px 24px; border: 2px solid #8d3d27; border-radius: 15px; color: #fff8eb; background: var(--fc-terra); box-shadow: 0 5px 0 #843c28; font-size: 18px; font-weight: 800; cursor: pointer; transition: transform .15s, box-shadow .15s; }
+.fc-cover-start:hover { transform: translateY(-2px); box-shadow: 0 7px 0 #843c28; }
+.fc-cover-start:active { transform: translateY(3px); box-shadow: 0 2px 0 #843c28; }
+.fc-cover-start:focus-visible, .fc-cover-close:focus-visible { outline: 3px solid #548aa5; outline-offset: 4px; }
+.fc-cover-help { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 30px; }
+.fc-cover-help > div { min-width: 0; padding: 12px 14px; border: 1px solid #263e5029; border-radius: 12px; background: #fff9ecb3; }
+.fc-cover-help-icon { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; margin-right: 9px; border-radius: 8px; color: #476879; background: #dce7e4; font-size: 20px; vertical-align: middle; }
+.fc-cover-help-icon--answer { color: #586e45; background: #e2ead5; }
+.fc-cover-help-icon--shield { color: #9d6b29; background: #f5e5bc; }
+.fc-cover-help strong { font-size: 13px; }
+.fc-cover-help p { margin: 7px 0 0; font-size: 12px; line-height: 1.55; color: #486070; }
+.fc-cover-illustration { grid-area: art; position: relative; align-self: center; margin: 0 5px 12px; min-width: 0; animation: fc-cover-float 6s ease-in-out infinite; }
+.fc-cover-picture { position: relative; width: 100%; aspect-ratio: 1408 / 768; overflow: hidden; border: clamp(5px, 1vw, 9px) solid #fff8e9; border-radius: 20px; background: #bcdae0; box-shadow: 0 20px 40px #263e5026; }
+.fc-cover-picture img { display: block; width: 100%; height: 100%; object-fit: contain; user-select: none; }
+.fc-cover-picture::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 35% 20%, transparent 35%, #3e4d3514); }
+.fc-cover-tape { position: absolute; z-index: 2; width: 88px; height: 25px; background: #d4aa5375; border: 1px solid #c89f481c; box-shadow: 0 1px 2px #a184451a; }
+.fc-cover-tape--top { top: -11px; left: 24px; transform: rotate(-5deg); }
+.fc-cover-tape--bottom { bottom: 28px; right: 25px; transform: rotate(4deg); }
+.fc-cover-illustration figcaption { padding-top: 12px; color: #607380; text-align: right; font-size: 9px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+.fc-cover-sky-puffs { position: absolute; top: 45%; left: 28%; width: 1px; height: 1px; pointer-events: none; }
+.fc-cover-sky-puffs i { position: absolute; width: 13px; height: 13px; border-radius: 50%; background: #fff8e5; opacity: 0; animation: fc-cover-smoke 4s linear infinite; }
+.fc-cover-sky-puffs i:nth-child(2) { animation-delay: -1.33s; }
+.fc-cover-sky-puffs i:nth-child(3) { animation-delay: -2.66s; }
+.fc-cover-fallback { position: relative; display: grid; place-items: center; width: 100%; height: 100%; overflow: hidden; background: linear-gradient(175deg, #8ebccf, #dbebe8 75%, #f2e6c8); }
+.fc-cover-fallback .fc-art-pilot { position: relative; z-index: 1; width: 85%; height: auto; }
+.fc-cover-fallback-hills { position: absolute; bottom: -22%; width: 160%; height: 48%; background: #8f9d73; border-radius: 50%; transform: rotate(-8deg); }
+@keyframes fc-cover-float { 0%, 100% { transform: translateY(0) rotate(-.7deg); } 50% { transform: translateY(-7px) rotate(.6deg); } }
+@keyframes fc-cover-smoke { 0% { opacity: .65; transform: translate(0, 0) scale(.4); } 100% { opacity: 0; transform: translate(-115px, -9px) scale(2.7); } }
+
+@media (min-width: 640px) {
+  .fc-cover-help { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .fc-cover-help-icon { display: flex; margin-bottom: 8px; }
+  .fc-cover-illustration { max-width: 540px; width: 100%; justify-self: center; }
+}
+@media (min-width: 950px) {
+  .fc-cover-grid { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); grid-template-areas: 'intro art' 'actions art'; gap: 24px 36px; margin-top: 42px; }
+  .fc-cover-help { gap: 9px; }
+  .fc-cover-help > div { padding: 12px; }
+}
+@media (max-width: 360px) {
+  .fc-cover-start { width: 100%; padding-inline: 15px; font-size: 16px; }
+  .fc-cover-eyebrow { max-width: 150px; font-size: 9px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fc-art-pilot--flying .fc-art-puff, .fc-art-pilot--flying .fc-art-propeller, .fc-art-pilot--flying .fc-art-scarf, .fc-cover-illustration, .fc-cover-sky-puffs i { animation: none; }
+  .fc-art-pilot--flying .fc-art-puff, .fc-cover-sky-puffs i { opacity: 0; }
+  .fc-cover-start { transition: none; }
+  .fc-art-energy-sphere, .fc-art-wreck-tail, .fc-art-wreck-nose, .fc-art-wreck-wing, .fc-art-wreck-smoke, .fc-art-crash-flash, .fc-art-fall-scarf { animation: none; }
+  .fc-art-wreck-tail { transform: translate(-12px, 8px) rotate(-8deg); }
+  .fc-art-wreck-nose { transform: translate(12px, 15px) rotate(9deg); }
+  .fc-art-wreck-wing { transform: translate(0, 20px) rotate(-15deg); }
+  .fc-art-wreck-smoke, .fc-art-crash-flash { opacity: 0; }
+}

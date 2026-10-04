@@ -9,6 +9,7 @@ import { parseFechaLocal } from '@/lib/utils';
 import { selectPublishedEvaluationSchemes } from '@/lib/academic/exercise-evaluation-options';
 import { endOfTenantCalendarDayIso } from '@/lib/service-countdown';
 import { UNWEIGHTED_PLATFORM_CRITERION_ID, UNWEIGHTED_PLATFORM_CRITERION_NAME } from '@/lib/academic/platform-category';
+import { normalizeFlyingCatContent, validateFlyingCatContent } from '@/lib/activities/flying-cat';
 
 const prepareForUpsert = (data: any) => {
   const cleanData = { ...data };
@@ -614,6 +615,20 @@ export async function upsertEjercicio(ejercicio: any, isSyncCreation: boolean = 
   const { supabase: supabaseAdmin, admin, tenantId, user, profile } = await requireTenantSession([
     'profesor', 'admin', 'superuser',
   ]);
+  if (ejercicio.tipo === 'flying_cat') {
+    let rawContent: unknown = ejercicio.contenido;
+    if (typeof rawContent === 'string') {
+      try { rawContent = JSON.parse(rawContent); }
+      catch { return { data: null, error: new Error('El contenido de Flying Cat no es JSON válido.') }; }
+    }
+    // Validate the original request before defaults can hide a missing field.
+    // This also protects direct server-action calls that bypass the editor.
+    const validationError = validateFlyingCatContent(rawContent);
+    if (validationError) return { data: null, error: new Error(validationError) };
+    // The existing upsert helper accepts serialized content; retain the schema,
+    // not arbitrary extra fields from an imported JSON document.
+    ejercicio = { ...ejercicio, contenido: JSON.stringify(normalizeFlyingCatContent(rawContent)) };
+  }
   const evaluationSelections = Array.isArray(ejercicio.evaluationLinks)
     ? ejercicio.evaluationLinks as ExerciseEvaluationSelection[]
     : [];

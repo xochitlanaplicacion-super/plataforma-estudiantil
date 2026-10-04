@@ -19,7 +19,7 @@ import { AccionesArchivoEntrega } from '@/components/shared/AccionesArchivoEntre
 import { GaleriaEntrega } from '@/components/shared/GaleriaEntrega';
 import { readSubmissionPhotos } from '@/lib/storage/photo-gallery';
 import { exerciseAttemptDetailCsv, exercisePerformanceCsv } from '@/lib/academic/exercise-performance-csv';
-import { readExerciseAttempts } from '@/lib/academic/exercise-attempt-history';
+import { gameTypeLabel, readExerciseAttempts } from '@/lib/academic/exercise-attempt-history';
 
 interface Entrega {
   alumno_id: string;
@@ -117,7 +117,7 @@ function EntregaRow({
   };
 
   const isAuto = ejercicioTipo !== 'actividad_descriptiva';
-  const isGame = ejercicioTipo === 'parkour_race' || ejercicioTipo === 'backrooms_scape';
+  const isGame = ejercicioTipo === 'parkour_race' || ejercicioTipo === 'backrooms_scape' || ejercicioTipo === 'flying_cat';
 
   if (isAuto) {
     return (
@@ -197,7 +197,7 @@ function EntregaRow({
                       {intento.game && (
                         <div className="mb-4 rounded-xl border border-indigo-100 bg-indigo-50/60 p-3">
                           <p className="mb-2 text-[10px] font-black uppercase tracking-widest text-indigo-700">
-                            Resumen de {intento.game.type === 'parkour_race' ? 'Parkour Race' : 'Backrooms Scape'}
+                            Resumen de {gameTypeLabel(intento.game.type)}
                           </p>
                           <div className="grid grid-cols-2 gap-2 text-xs text-slate-700 sm:grid-cols-3">
                             {intento.game.wrongAttempts !== null && <span>Respuestas incorrectas: <b>{intento.game.wrongAttempts}</b></span>}
@@ -418,7 +418,7 @@ export function PanelEntregasProfesor({ ejercicios, materiaNombre, isGroupMode }
       hits: row.aciertos,
       total: row.total_preguntas,
       attempts: row.intentos,
-    })), { game: exercise.tipo === 'parkour_race' || exercise.tipo === 'backrooms_scape' });
+    })), { game: exercise.tipo === 'parkour_race' || exercise.tipo === 'backrooms_scape' || exercise.tipo === 'flying_cat' });
     downloadCsv(csv, `resultados-${exerciseFileName(exercise)}.csv`);
   };
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { readExerciseAttempts } from '@/lib/academic/exercise-attempt-history';
+import { gameTypeLabel, readExerciseAttempts } from '@/lib/academic/exercise-attempt-history';
+import { gameAttemptDetails } from '@/lib/academic/game-attempt-details';
 
 describe('teacher automatic-attempt history', () => {
   it('reads the canonical per-attempt grade and keeps old game metrics without inventing answers', () => {
@@ -53,5 +54,24 @@ describe('teacher automatic-attempt history', () => {
     }]);
     expect(attempt.grade).toBeNull();
     expect(attempt.answers).toEqual([]);
+  });
+
+  it('recognizes Flying Cat as a game and preserves definitions, initial mistakes, and retries', () => {
+    const prompt = 'Una descripción suficientemente larga de un oficio para identificar el concepto. '.repeat(12);
+    const detalles = gameAttemptDetails('flying_cat', {
+      intentos_incorrectos: 1, tiempo_segundos: 95, puntos_juego: 320,
+    }, [
+      { questionId: 'q1', prompt, selectedAnswer: 'Nurse', correctAnswer: 'Pilot', isCorrect: false, attemptNumber: 1 },
+      { questionId: 'q1', prompt, selectedAnswer: 'Pilot', correctAnswer: 'Pilot', isCorrect: true, attemptNumber: 2 },
+    ]);
+    const [attempt] = readExerciseAttempts([{
+      intento: 1, calificacion_10: 5, aciertos: 1, total_preguntas: 2, detalles,
+    }]);
+
+    expect(attempt.game).toMatchObject({ type: 'flying_cat', wrongAttempts: 1, seconds: 95, points: 320 });
+    expect(gameTypeLabel(attempt.game!.type)).toBe('Flying Cat');
+    expect(attempt.answers.map((answer) => answer.prompt)).toEqual([prompt.trim(), prompt.trim()]);
+    expect(attempt.answers.map((answer) => [answer.given, answer.isCorrect, answer.retryNumber]))
+      .toEqual([['Nurse', false, 1], ['Pilot', true, 2]]);
   });
 });

@@ -1,4 +1,8 @@
-export type GameType = 'parkour_race' | 'backrooms_scape';
+export type GameType = 'parkour_race' | 'backrooms_scape' | 'flying_cat';
+
+export function gameTypeLabel(type: GameType): string {
+  return { parkour_race: 'Parkour Race', backrooms_scape: 'Backrooms Scape', flying_cat: 'Flying Cat' }[type];
+}
 
 export interface AttemptAnswer {
   questionId: string | null;
@@ -56,7 +60,7 @@ function text(value: unknown): string | null {
 
 function gameMetrics(value: unknown): GameAttemptMetrics | null {
   const item = object(value);
-  if (!item || (item.tipo !== 'parkour_race' && item.tipo !== 'backrooms_scape')) return null;
+  if (!item || (item.tipo !== 'parkour_race' && item.tipo !== 'backrooms_scape' && item.tipo !== 'flying_cat')) return null;
   return {
     type: item.tipo,
     wrongAttempts: finite(item.intentos_incorrectos),
