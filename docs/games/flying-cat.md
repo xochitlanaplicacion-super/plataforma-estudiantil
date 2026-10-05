@@ -55,6 +55,15 @@ el doble clic no genera dos solicitudes.
 ## Vuelo y calificación
 
 - Portada original de acuarela antes de empezar; fallback SVG si falla la imagen.
+- Fondo de vuelo reconstruido en cinco capas SVG: nubes, montañas lejanas,
+  colinas, campos con casitas y árboles cercanos. Cada capa se desplaza a su propia
+  velocidad; dos teselas idénticas se repiten sin huecos ni objetos acumulados.
+  El movimiento sigue el reloj del vuelo y aumenta de forma acotada por dificultad
+  y nivel. Se detiene al leer, pausar, ver explicaciones o reaccionar a un choque.
+  Conserva su fase al girar y redimensionar. No tiene colisiones ni intercepta
+  controles; utiliza el mismo RAF del juego sin renders React por fotograma.
+  En todos los dispositivos funciona igual; si el sistema solicita reducir
+  movimiento, conserva el paisaje quieto. La portada sigue siendo la original.
 - Antes de comenzar, el alumno elige **Fácil, Normal o Difícil**. Se ofrece primero
   la dificultad configurada por el profesor. La elección sólo modifica la partida:
   no cambia el ejercicio guardado ni la fórmula de calificación académica.
@@ -139,6 +148,11 @@ controles digitales dentro del escenario y WASD exclusivos, avance de dos pregun
 reacción al choque, escudo, guardado único y reintento de conexión.
 También simula un dashboard con transformaciones/recortes, un área visible de iPad
 menor que la ventana y sus cambios, y verifica música, mute y salida sin scroll bloqueado.
+Mide el desplazamiento de las cinco capas, sus velocidades distintas y la pausa
+del paisaje al leer o ver explicaciones. Comprueba continuidad al girar o cambiar
+el área visible y al activar/desactivar la preferencia de movimiento reducido.
+Las pruebas del componente cubren además bucles largos con DOM constante,
+limpieza de eventos y renderizado seguro en servidor.
 Conserva capturas en la carpeta temporal que imprime al terminar. No escribe en Supabase ni envía
 notificaciones reales.
 

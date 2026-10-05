@@ -32,7 +32,8 @@ beforeEach(() => {
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => setTimeout(() => callback(performance.now()), 16));
   vi.stubGlobal('cancelAnimationFrame', (timer: ReturnType<typeof setTimeout>) => clearTimeout(timer));
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
-  vi.stubGlobal('matchMedia', () => ({ matches: observed.touch, addEventListener() {}, removeEventListener() {} }));
+  vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(pointer: coarse)' && observed.touch,
+    addEventListener() {}, removeEventListener() {} }));
   vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
   vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
@@ -216,5 +217,34 @@ describe('Flying Cat exclusive movement controls', () => {
     expect(container.querySelector('.fc-stage--impact')).not.toBeInTheDocument();
     expect(screen.getByTestId('flying-cat-energy-shield')).toBeInTheDocument();
     expect(onComplete).not.toHaveBeenCalled();
+  });
+
+  it('moves five SVG scenery layers with the flight clock and freezes them during pause and impact', async () => {
+    const { container } = render(<FlyingCatGame exercise={makeExercise()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Comenzar vuelo/ }));
+    const positions = () => [...container.querySelectorAll<HTMLElement>('.fc-parallax-track')]
+      .map((node) => node.style.transform);
+    await tick();
+    const reading = positions();
+    expect(reading).toHaveLength(5);
+    await tick(100);
+    expect(positions()).toEqual(reading);
+    fireEvent.click(screen.getByRole('button', { name: /Continuar vuelo/ }));
+    await tick(100);
+    const moving = positions();
+    expect(moving.every((position, index) => position !== reading[index])).toBe(true);
+    expect(new Set(moving).size).toBe(5);
+    fireEvent.click(screen.getByRole('button', { name: 'Pausar y releer definición' }));
+    await tick(100);
+    expect(positions()).toEqual(moving);
+    fireEvent.click(screen.getByRole('button', { name: /Continuar vuelo/ }));
+    observed.collide = true;
+    await tick(16);
+    const impact = positions();
+    expect(container.querySelector('.fc-stage--impact')).toBeInTheDocument();
+    await tick(250);
+    expect(positions()).toEqual(impact);
+    await tick(500);
+    expect(positions()).not.toEqual(impact);
   });
 });

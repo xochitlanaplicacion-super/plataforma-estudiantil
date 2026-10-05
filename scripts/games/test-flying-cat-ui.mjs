@@ -67,6 +67,45 @@ const browser = await chromium.launch({ headless: true,
 const center = (box) => ({ x: box.x + box.width / 2, y: box.y + box.height / 2 });
 const keyForDirection = { up: 'w', left: 'a', down: 's', right: 'd' };
 
+async function parallaxSnapshot(page) {
+  return page.locator('.fc-parallax-layer').evaluateAll((layers) => layers.map((layer) => {
+    const track = layer.querySelector('.fc-parallax-track');
+    const transform = getComputedStyle(track).transform;
+    return { name: layer.dataset.layer, speed: Number(layer.dataset.speed), transform,
+      x: transform === 'none' ? 0 : new DOMMatrixReadOnly(transform).m41,
+      tiles: track.querySelectorAll('.fc-parallax-tile').length };
+  }));
+}
+
+function assertParallaxRetained(before, after, message, tolerance = 0.05) {
+  assert.deepEqual(after.map((layer) => layer.name), before.map((layer) => layer.name), message);
+  for (let index = 0; index < before.length; index++) {
+    assert(Math.abs(after[index].x - before[index].x) <= tolerance,
+      `${message}: ${before[index].name} (${before[index].x} → ${after[index].x})`);
+  }
+}
+
+async function assertParallaxFrozen(page, message, duration = 500) {
+  const before = await parallaxSnapshot(page);
+  assert.equal(before.length, 5, 'The paused backdrop must retain all five independent scenery layers');
+  await page.clock.runFor(duration);
+  assertParallaxRetained(before, await parallaxSnapshot(page), message);
+}
+
+async function assertParallaxMoving(page) {
+  const before = await parallaxSnapshot(page);
+  assert.deepEqual(before.map((layer) => layer.name), ['clouds', 'mountains', 'hills', 'fields', 'trees']);
+  assert(before.every((layer) => layer.tiles === 2), 'Every scenery layer must repeat seamlessly with two SVG tiles');
+  await page.clock.runFor(250);
+  const after = await parallaxSnapshot(page);
+  const distances = before.map((layer, index) => layer.x - after[index].x);
+  assert(distances.every((distance) => distance > 0.1), 'All five scenery layers must visibly scroll during active flight');
+  for (let index = 1; index < distances.length; index++) {
+    assert(distances[index] > distances[index - 1],
+      `${before[index].name} must move faster than ${before[index - 1].name}, giving the flight real depth`);
+  }
+}
+
 // CDP sends real held touches, including pointer capture and two-finger diagonals.
 // Synthetic PointerEvents cannot exercise capture: they have no active pointer ID.
 async function flightInput(page, touch) {
@@ -263,6 +302,7 @@ try {
     await start.scrollIntoViewIfNeeded();
     const startBox = await start.boundingBox();
     assert(startBox.y >= 0 && startBox.y + startBox.height <= page.viewportSize().height, 'Long definition must not hide the resume button');
+    await assertParallaxFrozen(page, 'The initial reading pause must leave the scenery still');
     await page.screenshot({ path: join(directory, `${device.name}-reading.png`) });
     await start.click();
     await page.waitForFunction(() => window.testMusic && !window.testMusic.paused);
@@ -276,6 +316,22 @@ try {
     await page.clock.runFor(1000);
     assert.equal(await page.getByText(/Escudo ·/).count(), 1);
     assert.equal(await page.locator('.fc-art-energy-sphere').count(), 1, 'Immunity must show the blue energy sphere');
+    await assertParallaxMoving(page);
+    if (device.name === 'desktop') {
+      const moving = await parallaxSnapshot(page);
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      const reduced = await parallaxSnapshot(page);
+      assertParallaxRetained(moving, reduced,
+        'Reduced motion must freeze the last scenery frame without jumping back to its origin');
+      await assertParallaxFrozen(page, 'Reduced motion must not animate the backdrop');
+      assert.equal(await page.locator('.fc-stage').getAttribute('data-mode'), 'flying',
+        'Reduced motion must not interrupt the academic activity or pilot controls');
+      await page.emulateMedia({ reducedMotion: 'no-preference' });
+      await page.clock.runFor(32);
+      const restored = await parallaxSnapshot(page);
+      assertParallaxRetained(moving, restored, 'Re-enabling scenery must retain its phase instead of restarting it', 6);
+      assert(restored.some((layer) => layer.transform !== 'none'), 'The moving backdrop must return after the preference changes');
+    }
     await page.screenshot({ path: join(directory, `${device.name}-flight.png`) });
     assert.equal(await page.locator('.fc-card').count(), 1, 'The field has only one concept node');
     const definition = await page.locator('.fc-definition').boundingBox();
@@ -319,6 +375,7 @@ try {
     await assertNoFieldSteering(page, device.hasTouch);
     if (device.name.startsWith('ipad')) {
       const progress = await page.locator('.fc-hud').innerText();
+      const sceneryBeforeResize = await parallaxSnapshot(page);
       await page.evaluate(() => window.setTestVisibleViewport({ height: innerHeight - 260, offsetTop: 40 }));
       await page.waitForFunction(() => document.querySelector('.fc-viewport').style.height === `${innerHeight - 260}px`);
       await page.clock.runFor(32);
@@ -327,6 +384,8 @@ try {
         'An iPad toolbar/visible-area change must not put the controls below the visible screen');
       assert.equal(await page.locator('.fc-hud').innerText(), progress, 'Visible viewport changes must not reset question or lives');
       assert.equal(await page.locator('.fc-stage').getAttribute('data-mode'), 'flying');
+      assertParallaxRetained(sceneryBeforeResize, await parallaxSnapshot(page),
+        'An iPad visible-viewport resize must retain the moving scenery phase', 6);
       await page.screenshot({ path: join(directory, `${device.name}-constrained-viewport.png`) });
       await page.evaluate(() => window.setTestVisibleViewport({ height: innerHeight - 180, offsetTop: 24 }));
       await page.waitForFunction(() => document.querySelector('.fc-viewport').style.height === `${innerHeight - 180}px`);
@@ -356,6 +415,7 @@ try {
     if (phone) {
       const progress = await page.locator('.fc-hud').innerText();
       const conceptBeforeRotation = await page.locator('.fc-card').textContent();
+      const sceneryBeforeRotation = await parallaxSnapshot(page);
       assert(conceptBeforeRotation.trim(), 'A concept must be visible before the orientation interruption');
       await page.setViewportSize(portrait);
       await page.locator('.fc-rotate').waitFor({ state: 'visible' });
@@ -370,12 +430,15 @@ try {
         'A portrait interruption must preserve the current question and lives');
       assert.equal(await page.locator('.fc-card').textContent(), conceptBeforeRotation,
         'A remounted concept card must retain its label after rotating back');
+      assertParallaxRetained(sceneryBeforeRotation, await parallaxSnapshot(page),
+        'A portrait interruption must preserve the scenery phase when the flight remounts');
+      await assertParallaxFrozen(page, 'Returning to landscape must keep the paused scenery still');
       await page.getByRole('button', { name: /Continuar vuelo/ }).click();
       await page.clock.runFor(100);
     }
     await page.getByRole('button', { name: /Pausar y releer/ }).click();
     assert.equal(await page.evaluate(() => window.testMusic.paused), true, 'Pausing flight must pause music too');
-    await page.clock.runFor(3000);
+    await assertParallaxFrozen(page, 'The explicit pause must stop every background layer', 3000);
     assert.equal(await page.getByRole('dialog').count(), 1);
     await page.getByRole('button', { name: /Continuar vuelo/ }).click();
     await page.clock.runFor(100);
@@ -388,6 +451,7 @@ try {
       for (let question = 0; question < 2; question++) {
         await flyIntoCard(page, input);
         assert.equal(await page.getByText('Explicación · vuelo en pausa', { exact: true }).count(), 1);
+        await assertParallaxFrozen(page, 'The answer explanation must pause scenery instead of distracting from reading');
         await page.screenshot({ path: join(directory, `${device.name}-feedback-${question}.png`) });
         const next = page.getByRole('button', { name: question === 1 ? 'Ver mi resultado' : 'Siguiente definición' });
         await next.scrollIntoViewIfNeeded();
@@ -423,7 +487,7 @@ try {
     assert.equal(await page.evaluate(() => window.testMusic.paused), true, 'Leaving must release soundtrack playback');
     assert.deepEqual(errors, []);
     await input.dispose();
-    console.log(`PASS ${device.name}: ${phone ? 'landscape gate and safe rotation, ' : ''}difficulty choice, persistent definition, ${device.hasTouch ? 'in-field digital controls only' : 'WASD only'}, pause, immunity, two answers and one save`);
+    console.log(`PASS ${device.name}: five-speed parallax, paused scenery${device.name === 'desktop' ? ' and reduced motion' : ''}, ${phone ? 'landscape gate and safe rotation, ' : ''}difficulty choice, persistent definition, ${device.hasTouch ? 'in-field digital controls only' : 'WASD only'}, pause, immunity, two answers and one save`);
     await context.close();
   }
   console.log(`Screenshots: ${directory}`);

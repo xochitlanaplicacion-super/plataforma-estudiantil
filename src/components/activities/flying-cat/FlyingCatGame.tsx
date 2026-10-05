@@ -10,6 +10,7 @@ import {
 import { FallingPilotCat, PilotCat, PilotCatWreck } from './PilotCat';
 import { FlyingCatCover } from './FlyingCatCover';
 import { useFlyingCatMusic } from './useFlyingCatMusic';
+import { FlyingCatParallax, type FlyingCatParallaxHandle } from './FlyingCatParallax';
 import './flying-cat.css';
 
 export type { FlyingCatResult } from '@/lib/activities/flying-cat-engine';
@@ -62,6 +63,10 @@ export default function FlyingCatGame({ exercise, onComplete, onClose, closeLabe
   callback.current = onComplete;
   const heldPointers = useRef(new Map<number, keyof FlightControls>());
   const resumeButton = useRef<HTMLButtonElement>(null);
+  const parallax = useRef<FlyingCatParallaxHandle>(null);
+  // Survives the scene unmounting when a phone rotates to portrait.
+  const landscapeClock = useRef(0);
+  const reduceMotion = useRef(false);
   const music = useFlyingCatMusic();
 
   const clearControls = useCallback(() => {
@@ -111,6 +116,14 @@ export default function FlyingCatGame({ exercise, onComplete, onClose, closeLabe
   }, [pause, onClose]);
 
   useEffect(() => { if (result) music.pause(); }, [result, music.pause]);
+
+  useEffect(() => {
+    const query = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const update = () => { reduceMotion.current = query.matches; };
+    update();
+    query.addEventListener('change', update);
+    return () => query.removeEventListener('change', update);
+  }, []);
 
   useEffect(() => {
     const query = window.matchMedia('(pointer: coarse)');
@@ -165,7 +178,16 @@ export default function FlyingCatGame({ exercise, onComplete, onClose, closeLabe
     const animate = (now: number) => {
       const state = flight.current;
       if (state) {
+        const previousTime = state.activeSeconds;
+        const landscapeMoving = state.mode === 'flying' && state.impactSeconds <= 0 && !reduceMotion.current;
+        const level = flightDifficulty(state).level;
         stepFlight(state, (now - lastTime) / 1000, controls.current);
+        if (landscapeMoving) {
+          const factor = state.difficulty === 'easy' ? 0.8 : state.difficulty === 'hard' ? 1.18 : 1;
+          landscapeClock.current += (state.activeSeconds - previousTime) * factor * Math.min(1.8, 1 + (level - 1) * 0.13);
+        }
+        // Reuse the simulation's capped delta: no extra RAF, timers or per-frame React renders.
+        parallax.current?.advance(landscapeClock.current);
         if (plane.current) {
           plane.current.style.width = `${state.player.width}px`;
           plane.current.style.transform = `translate3d(${state.player.x - state.player.width / 2}px,${state.player.y - state.player.height / 2}px,0)`;
@@ -327,7 +349,7 @@ export default function FlyingCatGame({ exercise, onComplete, onClose, closeLabe
     <div ref={stage} className={`fc-stage${view?.impact && view.mode === 'flying' ? ' fc-stage--impact' : ''}`}
       data-mode={view?.mode} data-difficulty={difficulty} tabIndex={0}
       aria-label={`Zona de vuelo: pilota al concepto correcto ${touch ? 'con los botones de dirección' : 'con WASD'}`}>
-      <div className="fc-sky-hills" />
+      <FlyingCatParallax ref={parallax} />
       <div className="fc-world">
       <div ref={plane} className="fc-plane" hidden={view?.mode === 'crashing'}>
         <div className={`fc-plane-reaction${view?.impact && view.mode === 'flying' ? ' fc-plane-reaction--impact' : ''}`}>

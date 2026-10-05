@@ -1,0 +1,10 @@
+.fc-sky-hills.fc-parallax{position:absolute;inset:0;overflow:hidden;background:none;opacity:1;pointer-events:none;contain:layout paint}
+.fc-parallax-layer{position:absolute;inset:0;overflow:hidden;pointer-events:none}
+.fc-parallax-layer[data-layer='clouds']{bottom:68%}
+.fc-parallax-layer[data-layer='mountains']{top:25%}
+.fc-parallax-layer[data-layer='hills']{top:46%}
+.fc-parallax-layer[data-layer='fields']{top:67%}
+.fc-parallax-layer[data-layer='trees']{top:87%}
+.fc-parallax-track{position:absolute;inset:0;width:200%;height:100%;display:flex;transform:translate3d(0,0,0);will-change:transform}
+.fc-parallax-tile{display:block;flex:0 0 50%;width:50%;height:100%;overflow:hidden}
+@media(prefers-reduced-motion:reduce){.fc-parallax-track{will-change:auto}}
