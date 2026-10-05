@@ -83,13 +83,21 @@ el doble clic no genera dos solicitudes.
   durante esa reacción. La sacudida no mueve los botones y se elimina al activar
   «reducir movimiento» en el dispositivo.
   Los obstáculos también se detienen en las pausas.
-- En móviles y iPad, sólo los **botones de dirección** dentro del escenario, abajo
-  a la izquierda, guían el avión. Admiten dos dedos para desplazarse en diagonal.
+- En móviles y iPad, sólo la **palanca circular analógica** dentro del escenario,
+  abajo a la izquierda por defecto, guía el avión. Permite diagonales y movimiento
+  suave, con una zona muerta que evita desplazamientos accidentales. Un dedo puede
+  mantener la palanca mientras otro activa un premio. Soltar, cancelar, pausar,
+  cambiar de pestaña o girar libera el control sin movimientos residuales.
   Tocar o arrastrar el cielo no mueve ni teletransporta al gato. En PC se pilota
   exclusivamente con **WASD**: ni el ratón ni las teclas de flecha lo guían.
-  En arenas horizontales bajas se reserva una franja izquierda dentro del cielo
-  para los controles; el avión y los objetos se mueven sólo en el espacio no tapado.
+  En arenas horizontales bajas se reservan las franjas que ocupan la palanca y los
+  premios; el avión y los objetos se mueven sólo en el espacio no tapado.
   Cambiar de pestaña o perder el foco pausa y libera controles presionados.
+- El botón **Ajustar controles** abre un panel dentro del juego y pausa el vuelo.
+  Se ajustan tamaño (pequeño/mediano/grande), lado (izquierdo/derecho), visibilidad
+  y sensibilidad. Los valores se validan y recuerdan localmente en ese navegador;
+  si el almacenamiento está bloqueado, se aplican durante la sesión sin fallar.
+  El tamaño real se limita al espacio disponible, también al salir de fullscreen.
 - El juego se monta directamente en `document.body`, fuera de los paneles con
   transformaciones o recortes. Su ancho, alto y posición siguen `VisualViewport`
   (incluidos cambios de las barras del navegador); si no existe, usa la ventana.
@@ -97,6 +105,36 @@ el doble clic no genera dos solicitudes.
   marcador. Los controles quedan dentro de esa área visible, también en iPad.
   Sólo en teléfonos compactos se reduce el avión aproximadamente un 30%; el motor
   usa esas mismas dimensiones para las colisiones y los corredores de vuelo.
+- **Pantalla completa nativa:** Comenzar y Continuar solicitan la Fullscreen API
+  desde el gesto del alumno, con `navigationUI: 'hide'`. El botón ⛶ permite entrar
+  o salir; Cerrar libera únicamente el fullscreen del propio juego. Se mantiene
+  el mismo portal con HUD, escenario, palanca, premios y paneles. En fullscreen
+  se usan las dimensiones completas y no los offsets antiguos de las barras.
+  Salir mediante Escape o un gesto del navegador pausa y conserva el avance;
+  salir con el botón ⛶ permite seguir jugando en el área visible del navegador.
+  Hay compatibilidad con métodos WebKit prefijados; se informa de rechazo o falta
+  de soporte sin bloquear la partida. No se puede obligar a un navegador sin API
+  de fullscreen de elementos a esconder sus barras: no se finge un vídeo ni se
+  rota la página. Safari compatible de iPad puede usar el modo nativo; un iPhone
+  o navegador concreto que no lo admita conserva el área visible y muestra ayuda.
+- **Premios:** cada acierto concede uno aleatorio si queda un hueco, con máximo
+  dos espacios fijos. En PC se activan con **E/R** (sin autorrepetición); en táctil,
+  tocando sus botones a la derecha. Sólo se usan durante el vuelo, fuera del choque.
+  No se reemplazan premios guardados cuando ambos espacios están ocupados.
+  - Vida extra: recupera una, hasta cinco; si ya hay cinco no consume el premio.
+  - Cámara lenta: ocho segundos activos al 55% de velocidad del mundo, incluidos
+    conceptos, obstáculos existentes/nuevos y parallax, sin frenar el avión.
+  - Puntos ×2/×3: multiplican los puntos del próximo acierto, no la nota; otro
+    multiplicador sustituye el anterior y no se acumula. Un error no lo consume.
+  - Rayo: retira obstáculos de las colisiones y muestra hasta ocho fragmentos
+    cayendo/girando durante 0.9 segundos. Retira la tarjeta falsa sin responder;
+    sólo circula el concepto correcto de esa definición hasta contestar.
+  - Señalar respuesta: resalta la tarjeta correcta cuando aparece, sin contestar
+    automáticamente. El alumno todavía debe pilotar hacia ella.
+  Los temporizadores, fragmentos y destello usan el reloj del juego y se congelan
+  al pausar, leer, ver explicaciones o reaccionar al choque. La portada explica
+  cada premio y los controles correspondientes al dispositivo. La fórmula
+  académica y la evidencia de respuestas permanecen independientes de los puntos.
 - Música: `Paper_Wings_and_Sunday_Naps.mp3`, provista por el propietario del
   proyecto y copiada sin modificar a `public/games/flying-cat/audio`.
   Se carga al pulsar **Comenzar**, en bucle y con volumen moderado. El botón del
@@ -111,8 +149,9 @@ el doble clic no genera dos solicitudes.
   admita: se detectan las dimensiones reales del navegador. Volver a vertical
   pausa y conserva la partida; al girar de nuevo se pide continuar. Los iPad
   amplios admiten ambas orientaciones. El resumen final sí se puede leer en vertical.
-- Cada dos definiciones aumenta el nivel y, de forma acotada, la velocidad. Tres
-  choques agotan las vidas. Se muestra el avión rompiéndose y el gato cayendo durante
+- Cada dos definiciones aumenta el nivel y, de forma acotada, la velocidad. Se
+  empieza con tres vidas; los premios permiten llegar a cinco. Al agotarlas se
+  muestra el avión rompiéndose y el gato cayendo durante
   2.4 segundos, sin nuevas respuestas; después se presenta el resumen. El resultado usa el total original de preguntas: las
   no respondidas nunca inflan la nota. Los obstáculos afectan puntos/vidas, no
   convierten una respuesta académica correcta en incorrecta.
@@ -144,7 +183,7 @@ El smoke test compila una página temporal y usa Chromium de Playwright; se pued
 usar un navegador ya instalado con `FLYING_CAT_BROWSER_PATH=/usr/bin/google-chrome`.
 Comprueba 390×844, 320×568, 844×390, iPad 768×1024 y 1024×768, y PC 1280×800:
 portada y selección de dificultad, definición persistente y explicación largas,
-controles digitales dentro del escenario y WASD exclusivos, avance de dos preguntas,
+palanca circular dentro del escenario y WASD exclusivos, avance de dos preguntas,
 reacción al choque, escudo, guardado único y reintento de conexión.
 También simula un dashboard con transformaciones/recortes, un área visible de iPad
 menor que la ventana y sus cambios, y verifica música, mute y salida sin scroll bloqueado.
@@ -153,6 +192,10 @@ del paisaje al leer o ver explicaciones. Comprueba continuidad al girar o cambia
 el área visible y al activar/desactivar la preferencia de movimiento reducido.
 Las pruebas del componente cubren además bucles largos con DOM constante,
 limpieza de eventos y renderizado seguro en servidor.
+Comprueba también fullscreen nativo y su limpieza al salir, ambos espacios de
+premios y ajustes de control persistidos. Las pruebas de motor/UI cubren los
+seis premios, aciertos/errores, límites, doble activación, E/R, multitáctil,
+caída de obstáculos, señal de respuesta y calificación académica sin multiplicar.
 Conserva capturas en la carpeta temporal que imprime al terminar. No escribe en Supabase ni envía
 notificaciones reales.
 

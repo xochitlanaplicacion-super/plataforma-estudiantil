@@ -12,7 +12,7 @@ describe('Flying Cat cover and pilot illustration', () => {
     render(<FlyingCatCover title="Amazing jobs" touch onStart={onStart} />);
     expect(screen.getByText('Control táctil')).toBeVisible();
     expect(screen.queryByText(/WASD/)).not.toBeInTheDocument();
-    expect(screen.getByText(/botones de dirección/)).toBeVisible();
+    expect(screen.getByText(/palanca circular/)).toBeVisible();
     expect(onStart).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Comenzar vuelo' }));
     expect(onStart).toHaveBeenCalledOnce();
@@ -22,7 +22,7 @@ describe('Flying Cat cover and pilot illustration', () => {
     const onClose = vi.fn();
     render(<FlyingCatCover title="Flying Cat" touch={false} onStart={() => {}} onClose={onClose} />);
     expect(screen.getByText('Teclado WASD')).toBeVisible();
-    expect(screen.queryByText(/botones de dirección/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/palanca circular/)).not.toBeInTheDocument();
     expect(screen.queryByText('Control táctil')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Cerrar juego' }));
     expect(onClose).toHaveBeenCalledOnce();

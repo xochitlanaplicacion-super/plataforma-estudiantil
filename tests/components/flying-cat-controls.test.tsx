@@ -45,11 +45,13 @@ beforeEach(() => {
     }
   });
   Object.defineProperty(HTMLElement.prototype, 'setPointerCapture', { configurable: true, value: vi.fn() });
+  Object.defineProperty(HTMLElement.prototype, 'releasePointerCapture', { configurable: true, value: vi.fn() });
 });
 afterEach(() => {
   cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks();
   Reflect.deleteProperty(navigator, 'maxTouchPoints');
   Reflect.deleteProperty(HTMLElement.prototype, 'setPointerCapture');
+  Reflect.deleteProperty(HTMLElement.prototype, 'releasePointerCapture');
 });
 
 const makeExercise = () => ({ titulo: 'Vocabulario', contenido: {
@@ -62,9 +64,15 @@ const start = () => {
   fireEvent.click(screen.getByRole('button', { name: /Comenzar vuelo/ }));
   fireEvent.click(screen.getByRole('button', { name: /Continuar vuelo/ }));
 };
+const joystick = () => {
+  const pad = screen.getByRole('button', { name: 'Palanca táctil de vuelo' });
+  vi.spyOn(pad, 'getBoundingClientRect').mockReturnValue({ x: 10, y: 100, left: 10, top: 100,
+    right: 118, bottom: 208, width: 108, height: 108, toJSON() {} });
+  return pad;
+};
 
 describe('Flying Cat exclusive movement controls', () => {
-  it('uses only on-stage direction buttons on touch screens, including independent multi-touch release', async () => {
+  it('uses only the on-stage analog joystick on touch screens, allowing another finger without stealing the pointer', async () => {
     observed.touch = true;
     const { container } = render(<FlyingCatGame exercise={makeExercise()} />);
     start();
@@ -78,28 +86,41 @@ describe('Flying Cat exclusive movement controls', () => {
     fireEvent.keyDown(stage, { key: 'ArrowRight' });
     await tick();
     expect(observed.state!.player).toEqual(initial);
-    const up = screen.getByRole('button', { name: 'Volar hacia arriba' });
-    const right = screen.getByRole('button', { name: 'Volar hacia la derecha' });
-    fireEvent.pointerDown(up, { pointerId: 2 });
-    fireEvent.pointerDown(right, { pointerId: 3 });
+    const pad = joystick();
+    fireEvent.pointerDown(pad, { pointerId: 2, clientX: 64, clientY: 154 });
+    fireEvent.pointerMove(window, { pointerId: 2, clientX: 98, clientY: 120 });
     await tick();
     expect(observed.state!.player.y).toBeLessThan(initial.y);
     expect(observed.state!.player.x).toBeGreaterThan(initial.x);
     const heldY = observed.state!.player.y;
+    fireEvent.pointerDown(pad, { pointerId: 3, clientX: 64, clientY: 188 });
+    fireEvent.pointerMove(window, { pointerId: 3, clientX: 64, clientY: 188 });
     fireEvent.keyUp(stage, { key: 'w' });
+    fireEvent.pointerUp(window, { pointerId: 3 });
     await tick();
     expect(observed.state!.player.y).toBeLessThan(heldY);
-    fireEvent.pointerUp(up, { pointerId: 2 });
-    const releasedY = observed.state!.player.y;
-    const heldX = observed.state!.player.x;
-    await tick();
-    expect(observed.state!.player.y).toBe(releasedY);
-    expect(observed.state!.player.x).toBeGreaterThan(heldX);
-    fireEvent.pointerCancel(right, { pointerId: 3 });
+    fireEvent.pointerCancel(window, { pointerId: 2 });
     const released = { ...observed.state!.player };
     await tick();
     expect(observed.state!.player).toEqual(released);
     expect(screen.getByLabelText('Definición de la pregunta actual')).toHaveTextContent('Profesional que enseña');
+  });
+
+  it('clears a held joystick when paused and resumes without ghost movement', async () => {
+    observed.touch = true;
+    render(<FlyingCatGame exercise={makeExercise()} />);
+    start();
+    const pad = joystick();
+    fireEvent.pointerDown(pad, { pointerId: 4, clientX: 64, clientY: 154 });
+    fireEvent.pointerMove(window, { pointerId: 4, clientX: 98, clientY: 154 });
+    const before = observed.state!.player.x;
+    await tick();
+    expect(observed.state!.player.x).toBeGreaterThan(before);
+    fireEvent.click(screen.getByRole('button', { name: 'Pausar y releer definición' }));
+    const paused = { ...observed.state!.player };
+    fireEvent.click(screen.getByRole('button', { name: /Continuar vuelo/ }));
+    await tick();
+    expect(observed.state!.player).toEqual(paused);
   });
 
   it('ignores mouse and arrow keys on PC and clears held WASD when paused', async () => {
@@ -178,6 +199,9 @@ describe('Flying Cat exclusive movement controls', () => {
     vi.stubGlobal('innerWidth', 844); vi.stubGlobal('innerHeight', 390);
     fireEvent.resize(window);
     start();
+    const pad = joystick();
+    fireEvent.pointerDown(pad, { pointerId: 5, clientX: 64, clientY: 154 });
+    fireEvent.pointerMove(window, { pointerId: 5, clientX: 98, clientY: 154 });
     await tick();
     expect(observed.state!.mode).toBe('flying');
     const before = { player: { ...observed.state!.player }, time: observed.state!.activeSeconds,
@@ -197,6 +221,7 @@ describe('Flying Cat exclusive movement controls', () => {
     fireEvent.click(screen.getByRole('button', { name: /Continuar vuelo/ }));
     await tick();
     expect(observed.state!.mode).toBe('flying');
+    expect(observed.state!.player).toEqual(before.player);
     expect(screen.queryByRole('heading', { name: 'Gira tu teléfono para jugar' })).not.toBeInTheDocument();
   });
 

@@ -3,6 +3,7 @@
 import { useId, useState } from 'react';
 import type { FlyingCatDifficulty } from '@/lib/activities/flying-cat';
 import { PilotCat } from './PilotCat';
+import { FlyingCatBonusGuide } from './FlyingCatBonuses';
 import './flying-cat-art.css';
 
 type FlyingCatCoverProps = {
@@ -74,7 +75,7 @@ export function FlyingCatCover({ title, instructions, touch, onStart, onClose, d
               <div>
                 <span className="fc-cover-help-icon" aria-hidden="true">{touch ? '☝' : '⌨'}</span>
                 <strong>{touch ? 'Control táctil' : 'Teclado WASD'}</strong>
-                <p>{touch ? 'Mantén presionados los botones de dirección en pantalla para pilotar.' : 'Usa W, A, S y D para mover el avión.'}</p>
+                <p>{touch ? 'Mueve la palanca circular para pilotar. Ajusta su tamaño, lado, visibilidad y sensibilidad con el botón de ajustes.' : 'Usa W, A, S y D para mover el avión. E y R activan tus bonus; P pausa el vuelo.'}</p>
               </div>
               <div>
                 <span className="fc-cover-help-icon fc-cover-help-icon--answer" aria-hidden="true">✓</span>
@@ -87,6 +88,8 @@ export function FlyingCatCover({ title, instructions, touch, onStart, onClose, d
                 <p>Lee la explicación en pausa. Al continuar tendrás 3 segundos de protección.</p>
               </div>
             </div>
+            <p className="fc-help">Al comenzar intentaremos ocultar las barras del navegador con pantalla completa. Puedes volver a intentarlo con ⛶. Algunos navegadores no lo permiten.</p>
+            <FlyingCatBonusGuide touch={touch} />
           </div>
         </div>
 

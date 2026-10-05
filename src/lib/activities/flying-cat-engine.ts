@@ -2,10 +2,20 @@ import { flyingCatRandom, shuffleFlyingCatOptions, type FlyingCatContent, type F
 import type { GameAnswerEvent } from '@/lib/academic/game-answer-details';
 
 export type FlightMode = 'reading' | 'flying' | 'feedback' | 'paused' | 'crashing' | 'finished';
-export interface FlightControls { up: boolean; down: boolean; left: boolean; right: boolean }
+export interface FlightControls {
+  up: boolean; down: boolean; left: boolean; right: boolean;
+  /** Optional analogue input; keyboard booleans remain supported unchanged. */
+  axisX?: number; axisY?: number;
+}
 export interface FlightBody { x: number; y: number; width: number; height: number }
 export interface FlightCard extends FlightBody { index: number; text: string }
 export interface FlightObstacle extends FlightBody { kind: number; speed: number; id: number }
+export type FlightBonusKind = 'extra_life' | 'slow_time' | 'points_x2' | 'points_x3' | 'lightning' | 'reveal';
+export interface FlightBonus { id: number; kind: FlightBonusKind }
+/** Decorative lightning fragments are deliberately separate from collidable obstacles. */
+export interface FlightDebris extends FlightObstacle {
+  elapsed: number; velocityY: number; rotation: number; rotationSpeed: number;
+}
 export interface FlyingCatResult {
   hits: number;
   total: number;
@@ -45,12 +55,32 @@ export interface FlightState {
   showFeedback: boolean;
   crashed: boolean;
   crashSeconds: number;
+  bonuses: [FlightBonus | null, FlightBonus | null];
+  bonusSerial: number;
+  /** Each fixed E/R slot may activate at most once per flight frame. */
+  bonusActivationSlots: number;
+  slowSeconds: number;
+  scoreMultiplier: 1 | 2 | 3;
+  lightningSeconds: number;
+  lightningSerial: number;
+  /** Lightning removes distractors until this one definition is answered. */
+  lightningQuestionIndex: number | null;
+  debris: FlightDebris[];
+  revealQuestionIndex: number | null;
 }
 
 export const RESUME_IMMUNITY_SECONDS = 3;
 export const CRASH_ANIMATION_SECONDS = 2.4;
 export const IMPACT_ANIMATION_SECONDS = 0.65;
 export const MAX_FLIGHT_OBSTACLES = 8;
+export const MAX_FLIGHT_BONUSES = 2;
+export const MAX_FLIGHT_LIVES = 5;
+export const SLOW_TIME_SECONDS = 8;
+export const SLOW_TIME_FACTOR = 0.55;
+export const LIGHTNING_ANIMATION_SECONDS = 0.9;
+export const FLIGHT_BONUS_KINDS: readonly FlightBonusKind[] = [
+  'extra_life', 'slow_time', 'points_x2', 'points_x3', 'lightning', 'reveal',
+];
 const clamp = (n: number, low: number, high: number) => Math.max(low, Math.min(high, n));
 export const emptyFlightControls = (): FlightControls => ({ up: false, down: false, left: false, right: false });
 
@@ -70,6 +100,8 @@ export function createFlight(content: FlyingCatContent, width: number, height: n
     immunity: 3, impactSeconds: 0, impactSerial: 0, activeSeconds: 0, lives: 3, hits: 0, wrongAttempts: 0,
     score: 0, answers: [], feedback: null, difficulty: content.settings.difficulty,
     showFeedback: content.showFeedback, crashed: false, crashSeconds: 0,
+    bonuses: [null, null], bonusSerial: 0, bonusActivationSlots: 0, slowSeconds: 0, scoreMultiplier: 1,
+    lightningSeconds: 0, lightningSerial: 0, lightningQuestionIndex: null, debris: [], revealQuestionIndex: null,
   };
   resizeFlight(state, width, height);
   state.player.x = state.width * 0.23;
@@ -88,7 +120,7 @@ export function resizeFlight(state: FlightState, width: number, height: number) 
   state.player.height = state.player.width * (230 / 340);
   state.player.x = state.player.x / oldWidth * state.width;
   state.player.y = state.player.y / oldHeight * state.height;
-  for (const object of [...state.obstacles, ...(state.card ? [state.card] : [])]) {
+  for (const object of [...state.obstacles, ...state.debris, ...(state.card ? [state.card] : [])]) {
     object.x = object.x / oldWidth * state.width;
     object.y = object.y / oldHeight * state.height;
   }
@@ -122,10 +154,13 @@ export function flightDifficulty(state: FlightState) {
   const interval = state.difficulty === 'easy' ? 1.55 : state.difficulty === 'hard' ? 0.88 : 1.15;
   const density = state.difficulty === 'easy' ? 4 : state.difficulty === 'hard' ? MAX_FLIGHT_OBSTACLES : 6;
   const arenaCap = state.height < 150 ? 3 : state.width < 300 ? 4 : MAX_FLIGHT_OBSTACLES;
+  const worldSpeedFactor = state.slowSeconds > 0 ? SLOW_TIME_FACTOR : 1;
   return {
     level,
-    cardSpeed: clamp(state.width * 0.22, 60, 220) * factor * progression,
-    obstacleSpeed: clamp(state.width * 0.14, 46, 175) * factor * progression,
+    worldSpeedFactor,
+    landscapeSpeedFactor: factor * progression * worldSpeedFactor,
+    cardSpeed: clamp(state.width * 0.22, 60, 220) * factor * progression * worldSpeedFactor,
+    obstacleSpeed: clamp(state.width * 0.14, 46, 175) * factor * progression * worldSpeedFactor,
     obstacleInterval: Math.max(0.72, interval / progression),
     maximumObstacles: Math.min(density, arenaCap),
   };
@@ -140,6 +175,8 @@ export function resumeFlight(state: FlightState) {
     state.feedback = null;
     state.card = null;
     state.obstacles = [];
+    state.debris = [];
+    state.lightningSeconds = 0;
     state.nextOption = 0;
     if (state.questionIndex >= state.questions.length) { state.mode = 'finished'; return; }
     state.mode = 'reading';
@@ -211,7 +248,52 @@ function nextObstacleHeight(state: FlightState, obstacle: FlightBody, random: ()
   return bands[bands.length - 1][1];
 }
 
-export function answerFlight(state: FlightState, index: number) {
+/** A correct answer grants at most one prize; a full inventory never grows or replaces held prizes. */
+export function grantFlightBonus(state: FlightState, random = flyingCatRandom): FlightBonus | null {
+  const slot = state.bonuses.findIndex((bonus) => bonus === null);
+  if (slot < 0) return null;
+  const draw = random();
+  const normalized = Number.isFinite(draw) ? clamp(draw, 0, 1 - Number.EPSILON) : 0;
+  const bonus: FlightBonus = { id: ++state.bonusSerial, kind: FLIGHT_BONUS_KINDS[Math.floor(normalized * FLIGHT_BONUS_KINDS.length)] };
+  state.bonuses[slot] = bonus;
+  return bonus;
+}
+
+/** Stable slots preserve E/R positions; optional identity rejects stale repeat events. */
+export function activateFlightBonus(state: FlightState, slot: 0 | 1, expectedBonusId?: number): boolean {
+  if (state.mode !== 'flying' || state.impactSeconds > 0 || (slot !== 0 && slot !== 1)) return false;
+  const bonus = state.bonuses[slot];
+  if (!bonus || (expectedBonusId !== undefined && expectedBonusId !== bonus.id)
+    || (state.bonusActivationSlots & (1 << slot))) return false;
+  if (bonus.kind === 'extra_life' && state.lives >= MAX_FLIGHT_LIVES) return false;
+  switch (bonus.kind) {
+    case 'extra_life': state.lives = Math.min(MAX_FLIGHT_LIVES, state.lives + 1); break;
+    case 'slow_time': state.slowSeconds = SLOW_TIME_SECONDS; break;
+    case 'points_x2': state.scoreMultiplier = 2; break;
+    case 'points_x3': state.scoreMultiplier = 3; break;
+    case 'lightning':
+      state.lightningQuestionIndex = state.questionIndex;
+      state.lightningSerial += 1;
+      state.lightningSeconds = LIGHTNING_ANIMATION_SECONDS;
+      state.debris = state.obstacles.slice(0, MAX_FLIGHT_OBSTACLES).map((obstacle, index) => ({
+        ...obstacle, elapsed: 0, velocityY: 40, rotation: 0, rotationSpeed: (index % 2 ? -1 : 1) * (95 + index * 11),
+      }));
+      state.obstacles = [];
+      state.obstacleDelay = Math.max(state.obstacleDelay, LIGHTNING_ANIMATION_SECONDS);
+      if (state.card && state.card.index !== state.questions[state.questionIndex]?.correctIndex) {
+        state.card = null;
+        state.nextOption = state.questions[state.questionIndex].correctIndex;
+        state.cardDelay = 0.15;
+      }
+      break;
+    case 'reveal': state.revealQuestionIndex = state.questionIndex; break;
+  }
+  state.bonuses[slot] = null;
+  state.bonusActivationSlots |= 1 << slot;
+  return true;
+}
+
+export function answerFlight(state: FlightState, index: number, random = flyingCatRandom) {
   const question = state.questions[state.questionIndex];
   if (state.mode !== 'flying' || state.impactSeconds > 0 || !question || !Number.isInteger(index) || index < 0 || index >= question.options.length) return;
   const isCorrect = index === question.correctIndex;
@@ -221,8 +303,15 @@ export function answerFlight(state: FlightState, index: number) {
   };
   state.answers.push(event);
   state.feedback = event;
-  if (isCorrect) { state.hits++; state.score += 100 + state.lives * 20; }
+  if (isCorrect) {
+    state.hits++;
+    state.score += (100 + state.lives * 20) * state.scoreMultiplier;
+    state.scoreMultiplier = 1;
+    grantFlightBonus(state, random);
+  }
   else { state.wrongAttempts++; }
+  state.revealQuestionIndex = null;
+  state.lightningQuestionIndex = null;
   state.card = null;
   state.mode = 'feedback';
   if (!state.showFeedback) resumeFlight(state);
@@ -237,6 +326,7 @@ export function stepFlight(state: FlightState, delta: number, controls: FlightCo
     return;
   }
   if (state.mode !== 'flying') return;
+  state.bonusActivationSlots = 0;
   state.activeSeconds += dt;
   if (state.impactSeconds > 0) {
     // React visibly before showing the shield. Freeze the world during this
@@ -246,19 +336,33 @@ export function stepFlight(state: FlightState, delta: number, controls: FlightCo
     return;
   }
   state.immunity = Math.max(0, state.immunity - dt);
-  const dx = Number(controls.right) - Number(controls.left);
-  const dy = Number(controls.down) - Number(controls.up);
-  const diagonal = dx && dy ? Math.SQRT1_2 : 1;
-  const movement = clamp(state.width * 0.7, 250, 500) * dt * diagonal;
-  moveFlightPlayer(state, state.player.x + dx * movement, state.player.y + dy * movement);
   const difficulty = flightDifficulty(state);
+  const countdown = (seconds: number) => seconds - dt < 1e-9 ? 0 : seconds - dt;
+  state.slowSeconds = countdown(state.slowSeconds);
+  state.lightningSeconds = countdown(state.lightningSeconds);
+  for (const fragment of state.debris) {
+    fragment.elapsed += dt;
+    fragment.x -= fragment.speed * dt * 0.3;
+    fragment.velocityY += Math.max(220, state.height * 1.25) * dt;
+    fragment.y += fragment.velocityY * dt;
+    fragment.rotation += fragment.rotationSpeed * dt;
+  }
+  state.debris = state.debris.filter((fragment) => fragment.elapsed < LIGHTNING_ANIMATION_SECONDS)
+    .slice(0, MAX_FLIGHT_OBSTACLES);
+  const analogue = (axis: number | undefined) => Number.isFinite(axis) ? clamp(axis!, -1, 1) : 0;
+  const dx = clamp(Number(controls.right) - Number(controls.left) + analogue(controls.axisX), -1, 1);
+  const dy = clamp(Number(controls.down) - Number(controls.up) + analogue(controls.axisY), -1, 1);
+  const length = Math.hypot(dx, dy);
+  const movement = clamp(state.width * 0.7, 250, 500) * dt / Math.max(1, length);
+  moveFlightPlayer(state, state.player.x + dx * movement, state.player.y + dy * movement);
   const question = state.questions[state.questionIndex];
   if (!question) { state.mode = 'finished'; return; }
 
   if (!state.card) {
-    state.cardDelay -= dt;
+    state.cardDelay -= dt * difficulty.worldSpeedFactor;
     if (state.cardDelay <= 0) {
-      const index = state.nextOption % question.options.length;
+      const index = state.lightningQuestionIndex === state.questionIndex
+        ? question.correctIndex : state.nextOption % question.options.length;
       state.nextOption++;
       const cardWidth = clamp(state.width * 0.25, 82, 128);
       state.card = {
@@ -269,23 +373,25 @@ export function stepFlight(state: FlightState, delta: number, controls: FlightCo
   }
   if (state.card) {
     state.card.x -= difficulty.cardSpeed * dt;
-    if (intersects(state.player, state.card)) { answerFlight(state, state.card.index); return; }
+    if (intersects(state.player, state.card)) { answerFlight(state, state.card.index, random); return; }
     if (state.card.x < -state.card.width) { state.card = null; state.cardDelay = 0.35; }
   }
 
-  state.obstacleDelay -= dt;
+  state.obstacleDelay -= dt * difficulty.worldSpeedFactor;
   if (state.obstacleDelay <= 0 && state.obstacles.length < difficulty.maximumObstacles) {
     const width = clamp(state.width * 0.12, 42, 76);
     const height = clamp(state.height * 0.14, 44, 58);
     const y = nextObstacleHeight(state, { x: 0, y: 0, width, height }, random);
     if (y !== null) state.obstacles.push({
       id: ++state.obstacleSerial, kind: Math.floor(clamp(random(), 0, 1 - Number.EPSILON) * 3), x: state.width + width / 2,
-      y, width, height, speed: difficulty.obstacleSpeed * (0.9 + random() * 0.2),
+      // Store unslowed speed so a prize also affects obstacles already on screen
+      // and expiry restores both old and newly spawned obstacles immediately.
+      y, width, height, speed: difficulty.obstacleSpeed / difficulty.worldSpeedFactor * (0.9 + random() * 0.2),
     });
     state.obstacleDelay = difficulty.obstacleInterval;
   }
   for (const obstacle of state.obstacles) {
-    obstacle.x -= obstacle.speed * dt;
+    obstacle.x -= obstacle.speed * dt * difficulty.worldSpeedFactor;
     if (state.immunity <= 0 && state.impactSeconds <= 0 && intersects(state.player, obstacle)) {
       obstacle.x = -200;
       state.lives--;
@@ -298,6 +404,8 @@ export function stepFlight(state: FlightState, delta: number, controls: FlightCo
         state.impactSeconds = 0;
         state.card = null;
         state.obstacles = [];
+        state.debris = [];
+        state.lightningSeconds = 0;
         return;
       }
       state.impactSerial += 1;

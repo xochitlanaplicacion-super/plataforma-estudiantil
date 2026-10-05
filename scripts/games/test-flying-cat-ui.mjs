@@ -106,7 +106,7 @@ async function assertParallaxMoving(page) {
   }
 }
 
-// CDP sends real held touches, including pointer capture and two-finger diagonals.
+// CDP sends a real held joystick pointer, including capture and analogue diagonals.
 // Synthetic PointerEvents cannot exercise capture: they have no active pointer ID.
 async function flightInput(page, touch) {
   const session = touch ? await page.context().newCDPSession(page) : null;
@@ -115,14 +115,24 @@ async function flightInput(page, touch) {
     async set(directions = []) {
       if (directions.join(',') === active.join(',')) return;
       if (session) {
-        if (active.length) await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-        const touchPoints = [];
-        for (let index = 0; index < directions.length; index++) {
-          const box = await page.locator(`.fc-pad button[data-direction="${directions[index]}"]`).boundingBox();
-          assert(box, 'A held direction must have a visible digital button');
-          touchPoints.push({ ...center(box), id: index + 1 });
+        if (!directions.length) {
+          if (active.length) await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+        } else {
+          const box = await page.getByRole('button', { name: 'Palanca táctil de vuelo', exact: true }).boundingBox();
+          assert(box, 'Touch piloting must have one visible circular analogue joystick');
+          const origin = center(box);
+          if (!active.length) {
+            await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...origin, id: 41 }] });
+          }
+          const x = Number(directions.includes('right')) - Number(directions.includes('left'));
+          const y = Number(directions.includes('down')) - Number(directions.includes('up'));
+          const length = Math.max(1, Math.hypot(x, y));
+          const radius = Math.min(box.width, box.height) * 0.31;
+          await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{
+            x: origin.x + x / length * radius,
+            y: origin.y + y / length * radius, id: 41,
+          }] });
         }
-        if (touchPoints.length) await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints });
       } else {
         for (const direction of active) await page.keyboard.up(keyForDirection[direction]);
         for (const direction of directions) await page.keyboard.down(keyForDirection[direction]);
@@ -162,6 +172,84 @@ async function assertNoFieldSteering(page, touch) {
     touch ? 'Touching/dragging the field and a hardware keyboard must not move the plane' : 'Mouse dragging and arrow keys must not move the plane');
 }
 
+async function assertJoystickDeadZone(page) {
+  const box = await page.getByRole('button', { name: 'Palanca táctil de vuelo', exact: true }).boundingBox();
+  assert(box, 'Touch controls must expose one circular joystick');
+  const origin = center(box);
+  const before = center(await page.locator('.fc-plane').boundingBox());
+  const session = await page.context().newCDPSession(page);
+  try {
+    await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...origin, id: 52 }] });
+    await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{
+      x: origin.x + box.width * 0.02, y: origin.y, id: 52,
+    }] });
+    await page.clock.runFor(100);
+    const after = center(await page.locator('.fc-plane').boundingBox());
+    assert(Math.abs(after.x - before.x) < 1 && Math.abs(after.y - before.y) < 1,
+      'A small movement inside the joystick dead zone must not drift the pilot');
+  } finally {
+    await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await session.detach();
+  }
+}
+
+async function visibleGameViewport(page) {
+  return page.evaluate(() => document.fullscreenElement?.classList.contains('fc-viewport')
+    ? { width: innerWidth, height: innerHeight, left: 0, top: 0 }
+    : { width: visualViewport.width, height: visualViewport.height,
+      left: visualViewport.offsetLeft, top: visualViewport.offsetTop });
+}
+
+async function assertNativeFullscreen(page) {
+  await page.waitForFunction(() => document.fullscreenElement?.classList.contains('fc-viewport'), null, { polling: 100 });
+  const box = await page.locator('.fc-viewport').boundingBox();
+  const visible = await visibleGameViewport(page);
+  assert(Math.abs(box.x) < 1 && Math.abs(box.y) < 1
+    && Math.abs(box.width - visible.width) < 1 && Math.abs(box.height - visible.height) < 1,
+  'Native fullscreen must occupy the complete screen, ignoring stale pre-entry browser-toolbar insets');
+  assert.equal(await page.getByRole('button', { name: 'Salir de pantalla completa', exact: true }).count(), 1);
+}
+
+async function flightProgress(page) {
+  return { progress: await page.locator('.fc-progress').innerText(),
+    lives: await page.locator('.fc-hearts').getAttribute('aria-label') };
+}
+
+async function assertJoystickSettings(page) {
+  const before = await flightProgress(page);
+  await page.getByRole('button', { name: 'Ajustar controles', exact: true }).click();
+  assert.equal(await page.locator('.fc-stage').getAttribute('data-mode'), 'paused',
+    'Control settings must pause the flight rather than leave it running behind the dialog');
+  await page.getByLabel('Tamaño', { exact: true }).selectOption('small');
+  await page.getByLabel('Lado del control', { exact: true }).selectOption('right');
+  const opacity = page.getByLabel(/^Visibilidad/);
+  for (let step = 0; step < 4; step++) await opacity.press('ArrowLeft');
+  const sensitivity = page.getByLabel(/^Sensibilidad/);
+  for (let step = 0; step < 3; step++) await sensitivity.press('ArrowRight');
+  const preferences = await page.evaluate(() => JSON.parse(localStorage.getItem('flying-cat:controls:v1')));
+  assert.deepEqual(preferences, { size: 'small', side: 'right', opacity: 0.65, sensitivity: 1.3 },
+    'Joystick preferences must persist on this device without requiring an account or database write');
+  await page.getByRole('button', { name: /Continuar vuelo/ }).click();
+  await page.clock.runFor(32);
+  const joystick = page.locator('.fc-joystick');
+  assert.equal(await joystick.getAttribute('data-side'), 'right');
+  assert.equal(await joystick.getAttribute('data-size'), 'small');
+  const pad = await joystick.boundingBox();
+  const field = await page.locator('.fc-stage').boundingBox();
+  assert(pad.width <= 80 && pad.x > field.x + field.width / 2
+    && pad.x + pad.width <= field.x + field.width + 1 && pad.y + pad.height <= field.y + field.height + 1,
+    'A customized right-hand joystick must fit inside the visible stage');
+  assert.deepEqual(await flightProgress(page), before, 'Changing control preferences must preserve the current question and lives');
+  await page.screenshot({ path: join(directory, 'ipad-landscape-controls-right.png') });
+  await page.getByRole('button', { name: 'Ajustar controles', exact: true }).click();
+  await page.getByRole('button', { name: 'Restablecer controles', exact: true }).click();
+  await page.getByRole('button', { name: /Continuar vuelo/ }).click();
+  await page.clock.runFor(32);
+  assert.equal(await joystick.getAttribute('data-side'), 'left');
+  assert.equal(await joystick.getAttribute('data-size'), 'medium');
+  await assertNativeFullscreen(page);
+}
+
 async function flyIntoCard(page, input) {
   for (let tick = 0; tick < 300; tick++) {
     if (await page.locator('.fc-stage').getAttribute('data-mode') === 'feedback') {
@@ -184,7 +272,7 @@ async function flyIntoCard(page, input) {
       'The answer corridor should remain reachable without exhausting the lives');
   }
   await input.release();
-  assert.fail('Directional controls must collide with a concept and open its feedback');
+  assert.fail('The analogue joystick or WASD must collide with a concept and open its feedback');
 }
 
 async function testNonfatalImpact(page, input, directory, deviceName) {
@@ -230,14 +318,17 @@ async function testNonfatalImpact(page, input, directory, deviceName) {
 }
 
 try {
-  for (const device of [
+  const devices = [
     { name: 'mobile', viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true },
     { name: 'mobile-small', viewport: { width: 320, height: 568 }, isMobile: true, hasTouch: true },
     { name: 'mobile-landscape', viewport: { width: 844, height: 390 }, isMobile: true, hasTouch: true },
     { name: 'ipad-portrait', viewport: { width: 768, height: 1024 }, isMobile: true, hasTouch: true },
     { name: 'ipad-landscape', viewport: { width: 1024, height: 768 }, isMobile: true, hasTouch: true },
     { name: 'desktop', viewport: { width: 1280, height: 800 }, isMobile: false, hasTouch: false },
-  ]) {
+  ];
+  const requestedDevice = process.env.FLYING_CAT_DEVICE;
+  if (requestedDevice) assert(devices.some((device) => device.name === requestedDevice), `Unknown FLYING_CAT_DEVICE: ${requestedDevice}`);
+  for (const device of devices.filter((candidate) => !requestedDevice || candidate.name === requestedDevice)) {
     const context = await browser.newContext(device);
     const page = await context.newPage();
     // Answer cards use the top lane; obstacles must keep their corridor open.
@@ -246,6 +337,21 @@ try {
     await page.addInitScript(() => {
       const RealAudio = window.Audio;
       window.Audio = function(...args) { window.testMusic = new RealAudio(...args); return window.testMusic; };
+      window.flightInputTrace = [];
+      const trace = (event) => {
+        const pad = document.querySelector('.fc-joystick-pad');
+        if (event.type.startsWith('pointer') || event.type === 'lostpointercapture') {
+          if (!(event.target instanceof Element) || !event.target.closest('.fc-joystick')) return;
+        }
+        const stage = document.querySelector('.fc-stage')?.getBoundingClientRect();
+        window.flightInputTrace.push({ type: event.type, pointerId: event.pointerId,
+          x: event.clientX, y: event.clientY, time: performance.now(), active: pad?.dataset.active,
+          mode: document.querySelector('.fc-stage')?.dataset.mode,
+          fullscreen: !!document.fullscreenElement, stage: stage && { x: stage.x, y: stage.y, width: stage.width, height: stage.height } });
+        if (window.flightInputTrace.length > 60) window.flightInputTrace.shift();
+      };
+      for (const name of ['pointerdown', 'pointermove', 'pointerup', 'pointercancel', 'lostpointercapture', 'resize']) window.addEventListener(name, trace, true);
+      document.addEventListener('fullscreenchange', trace, true);
     });
     if (device.name.startsWith('ipad')) {
       // Browser bars/zoom may leave less visible height than the layout viewport.
@@ -294,7 +400,13 @@ try {
     const chosenDifficulty = device.name === 'ipad-landscape' ? 'normal' : 'easy';
     await page.getByRole('radio', { name: chosenDifficulty === 'normal' ? 'Normal' : 'Fácil', exact: true }).check();
     await page.getByRole('button', { name: /Comenzar vuelo/ }).click();
+    await assertNativeFullscreen(page);
     assert.equal(await page.locator('.fc-touch-controls').count(), device.hasTouch ? 1 : 0);
+    assert.equal(await page.getByRole('button', { name: 'Palanca táctil de vuelo', exact: true }).count(), device.hasTouch ? 1 : 0,
+      'Mobile/iPad controls must be a single circular joystick, never the old four-button pad');
+    assert.equal(await page.locator('.fc-pad').count(), 0);
+    assert.equal(await page.getByRole('button', { name: /^Bonus [12] vacío$/ }).count(), 2,
+      'An unplayed activity must start with two fixed empty bonus slots');
     assert.equal(await page.locator('.fc-stage').getAttribute('data-difficulty'), chosenDifficulty,
       'The chosen student difficulty must reach the flight without changing the exercise');
     assert.equal(await page.getByRole('dialog').count(), 1);
@@ -336,8 +448,7 @@ try {
     assert.equal(await page.locator('.fc-card').count(), 1, 'The field has only one concept node');
     const definition = await page.locator('.fc-definition').boundingBox();
     const field = await page.locator('.fc-stage').boundingBox();
-    const visible = await page.evaluate(() => ({ width: visualViewport.width, height: visualViewport.height,
-      left: visualViewport.offsetLeft, top: visualViewport.offsetTop }));
+    const visible = await visibleGameViewport(page);
     const game = await page.locator('.fc-viewport').boundingBox();
     assert(Math.abs(game.x - visible.left) < 1 && Math.abs(game.y - visible.top) < 1
       && Math.abs(game.width - visible.width) < 1 && Math.abs(game.height - visible.height) < 1,
@@ -359,10 +470,10 @@ try {
       const pad = await page.locator('.fc-touch-controls').boundingBox();
       assert(pad.x >= field.x && pad.y >= field.y && pad.x + pad.width <= field.x + field.width + 1
         && pad.y + pad.height <= field.y + field.height + 1 && pad.y + pad.height <= visible.top + visible.height + 1,
-      'All touch buttons must remain inside the visible flight field');
+      'The complete analogue joystick must remain inside the visible flight field');
       assert(pad.x < field.x + field.width / 3 && pad.y + pad.height / 2 > field.y + field.height / 2
         && field.y + field.height - pad.y - pad.height <= 30,
-        'Digital controls must be at the lower left, for the left hand');
+        'The default joystick must be at the lower left, for the left hand');
       if (field.height < 240) {
         const world = await page.locator('.fc-world').boundingBox();
         const pilot = await page.locator('.fc-plane').boundingBox();
@@ -371,25 +482,47 @@ try {
         const overflow = await page.locator('.fc-world').evaluate((node) => getComputedStyle(node).overflowX);
         assert.equal(overflow, 'hidden', 'Departing cards and obstacles must be clipped before crossing beneath the control pad');
       }
+      await assertJoystickDeadZone(page);
+    }
+    const bonusRail = await page.locator('.fc-bonus-rail').boundingBox();
+    assert(bonusRail && bonusRail.x >= field.x && bonusRail.y >= field.y
+      && bonusRail.x + bonusRail.width <= field.x + field.width + 1
+      && bonusRail.y + bonusRail.height <= field.y + field.height + 1,
+      'Both right-hand bonus slots must remain inside the visible flight field');
+    assert(bonusRail.x > field.x + field.width / 2, 'Bonuses must be easy to find on the right side');
+    if (field.height < 240) {
+      const world = await page.locator('.fc-world').boundingBox();
+      assert(world.x + world.width <= bonusRail.x + 1,
+        'A short arena must reserve the bonus rail as well as the analogue control area');
     }
     await assertNoFieldSteering(page, device.hasTouch);
+    if (device.name === 'ipad-landscape') await assertJoystickSettings(page);
     if (device.name.startsWith('ipad')) {
-      const progress = await page.locator('.fc-hud').innerText();
+      const progress = await flightProgress(page);
       const sceneryBeforeResize = await parallaxSnapshot(page);
+      await page.getByRole('button', { name: 'Salir de pantalla completa', exact: true }).click();
+      await page.waitForFunction(() => document.fullscreenElement === null, null, { polling: 100 });
+      await page.waitForFunction(() => document.querySelector('.fc-viewport').style.height === `${innerHeight - 180}px`, null, { polling: 100 });
       await page.evaluate(() => window.setTestVisibleViewport({ height: innerHeight - 260, offsetTop: 40 }));
-      await page.waitForFunction(() => document.querySelector('.fc-viewport').style.height === `${innerHeight - 260}px`);
+      await page.waitForFunction(() => document.querySelector('.fc-viewport').style.height === `${innerHeight - 260}px`, null, { polling: 100 });
       await page.clock.runFor(32);
       const pad = await page.locator('.fc-touch-controls').boundingBox();
       assert(pad.y + pad.height <= device.viewport.height - 260 + 40,
         'An iPad toolbar/visible-area change must not put the controls below the visible screen');
-      assert.equal(await page.locator('.fc-hud').innerText(), progress, 'Visible viewport changes must not reset question or lives');
+      assert.deepEqual(await flightProgress(page), progress, 'Visible viewport changes must not reset question or lives');
       assert.equal(await page.locator('.fc-stage').getAttribute('data-mode'), 'flying');
       assertParallaxRetained(sceneryBeforeResize, await parallaxSnapshot(page),
         'An iPad visible-viewport resize must retain the moving scenery phase', 6);
       await page.screenshot({ path: join(directory, `${device.name}-constrained-viewport.png`) });
       await page.evaluate(() => window.setTestVisibleViewport({ height: innerHeight - 180, offsetTop: 24 }));
-      await page.waitForFunction(() => document.querySelector('.fc-viewport').style.height === `${innerHeight - 180}px`);
+      await page.waitForFunction(() => document.querySelector('.fc-viewport').style.height === `${innerHeight - 180}px`, null, { polling: 100 });
       await page.clock.runFor(32);
+      await page.getByRole('button', { name: 'Entrar en pantalla completa', exact: true }).click();
+      await assertNativeFullscreen(page);
+      // The mocked clock must paint the recentered pilot after native resizing
+      // before its position becomes the baseline for the held-input assertion.
+      await page.clock.runFor(32);
+      assert.deepEqual(await flightProgress(page), progress, 'Re-entering fullscreen must preserve question and lives');
     }
     const beforeMovement = center(await page.locator('.fc-plane').boundingBox());
     await input.set(['up', 'right']);
@@ -405,15 +538,26 @@ try {
     }
     await input.release();
     const afterMovement = center(await page.locator('.fc-plane').boundingBox());
+    if (!(afterMovement.x > beforeMovement.x && afterMovement.y < beforeMovement.y)) {
+      console.error(`DEBUG ${device.name} diagonal movement`, JSON.stringify({ beforeMovement, afterMovement,
+        state: await page.evaluate(() => ({ mode: document.querySelector('.fc-stage')?.dataset.mode,
+          viewport: { width: innerWidth, height: innerHeight },
+          padActive: document.querySelector('.fc-joystick-pad')?.dataset.active,
+          thumb: document.querySelector('.fc-joystick-thumb')?.style.transform,
+          plane: document.querySelector('.fc-plane')?.style.transform,
+          trace: window.flightInputTrace })) }));
+      await page.screenshot({ path: join(directory, `${device.name}-diagonal-failure.png`) });
+      console.error(`Failure screenshot: ${join(directory, `${device.name}-diagonal-failure.png`)}`);
+    }
     assert(afterMovement.x > beforeMovement.x && afterMovement.y < beforeMovement.y,
-      'Two held digital directions or WASD keys must steer a diagonal');
+      'A held analogue diagonal or WASD keys must steer smoothly');
     const stopped = center(await page.locator('.fc-plane').boundingBox());
     await page.clock.runFor(150);
     const still = center(await page.locator('.fc-plane').boundingBox());
     assert(Math.abs(still.x - stopped.x) < 1 && Math.abs(still.y - stopped.y) < 1,
       'Releasing the directions must stop movement');
     if (phone) {
-      const progress = await page.locator('.fc-hud').innerText();
+      const progress = await flightProgress(page);
       const conceptBeforeRotation = await page.locator('.fc-card').textContent();
       const sceneryBeforeRotation = await parallaxSnapshot(page);
       assert(conceptBeforeRotation.trim(), 'A concept must be visible before the orientation interruption');
@@ -426,7 +570,7 @@ try {
       await page.getByRole('dialog').waitFor({ state: 'visible' });
       await page.clock.runFor(100);
       assert.equal(await page.locator('.fc-stage').getAttribute('data-mode'), 'paused');
-      assert.equal(await page.locator('.fc-hud').innerText(), progress,
+      assert.deepEqual(await flightProgress(page), progress,
         'A portrait interruption must preserve the current question and lives');
       assert.equal(await page.locator('.fc-card').textContent(), conceptBeforeRotation,
         'A remounted concept card must retain its label after rotating back');
@@ -481,13 +625,14 @@ try {
     }
     await page.getByRole('button', { name: 'Volver a mis actividades', exact: true }).click();
     await page.locator('.fc-viewport').waitFor({ state: 'detached' });
+    await page.waitForFunction(() => document.fullscreenElement === null, null, { polling: 100 });
     assert.equal(await page.evaluate(() => window.flightClosed), true);
     assert.equal(await page.locator('.fc-viewport').count(), 0, 'Closing must remove the fullscreen portal');
     assert.equal(await page.evaluate(() => getComputedStyle(document.body).overflow), 'auto', 'Closing must restore dashboard scrolling');
     assert.equal(await page.evaluate(() => window.testMusic.paused), true, 'Leaving must release soundtrack playback');
     assert.deepEqual(errors, []);
     await input.dispose();
-    console.log(`PASS ${device.name}: five-speed parallax, paused scenery${device.name === 'desktop' ? ' and reduced motion' : ''}, ${phone ? 'landscape gate and safe rotation, ' : ''}difficulty choice, persistent definition, ${device.hasTouch ? 'in-field digital controls only' : 'WASD only'}, pause, immunity, two answers and one save`);
+    console.log(`PASS ${device.name}: native fullscreen and exit cleanup, five-speed parallax, paused scenery${device.name === 'desktop' ? ' and reduced motion' : ''}, ${phone ? 'landscape gate and safe rotation, ' : ''}difficulty choice, persistent definition, ${device.hasTouch ? 'in-field analogue joystick only' : 'WASD only'}, two bonus slots, pause, immunity, two answers and one save`);
     await context.close();
   }
   console.log(`Screenshots: ${directory}`);
