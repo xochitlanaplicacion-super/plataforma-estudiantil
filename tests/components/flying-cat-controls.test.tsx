@@ -26,12 +26,16 @@ vi.mock('@/lib/activities/flying-cat-engine', async (importOriginal) => {
 import FlyingCatGame from '@/components/activities/flying-cat/FlyingCatGame';
 
 beforeEach(() => {
+  localStorage.clear();
   observed.state = null; observed.touch = false; observed.collide = false;
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => setTimeout(() => callback(performance.now()), 16));
   vi.stubGlobal('cancelAnimationFrame', (timer: ReturnType<typeof setTimeout>) => clearTimeout(timer));
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
   vi.stubGlobal('matchMedia', () => ({ matches: observed.touch, addEventListener() {}, removeEventListener() {} }));
+  vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
+  vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+  vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
   Object.defineProperty(navigator, 'maxTouchPoints', { configurable: true, value: 5 });
   vi.stubGlobal('PointerEvent', class extends MouseEvent {
     pointerId: number; pointerType: string;
@@ -127,6 +131,41 @@ describe('Flying Cat exclusive movement controls', () => {
     start();
     expect(observed.state!.difficulty).toBe('easy');
     expect(exercise.contenido.settings.difficulty).toBe('hard');
+  });
+
+  it('puts close beside pause and music in one HUD row without an extra game header', () => {
+    const onClose = vi.fn();
+    const { container } = render(<FlyingCatGame exercise={makeExercise()} onClose={onClose} />);
+    start();
+    const close = screen.getByRole('button', { name: 'Cerrar juego' });
+    expect(close.parentElement).toBe(screen.getByRole('button', { name: 'Pausar y releer definición' }).parentElement);
+    expect(close.parentElement).toBe(screen.getByRole('button', { name: 'Silenciar música' }).parentElement);
+    expect(container.querySelector('header')).toBeNull();
+    fireEvent.click(close);
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(observed.state!.mode).toBe('paused');
+  });
+
+  it.each([
+    [568, 320, true], [844, 390, true], [768, 1024, false], [1024, 768, false],
+  ])('selects the phone-only pilot body at %s×%s (compact=%s)', (width, height, compact) => {
+    observed.touch = true;
+    vi.stubGlobal('innerWidth', width); vi.stubGlobal('innerHeight', height);
+    render(<FlyingCatGame exercise={makeExercise()} />);
+    start();
+    expect(observed.state!.compactPilot).toBe(compact);
+  });
+
+  it('returns keyboard focus to the flight after muting so WASD continues to work', async () => {
+    const { container } = render(<FlyingCatGame exercise={makeExercise()} />);
+    start();
+    const before = observed.state!.player.x;
+    fireEvent.click(screen.getByRole('button', { name: 'Silenciar música' }));
+    expect(document.activeElement).toBe(container.querySelector('.fc-stage'));
+    fireEvent.keyDown(document.activeElement!, { key: 'd' });
+    await tick();
+    expect(observed.state!.player.x).toBeGreaterThan(before);
+    fireEvent.keyUp(document.activeElement!, { key: 'd' });
   });
 
   it('requires landscape on phones and preserves the paused flight through real viewport changes', async () => {

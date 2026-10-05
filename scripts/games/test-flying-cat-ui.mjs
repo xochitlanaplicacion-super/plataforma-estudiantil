@@ -12,12 +12,25 @@ const directory = await mkdtemp(join(tmpdir(), 'flying-cat-browser-'));
 await build({
   absWorkingDir: root,
   stdin: {
-    contents: `import React from 'react';
+    contents: `import React, {useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import FlyingCatGame from './src/components/activities/flying-cat/FlyingCatGame';
+import {FlyingCatViewport} from './src/components/activities/flying-cat/FlyingCatViewport';
 const long = 'Una persona capacitada conduce aeronaves para transportar pasajeros y mercancías. Antes de despegar revisa los instrumentos y las condiciones del tiempo, y durante el viaje se comunica con la torre de control. Identifica la profesión que corresponde a esta descripción. ';
 window.completedFlights=[];window.saveRequests=0;
-createRoot(document.getElementById('root')).render(<div style={{height:'100dvh',display:'flex',flexDirection:'column'}}><header style={{height:56,flexShrink:0,background:'#234353',color:'white',padding:12}}>Vista de actividad · Flying Cat</header><main style={{minHeight:0,flex:1}}><FlyingCatGame exercise={{id:'qa',titulo:'Amazing jobs · prueba de vuelo',contenido:{version:1,instructions:'Lee la definición y pilota hacia el concepto correcto. Tienes tres vidas para esquivar obstáculos.',showFeedback:true,settings:{difficulty:'easy'},items:[{id:'q1',prompt:long.repeat(3),options:['Pilot','Doctor','Farmer','Teacher'],correctIndex:0,feedback:'Un piloto conduce aeronaves. Un médico atiende pacientes, un agricultor cultiva la tierra y un docente acompaña el aprendizaje. '.repeat(8)},{id:'q2',prompt:long,options:['Pilot','Doctor','Farmer','Teacher'],correctIndex:0,feedback:'Pilot significa piloto, la persona preparada para conducir una aeronave.'}]}}} onComplete={r=>{window.saveRequests++;if(location.search==='?fail=1'&&window.saveRequests===1)throw new Error('fallo de prueba');window.completedFlights.push(r);return null}} onClose={()=>{window.closed=true}}/></main></div>);`,
+function Fixture(){
+  const [open,setOpen]=useState(true);
+  return <div style={{minHeight:'220vh',background:'#e6f3ef'}}>
+    <header style={{height:96,padding:'24px',boxSizing:'border-box',background:'#087c6d',color:'white'}}>XOCHITLAN · Panel docente · Mis materias y grupos</header>
+    <main data-testid="transformed-dashboard" style={{transform:'translate3d(24px,32px,0)',contain:'paint',overflow:'hidden',height:460,width:'calc(100% - 96px)',margin:24,padding:16,boxSizing:'border-box',position:'relative',background:'white',borderRadius:16}}>
+      <h1>Mis asignaturas</h1><p>Unidad · Tema · Actividades · Vista previa</p>
+      <div style={{height:240,background:'#d5e7e2',borderRadius:12}}>Contenido del panel del profesor</div>
+      <button type="button" onClick={()=>setOpen(true)}>Volver a probar Flying Cat</button>
+      {open&&<FlyingCatViewport><FlyingCatGame exercise={{id:'qa',titulo:'Amazing jobs · prueba de vuelo',contenido:{version:1,instructions:'Lee la definición y pilota hacia el concepto correcto. Tienes tres vidas para esquivar obstáculos.',showFeedback:true,settings:{difficulty:'easy'},items:[{id:'q1',prompt:long.repeat(3),options:['Pilot','Doctor','Farmer','Teacher'],correctIndex:0,feedback:'Un piloto conduce aeronaves. Un médico atiende pacientes, un agricultor cultiva la tierra y un docente acompaña el aprendizaje. '.repeat(8)},{id:'q2',prompt:long,options:['Pilot','Doctor','Farmer','Teacher'],correctIndex:0,feedback:'Pilot significa piloto, la persona preparada para conducir una aeronave.'}]}}} onComplete={r=>{window.saveRequests++;if(location.search==='?fail=1'&&window.saveRequests===1)throw new Error('fallo de prueba');window.completedFlights.push(r);return null}} onClose={()=>{window.flightClosed=true;setOpen(false)}}/></FlyingCatViewport>}
+    </main>
+  </div>;
+}
+createRoot(document.getElementById('root')).render(<Fixture/>);`,
     resolveDir: root, sourcefile: 'flying-cat-browser-fixture.tsx', loader: 'tsx',
   },
   bundle: true, outfile: join(directory, 'main.js'), jsx: 'automatic',
@@ -30,16 +43,17 @@ const server = createServer(async (request, response) => {
     const requestPath = new URL(request.url, 'http://localhost').pathname;
     if (requestPath === '/') {
       response.setHeader('Content-Type', 'text/html');
-      response.end('<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/main.css"><style>html,body,#root{margin:0;height:100%;overflow:hidden}</style></head><body><div id="root"></div><script src="/main.js"></script></body></html>');
+      response.end('<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/main.css"><style>html,body,#root{margin:0;min-height:100%;width:100%}body{overflow:auto}</style></head><body><div id="root"></div><script src="/main.js"></script></body></html>');
       return;
     }
-    const assetPaths = ['cat-aviator.jpg', 'paper.jpg', 'sky-hills.jpg'].map((name) => `/games/flying-cat/images/${name}`);
+    const assetPaths = [...['cat-aviator.jpg', 'paper.jpg', 'sky-hills.jpg'].map((name) => `/games/flying-cat/images/${name}`),
+      '/games/flying-cat/audio/paper-wings-and-sunday-naps.mp3'];
     if (!assetPaths.includes(requestPath) && !['/main.js', '/main.css'].includes(requestPath)) {
       response.statusCode = 404; response.end(); return;
     }
     const path = assetPaths.includes(requestPath)
       ? resolve(root, 'public', requestPath.slice(1)) : join(directory, requestPath.slice(1));
-    const types = { '.js': 'text/javascript', '.css': 'text/css', '.jpg': 'image/jpeg' };
+    const types = { '.js': 'text/javascript', '.css': 'text/css', '.jpg': 'image/jpeg', '.mp3': 'audio/mpeg' };
     response.setHeader('Content-Type', types[extname(path)] || 'application/octet-stream');
     response.end(await readFile(path));
   } catch { response.statusCode = 404; response.end(); }
@@ -190,6 +204,29 @@ try {
     // Answer cards use the top lane; obstacles must keep their corridor open.
     // This fixture is isolated and cannot affect a production activity or database.
     await page.addInitScript(() => { Math.random = () => 0.1; });
+    await page.addInitScript(() => {
+      const RealAudio = window.Audio;
+      window.Audio = function(...args) { window.testMusic = new RealAudio(...args); return window.testMusic; };
+    });
+    if (device.name.startsWith('ipad')) {
+      // Browser bars/zoom may leave less visible height than the layout viewport.
+      // The dashboard ancestor intentionally clips/transforms descendants above.
+      await page.addInitScript(() => {
+        const visible = new EventTarget();
+        let inset = 180, top = 24, left = 0;
+        Object.defineProperties(visible, {
+          width: { get: () => innerWidth }, height: { get: () => innerHeight - inset },
+          offsetLeft: { get: () => left }, offsetTop: { get: () => top },
+        });
+        Object.defineProperty(window, 'visualViewport', { configurable: true, value: visible });
+        window.setTestVisibleViewport = (rect) => {
+          if ('height' in rect) inset = innerHeight - rect.height;
+          if ('offsetTop' in rect) top = rect.offsetTop;
+          if ('offsetLeft' in rect) left = rect.offsetLeft;
+          visible.dispatchEvent(new Event('resize')); visible.dispatchEvent(new Event('scroll'));
+        };
+      });
+    }
     const errors = [];
     page.on('pageerror', (error) => errors.push(error.message));
     await page.goto(address + (device.name === 'mobile-small' ? '/?fail=1' : '/'));
@@ -228,6 +265,13 @@ try {
     assert(startBox.y >= 0 && startBox.y + startBox.height <= page.viewportSize().height, 'Long definition must not hide the resume button');
     await page.screenshot({ path: join(directory, `${device.name}-reading.png`) });
     await start.click();
+    await page.waitForFunction(() => window.testMusic && !window.testMusic.paused);
+    await page.getByRole('button', { name: 'Silenciar música', exact: true }).click();
+    assert.equal(await page.evaluate(() => window.testMusic.paused), true, 'Mute must stop the soundtrack immediately');
+    await page.getByRole('button', { name: 'Activar música', exact: true }).click();
+    await page.waitForFunction(() => !window.testMusic.paused);
+    assert.equal(await page.evaluate(() => window.testMusic.loop), true, 'The supplied soundtrack must loop');
+    assert(await page.evaluate(() => window.testMusic.readyState >= 2), 'The provided MP3 must decode and be ready for playback');
     const input = await flightInput(page, device.hasTouch);
     await page.clock.runFor(1000);
     assert.equal(await page.getByText(/Escudo ·/).count(), 1);
@@ -236,13 +280,29 @@ try {
     assert.equal(await page.locator('.fc-card').count(), 1, 'The field has only one concept node');
     const definition = await page.locator('.fc-definition').boundingBox();
     const field = await page.locator('.fc-stage').boundingBox();
+    const visible = await page.evaluate(() => ({ width: visualViewport.width, height: visualViewport.height,
+      left: visualViewport.offsetLeft, top: visualViewport.offsetTop }));
+    const game = await page.locator('.fc-viewport').boundingBox();
+    assert(Math.abs(game.x - visible.left) < 1 && Math.abs(game.y - visible.top) < 1
+      && Math.abs(game.width - visible.width) < 1 && Math.abs(game.height - visible.height) < 1,
+      'The body portal must fill the real visible viewport, not a clipped/transformed dashboard');
+    assert(game.x >= 0 && game.x + game.width <= page.viewportSize().width + 1
+      && game.y + game.height <= page.viewportSize().height + 1,
+      'The simulated visible area must also fit inside the actual device screen');
+    assert.equal(await page.locator('.fc-viewport header').count(), 0, 'Flying Cat must not waste a separate close/title header');
+    const closeBox = await page.getByRole('button', { name: 'Cerrar juego', exact: true }).boundingBox();
+    const pauseBox = await page.getByRole('button', { name: /Pausar y releer/ }).boundingBox();
+    assert(Math.abs(closeBox.y - pauseBox.y) < 1, 'Close must sit beside pause in the same HUD row');
+    const pilotSize = await page.locator('.fc-plane').boundingBox();
+    assert(phone ? pilotSize.width <= 96 : pilotSize.width >= 90,
+      'Only compact phones must use the smaller pilot body');
     assert(definition.y >= 0 && definition.y + definition.height <= field.y + 1,
       'The active definition must stay above the flight field, within the screen');
     if (device.hasTouch) {
       assert.equal(await page.locator('.fc-stage > .fc-touch-controls').count(), 1);
       const pad = await page.locator('.fc-touch-controls').boundingBox();
       assert(pad.x >= field.x && pad.y >= field.y && pad.x + pad.width <= field.x + field.width + 1
-        && pad.y + pad.height <= field.y + field.height + 1 && pad.y + pad.height <= page.viewportSize().height,
+        && pad.y + pad.height <= field.y + field.height + 1 && pad.y + pad.height <= visible.top + visible.height + 1,
       'All touch buttons must remain inside the visible flight field');
       assert(pad.x < field.x + field.width / 3 && pad.y + pad.height / 2 > field.y + field.height / 2
         && field.y + field.height - pad.y - pad.height <= 30,
@@ -257,6 +317,21 @@ try {
       }
     }
     await assertNoFieldSteering(page, device.hasTouch);
+    if (device.name.startsWith('ipad')) {
+      const progress = await page.locator('.fc-hud').innerText();
+      await page.evaluate(() => window.setTestVisibleViewport({ height: innerHeight - 260, offsetTop: 40 }));
+      await page.waitForFunction(() => document.querySelector('.fc-viewport').style.height === `${innerHeight - 260}px`);
+      await page.clock.runFor(32);
+      const pad = await page.locator('.fc-touch-controls').boundingBox();
+      assert(pad.y + pad.height <= device.viewport.height - 260 + 40,
+        'An iPad toolbar/visible-area change must not put the controls below the visible screen');
+      assert.equal(await page.locator('.fc-hud').innerText(), progress, 'Visible viewport changes must not reset question or lives');
+      assert.equal(await page.locator('.fc-stage').getAttribute('data-mode'), 'flying');
+      await page.screenshot({ path: join(directory, `${device.name}-constrained-viewport.png`) });
+      await page.evaluate(() => window.setTestVisibleViewport({ height: innerHeight - 180, offsetTop: 24 }));
+      await page.waitForFunction(() => document.querySelector('.fc-viewport').style.height === `${innerHeight - 180}px`);
+      await page.clock.runFor(32);
+    }
     const beforeMovement = center(await page.locator('.fc-plane').boundingBox());
     await input.set(['up', 'right']);
     await page.clock.runFor(150);
@@ -299,6 +374,7 @@ try {
       await page.clock.runFor(100);
     }
     await page.getByRole('button', { name: /Pausar y releer/ }).click();
+    assert.equal(await page.evaluate(() => window.testMusic.paused), true, 'Pausing flight must pause music too');
     await page.clock.runFor(3000);
     assert.equal(await page.getByRole('dialog').count(), 1);
     await page.getByRole('button', { name: /Continuar vuelo/ }).click();
@@ -330,6 +406,7 @@ try {
       assert.equal(completed.total, 2);
       assert.equal(completed.answers.length, 2);
       assert.equal(await page.getByText('Resultado guardado en la plataforma.', { exact: true }).count(), 1);
+      assert.equal(await page.evaluate(() => window.testMusic.paused), true, 'Music must stop on the final result');
       await page.screenshot({ path: join(directory, `${device.name}-result.png`) });
       if (phone) {
         await page.setViewportSize(portrait);
@@ -338,6 +415,12 @@ try {
         assert.equal(await page.evaluate(() => window.completedFlights.length), 1, 'Rotating a result must not save it again');
       }
     }
+    await page.getByRole('button', { name: 'Volver a mis actividades', exact: true }).click();
+    await page.locator('.fc-viewport').waitFor({ state: 'detached' });
+    assert.equal(await page.evaluate(() => window.flightClosed), true);
+    assert.equal(await page.locator('.fc-viewport').count(), 0, 'Closing must remove the fullscreen portal');
+    assert.equal(await page.evaluate(() => getComputedStyle(document.body).overflow), 'auto', 'Closing must restore dashboard scrolling');
+    assert.equal(await page.evaluate(() => window.testMusic.paused), true, 'Leaving must release soundtrack playback');
     assert.deepEqual(errors, []);
     await input.dispose();
     console.log(`PASS ${device.name}: ${phone ? 'landscape gate and safe rotation, ' : ''}difficulty choice, persistent definition, ${device.hasTouch ? 'in-field digital controls only' : 'WASD only'}, pause, immunity, two answers and one save`);

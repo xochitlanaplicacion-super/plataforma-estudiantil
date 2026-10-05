@@ -17,6 +17,7 @@ import { BackroomsScapeFrame } from '@/components/activities/backrooms-scape/Bac
 import dynamic from 'next/dynamic';
 import type { GameLeaderboard } from '@/lib/game-leaderboard';
 import { gameAttemptDetails } from '@/lib/academic/game-attempt-details';
+import { FlyingCatViewport } from '@/components/activities/flying-cat/FlyingCatViewport';
 
 const FlyingCatGame = dynamic(() => import('@/components/activities/flying-cat/FlyingCatGame'), {
   ssr: false,
@@ -652,6 +653,7 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
             key={exercise.id || 'flying-cat-preview'}
             exercise={exercise}
             onClose={onClose}
+            closeLabel={isPreview ? 'Cerrar vista previa' : 'Cerrar juego'}
             onComplete={onComplete ? (result) => onComplete(result.hits, result.total, gameAttemptDetails('flying_cat', {
               intentos_incorrectos: result.wrongAttempts,
               tiempo_segundos: result.time,
@@ -1230,7 +1232,11 @@ export const ActivityPreview = ({ exercise, onClose, onComplete, entregaExistent
     return <div className="p-20 text-center opacity-20 italic">Vista previa no disponible.</div>;
   };
 
-  if (exercise.tipo === 'parkour_race' || exercise.tipo === 'backrooms_scape' || exercise.tipo === 'flying_cat') {
+  if (exercise.tipo === 'flying_cat') {
+    return <FlyingCatViewport>{renderContent()}</FlyingCatViewport>;
+  }
+
+  if (exercise.tipo === 'parkour_race' || exercise.tipo === 'backrooms_scape') {
     return (
       <div className="fixed inset-0 z-[100] flex h-[100dvh] flex-col overflow-hidden bg-slate-950">
         <header className="flex shrink-0 items-center justify-between gap-3 border-b border-white/15 px-3 py-2 text-white" style={{ paddingTop: 'max(8px, env(safe-area-inset-top))' }}>

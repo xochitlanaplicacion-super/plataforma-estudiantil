@@ -2328,8 +2328,8 @@ export default function ProfesorDashboard() {
         </Tabs>
       )}
 
-      {/* DIALOGO DE EDICIÓN DE ACTIVIDAD */}
-      <Dialog open={dialog.open} onOpenChange={o => {
+      {/* Preserve editor data while the fullscreen flight owns focus and touch input. */}
+      <Dialog open={dialog.open && previewActivity?.tipo !== 'flying_cat'} onOpenChange={o => {
         if (!saveGate.isLocked()) setDialog({ ...dialog, open: o });
       }}>
         <DialogContent className={cn("w-[95vw] max-h-[90vh] flex flex-col p-0 rounded-[32px] overflow-hidden", dialog.type === 'ejercicio' ? 'max-w-4xl' : 'max-w-xl')}>

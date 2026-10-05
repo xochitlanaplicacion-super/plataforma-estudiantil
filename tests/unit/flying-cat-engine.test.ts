@@ -21,6 +21,81 @@ const tick = (state: ReturnType<typeof createFlight>, seconds: number) => {
 };
 
 describe('Flying Cat mobile-first flight loop', () => {
+  it.each([[360, 400], [568, 156], [1024, 500]])('uses explicit phone sizing without changing tablet or desktop sizing in a %sx%s arena', (width, height) => {
+    const normal = createFlight(content, width, height, rng);
+    const phone = createFlight(content, width, height, rng, true);
+    expect(normal.compactPilot).toBe(false);
+    expect(phone.compactPilot).toBe(true);
+    expect(normal.player.width).toBe(Math.max(90, Math.min(136, width * 0.22)));
+    expect(phone.player.width).toBe(Math.max(64, Math.min(96, width * 0.16)));
+    expect(phone.player.width / normal.player.width).toBeGreaterThanOrEqual(0.7);
+    expect(phone.player.width / normal.player.width).toBeLessThanOrEqual(0.75);
+    expect(phone.player.height).toBe(phone.player.width * (230 / 340));
+    expect(phone.questions).toEqual(normal.questions);
+    expect(phone.immunity).toBe(normal.immunity);
+  });
+
+  it('retains compact sizing through phone rotation and keeps the entire pilot inside narrow arenas', () => {
+    const state = createFlight(content, 360, 400, rng, true);
+    for (const [width, height] of [[568, 156], [180, 100], [1024, 500], [360, 400]]) {
+      moveFlightPlayer(state, state.width, state.height);
+      resizeFlight(state, width, height);
+      expect(state.compactPilot).toBe(true);
+      expect(state.player.width).toBe(Math.max(64, Math.min(96, width * 0.16)));
+      expect(state.player.height).toBe(state.player.width * (230 / 340));
+      expect(state.player.x - state.player.width / 2).toBeGreaterThanOrEqual(3);
+      expect(state.player.x + state.player.width / 2).toBeLessThanOrEqual(width - 3);
+      expect(state.player.y - state.player.height / 2).toBeGreaterThanOrEqual(3);
+      expect(state.player.y + state.player.height / 2).toBeLessThanOrEqual(height - 3);
+    }
+  });
+
+  it('can change the explicit size mode mid-flight without changing timers, academic history or active controls', () => {
+    const state = createFlight(content, 568, 156, rng);
+    resumeFlight(state);
+    answerFlight(state, state.questions[0].correctIndex);
+    resumeFlight(state);
+    resumeFlight(state);
+    state.cardDelay = 100;
+    state.obstacleDelay = 100;
+    stepFlight(state, 0.05, { ...emptyFlightControls(), right: true }, rng);
+    const result = flightResult(state);
+    const playerPosition = { x: state.player.x, y: state.player.y };
+    const immunity = state.immunity;
+    state.compactPilot = true;
+    resizeFlight(state, 568, 156);
+    expect(state.player.width).toBeCloseTo(90.88);
+    expect({ x: state.player.x, y: state.player.y }).toEqual(playerPosition);
+    expect(state.mode).toBe('flying');
+    expect(state.immunity).toBe(immunity);
+    expect(flightResult(state)).toEqual(result);
+    const x = state.player.x;
+    stepFlight(state, 0.05, { ...emptyFlightControls(), right: true }, rng);
+    expect(state.player.x).toBeGreaterThan(x);
+    state.compactPilot = false;
+    resizeFlight(state, 568, 156);
+    expect(state.player.width).toBeCloseTo(124.96);
+    expect(state.mode).toBe('flying');
+    expect(state.answers).toEqual(result.answers);
+    expect(state.hits).toBe(result.hits);
+    expect(state.wrongAttempts).toBe(result.wrongAttempts);
+  });
+
+  it('preserves answer traces and frame-based movement across normal and compact pilots', () => {
+    const normal = createFlight(content, 568, 320, rng);
+    const compact = createFlight(content, 568, 320, rng, true);
+    for (const state of [normal, compact]) {
+      resumeFlight(state);
+      state.obstacleDelay = 100;
+      state.cardDelay = 100;
+      stepFlight(state, 0.05, { ...emptyFlightControls(), right: true, up: true }, rng);
+      answerFlight(state, state.questions[0].correctIndex);
+    }
+    expect({ x: compact.player.x, y: compact.player.y }).toEqual({ x: normal.player.x, y: normal.player.y });
+    expect(compact.immunity).toBe(normal.immunity);
+    expect(flightResult(compact)).toEqual(flightResult(normal));
+  });
+
   it('stays still until the definition is read and offers full three second obstacle immunity', () => {
     const state = createFlight(content, 360, 400, rng);
     tick(state, 10);

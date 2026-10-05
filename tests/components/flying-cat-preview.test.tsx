@@ -8,13 +8,14 @@ vi.mock('canvas-confetti', () => ({ default: vi.fn() }));
 vi.mock('@/components/shared/EntregaAlumno', () => ({ EntregaAlumno: () => null }));
 vi.mock('@/components/activities/parkour-race/ParkourRaceFrame', () => ({ ParkourRaceFrame: () => null }));
 vi.mock('@/components/activities/backrooms-scape/BackroomsScapeFrame', () => ({ BackroomsScapeFrame: () => null }));
-vi.mock('next/dynamic', () => ({ default: () => (props: any) => <button
+vi.mock('next/dynamic', () => ({ default: () => (props: any) => <div><span>{props.exercise.titulo}</span><button
+  type="button" onClick={props.onClose} aria-label={props.closeLabel}>Cerrar</button><button
   type="button" disabled={!props.onComplete} data-exercise={props.exercise.id}
   onClick={() => props.onComplete?.({ hits: 1, total: 2, wrongAttempts: 1, time: 50, score: 200, answers: [
     { questionId: 'q1', prompt: 'Persona que transporta pasajeros en una aeronave.',
       selectedAnswer: 'Pilot', correctAnswer: 'Pilot', isCorrect: true, attemptNumber: 1 },
   ] })}
->Finalizar vuelo</button> }));
+>Finalizar vuelo</button></div> }));
 
 import { ActivityPreview } from '@/components/shared/ActivityPreview';
 
@@ -28,6 +29,7 @@ describe('Flying Cat platform preview and automatic results', () => {
     render(<ActivityPreview exercise={exercise} onClose={vi.fn()} onComplete={onComplete} />);
 
     expect(screen.getByText('Amazing jobs')).toBeInTheDocument();
+    expect(screen.getByTestId('flying-cat-viewport').querySelector('header')).toBeNull();
     expect(screen.getByRole('button', { name: 'Finalizar vuelo' })).toHaveAttribute('data-exercise', exercise.id);
     fireEvent.click(screen.getByRole('button', { name: 'Finalizar vuelo' }));
 
@@ -42,7 +44,7 @@ describe('Flying Cat platform preview and automatic results', () => {
   it('never saves an author preview without a completion callback, and keeps the explicit close control', () => {
     const onClose = vi.fn();
     render(<ActivityPreview exercise={exercise} isPreview onClose={onClose} />);
-    expect(screen.getByText('Vista previa · Amazing jobs')).toBeInTheDocument();
+    expect(screen.getByText('Amazing jobs')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Finalizar vuelo' })).toBeDisabled();
     fireEvent.click(screen.getByRole('button', { name: 'Cerrar vista previa' }));
     expect(onClose).toHaveBeenCalledOnce();

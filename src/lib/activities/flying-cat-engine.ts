@@ -22,6 +22,8 @@ export interface FlightState {
   questionIndex: number;
   width: number;
   height: number;
+  /** Explicit device mode: a wide landscape phone still needs a smaller pilot. */
+  compactPilot: boolean;
   player: FlightBody;
   card: FlightCard | null;
   obstacles: FlightObstacle[];
@@ -53,7 +55,7 @@ const clamp = (n: number, low: number, high: number) => Math.max(low, Math.min(h
 export const emptyFlightControls = (): FlightControls => ({ up: false, down: false, left: false, right: false });
 
 /** One answer card at a time; gameplay objects are bounded, never an expanding particle list. */
-export function createFlight(content: FlyingCatContent, width: number, height: number, random = flyingCatRandom): FlightState {
+export function createFlight(content: FlyingCatContent, width: number, height: number, random = flyingCatRandom, compactPilot = false): FlightState {
   const questions = content.items.map((question) => shuffleFlyingCatOptions(question, random));
   // Shuffle definitions too: restarting never becomes a memorised A/B/C/D sequence.
   for (let i = questions.length - 1; i > 0; i--) {
@@ -62,7 +64,7 @@ export function createFlight(content: FlyingCatContent, width: number, height: n
   }
   const state: FlightState = {
     mode: 'reading', resumeMode: 'reading', questions, questionIndex: 0,
-    width: Math.max(180, width), height: Math.max(100, height),
+    width: Math.max(180, width), height: Math.max(100, height), compactPilot,
     player: { x: 0, y: 0, width: 80, height: 60 }, card: null, obstacles: [],
     nextOption: 0, cardDelay: 0.6, obstacleDelay: 0.75, obstacleSerial: 0,
     immunity: 3, impactSeconds: 0, impactSerial: 0, activeSeconds: 0, lives: 3, hits: 0, wrongAttempts: 0,
@@ -80,7 +82,9 @@ export function resizeFlight(state: FlightState, width: number, height: number) 
   const oldHeight = state.height;
   state.width = Math.max(180, width);
   state.height = Math.max(100, height);
-  state.player.width = clamp(state.width * 0.22, 90, 136);
+  state.player.width = state.compactPilot
+    ? clamp(state.width * 0.16, 64, 96)
+    : clamp(state.width * 0.22, 90, 136);
   state.player.height = state.player.width * (230 / 340);
   state.player.x = state.player.x / oldWidth * state.width;
   state.player.y = state.player.y / oldHeight * state.height;

@@ -81,6 +81,21 @@ el doble clic no genera dos solicitudes.
   En arenas horizontales bajas se reserva una franja izquierda dentro del cielo
   para los controles; el avión y los objetos se mueven sólo en el espacio no tapado.
   Cambiar de pestaña o perder el foco pausa y libera controles presionados.
+- El juego se monta directamente en `document.body`, fuera de los paneles con
+  transformaciones o recortes. Su ancho, alto y posición siguen `VisualViewport`
+  (incluidos cambios de las barras del navegador); si no existe, usa la ventana.
+  Se elimina la cabecera exterior: **Música, Pausa y Cerrar** comparten la fila del
+  marcador. Los controles quedan dentro de esa área visible, también en iPad.
+  Sólo en teléfonos compactos se reduce el avión aproximadamente un 30%; el motor
+  usa esas mismas dimensiones para las colisiones y los corredores de vuelo.
+- Música: `Paper_Wings_and_Sunday_Naps.mp3`, provista por el propietario del
+  proyecto y copiada sin modificar a `public/games/flying-cat/audio`.
+  Se carga al pulsar **Comenzar**, en bucle y con volumen moderado. El botón del
+  altavoz permite silenciar/activar y recuerda la preferencia en este navegador.
+  Pausar, cambiar de pestaña, girar a vertical, terminar o salir detiene el audio;
+  continuar reanuda la misma pista. Si el navegador bloquea el sonido o falla el
+  archivo, se puede activar de nuevo sin bloquear el juego. No hay autoplay al
+  abrir la portada ni dependencias de servicios externos de audio.
 - En teléfonos compactos se exige orientación horizontal. En vertical se muestra
   «Gira tu teléfono para jugar», con instrucciones sobre el bloqueo de orientación.
   No se rota la página por CSS ni se fuerza una API de orientación que Safari no
@@ -121,8 +136,10 @@ usar un navegador ya instalado con `FLYING_CAT_BROWSER_PATH=/usr/bin/google-chro
 Comprueba 390×844, 320×568, 844×390, iPad 768×1024 y 1024×768, y PC 1280×800:
 portada y selección de dificultad, definición persistente y explicación largas,
 controles digitales dentro del escenario y WASD exclusivos, avance de dos preguntas,
-reacción al choque, escudo, guardado único y reintento de conexión. Conserva capturas
-en la carpeta temporal que imprime al terminar. No escribe en Supabase ni envía
+reacción al choque, escudo, guardado único y reintento de conexión.
+También simula un dashboard con transformaciones/recortes, un área visible de iPad
+menor que la ventana y sus cambios, y verifica música, mute y salida sin scroll bloqueado.
+Conserva capturas en la carpeta temporal que imprime al terminar. No escribe en Supabase ni envía
 notificaciones reales.
 
 Prueba opcional con el proveedor real (consume tokens con la clave local existente,

@@ -26,8 +26,11 @@ beforeEach(() => {
     observe() {} unobserve() {} disconnect() {}
   });
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
+  vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue();
+  vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
+  vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
 });
-afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 const exercise = { id: 'crash-test', titulo: 'Profesiones', tipo: 'flying_cat', contenido: {
   version: 1, instructions: 'Pilota con cuidado.', showFeedback: true, settings: { difficulty: 'normal' },

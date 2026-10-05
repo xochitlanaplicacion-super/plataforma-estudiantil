@@ -9,6 +9,7 @@ import {
 } from '@/lib/activities/flying-cat-engine';
 import { FallingPilotCat, PilotCat, PilotCatWreck } from './PilotCat';
 import { FlyingCatCover } from './FlyingCatCover';
+import { useFlyingCatMusic } from './useFlyingCatMusic';
 import './flying-cat.css';
 
 export type { FlyingCatResult } from '@/lib/activities/flying-cat-engine';
@@ -27,10 +28,11 @@ const KEY_DIRECTION: Record<string, keyof FlightControls> = {
 };
 const DIFFICULTY_LABEL: Record<FlyingCatDifficulty, string> = { easy: 'Fácil', normal: 'Normal', hard: 'Difícil' };
 
-export default function FlyingCatGame({ exercise, onComplete, onClose }: {
+export default function FlyingCatGame({ exercise, onComplete, onClose, closeLabel = 'Cerrar juego' }: {
   exercise: any;
   onComplete?: (result: FlyingCatResult) => Promise<unknown> | unknown;
   onClose?: () => void;
+  closeLabel?: string;
 }) {
   const [content] = useState(() => {
     let source = exercise?.contenido;
@@ -40,6 +42,7 @@ export default function FlyingCatGame({ exercise, onComplete, onClose }: {
   const validation = validateFlyingCatContent(content);
   const [difficulty, setDifficulty] = useState<FlyingCatDifficulty>(content.settings.difficulty);
   const [touch, setTouch] = useState(false);
+  const [compactPilot, setCompactPilot] = useState(false);
   const [rotateRequired, setRotateRequired] = useState(false);
   const [started, setStarted] = useState(false);
   const [view, setView] = useState<View | null>(null);
@@ -59,6 +62,7 @@ export default function FlyingCatGame({ exercise, onComplete, onClose }: {
   callback.current = onComplete;
   const heldPointers = useRef(new Map<number, keyof FlightControls>());
   const resumeButton = useRef<HTMLButtonElement>(null);
+  const music = useFlyingCatMusic();
 
   const clearControls = useCallback(() => {
     controls.current = emptyFlightControls();
@@ -93,12 +97,20 @@ export default function FlyingCatGame({ exercise, onComplete, onClose }: {
     if (flight.current) resumeFlight(flight.current);
     refresh();
     stage.current?.focus();
-  }, [clearControls, refresh]);
+    if (flight.current?.mode !== 'finished') music.resume();
+  }, [clearControls, refresh, music.resume]);
   const pause = useCallback(() => {
     clearControls();
     if (flight.current) pauseFlight(flight.current);
     refresh();
-  }, [clearControls, refresh]);
+    music.pause();
+  }, [clearControls, refresh, music.pause]);
+  const close = useCallback(() => {
+    pause();
+    onClose?.();
+  }, [pause, onClose]);
+
+  useEffect(() => { if (result) music.pause(); }, [result, music.pause]);
 
   useEffect(() => {
     const query = window.matchMedia('(pointer: coarse)');
@@ -107,8 +119,9 @@ export default function FlyingCatGame({ exercise, onComplete, onClose }: {
       setTouch(tactile);
       // Observe the real viewport; never CSS-rotate it or compete with the OS.
       // Tablets have enough room in portrait; compact phones must use landscape.
-      const required = tactile && Math.min(window.innerWidth, window.innerHeight) < 600
-        && window.innerHeight > window.innerWidth;
+      const compact = tactile && Math.min(window.innerWidth, window.innerHeight) < 600;
+      setCompactPilot(compact);
+      const required = compact && window.innerHeight > window.innerWidth;
       // Pause synchronously before another animation frame can run after resize.
       if (required && flight.current) pause();
       setRotateRequired(required);
@@ -136,11 +149,12 @@ export default function FlyingCatGame({ exercise, onComplete, onClose }: {
       const gutter = touch && height < 240 && pad
         ? Math.min(pad.right - stage.current.getBoundingClientRect().left + 4, Math.max(0, width - 180)) : 0;
       stage.current.style.setProperty('--fc-control-gutter', `${gutter}px`);
+      flight.current.compactPilot = compactPilot;
       resizeFlight(flight.current, width - gutter, height);
     });
     observer.observe(stage.current);
     return () => observer.disconnect();
-  }, [started, rotateRequired, touch]);
+  }, [started, rotateRequired, touch, compactPilot]);
 
   useEffect(() => {
     if (!started) return;
@@ -237,7 +251,8 @@ export default function FlyingCatGame({ exercise, onComplete, onClose }: {
     if (flight.current || validation) return;
     clearControls();
     // The chosen challenge belongs to this run, not to the teacher's saved content.
-    flight.current = createFlight({ ...content, settings: { ...content.settings, difficulty } }, 360, 380);
+    flight.current = createFlight({ ...content, settings: { ...content.settings, difficulty } }, 360, 380, undefined, compactPilot);
+    music.resume();
     setStarted(true);
     refresh();
   };
@@ -256,16 +271,16 @@ export default function FlyingCatGame({ exercise, onComplete, onClose }: {
       <p>Colócalo en horizontal para tener espacio para pilotar y ver los conceptos y obstáculos.</p>
       <p className="fc-rotate-help">Si la pantalla no gira, activa el giro automático o desactiva el bloqueo de orientación de tu teléfono.</p>
       {started && <p role="status">Tu vuelo está en pausa. Conservamos tu avance; podrás continuar cuando gires la pantalla.</p>}
-      {onClose && <button type="button" className="fc-button fc-secondary" onClick={onClose}>Volver a mis actividades</button>}
+      {onClose && <button type="button" className="fc-button fc-secondary" onClick={close}>Volver a mis actividades</button>}
     </section>
   </div>;
 
   if (!started) return <div className="fc-game fc-intro">
     {validation ? <section className="fc-invalid" role="alert">
       <h2>Esta actividad necesita una revisión</h2><p>{validation}</p>
-      <button className="fc-button" onClick={onClose}>Volver</button>
+      <button className="fc-button" onClick={close}>Volver</button>
     </section> : <FlyingCatCover title={exercise?.titulo || 'Flying Cat'} instructions={content.instructions}
-      touch={touch} difficulty={difficulty} onDifficultyChange={setDifficulty} onStart={start} onClose={onClose} />}
+      touch={touch} difficulty={difficulty} onDifficultyChange={setDifficulty} onStart={start} onClose={onClose ? close : undefined} />}
   </div>;
 
   if (result) return <div className="fc-game fc-result" role="region" aria-label="Resumen del vuelo">
@@ -284,14 +299,27 @@ export default function FlyingCatGame({ exercise, onComplete, onClose }: {
       <p>Tu elección: {answer.selectedAnswer} · Correcta: {answer.correctAnswer}</p>
     </details>)}</div>
     {saveState === 'failed' && <button className="fc-button" onClick={() => void save(result)}>Reintentar guardar</button>}
-    <button className="fc-button fc-secondary" disabled={saveState === 'saving'} onClick={onClose}>Volver a mis actividades</button>
+    <button className="fc-button fc-secondary" disabled={saveState === 'saving'} onClick={close}>Volver a mis actividades</button>
   </div>;
 
-  return <div className="fc-game fc-play">
+  return <div className="fc-game fc-play" role="region" aria-label={exercise?.titulo || 'Flying Cat'} data-compact-pilot={compactPilot}>
     <div className="fc-hud">
-      <span><strong>{DIFFICULTY_LABEL[difficulty]} · Nivel {view?.level || 1}</strong> · {Math.min((view?.index || 0) + 1, content.items.length)}/{content.items.length}</span>
+      <span className="fc-progress"><strong>{DIFFICULTY_LABEL[difficulty]} · Nivel {view?.level || 1}</strong> · {Math.min((view?.index || 0) + 1, content.items.length)}/{content.items.length}</span>
       <span aria-label={`${view?.lives || 0} vidas`} className="fc-hearts">{'♥'.repeat(view?.lives || 0)}</span>
-      <button className="fc-pause" onClick={pause} disabled={view?.mode !== 'flying'} aria-label="Pausar y releer definición">Ⅱ Pausa</button>
+      <div className="fc-hud-actions">
+        <button type="button" className="fc-pause fc-music" onClick={() => {
+          music.toggle();
+          if (flight.current?.mode === 'flying') stage.current?.focus();
+        }} aria-pressed={music.enabled}
+          aria-label={music.enabled ? 'Silenciar música' : 'Activar música'} title={music.enabled ? 'Silenciar música' : 'Activar música'}>
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+            <path d="M11 4 5 9H2v6h3l6 5V4Z" />
+            {music.enabled ? <path d="M15 8a6 6 0 0 1 0 8m3-11a10 10 0 0 1 0 14" /> : <path d="m16 9 6 6m0-6-6 6" />}
+          </svg>
+        </button>
+        <button type="button" className="fc-pause" onClick={pause} disabled={view?.mode !== 'flying'} aria-label="Pausar y releer definición">Ⅱ Pausa</button>
+        {onClose && <button type="button" className="fc-pause fc-close" onClick={close} aria-label={closeLabel}>× Cerrar</button>}
+      </div>
     </div>
     <section className="fc-definition" aria-label="Definición de la pregunta actual" tabIndex={0}>
       <small>BUSCA EL CONCEPTO</small><p>{view?.prompt}</p>
