@@ -6,6 +6,7 @@ import { Dices, Loader2, Play, Radio, RotateCcw, Trash2, Users } from 'lucide-re
 import { createClassroomSessionAction, deleteClassroomSessionsAction, openClassroomSessionAction, resetClassroomSessionAction } from '@/lib/actions/classroom-games';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { ClassroomGameRepertoire } from './ClassroomGameRepertoire';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 type Confirmation = { type: 'delete' | 'reset'; sessions: any[] } | null;
@@ -75,10 +76,12 @@ export function TeacherSessionManager({ initialData }: { initialData: any }) {
   return <main className="mx-auto max-w-7xl space-y-6 pb-16">
     <header className="rounded-3xl bg-[radial-gradient(circle_at_top_right,#22d3ee_0,transparent_32%),linear-gradient(135deg,#020617,#172554_55%,#581c87)] p-7 text-white shadow-xl">
       <div className="flex items-center gap-3"><Dices className="size-10 text-cyan-300"/><div><p className="text-xs font-bold uppercase tracking-[.22em] text-cyan-200">Juego efímero · sin calificación</p><h1 className="text-3xl font-black">Actividades en clase</h1></div></div>
-      <p className="mt-3 max-w-3xl text-sm text-slate-200">Abre un duelo sólo para una de tus asignaciones. Los alumnos autenticados del grupo podrán entrar y recuperar su partida aun si recargan o cierran el navegador.</p>
+      <p className="mt-3 max-w-3xl text-sm text-slate-200">Dirige juegos locales desde tu pantalla en el Repertorio de juegos, o prepara un duelo en línea para los alumnos de una de tus asignaciones. Estas actividades no modifican calificaciones.</p>
     </header>
+    <ClassroomGameRepertoire/>
     <section className="rounded-3xl border bg-card p-6">
-      <h2 className="text-xl font-black">Preparar Bet Win Lose</h2>
+      <h2 className="text-xl font-black">Duelo en línea · Bet Win Lose</h2>
+      <p className="mt-2 text-sm text-muted-foreground">En este modo los alumnos sí ingresan desde sus cuentas. La partida se guarda en la sala del grupo.</p>
       <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         <label className="space-y-1 text-sm font-semibold">Materia y grupo<select className="h-11 w-full rounded-lg border bg-background px-3" value={assignmentId} onChange={(event) => { setAssignmentId(event.target.value); setBankId(''); }}>{assignments.map((item: any) => <option key={item.id} value={item.id}>{item.materias?.nombre} · {item.grupos?.nombre}</option>)}</select></label>
         <label className="space-y-1 text-sm font-semibold">Banco de preguntas<select className="h-11 w-full rounded-lg border bg-background px-3" value={bankId} onChange={(event) => setBankId(event.target.value)}><option value="">Selecciona un banco</option>{compatibleBanks.map((bank: any) => <option key={bank.id} value={bank.id}>{bank.title} ({bank.classroom_question_items?.length || 0})</option>)}</select></label>

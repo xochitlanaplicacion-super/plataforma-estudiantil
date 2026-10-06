@@ -1,0 +1,80 @@
+.nb-board {
+  --nb-cyan: #71e4ef;
+  --nb-water: #083c55;
+  color: #d8eff7;
+  min-width: 0;
+  width: 100%;
+}
+.nb-board-scroll { overflow: auto; max-width: 100%; overscroll-behavior: contain; scrollbar-color: #3b8194 #0a2638; scrollbar-width: thin; padding: 3px; border-radius: 15px; }
+.nb-coordinate-frame { display: grid; grid-template-columns: 25px minmax(calc(var(--nb-size) * 44px), 1fr); grid-template-rows: 25px auto; min-width: calc(var(--nb-size) * 44px + 25px); }
+.nb-coordinate-corner { align-self: center; text-align: center; color: #72c9d6; font-size: 19px; }
+.nb-column-labels, .nb-row-labels { display: grid; gap: 0; align-items: center; justify-items: center; color: #99cbd9; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 12px; font-weight: 800; }
+.nb-column-labels { grid-template-columns: repeat(var(--nb-size), minmax(0, 1fr)); }
+.nb-row-labels { grid-template-rows: repeat(var(--nb-size), minmax(0, 1fr)); }
+.nb-map { position: relative; isolation: isolate; aspect-ratio: 1; width: 100%; min-width: 0; overflow: hidden; border: 1px solid #438695; border-radius: 12px; background: radial-gradient(ellipse at 25% 12%, #216a82 0, #104e66 39%, #072e44 100%); box-shadow: inset 0 0 34px #061a32aa, 0 0 18px #21b5cd15; }
+.nb-ocean { position: absolute; pointer-events: none; left: -100%; top: -100px; width: 300%; height: calc(100% + 200px); z-index: 0; will-change: transform; background-repeat: repeat; }
+.nb-ocean--far { opacity: .28; background-size: 225px 82px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='225' height='82' viewBox='0 0 225 82'%3E%3Cpath d='M-22 20Q6 5 32 20t54 0 54 0 54 0 54 0M-18 64Q9 48 36 64t54 0 54 0 54 0 54 0' fill='none' stroke='%2366cee0' stroke-width='1.5'/%3E%3C/svg%3E"); animation: nb-ocean-far 23s linear infinite; }
+.nb-ocean--near { opacity: .24; background-size: 165px 69px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='165' height='69' viewBox='0 0 165 69'%3E%3Cpath d='M12 15q16-7 32 0m30 27q16-7 32 0m18-30q16-7 32 0M-18 56q16-7 32 0' fill='none' stroke='%23b6f7ff' stroke-linecap='round' stroke-width='2'/%3E%3C/svg%3E"); animation: nb-ocean-near 11s linear infinite; }
+@keyframes nb-ocean-far { to { transform: translate3d(225px, -82px, 0); } }
+@keyframes nb-ocean-near { to { transform: translate3d(-165px, 69px, 0); } }
+.nb-art-layer { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: hidden; }
+.nb-terrain-layer { z-index: 1; }
+.nb-island-shore { fill: #d6c994; stroke: #ede7b0; stroke-width: 3; }
+.nb-island-green { fill: #5a995f; stroke: #86b46b; stroke-width: 2; }
+.nb-palm { display: block; width: 100%; height: 100%; overflow: visible; }
+.nb-palm-fronds { transform-origin: 56% 36%; animation: nb-palm-sway 4.5s ease-in-out infinite alternate; }
+.nb-palm--1 .nb-palm-fronds { animation-delay: -1.8s; }
+.nb-palm--2 .nb-palm-fronds { animation-delay: -3.1s; }
+@keyframes nb-palm-sway { from { transform: rotate(-5deg); } to { transform: rotate(5deg); } }
+.nb-fleet-layer { z-index: 2; }
+.nb-unit-icon { width: 100%; height: 100%; display: block; overflow: visible; }
+.nb-fleet-footprint { fill: #0e35453d; stroke: #8fe6e4; stroke-width: 1.5; stroke-opacity: .44; }
+.nb-fleet-unit--sunk .nb-fleet-footprint { fill: #3d211c87; stroke: #ee8963; stroke-opacity: .55; }
+.nb-wreck-fire > path { transform-box: fill-box; transform-origin: center bottom; animation: nb-fire-flicker .8s ease-in-out infinite alternate; animation-delay: var(--nb-fire-delay); }
+.nb-wreck-smoke { animation: nb-smoke-drift 2s ease-out infinite; animation-delay: var(--nb-fire-delay); }
+@keyframes nb-fire-flicker { 0% { transform: scale(.92, 1.08); opacity: .9; } 50% { transform: scale(1.05, .95); opacity: 1; } 100% { transform: scale(.95, 1.15); opacity: .85; } }
+@keyframes nb-smoke-drift { from { transform: translate(0, 0) scale(.7); opacity: .65; } to { transform: translate(7px, -20px) scale(1.3); opacity: 0; } }
+.nb-board-grid { position: relative; display: grid; grid-template-columns: repeat(var(--nb-size), minmax(0, 1fr)); grid-template-rows: repeat(var(--nb-size), minmax(0, 1fr)); width: 100%; height: 100%; z-index: 3; }
+.nb-grid-row { display: contents; }
+.nb-cell { position: relative; appearance: none; border: 0; border-right: 1px solid #99dae030; border-bottom: 1px solid #99dae030; border-radius: 0; background: transparent; margin: 0; padding: 0; min-width: 44px; min-height: 44px; color: #fff; cursor: crosshair; touch-action: manipulation; -webkit-tap-highlight-color: transparent; transition: background-color .15s; }
+.nb-cell:not(:disabled):hover { background-color: #62e8ef30; box-shadow: inset 0 0 0 2px #6beaee; }
+.nb-cell:focus-visible { outline: 3px solid #e9ffac; outline-offset: -4px; z-index: 5; }
+.nb-cell:disabled, .naval-game .nb-cell:disabled { cursor: default; opacity: 1; }
+.nb-cell[aria-selected="true"] { box-shadow: inset 0 0 0 3px #fcda75; background-color: #e7c55330; }
+.nb-cell--preview { background: #4ad4ab42; box-shadow: inset 0 0 0 2px #75ffc2; }
+.nb-cell--invalid { background: #fe68465c; box-shadow: inset 0 0 0 2px #ff9677; }
+.nb-cell--radar { background: #55ffab27; box-shadow: inset 0 0 0 1px #6bffa98c; }
+.nb-radar-scan { position: absolute; inset: 5%; overflow: hidden; border: 1px solid #98ffc2; border-radius: 2px; opacity: .7; background: repeating-linear-gradient(0deg, transparent 0 5px, #91ffc227 5px 6px); pointer-events: none; }
+.nb-radar-scan::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 35%, #d3ffe6aa 48%, transparent 62%); animation: nb-radar-sweep 1.3s linear infinite; }
+@keyframes nb-radar-sweep { from { transform: translateY(-50%); opacity: 0; } 25% { opacity: .65; } to { transform: translateY(50%); opacity: 0; } }
+.nb-radar-fragment { opacity: .85; }
+.nb-board--interference .nb-cell--radar { background: repeating-linear-gradient(22deg, #6dceac39 0 2px, #052b213d 2px 5px, #c9ffe827 5px 6px); box-shadow: inset 0 0 0 1px #8cdfb961; }
+.nb-board--interference .nb-radar-scan { background: repeating-linear-gradient(-35deg, #caffd233 0 1px, transparent 1px 4px); border-style: dashed; opacity: .6; }
+.nb-board--interference .nb-radar-scan::after { display: none; }
+.nb-shot-marker { position: absolute; inset: 19%; display: grid; place-items: center; pointer-events: none; z-index: 2; }
+.nb-shot-marker svg { width: 100%; height: 100%; }
+.nb-cell--hit .nb-shot-marker { filter: drop-shadow(0 0 5px #ff552b); }
+.nb-cell--hit .nb-shot-marker path { fill: #ff573d; stroke: #ffd09c; stroke-width: 1.4; }
+.nb-cell--hit .nb-shot-marker circle { fill: #ffce83; }
+.nb-cell--miss .nb-shot-marker { filter: drop-shadow(0 0 4px #e4fbff); }
+.nb-cell--miss .nb-shot-marker circle:first-child { fill: #d8f4ff25; stroke: #defbff; stroke-width: 2; }
+.nb-cell--miss .nb-shot-marker circle:last-child { fill: #f1fdff; }
+.nb-impact-canvas { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 6; pointer-events: none; }
+.nb-board-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 7px 14px; padding: 10px 0 0 28px; color: #acd0dc; font-size: 11px; }
+.nb-board-legend > span { display: inline-flex; gap: 6px; align-items: center; }
+.nb-legend-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+.nb-legend-dot--hit { background: #ff6e4b; box-shadow: 0 0 6px #ff673e70; }
+.nb-legend-dot--miss { background: #edfcff; }
+.nb-legend-dot--land { background: #94b67d; }
+.nb-legend-dot--radar { background: #80ffc1; }
+.nb-board-scroll-hint { margin-left: auto; color: #90acbc; }
+.nb-board--compact .nb-board-legend { font-size: 10px; gap: 6px 10px; }
+.nb-board--paused .nb-ocean, .nb-board--paused .nb-palm-fronds, .nb-board--paused .nb-wreck-fire > path, .nb-board--paused .nb-wreck-smoke, .nb-board--paused .nb-radar-scan::after { animation-play-state: paused; }
+@media (max-width: 640px) { .nb-board-legend { padding-left: 3px; } .nb-board-scroll-hint { width: 100%; margin-left: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .nb-ocean, .nb-palm-fronds, .nb-wreck-fire > path, .nb-wreck-smoke, .nb-radar-scan::after { animation: none; will-change: auto; }
+  .nb-radar-scan::after { display: none; }
+  .nb-wreck-smoke { opacity: .35; }
+  .nb-cell { transition: none; }
+  .nb-cell--hit .nb-shot-marker, .nb-cell--miss .nb-shot-marker { filter: none; }
+}
