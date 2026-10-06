@@ -3,22 +3,30 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NavalState } from '@/lib/activities/naval-battle';
 
-const observed = vi.hoisted(() => ({ state: null as NavalState | null, requestFullscreen: vi.fn(), exitFullscreen: vi.fn(), closed: vi.fn() }));
+const observed = vi.hoisted(() => ({ state: null as NavalState | null, requestFullscreen: vi.fn(), exitFullscreen: vi.fn(), fullscreenChanged: null as ((active: boolean) => void) | null, closed: vi.fn() }));
 vi.mock('@/lib/activities/naval-battle', async (loadOriginal) => {
   const engine = await loadOriginal<typeof import('@/lib/activities/naval-battle')>();
   const wrap = (operation: (...args: never[]) => NavalState) => (...args: never[]) => { const next = operation(...args); observed.state = next; return next; };
-  const operations = ['createNavalBattle', 'autoPlaceNavalFleet', 'confirmNavalFleet', 'startNavalTurn', 'answerNavalTurn', 'continueNavalAnswer', 'attackNaval', 'advanceNavalTurn', 'skipNavalAttack', 'activateNavalRadar', 'activateNavalFlare', 'repairNavalShip', 'clearNavalRadar', 'selectNavalTarget'] as const;
+  const operations = ['createNavalBattle', 'placeNavalShip', 'removeNavalShip', 'autoPlaceNavalFleet', 'confirmNavalFleet', 'startNavalTurn', 'answerNavalTurn', 'continueNavalAnswer', 'attackNaval', 'advanceNavalTurn', 'skipNavalAttack', 'activateNavalRadar', 'activateNavalFlare', 'repairNavalShip', 'clearNavalRadar', 'selectNavalTarget'] as const;
   return { ...engine, ...Object.fromEntries(operations.map((name) => [name, wrap(engine[name] as (...args: never[]) => NavalState)])) };
 });
 vi.mock('@/components/activities/flying-cat/FlyingCatViewport', async () => {
   const React = await import('react');
   return {
     FlyingCatViewport: React.forwardRef<HTMLDivElement, { children: React.ReactNode }>(({ children }, ref) => <div ref={ref} data-testid="naval-native-viewport">{children}</div>),
-    useFlyingCatFullscreen: () => ({ viewportRef: () => {}, requestFullscreen: observed.requestFullscreen, exitFullscreen: observed.exitFullscreen, isFullscreen: false, supported: true, requesting: false, message: '', clearMessage: () => {} }),
+    useFlyingCatFullscreen: () => {
+      const [isFullscreen, setIsFullscreen] = React.useState(false);
+      observed.fullscreenChanged = setIsFullscreen;
+      return {
+        viewportRef: () => {}, isFullscreen, supported: true, requesting: false, message: '', clearMessage: () => {},
+        requestFullscreen: async () => { const accepted = await observed.requestFullscreen(); if (accepted) setIsFullscreen(true); return accepted; },
+        exitFullscreen: async () => { const accepted = await observed.exitFullscreen(); if (accepted) setIsFullscreen(false); return accepted; },
+      };
+    },
   };
 });
 import NavalBattleGame from '@/components/classroom-games/naval/NavalBattleGame';
-import { NAVAL_CORRECT_XP, NAVAL_SHIP_KINDS, NAVAL_SUPPLY_XP } from '@/lib/activities/naval-battle';
+import { canPlaceNavalShip, NAVAL_CORRECT_XP, NAVAL_SHIP_KINDS, NAVAL_SUPPLY_XP, previewShipCells } from '@/lib/activities/naval-battle';
 
 function questions(count = 10, optionCount = 4) {
   return { items: Array.from({ length: count }, (_, index) => ({ id: `q${index + 1}`, type: 'multiple_choice', prompt: `Pregunta educativa ${index + 1}: ¿qué palabra corresponde a un planeta?`, options: ['Tierra', 'Mesa', 'Lápiz', 'Puerta', 'Ventana', 'Libro'].slice(0, optionCount), correctIndex: 0, explanation: 'La Tierra es un planeta; las otras opciones son objetos cotidianos.' })) };
@@ -60,7 +68,7 @@ async function reachThirdOwnAttack() {
 }
 
 beforeEach(() => {
-  observed.state = null; observed.closed.mockReset();
+  observed.state = null; observed.closed.mockReset(); observed.fullscreenChanged = null;
   observed.requestFullscreen.mockReset().mockResolvedValue(true); observed.exitFullscreen.mockReset().mockResolvedValue(true);
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'performance'] });
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {}, removeEventListener() {} }));
@@ -70,7 +78,7 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, json: async () => questions() }));
   vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ clearRect() {}, setTransform() {}, beginPath() {}, arc() {}, fill() {}, fillStyle: '', globalCompositeOperation: '' } as unknown as CanvasRenderingContext2D);
 });
-afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('Naval classroom game: local setup and private handoffs', () => {
   it('defaults to an offline, ungraded game and does not request AI', () => {
@@ -121,6 +129,58 @@ describe('Naval classroom game: local setup and private handoffs', () => {
     expect(new Set(observed.state!.players[0].ships.map((unit) => unit.kind)).size).toBe(NAVAL_SHIP_KINDS.length);
     expect(initial).not.toBe(observed.state!.players[0].ships);
   }, 10_000);
+
+  it('rotates the actual preview image and footprint without saving until explicit confirmation', async () => {
+    render(<NavalBattleGame onClose={observed.closed} />);
+    await click('Comenzar colocación de flotas'); await click('Estoy listo para colocar mi flota');
+    const before = observed.state!;
+    const player = before.players[0];
+    const anchor = Array.from({ length: before.size ** 2 }, (_, index) => ({ row: Math.floor(index / before.size), col: index % before.size }))
+      .find((cell) => [0, 45].every((angle) => canPlaceNavalShip(before, player.id, 'nuclear', cell, angle)))!;
+    expect(anchor).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Confirmar posición' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('gridcell', { name: nameOfCell(anchor) }));
+    const orientation = () => document.querySelector('.nb-fleet-unit > g[clip-path] > g')!.getAttribute('transform');
+    expect(orientation()).toContain('rotate(0)');
+    expect(observed.state).toBe(before);
+    await click(/Girar ·/);
+    expect(orientation()).toContain('rotate(45)');
+    expect(observed.state).toBe(before);
+    for (const cell of previewShipCells('nuclear', anchor, 45)) expect(screen.getByRole('gridcell', { name: nameOfCell(cell) })).toHaveClass('nb-cell--preview');
+    const confirm = screen.getByRole('button', { name: 'Confirmar posición' });
+    expect(confirm).toBeEnabled();
+    await act(async () => {
+      fireEvent.click(confirm);
+      const justConfirmed = observed.state;
+      fireEvent.click(confirm);
+      expect(observed.state).toBe(justConfirmed);
+    });
+    expect(observed.state!.players[0].ships).toHaveLength(1);
+    expect(observed.state!.players[0].ships[0]).toMatchObject({ kind: 'nuclear', rotation: 45, anchor, cells: previewShipCells('nuclear', anchor, 45) });
+    expect(screen.getByRole('button', { name: 'Confirmar posición' })).toBeDisabled();
+    expect(screen.getByText('Posición guardada.')).toBeInTheDocument();
+  }, 15_000);
+
+  it('keeps confirmed positions intact when cancelling a rotation or invalid position, and blocks handoff while pending', async () => {
+    render(<NavalBattleGame onClose={observed.closed} />);
+    await click('Comenzar colocación de flotas'); await click('Estoy listo para colocar mi flota'); await click('Acomodar flota automáticamente');
+    const before = observed.state;
+    const saved = before!.players[0].ships.find((ship) => ship.kind === 'nuclear')!;
+    expect(screen.getByRole('button', { name: 'Guardar flota y ocultar' })).toBeEnabled();
+    await click(/Girar ·/);
+    expect(observed.state).toBe(before);
+    expect(screen.getByRole('button', { name: 'Guardar flota y ocultar' })).toBeDisabled();
+    await click('Cancelar cambio');
+    expect(screen.getByRole('button', { name: 'Guardar flota y ocultar' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: /Girar ·/ })).toHaveTextContent(`${saved.rotation}°`);
+    fireEvent.click(screen.getByRole('gridcell', { name: nameOfCell(before!.islands[0]) }));
+    expect(screen.getByRole('button', { name: 'Confirmar posición' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Guardar flota y ocultar' })).toBeDisabled();
+    expect(screen.getByText(/Posición no válida/)).toBeInTheDocument();
+    await click('Cancelar cambio');
+    expect(observed.state).toBe(before);
+    expect(screen.getByRole('button', { name: 'Guardar flota y ocultar' })).toBeEnabled();
+  }, 15_000);
 });
 
 describe('Naval classroom game: shared screen turns and active clocks', () => {
@@ -150,8 +210,64 @@ describe('Naval classroom game: shared screen turns and active clocks', () => {
     expect(observed.state!.phase).toBe('attack');
     await click('Reanudar'); await advance(1_000);
     expect(screen.getByRole('timer').textContent).not.toBe(before);
-    expect(observed.requestFullscreen).toHaveBeenCalledTimes(2);
+    expect(observed.requestFullscreen).toHaveBeenCalledOnce();
   }, 10_000);
+
+  it('touch panning, blur, visibility and browser fullscreen exits never open pause or close overlays', async () => {
+    render(<NavalBattleGame onClose={observed.closed} />); await placeBoth();
+    await advance(2_000);
+    const before = observed.state;
+    const remaining = screen.getByRole('timer').textContent;
+    const scroller = document.querySelector('.nb-board-scroll')!;
+    fireEvent.pointerDown(scroller, { pointerType: 'touch', clientX: 200, clientY: 300 });
+    fireEvent.pointerMove(scroller, { pointerType: 'touch', clientX: 80, clientY: 200 });
+    fireEvent.scroll(scroller, { target: { scrollLeft: 120, scrollTop: 100 } });
+    fireEvent.pointerUp(scroller, { pointerType: 'touch', clientX: 80, clientY: 200 });
+    vi.spyOn(document, 'hidden', 'get').mockReturnValue(true);
+    await act(async () => {
+      window.dispatchEvent(new Event('blur'));
+      window.dispatchEvent(new Event('resize'));
+      document.dispatchEvent(new Event('visibilitychange'));
+      observed.fullscreenChanged?.(false);
+      document.dispatchEvent(new Event('fullscreenchange'));
+      document.dispatchEvent(new Event('webkitfullscreenchange'));
+      window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    });
+    expect(observed.state).toBe(before);
+    expect(screen.queryByText('Partida en pausa')).not.toBeInTheDocument();
+    expect(screen.queryByText('¿Cerrar Batalla Naval?')).not.toBeInTheDocument();
+    expect(document.querySelector('.naval-content')).not.toHaveAttribute('inert');
+    expect(observed.exitFullscreen).not.toHaveBeenCalled();
+    expect(observed.closed).not.toHaveBeenCalled();
+    expect(observed.requestFullscreen).toHaveBeenCalledOnce();
+    await advance(1_100);
+    expect(screen.getByRole('timer').textContent).not.toBe(remaining);
+    expect(observed.state!.phase).toBe('attack');
+    await fireAtFreshUnit();
+    expect(observed.state!.phase).toBe('attack_result');
+  }, 15_000);
+
+  it('explicit fullscreen controls preserve the battle; resume never forces fullscreen back on', async () => {
+    render(<NavalBattleGame onClose={observed.closed} />); await placeBoth();
+    const before = observed.state;
+    await click('Salir de pantalla completa');
+    expect(observed.exitFullscreen).toHaveBeenCalledOnce();
+    expect(screen.getByRole('button', { name: 'Pantalla completa' })).toBeInTheDocument();
+    expect(screen.queryByText('Partida en pausa')).not.toBeInTheDocument();
+    expect(observed.state).toBe(before);
+    await click(/Pausa/);
+    const remaining = screen.getByRole('timer').textContent;
+    await advance(20_000);
+    expect(screen.getByRole('timer').textContent).toBe(remaining);
+    await click('Reanudar');
+    expect(screen.getByRole('button', { name: 'Pantalla completa' })).toBeInTheDocument();
+    expect(observed.requestFullscreen).toHaveBeenCalledOnce();
+    await click('Pantalla completa');
+    expect(observed.requestFullscreen).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('button', { name: 'Salir de pantalla completa' })).toBeInTheDocument();
+    expect(screen.queryByText('Partida en pausa')).not.toBeInTheDocument();
+    expect(observed.state).toBe(before);
+  }, 15_000);
 
   it('an expired shot skips damage and allows the next team to continue', async () => {
     render(<NavalBattleGame onClose={observed.closed} />); await placeBoth();

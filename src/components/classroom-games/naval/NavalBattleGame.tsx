@@ -1,17 +1,18 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Anchor, Check, Clock3, Crosshair, Dices, Eye, Loader2, LockKeyhole, Maximize, Pause, Play, RotateCw, Shield, Sparkles, Trophy, Volume2, VolumeX, X } from 'lucide-react';
+import { Anchor, Check, Clock3, Crosshair, Dices, Eye, Loader2, LockKeyhole, Maximize, Minimize, Pause, Play, RotateCw, Shield, Sparkles, Trophy, Volume2, VolumeX, X } from 'lucide-react';
 import {
   activateNavalFlare, activateNavalRadar, advanceNavalTurn, answerNavalTurn, attackNaval, autoPlaceNavalFleet,
   availableNavalSpecials, canPlaceNavalShip, clearNavalRadar, confirmNavalFleet, continueNavalAnswer,
   createNavalBattle, MAP_SIZES, NAVAL_SHIP_INFO, NAVAL_SHIP_KINDS, NAVAL_SPECIAL_INFO, NAVAL_SUPPLY_XP, NAVAL_XP_MAX,
   placeNavalShip, previewShipCells, removeNavalShip, repairNavalShip, selectNavalTarget, skipNavalAttack, startNavalTurn,
-  type NavalCell, type NavalConfig, type NavalShipKind, type NavalSpecial, type NavalState,
+  type NavalCell, type NavalConfig, type NavalShip, type NavalShipKind, type NavalSpecial, type NavalState,
 } from '@/lib/activities/naval-battle';
 import type { NavalQuestion } from '@/lib/activities/naval-questions';
 import { FlyingCatViewport, useFlyingCatFullscreen } from '@/components/activities/flying-cat/FlyingCatViewport';
 import { NavalBoard } from './NavalBoard';
+import { NavalMapPanel } from './NavalMapPanel';
 import { NavalUnitIcon } from './NavalArt';
 import { useNavalQuestionPool } from './useNavalQuestionPool';
 import { useNavalTimer } from './useNavalTimer';
@@ -41,6 +42,7 @@ export default function NavalBattleGame({ onClose }: { onClose: () => void }) {
   const [privateReady, setPrivateReady] = useState(false);
   const [shipKind, setShipKind] = useState<NavalShipKind>('nuclear');
   const [rotation, setRotation] = useState(0);
+  const [draftAnchor, setDraftAnchor] = useState<NavalCell | null>(null);
   const [hover, setHover] = useState<NavalCell | null>(null);
   const [selectedCell, setSelectedCell] = useState<NavalCell | null>(null);
   const [special, setSpecial] = useState<NavalSpecial | undefined>();
@@ -142,23 +144,14 @@ export default function NavalBattleGame({ onClose }: { onClose: () => void }) {
     if (battle && battle.phase !== 'finished' && battle.config.questionMode !== 'none' && !paused && !review
       && pool.items.length <= 3 && !pool.loading && !pool.error) void pool.replenish();
   }, [battle, paused, review, pool.items.length, pool.loading, pool.error, pool.replenish]);
-  useEffect(() => {
-    const hidden = () => { if (document.hidden && stateRef.current) setPaused(true); };
-    const blur = () => { if (stateRef.current) setPaused(true); };
-    const keyboard = (event: KeyboardEvent) => { if (event.key === 'Escape' && !document.fullscreenElement) setConfirmClose(true); };
-    document.addEventListener('visibilitychange', hidden); window.addEventListener('blur', blur); window.addEventListener('keydown', keyboard);
-    return () => { document.removeEventListener('visibilitychange', hidden); window.removeEventListener('blur', blur); window.removeEventListener('keydown', keyboard); };
-  }, []);
+  // Touch panning and browser chrome/fullscreen transitions can emit blur or
+  // visibility events on tablets. Only explicit game controls pause or close
+  // this shared-screen activity; native gestures must never open our overlays.
   useEffect(() => {
     if (!runningBattle) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
     window.addEventListener('beforeunload', warn); return () => window.removeEventListener('beforeunload', warn);
   }, [runningBattle]);
-  const wasFullscreen = useRef(false);
-  useEffect(() => {
-    if (wasFullscreen.current && !fullscreen.isFullscreen && stateRef.current) setPaused(true);
-    wasFullscreen.current = fullscreen.isFullscreen;
-  }, [fullscreen.isFullscreen]);
 
   function invalidateBank() { setApproved(false); pool.reset(); }
   function changeConfig(next: Partial<NavalConfig>) { setConfig((current) => ({ ...current, ...next })); if (next.questionMode) invalidateBank(); }
@@ -174,7 +167,7 @@ export default function NavalBattleGame({ onClose }: { onClose: () => void }) {
     try {
       const next = createNavalBattle(config, names);
       void fullscreen.requestFullscreen();
-      stateRef.current = next; setBattle(next); setPrivateReady(false); setError(''); setPaused(false);
+      stateRef.current = next; setBattle(next); setPrivateReady(false); setDraftAnchor(null); setShipKind('nuclear'); setRotation(0); setHover(null); setError(''); setPaused(false);
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'Revisa la configuración.'); }
   }
   function startTurn() {
@@ -194,7 +187,30 @@ export default function NavalBattleGame({ onClose }: { onClose: () => void }) {
     if (stateRef.current?.phase !== 'question' || !questionRef.current || pausedRef.current) return;
     if (transact((current) => answerNavalTurn(current, index === questionRef.current!.correctIndex))) setAnswerIndex(index);
   }
-  function chooseShip(kind: NavalShipKind) { setShipKind(kind); setRotation(0); setHover(null); }
+  function chooseShip(kind: NavalShipKind) {
+    const current = stateRef.current;
+    const placed = current?.players[current.placementIndex]?.ships.find((ship) => ship.kind === kind);
+    setShipKind(kind); setRotation(placed?.rotation ?? 0); setDraftAnchor(placed?.anchor ?? null); setHover(null); setError('');
+  }
+  function confirmPlacement() {
+    const current = stateRef.current;
+    if (!current || current.phase !== 'placement' || !privateReady || !draftAnchor || pausedRef.current) return;
+    const player = current.players[current.placementIndex];
+    const placed = player.ships.find((ship) => ship.kind === shipKind);
+    // A repeated confirmation cannot replace the just-confirmed unit twice.
+    if (placed && placed.rotation === rotation && placed.anchor.row === draftAnchor.row && placed.anchor.col === draftAnchor.col) return;
+    if (transact((state) => placeNavalShip(state, player.id, shipKind, draftAnchor, rotation))) chooseShip(shipKind);
+  }
+  function autoPlaceFleet() {
+    const current = stateRef.current;
+    if (!current || current.phase !== 'placement') return;
+    if (transact((state) => autoPlaceNavalFleet(state, current.players[current.placementIndex].id))) chooseShip(shipKind);
+  }
+  function removeSelectedShip() {
+    const current = stateRef.current;
+    if (!current || current.phase !== 'placement') return;
+    if (transact((state) => removeNavalShip(state, current.players[current.placementIndex].id, shipKind))) chooseShip(shipKind);
+  }
   function rotateShip() {
     const values = NAVAL_SHIP_INFO[shipKind].rotations;
     setRotation(values[(values.indexOf(rotation) + 1) % values.length]);
@@ -242,8 +258,18 @@ export default function NavalBattleGame({ onClose }: { onClose: () => void }) {
   const target = battle?.players.find((player) => player.id === battle.targetId);
   const placer = battle?.players[battle.placementIndex];
   const specials = battle ? availableNavalSpecials(battle) : [];
-  const preview = battle?.phase === 'placement' && hover ? previewShipCells(shipKind, hover, rotation) : [];
-  const previewValid = !!battle && !!placer && !!hover && canPlaceNavalShip(battle, placer.id, shipKind, hover, rotation);
+  const candidateAnchor = draftAnchor ?? hover;
+  const preview = battle?.phase === 'placement' && candidateAnchor ? previewShipCells(shipKind, candidateAnchor, rotation) : [];
+  const previewValid = battle?.phase === 'placement' && !!placer && !!candidateAnchor && canPlaceNavalShip(battle, placer.id, shipKind, candidateAnchor, rotation);
+  const placedSelection = placer?.ships.find((ship) => ship.kind === shipKind);
+  const pendingPlacement = !!draftAnchor && (!placedSelection || placedSelection.rotation !== rotation
+    || placedSelection.anchor.row !== draftAnchor.row || placedSelection.anchor.col !== draftAnchor.col);
+  const draftShip: NavalShip | null = candidateAnchor && preview.length ? {
+    id: placedSelection?.id ?? 'placement-preview', kind: shipKind, anchor: candidateAnchor, rotation, cells: preview, hits: [], sunk: false,
+  } : null;
+  // Replace the selected illustration with its live preview, never the saved
+  // engine unit. Only Confirmar posición commits coordinates/orientation.
+  const placementShips = draftShip ? [...(placer?.ships.filter((ship) => ship.kind !== shipKind) ?? []), draftShip] : placer?.ships ?? [];
   const shotCount = battle?.lastAttack?.cells.filter((shot) => shot.hit).length ?? 0;
   const showClock = battle?.phase === 'question' || battle?.phase === 'attack';
   const questionModeLabel = config.questionMode === 'none' ? 'Sin preguntas' : 'Preguntas con IA';
@@ -261,7 +287,7 @@ export default function NavalBattleGame({ onClose }: { onClose: () => void }) {
       <div className="naval-brand"><Anchor aria-hidden="true"/><div><strong>BATALLA NAVAL</strong><span>{battle ? `Ronda ${battle.turnNumber || 1} · ${battle.size} × ${battle.size}` : 'Un aula · una pantalla · toda la tripulación'}</span></div></div>
       <div className="naval-hud-actions">
         {showClock && <div className={`naval-clock ${turnClock <= 10 ? 'naval-clock--urgent' : ''}`} role="timer" aria-label={`Tiempo para ${battle?.phase === 'question' ? 'responder' : 'disparar'}`}><Clock3 size={18}/><strong>{turnClock}s</strong><span>{battle?.phase === 'question' ? 'Debate' : 'Disparo'}</span></div>}
-        <button className="naval-icon-button" onClick={() => void fullscreen.requestFullscreen()} aria-label="Pantalla completa" title="Pantalla completa"><Maximize size={19}/></button>
+        <button className="naval-icon-button" onClick={() => void (fullscreen.isFullscreen ? fullscreen.exitFullscreen() : fullscreen.requestFullscreen())} aria-label={fullscreen.isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'} title={fullscreen.isFullscreen ? 'Salir de pantalla completa' : 'Pantalla completa'}>{fullscreen.isFullscreen ? <Minimize size={19}/> : <Maximize size={19}/>}</button>
         <button className="naval-icon-button" onClick={audio.toggle} aria-label={audio.enabled ? 'Silenciar sonido' : 'Activar sonido'} title={audio.enabled ? 'Silenciar sonido' : 'Activar sonido'}>{audio.enabled ? <Volume2 size={19}/> : <VolumeX size={19}/>}</button>
         {battle && <button className="naval-button naval-button--quiet" onClick={() => setPaused((current) => !current)}><Pause size={17}/> Pausa</button>}
         <button className="naval-icon-button" onClick={() => runningBattle ? setConfirmClose(true) : close()} aria-label="Cerrar Batalla Naval" title="Cerrar juego"><X size={20}/></button>
@@ -292,8 +318,8 @@ export default function NavalBattleGame({ onClose }: { onClose: () => void }) {
         <div className="naval-start"><p>{questionModeLabel} · La partida se borra al cerrar o recargar.</p><button className="naval-button naval-button--primary" disabled={pool.loading || config.questionMode !== 'none' && (!approved || !pool.items.length)} onClick={begin}><Play size={20}/> Comenzar colocación de flotas</button></div>
       </> : <>
         {battle.phase === 'placement' && placer && (!privateReady ? <section className="naval-curtain naval-panel"><Eye size={54}/><span className="naval-eyebrow">COLOCACIÓN PRIVADA · {battle.placementIndex + 1} DE {battle.players.length}</span><h1>Entrega el dispositivo a {placer.name}</h1><p>Apaga u oculta la proyección antes de continuar. Nadie más debe ver las posiciones. Esta pantalla no contiene la flota del equipo anterior.</p><button className="naval-button naval-button--primary" onClick={() => setPrivateReady(true)}>Estoy listo para colocar mi flota</button></section> : <div className="naval-play-layout">
-          <aside className="naval-panel naval-command"><span className="naval-eyebrow">COLOCACIÓN PRIVADA</span><h2>{placer.name}</h2><p>Selecciona una unidad, gírala y toca la coordenada de inicio. Puedes recolocarla sin duplicarla.</p><div className="naval-fleet-picker">{NAVAL_SHIP_KINDS.map((kind) => <button key={kind} className={shipKind === kind ? 'selected' : ''} onClick={() => chooseShip(kind)}><NavalUnitIcon kind={kind}/><span>{NAVAL_SHIP_INFO[kind].name}<small>{NAVAL_SHIP_INFO[kind].cells} casillas · {kind === 'troops' ? 'isla' : 'mar'}</small></span>{placer.ships.some((ship) => ship.kind === kind) && <Check size={18}/>}</button>)}</div><div className="naval-toolbar"><button className="naval-button" disabled={shipKind === 'troops'} onClick={rotateShip}><RotateCw size={18}/> Girar · {rotation}°</button><button className="naval-button naval-button--quiet" disabled={!placer.ships.some((ship) => ship.kind === shipKind)} onClick={() => transact((current) => removeNavalShip(current, placer.id, shipKind))}>Quitar unidad</button></div><button className="naval-button" onClick={() => transact((current) => autoPlaceNavalFleet(current, placer.id))}><Dices size={18}/> Acomodar flota automáticamente</button><button className="naval-button naval-button--primary" disabled={placer.ships.length !== NAVAL_SHIP_KINDS.length} onClick={() => { if (transact((current) => confirmNavalFleet(current, placer.id))) { setPrivateReady(false); chooseShip('nuclear'); } }}><Shield size={18}/> Guardar flota y ocultar</button></aside>
-          <div className="naval-map-panel"><NavalBoard size={battle.size} islands={battle.islands} ships={placer.ships} showFleet onSelect={(cell) => transact((current) => placeNavalShip(current, placer.id, shipKind, cell, rotation))} onHover={setHover} previewCells={preview} previewValid={previewValid} paused={blocked} playerName={placer.name}/></div>
+          <aside className="naval-panel naval-command"><span className="naval-eyebrow">COLOCACIÓN PRIVADA</span><h2>{placer.name}</h2><p>Elige una unidad y toca la coordenada de inicio. Gira su imagen en la vista previa y pulsa Confirmar posición para guardarla.</p><div className="naval-fleet-picker">{NAVAL_SHIP_KINDS.map((kind) => <button key={kind} className={shipKind === kind ? 'selected' : ''} onClick={() => chooseShip(kind)}><NavalUnitIcon kind={kind}/><span>{NAVAL_SHIP_INFO[kind].name}<small>{NAVAL_SHIP_INFO[kind].cells} casillas · {kind === 'troops' ? 'isla' : 'mar'}</small></span>{placer.ships.some((ship) => ship.kind === kind) && <Check size={18}/>}</button>)}</div><div className="naval-toolbar"><button className="naval-button" disabled={shipKind === 'troops'} onClick={rotateShip}><RotateCw size={18}/> Girar · {rotation}°</button><button className="naval-button naval-button--quiet" disabled={!placer.ships.some((ship) => ship.kind === shipKind)} onClick={removeSelectedShip}>Quitar unidad</button></div>{draftAnchor && <p className="naval-help" role="status">{pendingPlacement ? previewValid ? 'Vista previa pendiente de confirmar.' : 'Posición no válida: revisa los límites, el terreno y otras unidades.' : 'Posición guardada.'}</p>}{pendingPlacement && <button className="naval-button naval-button--quiet" onClick={() => chooseShip(shipKind)}>Cancelar cambio</button>}<button className="naval-button" onClick={autoPlaceFleet}><Dices size={18}/> Acomodar flota automáticamente</button><button className="naval-button naval-button--primary" disabled={placer.ships.length !== NAVAL_SHIP_KINDS.length || pendingPlacement} onClick={() => { if (transact((current) => confirmNavalFleet(current, placer.id))) { setPrivateReady(false); chooseShip('nuclear'); } }}><Shield size={18}/> Guardar flota y ocultar</button></aside>
+          <NavalMapPanel><NavalBoard size={battle.size} islands={battle.islands} ships={placementShips} showFleet onSelect={(cell) => { setDraftAnchor(cell); setHover(null); setError(''); }} onHover={setHover} previewCells={preview} previewValid={previewValid} paused={blocked} playerName={placer.name}/></NavalMapPanel>
         </div>)}
         {battle.phase !== 'placement' && <div className="naval-team-strip" aria-label="Estado de los equipos">{battle.players.map((player) => <div key={player.id} className={`${player.id === actor?.id ? 'active' : ''} ${player.eliminated ? 'eliminated' : ''}`} style={{ borderColor: player.color }}><strong>{player.name}</strong><span>{player.eliminated ? 'Flota eliminada' : `${player.ships.filter((ship) => !ship.sunk).length} unidades · ${player.xp} XP`}</span></div>)}</div>}
         {battle.phase === 'handoff' && <section className="naval-curtain naval-panel"><Dices size={54}/><span className="naval-eyebrow">{battle.turnNumber ? 'SIGUIENTE TURNO' : 'TODAS LAS FLOTAS ESTÁN LISTAS'}</span><h1>{battle.config.turnOrder === 'random' ? 'Gira la ruleta de equipos' : 'Continúa la batalla'}</h1><p>{battle.config.turnOrder === 'random' ? 'Cada tirada sortea de nuevo a todos los equipos con vida. Puede repetirse el anterior.' : 'Los equipos con unidades en pie participan en orden.'}</p>{battle.config.questionMode !== 'none' && <PoolStatus loading={pool.loading} error={pool.error} count={pool.items.length} retry={() => void pool.replenish()}/>}<button className="naval-button naval-button--primary" disabled={battle.config.questionMode !== 'none' && !pool.items.length} onClick={startTurn}><Dices size={20}/>{battle.config.turnOrder === 'random' ? 'Sortear equipo y comenzar turno' : 'Comenzar siguiente turno'}</button></section>}
@@ -303,17 +329,18 @@ export default function NavalBattleGame({ onClose }: { onClose: () => void }) {
           {actor && actor.correctStreak >= 3 && <p className="naval-fever">🔥 Fiebre / Overdrive · {actor.correctStreak} aciertos seguidos · XP doble por respuesta correcta.</p>}<div className="naval-own-status">{actor?.ships.map((ship) => <span key={ship.id} title={`${NAVAL_SHIP_INFO[ship.kind].name}: ${ship.sunk ? 'hundido' : ship.hits.length ? 'dañado, bonus desactivado' : 'intacto'}`} className={ship.hits.length ? 'damaged' : ''}><NavalUnitIcon kind={ship.kind} sunk={ship.sunk}/></span>)}</div>
           {battle.config.targetOrder === 'choice' && battle.phase === 'attack' ? <label>Contrincante<select aria-label="Contrincante a atacar" value={battle.targetId ?? ''} disabled={battle.bonusUsedThisTurn && !!battle.targetId} onChange={(event) => { if (event.target.value) { transact((current) => selectNavalTarget(current, event.target.value)); setSelectedCell(null); } }}><option value="">Elige una flota rival</option>{battle.players.filter((player) => player.id !== actor?.id && !player.eliminated).map((player) => <option key={player.id} value={player.id}>{player.name}</option>)}</select></label> : <p>Contrincante: <strong>{target?.name ?? 'Sin seleccionar'}</strong></p>}
           {battle.phase === 'attack' ? <><p>Toca una coordenada del mapa y confirma. Las posiciones enemigas permanecen ocultas.</p><div className="naval-specials" aria-label="Ataques especiales"><button className={!special ? 'selected' : ''} onClick={() => setSpecial(undefined)}><Crosshair size={17}/> Disparo normal</button>{specialNames.map((name) => <button key={name} title={`${NAVAL_SPECIAL_INFO[name].description} Costo: ${NAVAL_SPECIAL_INFO[name].cost} XP. Requiere ${NAVAL_SHIP_INFO[NAVAL_SPECIAL_INFO[name].requiredShip].name} intacto.`} disabled={!specials.includes(name)} className={`${special === name ? 'selected' : ''} ${actor?.ships.find((ship) => ship.kind === NAVAL_SPECIAL_INFO[name].requiredShip)?.hits.length ? 'naval-special--sealed' : ''}`} onClick={() => { setSpecial(name); audio.play('alarm'); }}><span>{actor?.ships.find((ship) => ship.kind === NAVAL_SPECIAL_INFO[name].requiredShip)?.hits.length ? <LockKeyhole size={18}/> : name === 'radar' ? '⌖' : '✦'}</span><span>{NAVAL_SPECIAL_INFO[name].name}<small>{NAVAL_SPECIAL_INFO[name].once ? 'Un uso por partida' : 'Reutilizable'} · {NAVAL_SPECIAL_INFO[name].cost} XP{actor?.ships.find((ship) => ship.kind === NAVAL_SPECIAL_INFO[name].requiredShip)?.hits.length ? ' · Sellado por daño' : actor?.usedSpecials.includes(name) && NAVAL_SPECIAL_INFO[name].once ? ' · Ya usado' : ''}</small></span></button>)}</div>{special && <p className="naval-help">{NAVAL_SPECIAL_INFO[special].description}</p>}{special === 'repair' && <div className="naval-repair-picker"><p>Elige un impacto de tu flota que quieras reparar. No se muestran las posiciones intactas ni se reviven unidades hundidas.</p>{actor?.ships.filter((ship) => !ship.sunk && ship.hits.length && ship.kind !== 'troops').flatMap((ship) => ship.hits.map((hit) => <button className="naval-button" key={`${ship.id}:${coordinate(hit)}`} onClick={() => chooseRepair(ship.id, hit)}><Shield size={17}/>{NAVAL_SHIP_INFO[ship.kind].name} · {coordinate(hit)}</button>))}</div>}{repairNotice && <p className="naval-tactical-notice">{repairNotice}</p>}{battle.radar && <p className="naval-radar-notice">{battle.radar.kind === 'flare' ? 'Bengala costera' : 'Radar Vision'} · {radarClock}s · {battle.radar.interference ? 'Flak enemigo: señal interferida, posiciones ocultas.' : 'El disparo normal sigue disponible.'}</p>}<button className="naval-button naval-button--primary" disabled={!selectedCell || !target || !!battle.radar || special === 'repair'} onClick={fire}><Crosshair size={19}/>{special === 'radar' || special === 'flare' ? 'Revelar' : 'Disparar'}{selectedCell ? ` en ${coordinate(selectedCell)}` : ': elige una coordenada'}</button></> : <><span className="naval-eyebrow">RESULTADO DEL TURNO</span><h3>{expiredPhase === 'attack' ? 'Tiempo agotado. No hubo disparo.' : shotCount ? `¡${shotCount} ${shotCount === 1 ? 'impacto' : 'impactos'}!` : 'Agua. El disparo no tocó una unidad.'}</h3>{!!battle.lastAttack?.sunkShipIds.length && <p>{battle.lastAttack.sunkShipIds.length} unidad(es) destruida(s). Los restos permanecen en el mapa.</p>}{defenseResult && <p className="naval-tactical-notice">{defenseResult}</p>}{battle.lastAttack?.deflectedFrom && <p className="naval-tactical-notice">Flak costero: las tropas desviaron el ataque una casilla desde {coordinate(battle.lastAttack.deflectedFrom)}.</p>}{battle.lastAttack?.eliminated && <p>La flota de {target?.name} fue eliminada.</p>}<button className="naval-button naval-button--primary" onClick={() => transact(advanceNavalTurn)}>Continuar al siguiente turno</button></>}
-        </aside><div className="naval-map-panel">{target ? <NavalBoard size={battle.size} islands={battle.islands} ships={target.ships} shots={target.shots} playerName={target.name} onSelect={battle.phase === 'attack' ? setSelectedCell : undefined} disabled={battle.phase !== 'attack' || !!battle.radar} selectedCell={selectedCell} radarCells={battle.radar?.targetId === target.id ? battle.radar.cells : []} radarInterference={battle.radar?.interference} effects={battle.lastAttack?.targetId === target.id ? battle.lastAttack.cells : []} effectId={battle.turnNumber} paused={blocked}/> : <section className="naval-panel naval-curtain"><Crosshair size={52}/><h2>Elige un contrincante</h2><p>Después podrás seleccionar una coordenada en su mapa.</p></section>}</div></div>}
+        </aside><NavalMapPanel>{target ? <NavalBoard size={battle.size} islands={battle.islands} ships={target.ships} shots={target.shots} playerName={target.name} onSelect={battle.phase === 'attack' ? setSelectedCell : undefined} disabled={battle.phase !== 'attack' || !!battle.radar} selectedCell={selectedCell} radarCells={battle.radar?.targetId === target.id ? battle.radar.cells : []} radarInterference={battle.radar?.interference} effects={battle.lastAttack?.targetId === target.id ? battle.lastAttack.cells : []} effectId={battle.turnNumber} paused={blocked}/> : <section className="naval-panel naval-curtain"><Crosshair size={52}/><h2>Elige un contrincante</h2><p>Después podrás seleccionar una coordenada en su mapa.</p></section>}</NavalMapPanel></div>}
         {battle.phase === 'finished' && <section className="naval-curtain naval-panel"><Trophy size={72}/><span className="naval-eyebrow">BATALLA TERMINADA</span><h1>¡Victoria de {battle.players.find((player) => player.id === battle.winnerId)?.name}!</h1><p>{battle.turnNumber} turnos jugados. Gracias a todas las tripulaciones por debatir y colaborar.</p><button className="naval-button naval-button--primary" onClick={() => { stateRef.current = null; setBattle(null); setQuestion(null); questionRef.current = null; setApproved(false); pool.reset(); setPaused(false); setExpiredPhase(null); }}>Preparar otra batalla</button></section>}
         {battle.config.questionMode !== 'none' && battle.phase !== 'placement' && battle.phase !== 'finished' && <div className="naval-bank-footer"><PoolStatus loading={pool.loading} error={pool.error} count={pool.items.length} retry={() => void pool.replenish()}/><button className="naval-button naval-button--quiet" onClick={() => { setPaused(true); setReview(true); }}>Revisar próximas preguntas</button></div>}
       </>}
     </div>
+    {battle?.phase === 'placement' && privateReady && <footer className="naval-fire-dock" inert={blocked}><span>{NAVAL_SHIP_INFO[shipKind].name}<strong>{draftAnchor ? `${coordinate(draftAnchor)} · ${rotation}° · ${pendingPlacement ? 'Vista previa' : 'Guardada'}` : 'Toca una coordenada del mapa'}</strong></span><button className="naval-button naval-button--primary" disabled={!draftAnchor || !pendingPlacement || !previewValid} onClick={confirmPlacement}><Check size={18}/> Confirmar posición</button></footer>}
     {battle?.phase === 'attack' && <footer className="naval-fire-dock" inert={blocked}><span>{actor?.name} → {target?.name ?? 'Elige rival'}<strong>{selectedCell ? `Coordenada ${coordinate(selectedCell)}` : 'Selecciona una coordenada del mapa'}</strong></span><button className="naval-button naval-button--primary" disabled={!selectedCell || !target || !!battle.radar || special === 'repair'} aria-label={selectedCell ? `Confirmar coordenada ${coordinate(selectedCell)}` : 'Confirmar coordenada'} onClick={fire}><Crosshair size={18}/>{special === 'radar' || special === 'flare' ? 'Revelar zona' : 'Confirmar disparo'}</button></footer>}
     {defenseOffer && <div className="naval-overlay" inert={paused || confirmClose}><section className="naval-panel naval-curtain"><Shield size={58}/><span className="naval-eyebrow">ÚLTIMA OPORTUNIDAD DEL DEFENSOR</span><h1>¿Reto relámpago para {target?.name}?</h1><p>El profesor puede activar una pregunta de 10 segundos. Un acierto despliega Humo táctico: la bomba se reduce del área 3×3 a una cruz de cinco casillas. No cambia los XP del equipo defensor.</p><button className="naval-button naval-button--primary" disabled={!pool.items.length} onClick={beginDefense}>Activar reto defensor</button><PoolStatus loading={pool.loading} error={pool.error} count={pool.items.length} retry={() => void pool.replenish()}/><button className="naval-button" onClick={bypassDefense}>Lanzar bomba sin reto</button><button className="naval-button naval-button--quiet" onClick={() => setPaused(true)}>Pausar debate</button></section></div>}
     {defenseQuestion && <div inert={paused || confirmClose || review}><NavalDefenseChallenge question={defenseQuestion.question} defenderName={target?.name ?? 'Equipo defensor'} paused={paused || confirmClose || review} onResolve={resolveDefense} onCancel={() => resolveDefense(false)} onPause={() => setPaused(true)}/></div>}
     {rolling && <div className="naval-overlay naval-roulette" role="status"><section className="naval-curtain naval-panel"><Dices size={70}/><span className="naval-eyebrow">RULETA DE EQUIPOS</span><h1>{rouletteName}</h1><p>El sorteo real es independiente del orden de contrincantes.</p></section></div>}
     {cinematic && <div className="naval-overlay naval-cinematic" aria-label={`Activando ${NAVAL_SPECIAL_INFO[cinematic.special].name}`}><section className="naval-cinematic-card"><span className="naval-eyebrow">{actor?.name} · ATAQUE ESPECIAL</span><h1>{NAVAL_SPECIAL_INFO[cinematic.special].name}</h1><div className="naval-cinematic-ocean"><NavalUnitIcon kind={NAVAL_SPECIAL_INFO[cinematic.special].requiredShip}/><div className={`naval-missile ${cinematic.special === 'radar' ? 'naval-missile--jet' : ''}`}>➤</div></div><p>Coordenada {coordinate(cinematic.cell)} · {NAVAL_SPECIAL_INFO[cinematic.special].cost} XP</p></section></div>}
-    {paused && !confirmClose && !review && battle && <div className="naval-overlay"><section className="naval-panel naval-curtain"><Pause size={48}/><h1>Partida en pausa</h1><p>El debate puede continuar. Los relojes, el radar y las animaciones esperan aquí.</p><button className="naval-button naval-button--primary" onClick={() => { void fullscreen.requestFullscreen(); setPaused(false); }}><Play size={19}/> Reanudar</button><button className="naval-button naval-button--quiet" onClick={() => setConfirmClose(true)}>Terminar partida</button></section></div>}
+    {paused && !confirmClose && !review && battle && <div className="naval-overlay"><section className="naval-panel naval-curtain"><Pause size={48}/><h1>Partida en pausa</h1><p>El debate puede continuar. Los relojes, el radar y las animaciones esperan aquí.</p><button className="naval-button naval-button--primary" onClick={() => setPaused(false)}><Play size={19}/> Reanudar</button><button className="naval-button naval-button--quiet" onClick={() => setConfirmClose(true)}>Terminar partida</button></section></div>}
     {review && <div className="naval-overlay"><section className="naval-panel naval-review-dialog"><h2>Banco siguiente · partida en pausa</h2><p>La respuesta actual no se cambia. Oculta la proyección para no anticipar respuestas al grupo.</p><QuestionReview items={pool.items} onDiscard={pool.discard}/><PoolStatus loading={pool.loading} error={pool.error} count={pool.items.length} retry={() => void pool.replenish()}/><button className="naval-button naval-button--primary" onClick={() => { setReview(false); setPaused(false); }}>Cerrar revisión y continuar</button></section></div>}
     {confirmClose && <div className="naval-overlay"><section className="naval-panel naval-curtain"><h2>¿Cerrar Batalla Naval?</h2><p>La partida es local y no se guarda. Al cerrar se perderán las flotas, turnos y preguntas preparados.</p><button className="naval-button naval-button--primary" onClick={() => setConfirmClose(false)}>Seguir jugando</button><button className="naval-button naval-button--danger" onClick={close}>Sí, cerrar la partida</button></section></div>}
   </div></FlyingCatViewport>;
