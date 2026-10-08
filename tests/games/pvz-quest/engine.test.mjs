@@ -190,16 +190,44 @@ test('chomper consumes one enemy, rests one round, then can consume again', () =
   assert.equal(third.events.filter(event => event.type === 'chomp').length, 1);
 });
 
-test('mower intercepts arrivals once without erasing the trailing horde', () => {
+test('a mower sweeps its whole lane once, including simultaneous arrivals, armor and flyers', () => {
   const state = createMatch();
-  state.units = [fixture('common', 1, 1), fixture('bucket', 1, 7), fixture('cone', 2, 7)];
+  state.units = [
+    fixture('common', 1, 1), fixture('cone', 1, 1),
+    fixture('bucket', 1, 7), fixture('football', 1, 6), fixture('balloon', 1, 7),
+    fixture('sunflower', 1, 2), fixture('cone', 2, 7), fixture('wallnut', 2, 2),
+  ];
+  const sweptIds = state.units.filter(unit => unit.side === 'zombies' && unit.row === 1).map(unit => unit.id).sort();
   const result = resolveRound(ready(state));
-  assert.equal(result.state.mowers[1], false);
-  assert.equal(result.state.units.filter(unit => unit.row === 1).length, 1);
-  assert.equal(result.state.units.find(unit => unit.typeId === 'bucket').col, 6);
-  assert.equal(result.state.units.filter(unit => unit.row === 2).length, 1);
-  assert.equal(result.events.filter(event => event.type === 'mower').length, 1);
-  assert.equal(result.events.find(event => event.type === 'mower').interceptOnly, true);
+  assert.deepEqual(result.state.mowers, [true, false, true, true, true]);
+  assert.equal(result.state.units.some(unit => unit.side === 'zombies' && unit.row === 1), false);
+  assert.deepEqual(result.events.filter(event => event.type === 'mower'), [{ type: 'mower', row: 1, col: 0 }]);
+  assert.deepEqual(result.events.filter(event => event.type === 'damage' && event.sourceId === 'mower').map(event => event.unitId).sort(), sweptIds);
+  assert.deepEqual(result.events.filter(event => event.type === 'defeat').map(event => event.unitId).sort(), sweptIds);
+  assert.equal(result.state.stats.unitsDefeated.zombies, sweptIds.length);
+  assert.equal(result.state.stats.unitsDefeated.plants, 0);
+  assert.equal(result.events.some(event => event.type === 'invasion'), false);
+  assert.equal(result.state.winner, null);
+  const otherLane = result.state.units.find(unit => unit.side === 'zombies');
+  assert.equal(otherLane.row, 2);
+  assert.equal(otherLane.col, 6);
+  assert.equal(otherLane.hp, getUnit('cone').hp);
+  for (const typeId of ['sunflower', 'wallnut']) assert.equal(result.state.units.find(unit => unit.typeId === typeId).hp, getUnit(typeId).hp);
+});
+
+test('a later arrival can invade a lane after its mower was consumed', () => {
+  const state = createMatch();
+  state.units = [fixture('common', 1, 1), fixture('bucket', 1, 7)];
+  const first = resolveRound(ready(state));
+  assert.equal(first.state.units.length, 0);
+  const reinforced = { ...first.state, units: [fixture('common', 1, 1)] };
+  const next = resolveRound(ready(reinforced));
+  assert.equal(next.state.mowers[1], false);
+  assert.equal(next.events.some(event => event.type === 'mower'), false);
+  assert.deepEqual(next.events.filter(event => event.type === 'invasion'), [{ type: 'invasion', row: 1 }]);
+  assert.equal(next.state.units.length, 1);
+  assert.equal(next.state.winner, 'zombies');
+  assert.equal(next.state.phase, 'finished');
 });
 
 test('a final-round breach wins for zombies before a survival victory', () => {

@@ -12,6 +12,7 @@ const FRAME_INTERVAL = 1000 / 30;
 const LIVE_EFFECT_LIMIT = 128;
 const LIVE_TWEEN_MS = 120;
 const SUN_EFFECT_MS = 800;
+const MOWER_EFFECT_MS = 2400;
 const SUN_FRAME_SIZE = 79;
 const ASSETS = {
   garden: '/assets/images/Interface/background1.jpg',
@@ -128,6 +129,8 @@ export class BoardRenderer {
     this.stage = null;
     this.live = false;
     this.liveEffects = [];
+    this.liveMowers = new Map();
+    this.usedMowerRows = new Set();
     this.livePositions = new Map();
     this.liveRetired = new Map();
     this.lastDraw = -Infinity;
@@ -244,19 +247,34 @@ export class BoardRenderer {
     if (this.destroyed || !this.live || !Array.isArray(events)) return;
     const clock = now();
     this.liveEffects = this.liveEffects.filter(effect => clock < effect.started + effect.duration);
+    this.expireLiveMowers(clock);
     const drawable = new Set(['shot', 'damage', 'defeat', 'death', 'mine', 'chomp', 'bite', 'mower', 'invasion', 'sun']);
     for (const event of events) {
       if (!event || !drawable.has(event.type) || !Number.isFinite(event.row) || event.row < 0 || event.row >= GRID.rows) continue;
+      if (event.type === 'mower') {
+        if (!Number.isInteger(event.row) || this.usedMowerRows.has(event.row)) continue;
+        this.usedMowerRows.add(event.row);
+        // Each one-use mower owns its full path. Bursts of combat effects and
+        // repeated snapshots must not evict it or restart it at the house.
+        this.liveMowers.set(event.row, { event: { ...event }, started: clock, duration: this.reducedMotion ? 400 : MOWER_EFFECT_MS });
+        continue;
+      }
       const definition = getUnit(event.typeId);
       const former = this.view.units.find(unit => unit.id === event.unitId) || this.liveRetired.get(event.unitId)?.unit
         || (definition && Number.isFinite(event.col) ? { id: event.unitId, typeId: event.typeId, row: event.row, col: event.col, side: definition.side, hp: 0, maxHp: definition.hp } : null);
       this.liveEffects.push({
         event: { ...event }, started: clock,
-        duration: this.reducedMotion ? 400 : event.type === 'sun' ? SUN_EFFECT_MS : event.type === 'mower' ? 700 : event.type === 'shot' ? 650 : 550,
+        duration: this.reducedMotion ? 400 : event.type === 'sun' ? SUN_EFFECT_MS : event.type === 'shot' ? 650 : 550,
         unit: former ? { ...former } : null,
       });
     }
     if (this.liveEffects.length > LIVE_EFFECT_LIMIT) this.liveEffects.splice(0, this.liveEffects.length - LIVE_EFFECT_LIMIT);
+  }
+
+  expireLiveMowers(clock) {
+    for (const [row, effect] of this.liveMowers) {
+      if (clock >= effect.started + effect.duration) this.liveMowers.delete(row);
+    }
   }
 
   cancelPlay() {
@@ -269,6 +287,8 @@ export class BoardRenderer {
     this.stage = null;
     this.live = false;
     this.liveEffects = [];
+    this.liveMowers.clear();
+    this.usedMowerRows.clear();
     this.livePositions.clear();
     this.liveRetired.clear();
   }
@@ -283,9 +303,12 @@ export class BoardRenderer {
       if (version !== this.playVersion || this.destroyed) return false;
       const previous = this.view.units.map(unit => ({ ...unit }));
       const hasSun = stage.events?.some(event => event.type === 'sun');
-      const duration = this.reducedMotion ? hasSun ? 400 : 240 : hasSun ? SUN_EFFECT_MS : 650;
+      const hasMower = stage.events?.some(event => event.type === 'mower');
+      const effectDuration = this.reducedMotion ? hasSun ? 400 : 240 : hasSun ? SUN_EFFECT_MS : 650;
+      const duration = hasMower ? Math.max(effectDuration, this.reducedMotion ? 400 : MOWER_EFFECT_MS) : effectDuration;
       this.view = { ...this.view, units: (stage.units || []).map(unit => ({ ...unit })), mowers: [...(stage.mowers || this.view.mowers)] };
-      this.stage = { ...stage, events: stage.events || [], previous, started: now(), duration };
+      this.stage = { ...stage, events: stage.events || [], previous, started: now(), duration, effectDuration };
+      for (const event of this.stage.events) if (event.type === 'mower') this.usedMowerRows.add(event.row);
       try { onStage?.(stage, index); } catch (error) { this.cancelPlay(); throw error; }
       if (version !== this.playVersion || this.destroyed) return false;
       this.draw(now());
@@ -317,7 +340,9 @@ export class BoardRenderer {
     this.drawGarden();
     this.drawGrid();
     this.liveEffects = this.liveEffects.filter(effect => clock < effect.started + effect.duration);
-    const progress = this.stage ? clamp((clock - this.stage.started) / this.stage.duration, 0, 1) : 1;
+    this.expireLiveMowers(clock);
+    const progress = this.stage ? clamp((clock - this.stage.started) / this.stage.effectDuration, 0, 1) : 1;
+    const mowerProgress = this.stage ? clamp((clock - this.stage.started) / (this.reducedMotion ? 400 : MOWER_EFFECT_MS), 0, 1) : 1;
     const events = this.stage?.events || [];
     const visible = [...this.view.units, ...this.plans.map(order => ({ ...order, planned: true }))];
     const stacks = new Map();
@@ -340,9 +365,10 @@ export class BoardRenderer {
       const local = clamp((clock - effect.started) / effect.duration, 0, 1);
       if (effect.unit) this.drawUnit(effect.unit, clock, effect.unit.col, 0, 1 - local, true);
     }
-    this.drawMowers(events, progress, clock, this.liveEffects);
+    this.drawMowers(events, mowerProgress, clock);
     this.drawEffects(events, progress);
     for (const effect of this.liveEffects) this.drawEffects([effect.event], clamp((clock - effect.started) / effect.duration, 0, 1));
+    for (const effect of this.liveMowers.values()) this.drawEffects([effect.event], clamp((clock - effect.started) / effect.duration, 0, 1));
     // Income flies above the garden toward the resource bar, so it must not
     // inherit the clipping used by combat particles inside the lawn.
     for (const event of events) if (event.type === 'sun') this.drawSun(event, progress);
@@ -420,13 +446,13 @@ export class BoardRenderer {
     context.restore();
   }
 
-  drawMowers(events, progress, clock, liveEffects = []) {
+  drawMowers(events, progress, clock) {
     const context = this.context, image = this.images.get(ASSETS.mower);
     for (let row = 0; row < GRID.rows; row += 1) {
-      const liveMower = liveEffects.find(effect => effect.event.type === 'mower' && effect.event.row === row);
-      const moving = !!liveMower || events.some(event => event.type === 'mower' && event.row === row);
+      const liveMower = this.liveMowers.get(row);
+      const moving = !!liveMower || progress < 1 && events.some(event => event.type === 'mower' && event.row === row);
       const local = liveMower ? clamp((clock - liveMower.started) / liveMower.duration, 0, 1) : progress;
-      if (!this.view.mowers[row] && !moving) {
+      if ((!this.view.mowers[row] || this.usedMowerRows.has(row)) && !moving) {
         const warning = centre(row, 0);
         context.save();
         context.globalAlpha = this.reducedMotion ? 1 : 0.85 + Math.sin(clock / 450) * 0.15;
@@ -437,10 +463,11 @@ export class BoardRenderer {
         context.restore();
         continue;
       }
-      // This is one last interception at the house, not a sweep that wipes
-      // distant hordes. The visual must agree with the actual balance rule.
-      const point = centre(row, moving ? ease(local) * 0.8 : 0);
-      context.save(); context.globalAlpha = moving ? 1 - Math.max(0, local - 0.65) / 0.35 : 1;
+      const point = centre(row, 0);
+      // Keep the mower visible across the lawn and the entry road, then let
+      // its whole sprite leave the canvas. Reduced motion uses a local fade.
+      if (moving && !this.reducedMotion) point.x += (WIDTH + 27 - point.x) * local;
+      context.save(); context.globalAlpha = moving && this.reducedMotion ? 1 - local : 1;
       if (image) context.drawImage(image, point.x - 27, point.y - 28, 54, 55);
       else { context.fillStyle = '#cb403e'; context.fillRect(point.x - 20, point.y - 15, 40, 30); }
       context.restore();

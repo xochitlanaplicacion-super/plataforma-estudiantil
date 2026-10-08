@@ -37,23 +37,42 @@ test('zombie economy supports larger hordes with explicit prices, not increased 
   assert.equal(availableUnits(state, 'zombies').find(entry => entry.id === 'common').affordable, true);
 });
 
-test('five purchasing waves cannot silently declare plants winners before a slow horde crosses the board', () => {
+test('five purchasing waves cannot silently declare plants winners before post-mower reinforcements cross the board', () => {
   let state = createMatch({ rounds: 5 });
   for (let round = 1; round <= 5; round += 1) {
     state = beginPlanning(state);
     if (state.activeSide === 'plants') state = continuePlanning(commitPlan(state));
-    state = addOrder(state, 'zombies', 'common', 0, 7);
+    // The fast pioneer consumes the mower in round four. The final slow
+    // reinforcement is purchased afterwards, so it survives that lane sweep.
+    state = addOrder(state, 'zombies', round === 1 ? 'football' : 'common', 0, 7);
     state = commitPlan(state);
     if (state.phase === 'handover') state = commitPlan(continuePlanning(state));
-    state = resolveRound(state).state;
+    const result = resolveRound(state);
+    state = result.state;
+    if (round === 4) {
+      assert.equal(state.mowers[0], false);
+      assert.equal(state.units.length, 0);
+      assert.equal(result.events.filter(event => event.type === 'mower').length, 1);
+      assert.equal(result.events.some(event => event.type === 'invasion'), false);
+    }
   }
   assert.equal(state.phase, 'cleanup');
   assert.equal(state.winner, null);
+  assert.equal(state.mowers[0], false);
+  assert.equal(state.units.length, 1);
+  assert.equal(state.units[0].col, 6);
   const budget = structuredClone(state.resources);
   const placed = structuredClone(state.stats.unitsPlaced);
   const rounds = state.stats.roundsResolved;
-  while (state.phase === 'cleanup') state = resolveCleanup(state).state;
+  const cleanupEvents = [];
+  while (state.phase === 'cleanup') {
+    const result = resolveCleanup(state);
+    state = result.state;
+    cleanupEvents.push(...result.events);
+  }
   assert.equal(state.winner, 'zombies');
+  assert.deepEqual(cleanupEvents.filter(event => event.type === 'invasion'), [{ type: 'invasion', row: 0 }]);
+  assert.equal(cleanupEvents.some(event => ['mower', 'deploy', 'income'].includes(event.type)), false);
   assert.equal(state.round, 5);
   assert.equal(state.stats.roundsResolved, rounds);
   assert.deepEqual(state.resources, budget);
@@ -76,7 +95,7 @@ test('cleanup is pure, has no deployment, refunds or income, and cannot run afte
   assert.throws(() => addOrder(result.state, 'zombies', 'common', 0, 7), /turno/);
   let state = result.state;
   while (state.phase === 'cleanup') state = resolveCleanup(state).state;
-  assert.equal(state.winner, 'plants'); // Only this one wave, intercepted once.
+  assert.equal(state.winner, 'plants'); // Only this one wave, swept once.
   assert.throws(() => resolveCleanup(state), /última horda/);
 });
 
@@ -134,30 +153,48 @@ function distributedDefense(state) {
 }
 
 function equalRewardSimulation(plantStrategy) {
-  let state = createMatch({ rounds: 5, seed: 'equal-100-each-team' });
-  for (let round = 0; round < 5 && state.phase !== 'finished'; round += 1) {
+  let state = createMatch({ rounds: 8, seed: 'equal-100-each-team' });
+  const events = [];
+  for (let round = 0; round < state.maxRounds && state.phase !== 'finished'; round += 1) {
     state = grantResources(grantResources(state, 'plants', 100), 'zombies', 100);
     state = beginPlanning(state);
     for (let turn = 0; turn < 2; turn += 1) {
       if (state.activeSide === 'plants') state = plantStrategy(state);
-      else for (let index = 0; index < 8; index += 1) state = buyIfPossible(state, 'common', 0, 7);
+      else {
+        // Flyers can bypass the distributed wall and consume its mower in
+        // round seven. Round eight then supplies a genuinely later horde.
+        if (round === 0) for (let index = 0; index < 3; index += 1) state = buyIfPossible(state, 'balloon', 0, 7);
+        for (let index = 0; index < 8; index += 1) state = buyIfPossible(state, 'common', 0, 7);
+      }
       state = commitPlan(state);
       if (state.phase === 'handover') state = continuePlanning(state);
     }
-    state = resolveRound(state).state;
+    const result = resolveRound(state);
+    state = result.state;
+    events.push(...result.events);
   }
-  while (state.phase === 'cleanup') state = resolveCleanup(state).state;
-  return state;
+  while (state.phase === 'cleanup') {
+    const result = resolveCleanup(state);
+    state = result.state;
+    events.push(...result.events);
+  }
+  return { state, events };
 }
 
 test('equal +100 prizes allow either side to win depending on defense and horde strategy, not an automatic horizon winner', () => {
-  const defended = equalRewardSimulation(focusedDefense);
-  const breached = equalRewardSimulation(distributedDefense);
+  const { state: defended } = equalRewardSimulation(focusedDefense);
+  const { state: breached, events } = equalRewardSimulation(distributedDefense);
   assert.equal(defended.winner, 'plants');
   assert.equal(breached.winner, 'zombies');
+  const mowerIndex = events.findIndex(event => event.type === 'mower' && event.row === 0);
+  assert.ok(mowerIndex >= 0);
+  const reinforcementIndex = events.findIndex((event, index) => index > mowerIndex && event.type === 'deploy' && event.side === 'zombies');
+  assert.ok(reinforcementIndex > mowerIndex);
+  assert.ok(events.findIndex(event => event.type === 'invasion' && event.row === 0) > reinforcementIndex);
+  assert.equal(events.filter(event => event.type === 'mower' && event.row === 0).length, 1);
   for (const result of [defended, breached]) {
-    assert.deepEqual(result.stats.resourcesAwarded, { plants: 500, zombies: 500 });
-    assert.equal(result.stats.roundsResolved, 5);
+    assert.deepEqual(result.stats.resourcesAwarded, { plants: 800, zombies: 800 });
+    assert.equal(result.stats.roundsResolved, 8);
     assert.ok(result.stats.cleanupSteps <= MAX_CLEANUP_STEPS);
     assert.ok(result.stats.unitsPlaced.zombies >= 25);
   }

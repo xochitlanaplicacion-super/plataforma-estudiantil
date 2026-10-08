@@ -528,11 +528,11 @@ function finish(state, winner, events) {
 
 function houseAndMowers(state, events) {
   for (let row = 0; row < 5; row += 1) {
-    if (!state.units.some(unit => unit.side === 'zombies' && unit.row === row && unit.col <= 0.3)) continue;
+    if (!state.units.some(unit => unit.side === 'zombies' && alive(unit) && unit.row === row && unit.col <= 0.3)) continue;
     if (state.mowers[row]) {
       state.mowers[row] = false;
-      emit(events, 'mower', { row, col: 0, interceptOnly: true });
-      for (const unit of state.units.filter(unit => unit.side === 'zombies' && unit.row === row && unit.col <= 0.3)) hurt(state, unit, unit.hp, events, 'mower');
+      emit(events, 'mower', { row, col: 0 });
+      for (const unit of state.units.filter(unit => unit.side === 'zombies' && alive(unit) && unit.row === row)) hurt(state, unit, unit.hp, events, 'mower');
       removeDead(state, events);
     } else {
       emit(events, 'invasion', { row });

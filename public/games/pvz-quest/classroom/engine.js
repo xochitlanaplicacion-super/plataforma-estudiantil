@@ -318,13 +318,12 @@ function bites(state, events) {
 
 function mow(state, events) {
   for (let row = 0; row < BOARD_ROWS; row += 1) {
-    if (!state.units.some(unit => unit.side === 'zombies' && unit.row === row && unit.col <= 0)) continue;
+    if (!state.units.some(unit => unit.side === 'zombies' && unit.hp > 0 && unit.row === row && unit.col <= 0)) continue;
     if (state.mowers[row]) {
       state.mowers[row] = false;
-      // This classroom board advances in coarse steps. Intercept arrivals at
-      // the house once, without erasing reinforcements still crossing the lane.
-      event(events, 'mower', { row, col: 0, interceptOnly: true });
-      for (const zombie of state.units.filter(unit => unit.side === 'zombies' && unit.row === row && unit.col <= 0)) hurt(state, zombie, zombie.hp, events, 'mower');
+      // A triggered mower clears every living zombie in its lane once.
+      event(events, 'mower', { row, col: 0 });
+      for (const zombie of state.units.filter(unit => unit.side === 'zombies' && unit.hp > 0 && unit.row === row)) hurt(state, zombie, zombie.hp, events, 'mower');
     } else {
       state.winner = 'zombies';
       event(events, 'invasion', { row });
