@@ -345,7 +345,7 @@ describe('Naval shots, destruction, bonuses and immutable outcomes', () => {
       expect(availableNavalSpecials(state)).not.toContain(special);
       expect(() => special === 'radar' ? activateNavalRadar(state, { row: 4, col: 4 })
         : special === 'flare' ? activateNavalFlare(state, { row: 4, col: 4 })
-          : special === 'repair' ? repairNavalShip(state, repairTarget.id, repairTarget.hits[0])
+          : special === 'repair' ? repairNavalShip(state, seeded(98))
             : attackNaval(state, openCell(state), special)).toThrow(/bonus/);
     }
   });
@@ -497,26 +497,32 @@ describe('Naval hospital, fever and coastal defenses', () => {
     expect(actor(result).correctStreak).toBe(2); expect(actor(result).xp).toBe(NAVAL_SUPPLY_XP + NAVAL_HIT_XP);
   });
 
-  it('repair needs a damaged living sea target and restores only one hit without resurrecting or spending the shot', () => {
+  it('repair needs exactly one hit on a living sea target and whitens the registered impact while relocating without spending the shot', () => {
     const state = charged();
     expect(availableNavalSpecials(state)).not.toContain('repair');
     const submarine = actor(state).ships.find((ship) => ship.kind === 'nuclear')!;
     submarine.hits = copy(submarine.cells.slice(0, 2));
     actor(state).shots.push(...submarine.hits.map((cell) => ({ ...cell, hit: true })));
+    expect(availableNavalSpecials(state)).not.toContain('repair');
+    submarine.hits = copy(submarine.cells.slice(0, 1));
+    actor(state).shots = submarine.hits.map((cell) => ({ ...cell, hit: true }));
     expect(availableNavalSpecials(state)).toContain('repair');
     const original = freeze(state);
-    const healed = repairNavalShip(original, submarine.id, submarine.hits[0]);
+    const healed = repairNavalShip(original, seeded(98));
     const repaired = actor(healed).ships.find((ship) => ship.id === submarine.id)!;
-    expect(repaired.hits).toEqual(submarine.hits.slice(1)); expect(repaired.sunk).toBe(false);
-    expect(actor(healed).shots).toEqual([{ ...submarine.hits[1], hit: true }]);
-    expect(actor(original).shots).toHaveLength(2);
+    expect(repaired.hits).toEqual([]); expect(repaired.sunk).toBe(false);
+    expect(repaired.cells.map(cellKey).sort()).not.toEqual(submarine.cells.map(cellKey).sort());
+    expect(actor(healed).shots).toEqual([{ ...submarine.hits[0], hit: false, repaired: true }]);
+    expect(actor(healed).shots.map(cellKey)).toEqual(actor(original).shots.map(cellKey));
+    expect(actor(original).shots).toEqual([{ ...submarine.hits[0], hit: true }]);
+    expect(actor(original).shots).toHaveLength(1);
     expect(actor(healed).xp).toBe(0); expect(actor(healed).usedSpecials).toContain('repair');
     expect(healed.phase).toBe('attack'); expect(healed.bonusUsedThisTurn).toBe(true);
     expect(attackNaval(healed, openCell(healed)).phase).toBe('attack_result');
-    expect(() => repairNavalShip(healed, submarine.id, submarine.hits[1])).toThrow(/bonus/);
+    expect(() => repairNavalShip(healed)).toThrow(/bonus/);
     const sunk = charged();
     const victim = actor(sunk).ships.find((ship) => ship.kind === 'destroyer')!; victim.sunk = true; victim.hits = copy(victim.cells);
-    expect(() => repairNavalShip(sunk, victim.id, victim.hits[0])).toThrow(/revivir/);
+    expect(() => repairNavalShip(sunk)).toThrow(/bonus/);
     expect(availableNavalSpecials(sunk)).not.toContain('repair');
   });
 
@@ -527,18 +533,20 @@ describe('Naval hospital, fever and coastal defenses', () => {
     const hospital = actor(state).ships.find((ship) => ship.kind === 'hospital')!;
     hospital.hits = [{ ...hospital.cells[0] }];
     expect(availableNavalSpecials(state)).not.toContain('repair');
-    expect(() => repairNavalShip(state, submarine.id, submarine.hits[0])).toThrow(/bonus/);
+    expect(() => repairNavalShip(state)).toThrow(/bonus/);
     hospital.hits = [];
-    const healed = repairNavalShip(state, submarine.id, submarine.hits[0]);
+    const healed = repairNavalShip(state, seeded(98));
     const nextTurn = copy(healed); nextTurn.bonusUsedThisTurn = false; actor(nextTurn).xp = 100;
     expect(availableNavalSpecials(nextTurn)).toContain('nuclear');
     expect(availableNavalSpecials(nextTurn)).not.toContain('repair');
     actor(nextTurn).usedSpecials.push('nuclear');
     expect(availableNavalSpecials(nextTurn)).not.toContain('nuclear');
     expect(availableNavalSpecials(nextTurn)).toContain('big_boy');
-    // The repaired hit is again a legal target for an opposing shot.
+    // The new position is attackable, while the white historical impact remains registered.
     nextTurn.actorId = 'player-2'; nextTurn.targetId = 'player-1'; nextTurn.bonusUsedThisTurn = false;
-    const hitAgain = attackNaval(nextTurn, submarine.cells[0]);
+    expect(() => attackNaval(nextTurn, submarine.cells[0])).toThrow(/ya recibió/);
+    const newPosition = target(nextTurn).ships.find((ship) => ship.id === submarine.id)!.cells[0];
+    const hitAgain = attackNaval(nextTurn, newPosition);
     expect(hitAgain.lastAttack!.cells[0].hit).toBe(true);
     expect(target(hitAgain).ships.find((ship) => ship.id === submarine.id)!.hits).toHaveLength(1);
   });
@@ -548,7 +556,7 @@ describe('Naval hospital, fever and coastal defenses', () => {
     const submarine = actor(state).ships.find((ship) => ship.kind === 'nuclear')!;
     submarine.hits = [{ ...submarine.cells[0] }]; actor(state).shots.push({ ...submarine.cells[0], hit: true });
     expect(state.targetId).toBeNull();
-    const healed = repairNavalShip(freeze(state), submarine.id, submarine.cells[0]);
+    const healed = repairNavalShip(freeze(state), seeded(98));
     const chosen = selectNavalTarget(healed, 'player-3');
     expect(chosen.targetId).toBe('player-3'); expect(chosen.bonusUsedThisTurn).toBe(true);
     expect(attackNaval(chosen, openCell(chosen)).phase).toBe('attack_result');

@@ -7,8 +7,8 @@ export interface NavalShip {
   id: string; kind: NavalShipKind; anchor: NavalCell; rotation: number;
   cells: NavalCell[]; hits: NavalCell[]; sunk: boolean;
 }
-/** Shots are received on this player's own board, not a history of outgoing shots. */
-export interface NavalShot extends NavalCell { hit: boolean }
+/** Received shots remain registered; a repaired historic impact is shown white. */
+export interface NavalShot extends NavalCell { hit: boolean; repaired?: boolean }
 export interface NavalPlayer {
   id: string; name: string; color: string; ships: NavalShip[]; shots: NavalShot[];
   xp: number; correctStreak: number; eliminated: boolean; usedSpecials: NavalSpecial[];
@@ -17,7 +17,7 @@ export interface NavalConfig {
   mapSize: NavalMapSize;
   turnOrder: 'sequential' | 'random';
   targetOrder: 'sequential' | 'random' | 'choice';
-  questionMode: 'none' | 'multiple_choice' | 'true_false' | 'mixed';
+  questionMode: 'none' | 'teacher' | 'multiple_choice' | 'true_false' | 'mixed';
 }
 export interface NavalAttackResult {
   actorId: string; targetId: string; cells: NavalShot[]; sunkShipIds: string[];
@@ -28,7 +28,7 @@ export interface NavalState {
   config: NavalConfig; size: number; islands: NavalCell[]; players: NavalPlayer[];
   phase: 'placement' | 'handoff' | 'question' | 'answer_result' | 'attack' | 'attack_result' | 'finished';
   placementIndex: number; turnNumber: number; actorId: string | null; targetId: string | null;
-  answerCorrect: boolean | null; lastAttack: NavalAttackResult | null;
+  answerCorrect: boolean | null; teacherBonusXP: number | null; lastAttack: NavalAttackResult | null;
   radar: { targetId: string; cells: NavalCell[]; kind: 'radar' | 'flare'; durationSeconds: 3 | 2; interference: boolean } | null;
   winnerId: string | null; bonusUsedThisTurn: boolean;
 }
@@ -58,7 +58,7 @@ export const NAVAL_SPECIAL_INFO: Record<NavalSpecial, { name: string; descriptio
   night_fire: { name: 'Night of Fire', description: 'Afecta tres coordenadas en una dirección aleatoria. Una vez por partida.', requiredShip: 'destroyer', once: true, cost: 70, aerial: false },
   radar: { name: 'Radar Vision', description: 'Revela un área de 3 × 3 durante tres segundos y conserva el disparo normal. Una vez por partida.', requiredShip: 'carrier', once: true, cost: 100, aerial: true },
   flare: { name: 'Bengala', description: 'Revela cinco coordenadas en cruz durante dos segundos, sin interferencia. Conserva el disparo normal.', requiredShip: 'troops', once: false, cost: 35, aerial: false },
-  repair: { name: 'Reparación', description: 'Repara una casilla dañada de una nave propia que siga a flote. Una vez por partida; conserva el disparo normal.', requiredShip: 'hospital', once: true, cost: 100, aerial: false },
+  repair: { name: 'Reparación', description: 'Repara y reubica en secreto una nave propia con un único impacto, elegida al azar. El impacto anterior queda blanco. Una vez por partida; conserva el disparo normal.', requiredShip: 'hospital', once: true, cost: 100, aerial: false },
 };
 
 export const cellKey = (cell: NavalCell): string => `${cell.row}:${cell.col}`;
@@ -190,7 +190,7 @@ function generateIslands(size: number, random: NavalRandom): NavalCell[] {
 }
 const COLORS = ['#22d3ee', '#fb7185', '#fbbf24', '#a78bfa', '#34d399', '#fb923c', '#60a5fa', '#e879f9', '#a3e635', '#f472b6'];
 export function createNavalBattle(config: NavalConfig, names: readonly string[], random: NavalRandom = navalRandom): NavalState {
-  if (!config || !Object.prototype.hasOwnProperty.call(MAP_SIZES, config.mapSize) || !['sequential', 'random'].includes(config.turnOrder) || !['sequential', 'random', 'choice'].includes(config.targetOrder) || !['none', 'multiple_choice', 'true_false', 'mixed'].includes(config.questionMode)) throw new Error('La configuración de la partida no es válida.');
+  if (!config || !Object.prototype.hasOwnProperty.call(MAP_SIZES, config.mapSize) || !['sequential', 'random'].includes(config.turnOrder) || !['sequential', 'random', 'choice'].includes(config.targetOrder) || !['none', 'teacher', 'multiple_choice', 'true_false', 'mixed'].includes(config.questionMode)) throw new Error('La configuración de la partida no es válida.');
   if (names.length < 2 || names.length > 10) throw new Error('La partida admite entre 2 y 10 participantes o equipos.');
   const trimmed = names.map((name) => typeof name === 'string' ? name.trim() : '');
   if (trimmed.some((name) => !name || name.length > 60)) throw new Error('Escribe nombres de entre 1 y 60 caracteres para todos los participantes.');
@@ -200,7 +200,7 @@ export function createNavalBattle(config: NavalConfig, names: readonly string[],
     config: { ...config }, size, islands: generateIslands(size, random),
     players: trimmed.map((name, index) => ({ id: `player-${index + 1}`, name, color: COLORS[index], ships: [], shots: [], xp: 0, correctStreak: 0, eliminated: false, usedSpecials: [] })),
     phase: 'placement', placementIndex: 0, turnNumber: 0, actorId: null, targetId: null,
-    answerCorrect: null, lastAttack: null, radar: null, winnerId: null, bonusUsedThisTurn: false,
+    answerCorrect: null, teacherBonusXP: null, lastAttack: null, radar: null, winnerId: null, bonusUsedThisTurn: false,
   };
 }
 
@@ -270,7 +270,7 @@ export function startNavalTurn(state: NavalState, random: NavalRandom = navalRan
   const rivals = alive.filter((player) => player.id !== actor.id);
   next.targetId = next.config.targetOrder === 'choice' && rivals.length > 1 ? null
     : next.config.targetOrder === 'random' ? shuffleNaval(rivals, random)[0].id : nextSequential(next, actor.id, actor.id).id;
-  next.turnNumber++; next.answerCorrect = null; next.lastAttack = null; next.radar = null; next.bonusUsedThisTurn = false;
+  next.turnNumber++; next.answerCorrect = null; next.teacherBonusXP = null; next.lastAttack = null; next.radar = null; next.bonusUsedThisTurn = false;
   if (actor.ships.some((ship) => ship.kind === 'supply' && !ship.sunk && ship.hits.length === 0)) actor.xp = Math.min(NAVAL_XP_MAX, actor.xp + NAVAL_SUPPLY_XP);
   next.phase = next.config.questionMode === 'none' ? 'attack' : 'question';
   return next;
@@ -283,8 +283,28 @@ export function answerNavalTurn(state: NavalState, correct: boolean): NavalState
   const actor = playerById(next, next.actorId!);
   if (correct) {
     actor.correctStreak++;
-    actor.xp = Math.min(NAVAL_XP_MAX, actor.xp + (actor.correctStreak >= 3 ? NAVAL_FEVER_XP : NAVAL_CORRECT_XP));
+    if (next.config.questionMode !== 'teacher') actor.xp = Math.min(NAVAL_XP_MAX, actor.xp + (actor.correctStreak >= 3 ? NAVAL_FEVER_XP : NAVAL_CORRECT_XP));
   } else actor.correctStreak = 0;
+  return next;
+}
+/** One teacher-selected award per correct answer, also available alongside AI answer XP. */
+export function grantNavalTeacherXP(state: NavalState, amount: 10 | 30 | 50): NavalState {
+  assertPhase(state, 'answer_result');
+  if (state.config.questionMode === 'none' || state.answerCorrect !== true || !state.actorId) throw new Error('El premio del maestro requiere una respuesta correcta en una partida con preguntas.');
+  if (![10, 30, 50].includes(amount)) throw new Error('Selecciona un premio de 10, 30 o 50 XP.');
+  if (state.teacherBonusXP !== null) throw new Error('Ya se eligió el premio del maestro para esta respuesta.');
+  const next = cloneState(state);
+  const actor = playerById(next, next.actorId!);
+  actor.xp = Math.min(NAVAL_XP_MAX, actor.xp + amount);
+  next.teacherBonusXP = amount;
+  return next;
+}
+/** Skipping a question hands off immediately and keeps XP already earned by the supply base. */
+export function skipNavalQuestion(state: NavalState): NavalState {
+  assertPhase(state, 'question');
+  const next = cloneState(state);
+  playerById(next, next.actorId!).correctStreak = 0;
+  next.answerCorrect = false; next.teacherBonusXP = null; next.phase = 'handoff'; next.radar = null;
   return next;
 }
 export function continueNavalAnswer(state: NavalState): NavalState {
@@ -322,8 +342,8 @@ export function availableNavalSpecials(state: NavalState): NavalSpecial[] {
   const actor = playerById(state, state.actorId);
   return (Object.keys(NAVAL_SPECIAL_INFO) as NavalSpecial[]).filter((special) => {
     const info = NAVAL_SPECIAL_INFO[special];
-    const repairTarget = special !== 'repair' || actor.ships.some((ship) => ship.kind !== 'troops' && !ship.sunk && ship.hits.length > 0);
-    return repairTarget && actor.xp >= info.cost && (!info.once || !actor.usedSpecials.includes(special)) && actor.ships.some((ship) => ship.kind === info.requiredShip && !ship.sunk && ship.hits.length === 0);
+    if (actor.xp < info.cost || (info.once && actor.usedSpecials.includes(special)) || !actor.ships.some((ship) => ship.kind === info.requiredShip && !ship.sunk && ship.hits.length === 0)) return false;
+    return special !== 'repair' || repairableShips(state, actor).length > 0;
   });
 }
 function attackActors(state: NavalState, cell: NavalCell): { actor: NavalPlayer; target: NavalPlayer } {
@@ -394,7 +414,7 @@ export function attackNaval(state: NavalState, cell: NavalCell, special?: NavalS
   const { target } = attackActors(state, cell);
   if (special === 'radar') throw new Error('Usa Radar Vision antes del disparo; el radar no causa daño.');
   if (special === 'flare') throw new Error('Usa Bengala antes del disparo; la bengala no causa daño.');
-  if (special === 'repair') throw new Error('Selecciona una casilla dañada de una nave propia para repararla.');
+  if (special === 'repair') throw new Error('Usa Reparación antes del disparo para reparar y reubicar una nave propia al azar.');
   if (target.shots.some((shot) => cellKey(shot) === cellKey(cell))) throw new Error('Esa coordenada ya recibió un disparo. Elige otra.');
   const next = cloneState(state);
   if (special) consumeSpecial(next, special);
@@ -437,17 +457,50 @@ export function activateNavalFlare(state: NavalState, cell: NavalCell): NavalSta
   next.radar = { targetId: target.id, cells: crossCells(cell, next.size), kind: 'flare', durationSeconds: 2, interference: false };
   return next;
 }
-export function repairNavalShip(state: NavalState, shipId: string, cell: NavalCell): NavalState {
+interface NavalRelocation { anchor: NavalCell; rotation: number; cells: NavalCell[] }
+/** Exhaustively enumerate the bounded grid, deduplicating equivalent rotated footprints. */
+function repairDestinations(state: NavalState, actor: NavalPlayer, ship: NavalShip): NavalRelocation[] {
+  const forbidden = new Set([
+    ...state.islands.map(cellKey), ...actor.shots.map(cellKey),
+    ...actor.ships.filter((item) => item.id !== ship.id).flatMap((item) => item.cells.map(cellKey)),
+  ]);
+  const oldFootprint = ship.cells.map(cellKey).sort().join('|');
+  const seen = new Set([oldFootprint]);
+  const destinations: NavalRelocation[] = [];
+  for (let row = 0; row < state.size; row++) for (let col = 0; col < state.size; col++) for (const rotation of NAVAL_SHIP_INFO[ship.kind].rotations) {
+    const anchor = { row, col };
+    const cells = previewShipCells(ship.kind, anchor, rotation);
+    if (!cells.every((cell) => validCell(cell, state.size) && !forbidden.has(cellKey(cell)))) continue;
+    const footprint = cells.map(cellKey).sort().join('|');
+    if (seen.has(footprint)) continue;
+    seen.add(footprint); destinations.push({ anchor, rotation, cells });
+  }
+  return destinations;
+}
+function repairableShips(state: NavalState, actor: NavalPlayer): Array<{ ship: NavalShip; destinations: NavalRelocation[] }> {
+  return actor.ships.flatMap((ship) => {
+    if (ship.kind === 'troops' || ship.sunk || ship.hits.length !== 1) return [];
+    const destinations = repairDestinations(state, actor, ship);
+    return destinations.length ? [{ ship, destinations }] : [];
+  });
+}
+export function repairNavalShip(state: NavalState, random: NavalRandom = navalRandom): NavalState {
   assertPhase(state, 'attack');
   if (!state.actorId) throw new Error('No hay un participante activo para reparar su flota.');
   const actor = playerById(state, state.actorId);
-  const ship = actor.ships.find((item) => item.id === shipId);
-  if (!ship || ship.kind === 'troops' || ship.sunk || !ship.hits.some((hit) => cellKey(hit) === cellKey(cell))) throw new Error('Elige una casilla dañada de una nave propia que siga a flote; no se pueden revivir naves hundidas.');
+  if (!availableNavalSpecials(state).includes('repair')) throw new Error('Este bonus requiere 100 XP, el hospital intacto, un uso disponible y una nave a flote con un único impacto que pueda reubicarse.');
+  const eligible = repairableShips(state, actor);
+  const choice = eligible[Math.floor(draw(random) * eligible.length)];
+  const destination = choice.destinations[Math.floor(draw(random) * choice.destinations.length)];
   const next = cloneState(state);
   consumeSpecial(next, 'repair');
-  const repaired = playerById(next, actor.id);
-  repaired.ships.find((item) => item.id === shipId)!.hits = ship.hits.filter((hit) => cellKey(hit) !== cellKey(cell)).map((hit) => ({ ...hit }));
-  repaired.shots = repaired.shots.filter((shot) => cellKey(shot) !== cellKey(cell));
+  const repairedActor = playerById(next, actor.id);
+  const repaired = repairedActor.ships.find((item) => item.id === choice.ship.id)!;
+  const historicImpact = repairedActor.shots.find((shot) => cellKey(shot) === cellKey(choice.ship.hits[0]));
+  if (historicImpact) { historicImpact.hit = false; historicImpact.repaired = true; }
+  repaired.anchor = { ...destination.anchor }; repaired.rotation = destination.rotation;
+  repaired.cells = destination.cells.map((cell) => ({ ...cell })); repaired.hits = [];
+  // The old impact stays registered in white; attack/radar never reveal the new location.
   next.radar = null;
   return next;
 }

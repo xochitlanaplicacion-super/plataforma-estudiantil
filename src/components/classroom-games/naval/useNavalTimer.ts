@@ -2,8 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-/** Each question/shot gets its own clock; pause preserves its unused time. */
-export function useNavalTimer(key: string, seconds: number, running: boolean, onExpire: () => void) {
+/** Each question/shot gets its own clock; return false to reject a queued expiration. */
+export function useNavalTimer(key: string, seconds: number, running: boolean, onExpire: () => unknown) {
   const remaining = useRef(seconds * 1000);
   const lastKey = useRef(key);
   const expired = useRef(false);
@@ -19,7 +19,11 @@ export function useNavalTimer(key: string, seconds: number, running: boolean, on
       const now = performance.now();
       remaining.current = Math.max(0, remaining.current - (now - previous)); previous = now;
       setDisplay(Math.ceil(remaining.current / 1000));
-      if (remaining.current === 0 && !expired.current) { expired.current = true; callback.current(); }
+      if (remaining.current === 0 && !expired.current) {
+        // A cinematic can block a tick before its paused state commits. Leave
+        // that expiration pending so the same phase can expire after resuming.
+        expired.current = callback.current() !== false;
+      }
     }, 100);
     return () => {
       clearInterval(interval);

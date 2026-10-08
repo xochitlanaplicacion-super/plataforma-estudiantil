@@ -193,6 +193,20 @@ describe('Naval board: enemy confidentiality and readable shot evidence', () => 
     expect(screen.getByLabelText('Leyenda del mapa')).toHaveTextContent('ImpactoAguaIsla');
   });
 
+  it('renders the old repaired hit as a white recorded shot without revealing the relocated ship', () => {
+    const moved = ship('nuclear', [{ row: 5, col: 5 }, { row: 5, col: 6 }, { row: 5, col: 7 }, { row: 5, col: 8 }]);
+    const { container } = render(<NavalBoard size={10} islands={[]} ships={[moved]} shots={[{ row: 0, col: 0, hit: false, repaired: true }, { row: 0, col: 1, hit: true }]} />);
+    const repaired = screen.getByRole('gridcell', { name: 'A1, mar, impacto anterior reparado; nave trasladada' });
+    expect(repaired).toHaveClass('nb-cell--miss');
+    expect(repaired).not.toHaveClass('nb-cell--hit');
+    expect(repaired.querySelector('.nb-shot-marker circle')).toBeInTheDocument();
+    expect(screen.getByLabelText('Leyenda del mapa')).toHaveTextContent('Impacto reparado: nave trasladada');
+    expect(screen.getByRole('gridcell', { name: 'B1, mar, impacto' })).toHaveClass('nb-cell--hit');
+    expect(screen.getByRole('gridcell', { name: 'F6, mar, sin disparo' })).toBeInTheDocument();
+    expect(container.querySelector('.nb-fleet-unit')).not.toBeInTheDocument();
+    expect(container.querySelector('clipPath')).not.toBeInTheDocument();
+  });
+
   it('ignores malformed coordinates instead of placing art outside the board', () => {
     const malformed = ship('nuclear', [{ row: 0, col: 0 }, { row: 90, col: 90 }]);
     const { container } = render(<NavalBoard size={10} islands={[{ row: -1, col: 0 }]} ships={[malformed]} showFleet radarCells={[{ row: 999, col: 0 }]} />);

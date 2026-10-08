@@ -12,19 +12,30 @@ export function NavalMapPanel({ children }: { children: ReactNode }) {
     if (!panel || !content) return;
 
     const measure = () => {
-      if (content.clientHeight <= 0) return;
-      const contentStyle = getComputedStyle(content);
-      const paddingTop = Number.parseFloat(contentStyle.paddingTop) || 0;
-      const paddingBottom = Number.parseFloat(contentStyle.paddingBottom) || 0;
       const legendHeight = panel.querySelector('.nb-board-legend')?.getBoundingClientRect().height ?? 0;
-      const naturalTop = panel.getBoundingClientRect().top - content.getBoundingClientRect().top + content.scrollTop;
-      const layout = panel.closest('.naval-play-layout');
-      const stacked = layout ? getComputedStyle(layout).flexDirection === 'column' : false;
+      let availableHeight: number;
 
-      // On small screens the command panel comes first. The outer scroll lets
-      // the map reach the top, so it can use the whole remaining viewport.
-      const top = stacked ? paddingTop : Math.max(paddingTop, naturalTop);
-      const height = `${Math.max(44, Math.floor(content.clientHeight - top - paddingBottom - legendHeight))}px`;
+      if (content.classList.contains('naval-content--play')) {
+        // The play layout assigns each pane its own viewport, including when
+        // they are stacked. Command scrolling must not change the map window.
+        if (panel.clientHeight <= 0) return;
+        const panelStyle = getComputedStyle(panel);
+        const paddingTop = Number.parseFloat(panelStyle.paddingTop) || 0;
+        const paddingBottom = Number.parseFloat(panelStyle.paddingBottom) || 0;
+        availableHeight = panel.clientHeight - paddingTop - paddingBottom;
+      } else {
+        if (content.clientHeight <= 0) return;
+        const contentStyle = getComputedStyle(content);
+        const paddingTop = Number.parseFloat(contentStyle.paddingTop) || 0;
+        const paddingBottom = Number.parseFloat(contentStyle.paddingBottom) || 0;
+        const naturalTop = panel.getBoundingClientRect().top - content.getBoundingClientRect().top + content.scrollTop;
+        const layout = panel.closest('.naval-play-layout');
+        const stacked = layout ? getComputedStyle(layout).flexDirection === 'column' : false;
+        const top = stacked ? paddingTop : Math.max(paddingTop, naturalTop);
+        availableHeight = content.clientHeight - top - paddingBottom;
+      }
+
+      const height = `${Math.max(44, Math.floor(availableHeight - legendHeight))}px`;
       if (panel.style.getPropertyValue('--naval-board-height') !== height) {
         panel.style.setProperty('--naval-board-height', height);
       }
@@ -44,7 +55,7 @@ export function NavalMapPanel({ children }: { children: ReactNode }) {
       measure();
     };
     const mutationObserver = new MutationObserver(observeLayout);
-    mutationObserver.observe(content, { childList: true, subtree: true });
+    mutationObserver.observe(content, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
     observeLayout();
     window.addEventListener('resize', measure);
 

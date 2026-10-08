@@ -3,7 +3,7 @@ import { act, cleanup, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NavalMapPanel } from '@/components/classroom-games/naval/NavalMapPanel';
 
-let geometry: { contentHeight: number; contentTop: number; panelTop: number; legendHeight: number; width: number };
+let geometry: { contentHeight: number; contentTop: number; panelTop: number; panelHeight: number; legendHeight: number; width: number };
 let observers: MockResizeObserver[];
 
 class MockResizeObserver {
@@ -18,8 +18,8 @@ function rect(top: number, height: number, width = geometry.width): DOMRect {
   return { x: 0, y: top, top, left: 0, bottom: top + height, right: width, width, height, toJSON() {} };
 }
 
-function Fixture({ stacked = false, legendKey = 'initial' }: { stacked?: boolean; legendKey?: string }) {
-  return <div className="naval-content" style={{ paddingTop: 24, paddingBottom: 30 }}>
+function Fixture({ stacked = false, play = false, legendKey = 'initial' }: { stacked?: boolean; play?: boolean; legendKey?: string }) {
+  return <div className={`naval-content${play ? ' naval-content--play' : ''}`} style={{ paddingTop: 24, paddingBottom: 30 }}>
     <div className="naval-team-strip">Equipos</div>
     <div className="naval-play-layout" style={{ display: stacked ? 'flex' : 'grid', flexDirection: stacked ? 'column' : undefined }}>
       <aside>Controles</aside>
@@ -28,22 +28,23 @@ function Fixture({ stacked = false, legendKey = 'initial' }: { stacked?: boolean
   </div>;
 }
 
-function setup(stacked = false) {
-  const rendered = render(<Fixture stacked={stacked} />);
+function setup(stacked = false, play = false) {
+  const rendered = render(<Fixture stacked={stacked} play={play} />);
   const content = rendered.container.querySelector<HTMLElement>('.naval-content')!;
   const panel = rendered.container.querySelector<HTMLElement>('.naval-map-panel')!;
   Object.defineProperty(content, 'clientHeight', { configurable: true, get: () => geometry.contentHeight });
+  Object.defineProperty(panel, 'clientHeight', { configurable: true, get: () => geometry.panelHeight });
   act(() => { window.dispatchEvent(new Event('resize')); });
   return { ...rendered, content, panel };
 }
 
 beforeEach(() => {
-  geometry = { contentHeight: 600, contentTop: 80, panelTop: 170, legendHeight: 25, width: 1_024 };
+  geometry = { contentHeight: 600, contentTop: 80, panelTop: 170, panelHeight: 400, legendHeight: 25, width: 1_024 };
   observers = [];
   vi.stubGlobal('ResizeObserver', MockResizeObserver);
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
     if (this.classList.contains('naval-content')) return rect(geometry.contentTop, geometry.contentHeight);
-    if (this.classList.contains('naval-map-panel')) return rect(geometry.panelTop, 0);
+    if (this.classList.contains('naval-map-panel')) return rect(geometry.panelTop, geometry.panelHeight);
     if (this.classList.contains('nb-board-legend')) return rect(0, geometry.legendHeight);
     return rect(0, 0);
   });
@@ -117,5 +118,37 @@ describe('Naval map uses its full column and a bounded scroll window', () => {
     geometry.contentHeight = 90;
     const { panel } = setup();
     expect(panel.style.getPropertyValue('--naval-board-height')).toBe('44px');
+  });
+
+  it.each([false, true])('uses its own assigned pane height in play mode (stacked: %s)', (stacked) => {
+    const { panel, content } = setup(stacked, true);
+    expect(panel.style.getPropertyValue('--naval-board-height')).toBe('375px');
+    geometry.panelTop = 400;
+    content.scrollTop = 150;
+    act(() => observers[0].resize());
+    expect(panel.style.getPropertyValue('--naval-board-height')).toBe('375px');
+    geometry.panelHeight = 250;
+    geometry.legendHeight = 44;
+    act(() => observers[0].resize());
+    expect(panel.style.getPropertyValue('--naval-board-height')).toBe('206px');
+  });
+
+  it('reserves its own padding and remeasures when the play mode class changes', async () => {
+    const { panel, rerender } = setup();
+    panel.style.paddingTop = '8px';
+    panel.style.paddingBottom = '12px';
+    await act(async () => { rerender(<Fixture play />); });
+    expect(panel.style.getPropertyValue('--naval-board-height')).toBe('355px');
+    await act(async () => { rerender(<Fixture />); });
+    expect(panel.style.getPropertyValue('--naval-board-height')).toBe('455px');
+  });
+
+  it('waits for a measured play pane instead of deriving its height from the outer content', () => {
+    geometry.panelHeight = 0;
+    const { panel } = setup(false, true);
+    expect(panel.style.getPropertyValue('--naval-board-height')).toBe('');
+    geometry.panelHeight = 260;
+    act(() => observers[0].resize());
+    expect(panel.style.getPropertyValue('--naval-board-height')).toBe('235px');
   });
 });

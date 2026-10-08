@@ -7,7 +7,7 @@ const observed = vi.hoisted(() => ({ state: null as NavalState | null, requestFu
 vi.mock('@/lib/activities/naval-battle', async (loadOriginal) => {
   const engine = await loadOriginal<typeof import('@/lib/activities/naval-battle')>();
   const wrap = (operation: (...args: never[]) => NavalState) => (...args: never[]) => { const next = operation(...args); observed.state = next; return next; };
-  const operations = ['createNavalBattle', 'placeNavalShip', 'removeNavalShip', 'autoPlaceNavalFleet', 'confirmNavalFleet', 'startNavalTurn', 'answerNavalTurn', 'continueNavalAnswer', 'attackNaval', 'advanceNavalTurn', 'skipNavalAttack', 'activateNavalRadar', 'activateNavalFlare', 'repairNavalShip', 'clearNavalRadar', 'selectNavalTarget'] as const;
+  const operations = ['createNavalBattle', 'placeNavalShip', 'removeNavalShip', 'autoPlaceNavalFleet', 'confirmNavalFleet', 'startNavalTurn', 'answerNavalTurn', 'continueNavalAnswer', 'attackNaval', 'advanceNavalTurn', 'skipNavalAttack', 'skipNavalQuestion', 'grantNavalTeacherXP', 'activateNavalRadar', 'activateNavalFlare', 'repairNavalShip', 'clearNavalRadar', 'selectNavalTarget'] as const;
   return { ...engine, ...Object.fromEntries(operations.map((name) => [name, wrap(engine[name] as (...args: never[]) => NavalState)])) };
 });
 vi.mock('@/components/activities/flying-cat/FlyingCatViewport', async () => {
@@ -184,6 +184,88 @@ describe('Naval classroom game: local setup and private handoffs', () => {
 });
 
 describe('Naval classroom game: shared screen turns and active clocks', () => {
+  it.each([10, 30, 50] as const)('teacher oral mode awards only the chosen +%s extra once, without AI calls', async (amount) => {
+    render(<NavalBattleGame onClose={observed.closed} />);
+    fireEvent.change(screen.getByLabelText('Modalidad de preguntas'), { target: { value: 'teacher' } });
+    expect(screen.queryByRole('button', { name: 'Generar banco para revisar' })).not.toBeInTheDocument();
+    await placeBoth();
+    expect(observed.state!.phase).toBe('question');
+    expect(screen.getByRole('timer')).toHaveTextContent('45s');
+    expect(currentActor().xp).toBe(NAVAL_SUPPLY_XP);
+    const answer = screen.getByRole('button', { name: 'Respuesta correcta' });
+    await act(async () => { fireEvent.click(answer); fireEvent.click(answer); });
+    expect(observed.state!.phase).toBe('answer_result');
+    expect(currentActor().xp).toBe(NAVAL_SUPPLY_XP);
+    const reward = screen.getByRole('button', { name: `+${amount} XP extra` });
+    await act(async () => { fireEvent.click(reward); fireEvent.click(reward); fireEvent.click(reward); });
+    expect(currentActor().xp).toBe(NAVAL_SUPPLY_XP + amount);
+    expect(observed.state!.teacherBonusXP).toBe(amount);
+    for (const bonus of [10, 30, 50]) expect(screen.getByRole('button', { name: `+${bonus} XP extra` })).toBeDisabled();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    await click('Elegir coordenada de disparo');
+    expect(screen.getByRole('grid')).toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
+  }, 15_000);
+
+  it('teacher question skip stops the timer and passes with zero extra XP, preserving the supply tick', async () => {
+    render(<NavalBattleGame onClose={observed.closed} />);
+    fireEvent.change(screen.getByLabelText('Modalidad de preguntas'), { target: { value: 'teacher' } });
+    await placeBoth();
+    await advance(2_000);
+    const firstId = observed.state!.actorId;
+    const skip = screen.getByRole('button', { name: 'Saltar pregunta y pasar al siguiente equipo' });
+    await act(async () => { fireEvent.click(skip); fireEvent.click(skip); });
+    expect(observed.state!.phase).toBe('handoff');
+    expect(currentActor().xp).toBe(NAVAL_SUPPLY_XP);
+    expect(observed.state!.teacherBonusXP).toBeNull();
+    expect(observed.state!.answerCorrect).toBe(false);
+    expect(screen.queryByRole('timer')).not.toBeInTheDocument();
+    await advance(50_000);
+    expect(observed.state!.phase).toBe('handoff');
+    await click('Comenzar siguiente turno');
+    expect(observed.state!.actorId).not.toBe(firstId);
+    expect(screen.getByRole('timer')).toHaveTextContent('45s');
+    expect(currentActor().xp).toBe(NAVAL_SUPPLY_XP);
+    expect(fetch).not.toHaveBeenCalled();
+  }, 15_000);
+
+  it('wrong and expired teacher answers cannot award extra XP or enable a shot', async () => {
+    render(<NavalBattleGame onClose={observed.closed} />);
+    fireEvent.change(screen.getByLabelText('Modalidad de preguntas'), { target: { value: 'teacher' } });
+    await placeBoth();
+    await click('Respuesta incorrecta');
+    expect(screen.queryByRole('group', { name: 'Elegir premio extra' })).not.toBeInTheDocument();
+    expect(currentActor().xp).toBe(NAVAL_SUPPLY_XP);
+    await click('Pasar al siguiente equipo');
+    await click('Comenzar siguiente turno');
+    await advance(45_100);
+    expect(screen.getByText('SE AGOTÓ EL TIEMPO')).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Elegir premio extra' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('grid')).not.toBeInTheDocument();
+    expect(currentActor().xp).toBe(NAVAL_SUPPLY_XP);
+    expect(fetch).not.toHaveBeenCalled();
+  }, 15_000);
+
+  it('AI correct answers keep their automatic XP and can receive one extra teacher award', async () => {
+    render(<NavalBattleGame onClose={observed.closed} />); await makeQuestionMode(); await placeBoth();
+    await click(/Tierra/);
+    await click('+30 XP extra');
+    expect(currentActor().xp).toBe(NAVAL_SUPPLY_XP + NAVAL_CORRECT_XP + 30);
+    expect(observed.state!.teacherBonusXP).toBe(30);
+    await click('Elegir coordenada de disparo');
+    expect(observed.state!.phase).toBe('attack');
+  }, 15_000);
+
+  it('AI questions also have an immediate skip without automatic answer or teacher rewards', async () => {
+    render(<NavalBattleGame onClose={observed.closed} />); await makeQuestionMode(); await placeBoth();
+    const xp = currentActor().xp;
+    await click('Saltar pregunta y pasar al siguiente equipo');
+    expect(observed.state!.phase).toBe('handoff');
+    expect(currentActor().xp).toBe(xp);
+    expect(observed.state!.teacherBonusXP).toBeNull();
+    expect(screen.queryByRole('timer')).not.toBeInTheDocument();
+  }, 15_000);
+
   it('selecting a cell does not shoot; confirmation records one shot even after a double click', async () => {
     render(<NavalBattleGame onClose={observed.closed} />); await placeBoth();
     const target = currentTarget(); const cell = target.ships[0].cells[0];
@@ -379,7 +461,7 @@ describe('Naval classroom game: reviewed AI bank and question-driven shots', () 
     expect(observed.state).toBeNull();
   }, 10_000);
 
-  it('repairs a real own hit through an intact hospital after earning 100 XP, without exposing intact coordinates', async () => {
+  it('randomly repairs and relocates one own hit through the hospital without exposing coordinates', async () => {
     render(<NavalBattleGame onClose={observed.closed} />); await makeQuestionMode(); await placeBoth(); await reachThirdOwnAttack();
     const damaged = currentActor().ships.find((unit) => unit.hits.length > 0)!;
     const cell = { ...damaged.hits[0] };
@@ -387,16 +469,48 @@ describe('Naval classroom game: reviewed AI bank and question-driven shots', () 
     expect(screen.getByRole('button', { name: /Reparación/ })).toBeEnabled();
     await click(/Reparación/);
     const choices = document.querySelectorAll<HTMLButtonElement>('.naval-repair-picker button');
-    expect(choices).toHaveLength(1); // Only the actual hit, never healthy coordinates or a full own fleet.
-    await act(async () => { fireEvent.click(choices[0]); });
+    expect(choices).toHaveLength(1);
+    expect(choices[0]).toHaveTextContent('Reparar y reubicar en secreto');
+    expect(choices[0]).not.toHaveTextContent(nameOfCell(cell));
+    const originalCells = structuredClone(damaged.cells);
+    const history = structuredClone(currentActor().shots);
+    await act(async () => { fireEvent.click(choices[0]); fireEvent.click(choices[0]); });
     expect(document.querySelector('.naval-cinematic')).toBeInTheDocument();
+    expect(document.querySelector('.naval-cinematic')).toHaveTextContent('sin mostrar coordenadas');
+    expect(document.querySelector('.naval-cinematic')).not.toHaveTextContent('Coordenada');
     await advance(1_100);
     expect(observed.state!.phase).toBe('attack');
     expect(currentActor().ships.find((unit) => unit.id === damaged.id)!.hits).toHaveLength(0);
-    expect(currentActor().shots.some((shot) => shot.row === cell.row && shot.col === cell.col)).toBe(false);
+    expect(currentActor().ships.find((unit) => unit.id === damaged.id)!.cells).not.toEqual(originalCells);
+    expect(currentActor().shots).toEqual(history.map((shot) => shot.row === cell.row && shot.col === cell.col ? { ...shot, hit: false, repaired: true } : shot));
     expect(currentActor().xp).toBe(0);
-    expect(screen.getByText(/reparado\. Si esa nave queda intacta/)).toBeInTheDocument();
+    expect(screen.getByText(/reparada y reubicada en secreto/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Reparación/ })).toBeDisabled();
     expect(document.querySelector('.nb-fleet-unit')).not.toBeInTheDocument();
+    await fireAtFreshUnit(); await click('Continuar al siguiente turno'); await click('Comenzar siguiente turno');
+    await click(/Tierra/); await click('Elegir coordenada de disparo');
+    const recorded = screen.getByRole('gridcell', { name: nameOfCell(cell) });
+    expect(recorded).toHaveClass('nb-cell--miss');
+    expect(recorded).not.toHaveClass('nb-cell--hit');
+    expect(recorded).toHaveAccessibleName(/impacto anterior reparado; nave trasladada/);
+    expect(document.querySelector('.nb-fleet-unit')).not.toBeInTheDocument();
+  }, 20_000);
+
+  it('does not leave the attack clock permanently expired when repair starts on its last tick', async () => {
+    render(<NavalBattleGame onClose={observed.closed} />); await makeQuestionMode(); await placeBoth(); await reachThirdOwnAttack();
+    await click(/Reparación/);
+    await act(async () => { vi.advanceTimersByTime(29_900); });
+    const repair = screen.getByRole('button', { name: 'Reparar y reubicar en secreto' });
+    await act(async () => { fireEvent.click(repair); vi.advanceTimersByTime(100); });
+    expect(observed.state!.phase).toBe('attack');
+    expect(document.querySelector('.naval-cinematic')).toBeInTheDocument();
+    await advance(1_000);
+    expect(observed.state!.phase).toBe('attack');
+    expect(currentActor().usedSpecials).toContain('repair');
+    expect(document.querySelector('.naval-cinematic')).not.toBeInTheDocument();
+    await advance(200);
+    expect(observed.state!.phase).toBe('attack_result');
+    expect(screen.getByText('Tiempo agotado. No hubo disparo.')).toBeInTheDocument();
   }, 20_000);
 
   it('lets the defender answer a separate ten-second question before resolving a nuclear attack', async () => {

@@ -85,6 +85,31 @@ describe('Naval classroom phase timer', () => {
     expect(expire).toHaveBeenCalledTimes(2);
   });
 
+  it('retries a rejected queued expiration after a cinematic pauses and resumes the same phase', () => {
+    let cinematicStarted = false;
+    const expire = vi.fn(() => { if (cinematicStarted) return false; });
+    const { result, rerender } = renderHook(({ running }) => useNavalTimer('shot-1', 1, running, expire), { initialProps: { running: true } });
+    advance(900);
+    // The action sets its ref before React commits the paused clock.
+    act(() => { cinematicStarted = true; vi.advanceTimersByTime(100); });
+    expect(result.current).toBe(0);
+    expect(expire).toHaveBeenCalledOnce();
+    rerender({ running: false });
+    advance(30_000);
+    expect(expire).toHaveBeenCalledOnce();
+
+    cinematicStarted = false;
+    rerender({ running: true });
+    advance(100);
+    expect(result.current).toBe(0);
+    expect(expire).toHaveBeenCalledTimes(2);
+    advance(10_000);
+    rerender({ running: false });
+    rerender({ running: true });
+    advance(10_000);
+    expect(expire).toHaveBeenCalledTimes(2);
+  });
+
   it('calls the latest expiration handler, not a stale turn callback', () => {
     const earlier = vi.fn(); const current = vi.fn();
     const { rerender } = renderHook(({ callback }) => useNavalTimer('question-1', 2, true, callback), { initialProps: { callback: earlier } });
