@@ -1,5 +1,6 @@
 import { UNITS, getUnit } from './catalog.js';
 import { assetURL } from './runtime.js';
+import { createImageLoader } from './image-loader.js';
 
 const WIDTH = 960;
 const HEIGHT = 540;
@@ -17,37 +18,13 @@ const ASSETS = {
   mower: '/assets/images/Interface/Lawn_mower.png',
   sun: '/assets/images/Interface/SunSprite_79x79.png',
 };
-const imageCache = new Map();
+const imageLoader = createImageLoader({ resolveURL: assetURL });
 const cropCache = new Map();
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 const centre = (row, col) => ({ x: GRID.x + (col + 0.5) * CELL_W, y: GRID.y + (row + 0.5) * CELL_H });
 const ease = value => value * value * (3 - 2 * value);
 const now = () => performance.now();
 const plansArray = plans => Array.isArray(plans) ? plans : [...(plans?.plants || []), ...(plans?.zombies || [])];
-
-// Errors are represented as null images: a missing asset never stops the rules
-// or leaves an unhandled rejection. Each URL has just one shared load promise.
-function loadImage(src) {
-  if (!imageCache.has(src)) {
-    imageCache.set(src, new Promise(resolve => {
-      const image = new Image();
-      let finished = false;
-      const finish = result => {
-        if (finished) return;
-        finished = true;
-        clearTimeout(timeout);
-        image.onload = null;
-        image.onerror = null;
-        resolve(result);
-      };
-      const timeout = setTimeout(() => finish(null), 8000);
-      image.onload = () => finish(image.naturalWidth && image.naturalHeight ? image : null);
-      image.onerror = () => finish(null);
-      image.src = assetURL(src);
-    }));
-  }
-  return imageCache.get(src);
-}
 
 function frameFor(sprite, clock, phase = 0) {
   const start = sprite.startY * SHEET_COLS + sprite.startX;
@@ -119,10 +96,13 @@ export async function renderCard(canvas, typeId) {
   const definition = getUnit(typeId);
   const context = canvas?.getContext?.('2d');
   if (!definition || !context) return false;
-  const image = await loadImage(definition.sprite.src);
   const width = canvas.width || 112, height = canvas.height || 90;
-  context.clearRect(0, 0, width, height);
-  drawSprite(context, image, definition, width / 2, height / 2, width * 0.9, height * 0.9, 0);
+  const paint = image => {
+    context.clearRect(0, 0, width, height);
+    drawSprite(context, image, definition, width / 2, height / 2, width * 0.9, height * 0.9, 0);
+  };
+  const image = await imageLoader.load(definition.sprite.src, paint);
+  paint(image);
   return !!image;
 }
 
@@ -182,9 +162,17 @@ export class BoardRenderer {
 
   async load() {
     const sources = [...new Set([...Object.values(UNITS).map(unit => unit.sprite.src), ...Object.values(ASSETS)])];
-    const entries = await Promise.all(sources.map(async src => [src, await loadImage(src)]));
+    const entries = await Promise.all(sources.map(async src => [src, await imageLoader.load(src, image => {
+      if (this.destroyed) return;
+      this.images.set(src, image);
+      this.draw(now());
+    })]));
     if (this.destroyed) return false;
-    this.images = new Map(entries);
+    // Do not overwrite an image that finished late while another sprite was
+    // still loading: its original promise may have returned the placeholder.
+    for (const [src, image] of entries) {
+      if (image || !this.images.get(src)) this.images.set(src, image);
+    }
     this.draw(now());
     return true;
   }

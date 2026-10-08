@@ -114,7 +114,7 @@ export const ZOMBIES = Object.freeze([
     zombie(
         "football", "Zombi jugador", 125, 8, 2, 2, "fast",
         "Corre hasta 2 casillas por ronda, sin atravesar plantas que lo bloqueen. Tiene 8 de vida y muerde con daño 2.",
-        { src: "/assets/images/Zombies/FootballZombieSprite_300.png", width: 300, height: 300, startX: 0, startY: 0, endX: 7, endY: 2 },
+        { src: "/assets/images/Zombies/FootballZombieWalk_300.png", width: 300, height: 300, startX: 0, startY: 0, endX: 7, endY: 2 },
     ),
     zombie(
         "balloon", "Zombi globo", 100, 4, 1, 1, "flying",

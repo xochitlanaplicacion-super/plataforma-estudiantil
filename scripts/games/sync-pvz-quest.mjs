@@ -29,7 +29,7 @@ await writeFile(template, html);
 // than relying on a separate local prototype after a clone or deployment.
 const checks = resolve(project, 'tests/games/pvz-quest');
 await mkdir(checks, { recursive: true });
-for (const name of ['engine', 'live-engine', 'tactical-engine', 'balance', 'questions', 'renderer', 'sound-events']) {
+for (const name of ['engine', 'live-engine', 'tactical-engine', 'balance', 'questions', 'renderer', 'sound-events', 'image-loader']) {
   const sourceTest = await readFile(resolve(source, `../tests/classroom-${name}.test.mjs`), 'utf8');
   await writeFile(resolve(checks, `${name}.test.mjs`), sourceTest
     .replaceAll('../public/classroom/', '../../../public/games/pvz-quest/classroom/')
