@@ -13,6 +13,7 @@
     "test": "vitest run",
     "test:unit": "vitest run tests/unit",
     "test:components": "vitest run tests/components",
+    "test:pvz-quest": "node --experimental-default-type=module --test tests/games/pvz-quest/*.test.mjs",
     "test:e2e": "playwright test",
     "test:e2e:list": "playwright test --list",
     "test:db": "supabase test db",

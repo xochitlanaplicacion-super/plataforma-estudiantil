@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <title>Plantas vs Zombies Quest · Aula</title>
+  <link rel="icon" href="../assets/images/favicon.ico">
+  <link rel="stylesheet" href="classroom.css">
+  <link rel="stylesheet" href="board-layout.css">
+  <link rel="stylesheet" href="quest-theme.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <main id="setup" class="setup shell">
+    <header class="hero quest-hero">
+      <p class="eyebrow">REPERTORIO DE JUEGOS · UNA PANTALLA PARA TODA LA CLASE</p>
+      <h1 aria-label="Plantas vs Zombies Quest"><span class="quest-brand-art" aria-hidden="true"></span><span class="quest-word">Quest</span></h1>
+      <p class="quest-brand-name">Plantas vs Zombies Quest</p>
+      <p>Plantas contra zombis, preguntas y estrategia en una sola pantalla. El profesor dirige; los equipos deciden.</p>
+      <div class="hero-links"><a href="/" data-local-only>Ver el juego base →</a><button type="button" data-action="repertoire" data-platform-only hidden>Volver al repertorio</button></div>
+    </header>
+    <div class="setup-grid">
+      <form id="settings" class="panel">
+        <p class="eyebrow">01 · PREPARAR LA CLASE</p>
+        <h2>¿Cómo van a jugar?</h2>
+        <label>Equipos<select name="mode"><option value="duel">Plantas vs. Zombis · dos equipos</option><option value="coop-plants">Todo el salón: Plantas vs. computadora</option><option value="coop-zombies">Todo el salón: Zombis vs. computadora</option></select></label>
+        <label>Ritmo de juego<select name="tempo"><option value="continuous" selected>Continuo · el combate sigue durante preguntas y compras</option><option value="rounds">Por rondas · responder, comprar y revelar</option></select></label>
+        <div id="live-notice" class="notice"><strong>Combate continuo con pausas tácticas.</strong><p>Primero responde y premia a los equipos; luego la moneda decide quién compra y coloca primero. Cada unidad descuenta su precio al tocar la casilla. Ambos confirman y empieza el combate. Entre oleadas aparece otra moneda y se congela el combate para comprar por turnos. No se mueven ni desplantan unidades. Premios y preguntas siguen disponibles. Los girasoles producen soles automáticos y el copiloto zombi trae refuerzos crecientes. Velocidad inicial: Lenta; puedes cambiarla desde Menú.</p><label>Duración de cada oleada<select name="waveSeconds"><option value="30">30 segundos</option><option value="45" selected>45 segundos</option><option value="60">1 minuto</option><option value="90">1 minuto 30 segundos</option><option value="120">2 minutos</option><option value="180">3 minutos</option><option value="240">4 minutos</option><option value="300">5 minutos</option><option value="360">6 minutos</option><option value="420">7 minutos</option><option value="480">8 minutos</option><option value="540">9 minutos</option><option value="600">10 minutos</option></select></label><label>Pausas entre oleadas<select name="tacticalPauses"><option value="on" selected>Moneda y compra táctica por turnos</option><option value="off">Sin pausas tácticas · continuo anterior</option></select></label></div>
+        <div class="fields"><label>Planificación<select name="planning"><option value="open">Duelo abierto · rápido</option><option value="secret">Guerra secreta · revelación conjunta</option></select></label><label><span id="rounds-label">Rondas</span><input name="rounds" type="number" min="1" max="30" value="10" required></label></div>
+        <div class="fields"><label>Preguntas<select name="questionMode"><option value="manual">Profesor: premio manual o sin preguntas</option><option value="bank">Banco aprobado · respuesta automática</option></select></label><label>Premio por acierto<select name="reward"><option value="25">25 recursos</option><option value="50" selected>50 recursos</option><option value="100">100 recursos</option></select></label></div>
+        <label>Tiempo de debate<select name="timer"><option value="0">Sin límite</option><option value="30">30 segundos</option><option value="45" selected>45 segundos</option><option value="60">60 segundos</option></select></label>
+        <div id="secret-notice" class="notice" hidden><strong>Una cortina no oculta una pantalla duplicada.</strong><p>Para compras privadas, usa la pantalla pública en un monitor extendido, o congela/apaga el proyector mientras compra cada equipo. Ambos planes se revelan juntos.</p><label class="check"><input name="privacy" type="checkbox"> Usaré pantalla extendida o congelaré el proyector durante ambas compras.</label></div>
+        <div class="quest-audio-choice"><label class="check"><input type="checkbox" name="audio" checked> Música y efectos al comenzar</label><button type="button" data-action="test-sound">🔊 Probar sonido</button><p id="audio-status" class="fine" role="status">El botón de comenzar activa el sonido. Puedes desmarcarlo o silenciar desde Menú. Si no se escucha, revisa el volumen y el silencio de la pestaña.</p></div>
+        <button id="start" class="primary" type="submit">Preparar tablero →</button>
+        <p class="fine platform-description">Sin cuentas de alumnos ni calificaciones. Prueba local sin publicación.</p>
+      </form>
+      <aside class="panel guide">
+        <p class="eyebrow">02 · APRENDER JUGANDO</p><h2>Una ronda, tres decisiones.</h2>
+        <ol><li><strong>Responder y obtener recursos.</strong> El profesor premia el debate, o cada equipo contesta una pregunta del banco.</li><li><strong>Moneda, comprar y confirmar.</strong> En continuo la moneda decide el primer turno. Cada compra descuenta su precio; confirmar no cobra de nuevo. No se mueven ni desplantan unidades.</li><li><strong>Combatir y preparar la próxima oleada.</strong> El mapa avanza mientras responden; al terminar una oleada llega la pausa táctica. Confirma ambos turnos y pulsa comenzar para reanudar.</li></ol>
+        <div class="bank-summary"><strong id="bank-summary">Todavía no hay banco aprobado.</strong><button type="button" data-action="bank">Preparar preguntas / IA</button></div>
+        <details><summary>Reglas del jardín y nuevo balance</summary><p>Tablero de 5 carriles × 8 columnas. Plantas: columnas 1–6. Zombis: entrada 7. La casa tiene una podadora de un solo uso por carril: intercepta a los intrusos que llegan a la casa, no elimina los refuerzos que todavía vienen detrás. Si vuelven a llegar a ese carril, ganan los zombis.</p><p>Las rondas indican compras, no una victoria automática. Al cerrar las compras se resuelve la última horda; las plantas sólo ganan si no queda ningún zombi. Si la situación no se resuelve dentro del límite de cierre, hay empate.</p><p>Cada equipo empieza con 200 recursos y recibe 25 por ronda/oleada. En continuo, hasta cuatro girasoles producen 25 soles cada 12 segundos de combate; se recogen solos. Los premios del profesor siguen disponibles durante el combate y las pausas, sin límite por oleada; saldo máximo 1,500. El copiloto zombi aporta refuerzos gratuitos crecientes en los tres modos. La computadora de Plantas recibe además 100 por oleada en cooperativo zombi. En el modo por rondas se conserva el límite de 300 de premio y la producción por ronda.</p><p>Los zombis cuestan 25 / 50 / 100 / 125 / 100 / 175 según su tipo. La moneda elige el orden de las compras tácticas, incluida la preparación inicial del duelo después de las primeras preguntas. Comprar y colocar descuenta el precio una sola vez; confirmar no cobra de nuevo. No se puede mover ni retirar ninguna planta. Estas reglas son de la adaptación educativa, no del PvZ original; aún requieren pruebas de balance con grupos reales.</p></details>
+      </aside>
+    </div>
+    <footer>Adaptación educativa de una recreación comunitaria; no es una edición oficial de PopCap/EA.</footer>
+  </main>
+
+  <main id="game" class="game" hidden>
+    <header class="game-bar">
+      <div><span class="eyebrow">PVZ AULA</span><h1 id="round-title">Ronda 1</h1></div>
+      <div class="resources"><span class="plant-chip">☀ <b id="plant-money">200</b><small>Soles · Plantas</small></span><span class="zombie-chip">🧠 <b id="zombie-money">200</b><small>Cerebros · Zombis</small></span></div>
+      <div class="toolbar"><button id="live-pause" data-action="live-pause" type="button" aria-pressed="false" hidden>Pausar combate</button><button id="board-focus" data-action="focus" type="button" aria-pressed="false" aria-controls="control-panel">Ampliar tablero</button><button data-action="fullscreen" type="button" title="Activar o salir de pantalla completa">⛶ <span>Pantalla completa</span></button><details class="menu"><summary>Menú</summary><div class="menu-items"><button data-action="project" type="button">Pantalla pública</button><button id="sound-toggle" data-action="sound" type="button" aria-pressed="false">Activar sonido</button><button data-action="test-sound" type="button">🔊 Probar sonido</button><section id="zombie-controls" hidden><label for="zombie-speed">Avance zombi <output id="zombie-speed-label" for="zombie-speed">0.55×</output></label><input id="zombie-speed" type="range" min="0.25" max="2" step="0.05" value="0.55" aria-label="Velocidad de desplazamiento de los zombis"><div class="speed-presets"><button type="button" data-action="speed-preset" data-speed="0.35" aria-pressed="false">Muy lenta</button><button type="button" data-action="speed-preset" data-speed="0.55" aria-pressed="true">Lenta</button><button type="button" data-action="speed-preset" data-speed="0.8" aria-pressed="false">Tranquila</button><button type="button" data-action="speed-preset" data-speed="1" aria-pressed="false">Normal</button><button type="button" data-action="speed-preset" data-speed="1.3" aria-pressed="false">Rápida</button><button type="button" data-action="speed-preset" data-speed="1.7" aria-pressed="false">Muy rápida</button></div><p>Sólo cambia el avance: no acelera preguntas, ingresos ni ataques.</p></section><button data-action="finish" type="button">Salir</button></div></details></div>
+    </header>
+    <div class="status-bar"><strong id="status">Preparar recursos</strong><span id="timer" aria-live="off"></span><button id="timer-toggle" type="button" data-action="timer" hidden>Pausar reloj</button></div>
+    <div class="play-layout">
+      <section id="control-panel" class="panel control-panel"><div id="controls"></div></section>
+      <section class="board-panel"><section id="live-question" class="live-question" hidden><div class="question-heading"><p id="live-quiz-team" class="eyebrow"></p><small>El combate sigue · puedes pausarlo con el botón superior</small></div><h2 id="live-quiz-prompt"></h2><div id="live-quiz-options"></div><p id="live-quiz-result" role="status"></p><button id="live-quiz-next" type="button" class="primary" data-action="quiz-next" hidden>Siguiente pregunta / volver al mapa</button></section><section id="public-question" class="public-question" hidden><p id="public-question-team" class="eyebrow"></p><h2 id="public-question-prompt"></h2><ol id="public-question-options" type="A"></ol><p id="public-question-result"></p></section><div id="board-stage"><canvas id="board" width="960" height="540" aria-label="Jardín de cinco carriles. Selecciona una tarjeta y toca una casilla."></canvas></div><div id="board-caption" class="board-caption">Casa · Plantas en columnas 1–6 · Entrada zombi en 7</div><div id="battle-log" class="battle-log" aria-live="polite"></div></section>
+    </div>
+    <div id="focus-actions" hidden></div>
+  </main>
+
+  <dialog id="bank-dialog" class="wide-dialog">
+    <header><div><p class="eyebrow">BANCO DE LA CLASE</p><h2>Preguntas que sí revisa el profesor</h2></div><button type="button" data-action="close-bank" aria-label="Cerrar banco">✕</button></header>
+    <div class="bank-layout"><section>
+      <label>Tema o instrucciones<textarea id="topic" rows="3" placeholder="Escribe el tema y lo que quieres que practique el grupo."></textarea></label>
+      <label>Nivel escolar<input id="level" placeholder="Ej. primero de secundaria"></label>
+      <div class="fields"><label>Tipo<select id="question-type"><option value="multiple">Opción múltiple</option><option value="truefalse">Verdadero / falso</option><option value="mixed">Ambos tipos</option></select></label><label>Opciones<select id="option-count"><option>2</option><option>3</option><option selected>4</option></select></label><label>Cantidad<input id="question-count" type="number" min="1" max="30" value="12"></label></div>
+      <button id="generate-ai" type="button" class="primary" data-action="generate">Generar con IA</button><p id="ai-status" class="fine">Comprobando disponibilidad de IA local…</p>
+      <details open><summary>También puedes importar un banco JSON</summary><p class="fine">El índice correcto empieza en 0. Se valida la respuesta y se mezclan las opciones sin cambiar cuál es correcta.</p><textarea id="bank-json" rows="6" spellcheck="false" placeholder='{"questions":[{"prompt":"Pregunta…","type":"multiple","options":["A","B","C","D"],"answerIndex":0,"explanation":"Explicación…"}]}'></textarea><div class="button-row"><button type="button" data-action="import">Revisar JSON</button><button type="button" data-action="prompt">Copiar instrucciones para IA</button></div></details>
+    </section><section><h3 id="review-title">Revisión antes de jugar</h3><div id="question-review" class="question-review"><p>No se ha generado ni importado un banco. No se envían instrucciones a la IA hasta que pulses Generar.</p></div></section></div>
+    <footer><span id="bank-error" role="alert"></span><button id="approve-bank" class="primary" data-action="approve" type="button" disabled>Aprobar estas preguntas</button></footer>
+  </dialog>
+
+  <dialog id="quiz-dialog" class="quiz-dialog"><p class="eyebrow" id="quiz-team"></p><h2 id="quiz-prompt"></h2><div id="quiz-options"></div><div id="quiz-result" role="status"></div><button id="quiz-next" type="button" class="primary" data-action="quiz-next" hidden>Volver al tablero</button></dialog>
+  <dialog id="exit-dialog"><h2>¿Terminar esta partida local?</h2><p>El tablero y sus recursos no se guardan. No se elimina ningún dato de tu plataforma.</p><div class="button-row"><button data-action="cancel-exit" type="button">Continuar jugando</button><button data-action="confirm-exit" class="danger" type="button">Terminar partida</button></div></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>
