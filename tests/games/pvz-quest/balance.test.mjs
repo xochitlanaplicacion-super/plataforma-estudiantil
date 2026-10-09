@@ -20,36 +20,37 @@ function unit(typeId, row, col, extras = {}) {
     lastChompRound: -2, lastSpikeRound: -1, ...extras };
 }
 
-test('zombie economy supports larger hordes with explicit prices, not increased damage or hidden income', () => {
-  assert.deepEqual(['common', 'cone', 'bucket', 'football', 'balloon', 'dragon'].map(id => getUnit(id).cost), [25, 50, 100, 125, 100, 175]);
-  assert.deepEqual(['common', 'cone', 'bucket', 'football', 'balloon', 'dragon'].map(id => getUnit(id).hp), [3, 6, 10, 8, 4, 12]);
-  assert.equal(orderLimit('plants'), 5);
-  assert.equal(orderLimit('zombies'), 8);
+test('requested prices and life support spending a full balance without per-round purchase caps', () => {
+  assert.deepEqual(['common', 'cone', 'bucket', 'football', 'balloon', 'dragon'].map(id => getUnit(id).cost), [25, 50, 100, 175, 100, 500]);
+  assert.deepEqual(['common', 'cone', 'bucket', 'football', 'balloon', 'dragon'].map(id => getUnit(id).hp), [5, 8, 12, 12, 5, 19]);
+  assert.equal(orderLimit('plants'), 30);
+  assert.equal(orderLimit('zombies'), 200);
   assert.throws(() => orderLimit('neither'), /equipo/);
   let state = continuePlanning(commitPlan(beginPlanning(createMatch())));
-  for (let index = 0; index < 8; index += 1) state = addOrder(state, 'zombies', 'common', index % 5, 7);
+  state.resources.zombies = 1500;
+  for (let index = 0; index < 60; index += 1) state = addOrder(state, 'zombies', 'common', index % 5, 7);
   assert.equal(state.resources.zombies, 0);
-  assert.equal(state.plans.zombies.length, 8);
-  assert.ok(availableUnits(state, 'zombies').every(entry => entry.disabledReason.includes('8 compras')));
-  assert.throws(() => addOrder(state, 'zombies', 'common', 0, 7), /máximo 8/);
+  assert.equal(state.plans.zombies.length, 60);
+  assert.ok(availableUnits(state, 'zombies').every(entry => entry.disabledReason.includes('insuficientes')));
+  assert.throws(() => addOrder(state, 'zombies', 'common', 0, 7), /suficientes/);
   state = removeOrder(state, 'zombies', state.plans.zombies[0].id);
   assert.equal(state.resources.zombies, 25);
   assert.equal(availableUnits(state, 'zombies').find(entry => entry.id === 'common').affordable, true);
 });
 
-test('five purchasing waves cannot silently declare plants winners before post-mower reinforcements cross the board', () => {
-  let state = createMatch({ rounds: 5 });
-  for (let round = 1; round <= 5; round += 1) {
+test('six accelerating waves cannot declare plants winners before post-mower reinforcements cross the board', () => {
+  let state = createMatch({ rounds: 6 });
+  for (let round = 1; round <= 6; round += 1) {
     state = beginPlanning(state);
     if (state.activeSide === 'plants') state = continuePlanning(commitPlan(state));
-    // The fast pioneer consumes the mower in round four. The final slow
+    // The fast pioneer consumes the mower in round five. The final slow
     // reinforcement is purchased afterwards, so it survives that lane sweep.
     state = addOrder(state, 'zombies', round === 1 ? 'football' : 'common', 0, 7);
     state = commitPlan(state);
     if (state.phase === 'handover') state = commitPlan(continuePlanning(state));
     const result = resolveRound(state);
     state = result.state;
-    if (round === 4) {
+    if (round === 5) {
       assert.equal(state.mowers[0], false);
       assert.equal(state.units.length, 0);
       assert.equal(result.events.filter(event => event.type === 'mower').length, 1);
@@ -73,7 +74,7 @@ test('five purchasing waves cannot silently declare plants winners before post-m
   assert.equal(state.winner, 'zombies');
   assert.deepEqual(cleanupEvents.filter(event => event.type === 'invasion'), [{ type: 'invasion', row: 0 }]);
   assert.equal(cleanupEvents.some(event => ['mower', 'deploy', 'income'].includes(event.type)), false);
-  assert.equal(state.round, 5);
+  assert.equal(state.round, 6);
   assert.equal(state.stats.roundsResolved, rounds);
   assert.deepEqual(state.resources, budget);
   assert.deepEqual(state.stats.unitsPlaced, placed);
@@ -110,7 +111,7 @@ test('cleanup cannot stall forever or award an artificial plant victory at the s
 });
 
 test('cleanup advances mine arming, spike contact and chomper recovery without purchasing another round', () => {
-  const initial = createMatch({ rounds: 1 });
+  const initial = createMatch({ rounds: 1, zombieSpeed: 1 });
   initial.phase = 'cleanup'; initial.battleStep = 1;
   initial.units = [unit('potato-mine', 0, 5), unit('common', 0, 6)];
   const mined = resolveCleanup(initial);
@@ -127,9 +128,15 @@ test('cleanup advances mine arming, spike contact and chomper recovery without p
   chomping.units = [unit('chomper', 0, 4, { hp: 100 }), unit('common', 0, 5), unit('common', 0, 6), unit('common', 0, 7)];
   const eat = resolveCleanup(chomping);
   const rest = resolveCleanup(eat.state);
-  const eatAgain = resolveCleanup(rest.state);
   assert.equal(eat.events.filter(entry => entry.type === 'chomp').length, 1);
   assert.equal(rest.events.some(entry => entry.type === 'chomp'), false);
+  let digesting = rest.state;
+  for (let index = 0; index < 2; index += 1) {
+    const chewing = resolveCleanup(digesting);
+    assert.equal(chewing.events.some(entry => entry.type === 'chomp'), false);
+    digesting = chewing.state;
+  }
+  const eatAgain = resolveCleanup(digesting);
   assert.equal(eatAgain.events.filter(entry => entry.type === 'chomp').length, 1);
   assert.equal(eatAgain.state.round, 1);
 });

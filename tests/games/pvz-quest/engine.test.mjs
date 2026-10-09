@@ -2,16 +2,21 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { getUnit } from '../../../public/games/pvz-quest/classroom/catalog.js';
 import {
-  createMatch, grantResources, beginPlanning, addOrder, removeOrder, commitPlan,
+  createMatch as createCurrentMatch, grantResources, beginPlanning, addOrder, removeOrder, commitPlan,
   continuePlanning, resolveRound, resolveCleanup, publicSnapshot, availableUnits, orderLimit,
+  MAX_ZOMBIES,
 } from '../../../public/games/pvz-quest/classroom/engine.js';
+
+// Legacy contact/ordering fixtures explicitly use normal advancement; automatic
+// wave progression and its very-slow opening have dedicated tests below.
+const createMatch = (config = {}) => createCurrentMatch(config === null || Array.isArray(config) ? config : { zombieSpeed: 1, ...config });
 
 const clone = value => structuredClone(value);
 function ready(original = createMatch()) {
   let state = beginPlanning(original);
   state = commitPlan(state);
   if (state.phase === 'handover') state = commitPlan(continuePlanning(state));
-  return state;
+  return { ...state, zombieSpeed: 1 };
 }
 function fixture(typeId, row, col, options = {}) {
   const def = getUnit(typeId);
@@ -61,7 +66,7 @@ test('buying and removing orders refund exactly and never mutate the input', () 
   assert.throws(() => removeOrder(removed, 'plants', order.id), /no está/);
 });
 
-test('ownership, occupancy, boundaries, budgets and five-order limit are checked', () => {
+test('ownership, occupancy, boundaries and budgets are checked without a five-order cap', () => {
   let state = beginPlanning(createMatch());
   assert.throws(() => addOrder(state, 'zombies', 'common', 0, 7), /turno/);
   assert.throws(() => addOrder(state, 'plants', 'common', 0, 7), /otro equipo/);
@@ -71,7 +76,8 @@ test('ownership, occupancy, boundaries, budgets and five-order limit are checked
   state = addOrder(state, 'plants', 'potato-mine', 0, 2);
   assert.throws(() => addOrder(state, 'plants', 'wallnut', 0, 2), /ocupada/);
   for (let row = 1; row < 5; row += 1) state = addOrder(state, 'plants', 'potato-mine', row, 2);
-  assert.throws(() => addOrder(state, 'plants', 'potato-mine', 0, 3), /máximo 5/);
+  state = addOrder(state, 'plants', 'potato-mine', 0, 3);
+  assert.equal(state.plans.plants.length, 6);
   let broke = beginPlanning(createMatch()); broke.resources.plants = 0;
   assert.throws(() => addOrder(broke, 'plants', 'wallnut', 0, 1), /suficientes/);
 });
@@ -179,7 +185,7 @@ test('threepeater shoots its own lane and the two adjacent lanes', () => {
   assert.equal(result.state.units.find(unit => unit.side === 'zombies' && unit.row === 4).hp, getUnit('common').hp);
 });
 
-test('chomper consumes one enemy, rests one round, then can consume again', () => {
+test('chomper consumes one enemy, digests for four five-second steps, then consumes again', () => {
   const state = createMatch();
   state.units = [fixture('chomper', 1, 5), fixture('common', 1, 6), fixture('common', 1, 7)];
   const first = resolveRound(ready(state));
@@ -187,7 +193,11 @@ test('chomper consumes one enemy, rests one round, then can consume again', () =
   const second = resolveRound(ready(first.state));
   assert.equal(second.events.some(event => event.type === 'chomp'), false);
   const third = resolveRound(ready(second.state));
-  assert.equal(third.events.filter(event => event.type === 'chomp').length, 1);
+  const fourth = resolveRound(ready(third.state));
+  assert.equal(third.events.some(event => event.type === 'chomp'), false);
+  assert.equal(fourth.events.some(event => event.type === 'chomp'), false);
+  const fifth = resolveRound(ready(fourth.state));
+  assert.equal(fifth.events.filter(event => event.type === 'chomp').length, 1);
 });
 
 test('a mower sweeps its whole lane once, including simultaneous arrivals, armor and flyers', () => {
@@ -297,22 +307,22 @@ test('cooperative zombie mode has starter defenses and one explicitly free commo
 test('unit availability reports affordability and returns isolated catalog entries', () => {
   const state = createMatch(); state.resources.plants = 0;
   const units = availableUnits(state, 'plants');
-  assert.equal(units.length, 9);
+  assert.equal(units.length, 10);
   assert.ok(units.every(unit => !unit.affordable && unit.disabledReason));
   units[0].cost = 0;
   assert.notEqual(getUnit(units[0].id).cost, 0);
   assert.throws(() => availableUnits(state, 'unknown'), /equipo/);
 });
 
-test('the thirty-zombie limit includes orders and blocks both human and CPU excess', () => {
+test('the two-hundred-zombie safety limit includes orders and blocks human and CPU excess', () => {
   let state = createMatch();
-  state.units = Array.from({ length: 29 }, (_, index) => fixture('bucket', index % 5, 7, { id: `crowd-${index}` }));
+  state.units = Array.from({ length: MAX_ZOMBIES - 1 }, (_, index) => fixture('bucket', index % 5, 7, { id: `crowd-${index}` }));
   state = continuePlanning(commitPlan(beginPlanning(state)));
   state = addOrder(state, 'zombies', 'common', 0, 7);
-  assert.throws(() => addOrder(state, 'zombies', 'common', 1, 7), /30 zombis/);
+  assert.throws(() => addOrder(state, 'zombies', 'common', 1, 7), /200 zombis/);
   assert.ok(availableUnits(state, 'zombies').every(unit => !unit.affordable));
   const coop = createMatch({ mode: 'coop-plants' });
-  coop.units = Array.from({ length: 30 }, (_, index) => fixture('bucket', index % 5, 7, { id: `full-${index}` }));
+  coop.units = Array.from({ length: MAX_ZOMBIES }, (_, index) => fixture('bucket', index % 5, 7, { id: `full-${index}` }));
   const cpuReady = commitPlan(beginPlanning(coop));
   assert.equal(cpuReady.plans.zombies.length, 0);
 });
@@ -339,18 +349,20 @@ test('spikeweed hurts a traversing ground zombie once per round, never teleports
   state.units = [fixture('spikeweed', 1, 6), fixture('bucket', 1, 7, { move: 2 })];
   const result = resolveRound(ready(state));
   const zombie = result.state.units.find(unit => unit.typeId === 'bucket');
-  assert.equal(zombie.col, 5);
+  assert.equal(zombie.col, 6);
+  assert.equal(zombie.movementCredit, .6);
   assert.equal(zombie.hp, getUnit('bucket').hp - getUnit('spikeweed').damage);
   assert.equal(result.events.filter(event => event.type === 'damage' && event.unitId === zombie.id).length, 1);
 });
 
-test('CPU cooperation never grants a free ninth order or a thirty-first zombie', () => {
+test('CPU cooperation never grants a free zombie beyond the simultaneous safety cap', () => {
   let state = createMatch({ mode: 'coop-zombies' });
-  state.resources.zombies = 1000;
+  state.resources.zombies = 1500;
+  state.units = Array.from({ length: MAX_ZOMBIES - 20 }, (_, index) => fixture('bucket', index % 5, 7, { id: `existing-${index}` }));
   state = beginPlanning(state);
-  for (let index = 0; index < orderLimit('zombies'); index += 1) state = addOrder(state, 'zombies', 'common', index % 5, 7);
+  for (let index = 0; index < 20; index += 1) state = addOrder(state, 'zombies', 'common', index % 5, 7);
   const confirmed = commitPlan(state);
-  assert.equal(confirmed.plans.zombies.length, 8);
+  assert.equal(confirmed.plans.zombies.length, 20);
   assert.equal(confirmed.plans.zombies.some(order => order.free), false);
 });
 
@@ -404,7 +416,7 @@ test('CPU waves progressively unlock balloons and dragons without exceeding thei
       assert.ok(spent <= Math.min(money, 125 + round * 25, 300));
       assert.equal(planned.resources.zombies, money - spent);
       assert.ok(planned.plans.zombies.length <= orderLimit('zombies'));
-      assert.ok(crowd + planned.plans.zombies.length <= 30);
+      assert.ok(crowd + planned.plans.zombies.length <= MAX_ZOMBIES);
       assert.deepEqual(state, saved);
       for (const order of planned.plans.zombies) seen.add(order.typeId);
     }
@@ -418,10 +430,125 @@ test('CPU waves progressively unlock balloons and dragons without exceeding thei
   assert.equal(middle.has('dragon'), false);
   const late = choices(8, 1500);
   assert.equal(late.has('balloon'), true);
-  assert.equal(late.has('dragon'), true);
+  // A 500-brain dragon cannot be charged to this mode's 300-brain CPU budget.
+  assert.equal(late.has('dragon'), false);
   assert.equal(choices(8, getUnit('balloon').cost - 1).has('balloon'), false);
   assert.equal(choices(8, getUnit('dragon').cost - 1).has('dragon'), false);
-  const nearlyFull = choices(8, 1500, 29);
+  const nearlyFull = choices(8, 1500, MAX_ZOMBIES - 1);
   assert.equal(nearlyFull.has('balloon'), true);
-  assert.equal(nearlyFull.has('dragon'), true);
+  assert.equal(nearlyFull.has('dragon'), false);
+});
+
+test('the requested classroom hit points and prices are shared by both engines', () => {
+  const hp = { sunflower: 6, peashooter: 5, wallnut: 10, repeater: 6, threepeater: 6,
+    chomper: 8, spikeweed: 4, 'corn-pult': 8, 'snow-pea': 4,
+    common: 5, cone: 8, bucket: 12, football: 12, balloon: 5, dragon: 19 };
+  for (const [typeId, expected] of Object.entries(hp)) assert.equal(getUnit(typeId).hp, expected, typeId);
+  assert.equal(getUnit('snow-pea').cost, 175);
+  assert.equal(getUnit('football').cost, 175);
+  assert.equal(getUnit('dragon').cost, 500);
+  assert.equal(getUnit('potato-mine').hp, 1);
+});
+
+test('a 1500-resource tactical shop can spend on thirty plants or sixty common zombies', () => {
+  let plants = beginPlanning(createCurrentMatch()); plants.resources.plants = 1500;
+  for (let row = 0; row < 5; row += 1) for (let col = 1; col <= 6; col += 1) plants = addOrder(plants, 'plants', 'sunflower', row, col);
+  assert.equal(plants.plans.plants.length, 30);
+  assert.equal(plants.resources.plants, 0);
+  assert.throws(() => addOrder(plants, 'plants', 'wallnut', 0, 1), /suficientes|ocupada/);
+  let zombies = continuePlanning(commitPlan(beginPlanning(createCurrentMatch()))); zombies.resources.zombies = 1500;
+  for (let index = 0; index < 60; index += 1) zombies = addOrder(zombies, 'zombies', 'common', index % 5, 7);
+  assert.equal(zombies.plans.zombies.length, 60);
+  assert.equal(zombies.resources.zombies, 0);
+  assert.throws(() => addOrder(zombies, 'zombies', 'common', 0, 7), /suficientes/);
+});
+
+test('tactical speed rises automatically through six levels and stays capped afterward', () => {
+  for (const mode of ['duel', 'coop-plants', 'coop-zombies']) {
+    let state = createCurrentMatch({ mode, rounds: 8 });
+    const speeds = [.35, .55, .8, 1, 1.3, 1.7, 1.7, 1.7];
+    for (const speed of speeds) {
+      assert.equal(state.zombieSpeed, speed);
+      assert.equal(state.zombieSpeedMode, 'auto');
+      if (state.round === 8) break;
+      // Avoid CPU battle results: this checks the shared round transition only.
+      state = { ...state, units: [], phase: 'ready', planLocked: { plants: true, zombies: true }, plans: { plants: [], zombies: [] } };
+      state = resolveRound(state).state;
+    }
+  }
+});
+
+test('tactical ice shots damage, flag blue projectiles and reduce the current advance by thirty percent', () => {
+  const state = createMatch();
+  state.units = [fixture('snow-pea', 1, 1), fixture('bucket', 1, 6)];
+  const result = resolveRound(ready(state));
+  const zombie = result.state.units.find(unit => unit.typeId === 'bucket');
+  assert.equal(zombie.hp, getUnit('bucket').hp - 1);
+  assert.equal(zombie.col, 6);
+  assert.equal(zombie.movementCredit, .7);
+  assert.equal(zombie.freezeUntil, 9);
+  assert(result.events.some(event => event.type === 'shot' && event.ice && event.typeId === 'snow-pea'));
+  assert(result.events.some(event => event.type === 'freeze' && event.targetId === zombie.id));
+  assert.equal(result.stages[1].elapsed, 5);
+});
+
+test('floating balloons and dragons ignore mines, chomper and spikeweed in tactical combat', () => {
+  for (const typeId of ['balloon', 'dragon']) {
+    const state = createMatch(); state.round = 2;
+    state.units = [fixture('potato-mine', 1, 6), fixture('spikeweed', 1, 5), fixture('chomper', 1, 4), fixture(typeId, 1, 7, { move: 3 })];
+    const result = resolveRound(ready(state));
+    const flying = result.state.units.find(unit => unit.typeId === typeId);
+    assert.equal(flying.hp, getUnit(typeId).hp);
+    assert.equal(flying.col, 4);
+    assert(!result.events.some(event => ['mine', 'chomp'].includes(event.type)));
+  }
+});
+
+test('tactical snapshots expose chewing progress and never share its mutable state', () => {
+  const state = createMatch(); state.units = [fixture('chomper', 1, 5), fixture('common', 1, 6)];
+  const result = resolveRound(ready(state));
+  const stage = result.stages.find(item => item.name === 'bites');
+  assert.equal(stage.elapsed, 5);
+  assert.equal(stage.units.find(unit => unit.typeId === 'chomper').cooldownSeconds, 20);
+  const projected = publicSnapshot(result.state);
+  assert.equal(projected.units[0].digesting, true);
+  projected.units[0].chompCooldown = 0;
+  assert.equal(result.state.units[0].chompCooldown, 25);
+});
+
+test('tactical spike slowing is forty percent, excludes floaters and takes precedence over ice', () => {
+  for (const typeId of ['bucket', 'balloon', 'dragon']) {
+    const state = createMatch();
+    state.units = [fixture('spikeweed', 1, 5), fixture(typeId, 1, 5, { freezeUntil: 9 })];
+    const result = resolveRound(ready(state));
+    const zombie = result.state.units.find(unit => unit.typeId === typeId);
+    // Ice can hit flyers, but ground spikes do not. Effects never multiply.
+    assert.equal(zombie.movementCredit, typeId === 'bucket' ? .6 : .7);
+    assert.equal(zombie.hp, getUnit(typeId).hp - (typeId === 'bucket' ? 1 : 0));
+  }
+});
+
+test('fast tactical football zombies pay forty-percent slowing even when entering and leaving spikes in one step', () => {
+  const simulate = (typeId, withSpikes) => {
+    const state = createCurrentMatch({ rounds: 10, zombieSpeed: 1.7 });
+    state.round = 6; state.phase = 'ready'; state.planLocked = { plants: true, zombies: true };
+    state.units = [fixture(typeId, 1, 7, { move: 2 }), ...(withSpikes ? [fixture('spikeweed', 1, 6)] : [])];
+    return resolveRound(state).state.units.find(unit => unit.typeId === typeId);
+  };
+  const normal = simulate('football', false);
+  const slowed = simulate('football', true);
+  assert.equal(normal.col, 4);
+  assert.equal(slowed.col, 5);
+  // Of 3.4 travel-time units: 1 reaches the spikes, 1/.6 crosses them,
+  // and the remaining time advances normally again beyond their tile.
+  const remainder = 3.4 - 1 - 1 / .6;
+  assert(Math.abs(slowed.movementCredit - remainder) < 1e-8);
+  assert.equal(slowed.hp, getUnit('football').hp - 1);
+  for (const typeId of ['balloon', 'dragon']) {
+    const plainAir = simulate(typeId, false);
+    const spikedAir = simulate(typeId, true);
+    assert.equal(spikedAir.col, plainAir.col);
+    assert.equal(spikedAir.movementCredit, plainAir.movementCredit);
+    assert.equal(spikedAir.hp, getUnit(typeId).hp);
+  }
 });

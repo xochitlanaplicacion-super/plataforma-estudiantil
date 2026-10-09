@@ -128,7 +128,7 @@ test('plants cannot overwrite units, place outside garden or plant under a zombi
   assert.throws(() => buyLiveUnit(state, 'plants', 'missing', 0, 2));
 });
 
-test('purchase and resource caps remain explicit while question rewards continue', () => {
+test('resource and simultaneous-entity safety caps remain explicit, without a purchase-per-wave cap', () => {
   let state = createLiveMatch({ mode: 'coop-zombies', waves: 2, waveSeconds: 30 });
   for (let i = 0; i < 3; i += 1) state = awardLiveResources(state, 'zombies', 100);
   state = awardLiveResources(state, 'zombies', 25);
@@ -137,10 +137,10 @@ test('purchase and resource caps remain explicit while question rewards continue
   assert.throws(() => awardLiveResources(state, 'zombies', 101));
   const capped = { ...state, resources: { ...state.resources, zombies: 1490 }, bonusThisWave: { plants: 0, zombies: 0 } };
   assert.equal(awardLiveResources(capped, 'zombies', 100).resources.zombies, 1500);
-  const crowded = { ...state, units: [...state.units, ...Array.from({ length: 30 }, (_, i) => injectedUnit('common', i % 5, 7, { id: `crowd-${i}` }))] };
-  assert.throws(() => buyLiveUnit(crowded, 'zombies', 'bucket', 0, 7), /30 zombis/);
+  const crowded = { ...state, units: [...state.units, ...Array.from({ length: LIVE_RULES.maxZombies }, (_, i) => injectedUnit('common', i % 5, 7, { id: `crowd-${i}` }))] };
+  assert.throws(() => buyLiveUnit(crowded, 'zombies', 'bucket', 0, 7), /200 zombis/);
   const cappedOrders = { ...state, humanPurchasesThisWave: 10, purchasesBySideThisWave: { plants: 0, zombies: 10 } };
-  assert.throws(() => buyLiveUnit(cappedOrders, 'zombies', 'common', 0, 7), /10 compras/);
+  assert.equal(buyLiveUnit(cappedOrders, 'zombies', 'common', 0, 7).purchasesBySideThisWave.zombies, 11);
 });
 
 test('new waves reset purchase counters and only pay base income once', () => {
@@ -178,8 +178,8 @@ test('shooters fire over time and damage the first target in front', () => {
   const state = withoutCPU(createLiveMatch());
   state.units = [injectedUnit('peashooter', 0, 2), injectedUnit('bucket', 0, 6), injectedUnit('cone', 0, 7)];
   const result = advance(state, 4.8);
-  assert.equal(result.state.units.find(unit => unit.typeId === 'bucket').hp, 8);
-  assert.equal(result.state.units.find(unit => unit.typeId === 'cone').hp, 6);
+  assert.equal(result.state.units.find(unit => unit.typeId === 'bucket').hp, getUnit('bucket').hp - 2);
+  assert.equal(result.state.units.find(unit => unit.typeId === 'cone').hp, getUnit('cone').hp);
   assert.equal(result.events.filter(event => event.type === 'shot').length, 2);
 });
 
@@ -190,7 +190,7 @@ test('a fast zombie stops at a wall and bites it rather than teleporting through
   const wall = result.state.units.find(unit => unit.typeId === 'wallnut');
   const zombie = result.state.units.find(unit => unit.typeId === 'football');
   assert.equal(zombie.col, 4.42);
-  assert(wall.hp < 8 && wall.hp > 0);
+  assert(wall.hp < getUnit('wallnut').hp && wall.hp > 0);
 });
 
 test('an armed mine detonates once; an unarmed mine and a balloon are ignored', () => {
@@ -213,16 +213,16 @@ test('chompers rest after eating and cannot consume balloon zombies', () => {
   assert.equal(result.events.filter(event => event.type === 'chomp').length, 1);
   assert(result.state.units.some(unit => unit.typeId === 'bucket'));
   assert(result.state.units.some(unit => unit.typeId === 'balloon'));
-  assert.equal(result.state.units.find(unit => unit.typeId === 'chomper').chompCooldown, LIVE_RULES.fixedStep + 8);
+  assert.equal(result.state.units.find(unit => unit.typeId === 'chomper').chompCooldown, LIVE_RULES.fixedStep + 20);
 });
 
 test('spikes damage ground units periodically but do not block movement', () => {
   const state = withoutCPU(createLiveMatch());
   state.units = [injectedUnit('spikeweed', 0, 4), injectedUnit('bucket', 0, 4.4), injectedUnit('balloon', 0, 4.4)];
   const result = advance(state, 2.1).state;
-  assert.equal(result.units.find(unit => unit.typeId === 'bucket').hp, 8);
-  assert.equal(result.units.find(unit => unit.typeId === 'balloon').hp, 4);
-  assert(result.units.find(unit => unit.typeId === 'bucket').col < 4);
+  assert.equal(result.units.find(unit => unit.typeId === 'bucket').hp, getUnit('bucket').hp - 2);
+  assert.equal(result.units.find(unit => unit.typeId === 'balloon').hp, getUnit('balloon').hp);
+  assert(result.units.find(unit => unit.typeId === 'bucket').col < 4.4);
 });
 
 test('a mower sweeps its whole lane once, including simultaneous arrivals, armor and flyers', () => {
@@ -408,10 +408,11 @@ test('duel purchases are counted independently for both sides', () => {
   let state = createLiveMatch({ mode: 'duel', startPaused: true });
   state.purchasesBySideThisWave.plants = 10;
   state.humanPurchasesThisWave = 10;
-  assert.throws(() => buyLiveUnit(state, 'plants', 'wallnut', 0, 1), /10 compras/);
+  state = buyLiveUnit(state, 'plants', 'wallnut', 0, 1);
+  assert.equal(state.purchasesBySideThisWave.plants, 11);
   state = buyLiveUnit(state, 'zombies', 'common', 0, 7);
   assert.equal(state.purchasesBySideThisWave.zombies, 1);
-  assert.equal(state.purchasesBySideThisWave.plants, 10);
+  assert.equal(state.purchasesBySideThisWave.plants, 11);
   state = selectLiveSide(state, 'zombies');
   assert.equal(state.humanPurchasesThisWave, 1);
 });
@@ -509,15 +510,15 @@ test('assistant waves gain fixed counts and scheduled stronger types without ada
 
 test('a full board skips assisted arrivals and closing never schedules another zombie', () => {
   const state = createLiveMatch({ mode: 'duel', waves: 1, waveSeconds: 30 });
-  state.units = Array.from({ length: 30 }, (_, index) => injectedUnit('common', index % 5, 7, { id: `limit-${index}`, move: 0 }));
+  state.units = Array.from({ length: LIVE_RULES.maxZombies }, (_, index) => injectedUnit('common', index % 5, 7, { id: `limit-${index}`, move: 0 }));
   const crowded = advance(state, 25);
-  assert.equal(crowded.state.units.length, 30);
+  assert.equal(crowded.state.units.length, LIVE_RULES.maxZombies);
   assert.equal(crowded.state.stats.assistantUnitsSpawned, 0);
   assert(!crowded.events.some(event => event.source === 'assistant-wave'));
   crowded.state.units.pop();
   const closing = advance(crowded.state, 6);
   assert.equal(closing.state.closing, true);
-  assert.equal(closing.state.units.length, 29);
+  assert.equal(closing.state.units.length, LIVE_RULES.maxZombies - 1);
   assert(!closing.events.some(event => event.source === 'assistant-wave'));
 });
 
@@ -535,8 +536,8 @@ test('six speed presets change only zombie movement and publish their chosen spe
   }
   assert.equal(state.zombieSpeed, 1);
   for (const speed of [undefined, null, NaN, Infinity, '1', 0.24, 2.01]) assert.throws(() => setLiveZombieSpeed(state, speed));
-  assert.equal(setLiveZombieSpeed(state, 0.25).zombieSpeed, 0.25);
-  assert.equal(setLiveZombieSpeed(state, 2).zombieSpeed, 2);
+  assert.throws(() => setLiveZombieSpeed(state, 0.25));
+  assert.throws(() => setLiveZombieSpeed(state, 2));
   const blocked = { ...state, units: [injectedUnit('common', 0, 2.42), injectedUnit('wallnut', 0, 2, { hp: 50, maxHp: 50 })] };
   for (const speed of [0.35, 1.7]) {
     const result = advance(setLiveZombieSpeed(blocked, speed), 4.5);
@@ -544,4 +545,114 @@ test('six speed presets change only zombie movement and publish their chosen spe
     assert.equal(result.state.units.find(unit => unit.typeId === 'wallnut').hp, 47);
     assert.equal(result.state.units.find(unit => unit.typeId === 'common').col, 2.42);
   }
+});
+
+test('all continuous modes automatically accelerate by wave and cap at the sixth preset', () => {
+  for (const mode of ['duel', 'coop-plants', 'coop-zombies']) {
+    let state = createCurrentLiveMatch({ mode, waves: 8, waveSeconds: 30, tacticalPauses: false });
+    assert.equal(state.zombieSpeed, .35);
+    assert.equal(state.zombieSpeedMode, 'auto');
+    for (let round = 2; round <= 8; round += 1) {
+      state.tickCount = (round - 1) * 30 * 60 - 1;
+      state.elapsed = state.tickCount / 60;
+      state.units = [];
+      state = stepLive(state, 1 / 60).state;
+      assert.equal(state.round, round);
+      assert.equal(state.zombieSpeed, LIVE_ZOMBIE_SPEED_PRESETS[Math.min(round - 1, 5)]);
+      assert.equal(liveSnapshot(state).zombieSpeedMode, 'auto');
+    }
+  }
+});
+
+test('a manual speed change survives ticks, but the next wave returns to automatic progression', () => {
+  let state = withoutCPU(createCurrentLiveMatch({ mode: 'duel', waves: 2, waveSeconds: 30, tacticalPauses: false }));
+  state = setLiveZombieSpeed(state, 1.3);
+  assert.equal(state.zombieSpeedMode, 'manual');
+  state = advance(state, 1).state;
+  assert.equal(state.zombieSpeed, 1.3);
+  state.tickCount = 1799; state.elapsed = state.tickCount / 60; state.units = [];
+  const next = stepLive(state, 1 / 60).state;
+  assert.equal(next.round, 2);
+  assert.equal(next.zombieSpeed, .55);
+  assert.equal(next.zombieSpeedMode, 'auto');
+});
+
+test('paused shoppers can use all 1500 resources without a ten-purchase or same-unit recharge lock', () => {
+  let state = pauseLive(createLiveMatch({ mode: 'duel' }), true);
+  state.resources.zombies = 1500;
+  for (let index = 0; index < 60; index += 1) state = buyLiveUnit(state, 'zombies', 'common', index % 5, 7);
+  assert.equal(state.resources.zombies, 0);
+  assert.equal(state.purchasesBySideThisWave.zombies, 60);
+  assert.equal(state.units.length, 60);
+  state.resources.plants = 1500;
+  for (let row = 0; row < 5; row += 1) for (let col = 1; col <= 6; col += 1) {
+    // Move entry zombies away only for the independent plant-space fixture.
+    state.units = state.units.filter(unit => unit.side === 'plants');
+    state = buyLiveUnit(state, 'plants', 'sunflower', row, col);
+  }
+  assert.equal(state.resources.plants, 0);
+  assert.equal(state.units.length, 30);
+  assert.equal(state.purchasesBySideThisWave.plants, 30);
+});
+
+test('chomper chewing lasts twenty combat seconds, freezes during pause and then permits another bite', () => {
+  const state = withoutCPU(createLiveMatch());
+  state.units = [injectedUnit('chomper', 0, 4), injectedUnit('common', 0, 4.6, { move: 0, damage: 0 }),
+    injectedUnit('bucket', 0, 4.6, { move: 0, damage: 0 })];
+  const first = stepLive(state, 1 / 60);
+  assert.equal(first.events.filter(event => event.type === 'chomp').length, 1);
+  const projected = liveSnapshot(first.state).units.find(unit => unit.typeId === 'chomper');
+  assert.equal(projected.cooldownSeconds, 20);
+  assert.equal(projected.digesting, true);
+  const paused = advance(pauseLive(first.state, true), 30);
+  assert.equal(liveSnapshot(paused.state).units.find(unit => unit.typeId === 'chomper').cooldownSeconds, 20);
+  const waiting = advance(first.state, 19.9);
+  assert.equal(waiting.events.filter(event => event.type === 'chomp').length, 0);
+  assert(waiting.state.units.some(unit => unit.typeId === 'bucket'));
+  const ready = advance(waiting.state, .1);
+  assert.equal(ready.events.filter(event => event.type === 'chomp').length, 1);
+});
+
+test('spikes slow ground zombies forty percent only on contact and never affect floating units', () => {
+  for (const typeId of ['bucket', 'balloon', 'dragon']) {
+    const state = withoutCPU(createLiveMatch());
+    state.units = [injectedUnit('spikeweed', 0, 4), injectedUnit(typeId, 0, 4.4)];
+    const result = advance(state, 1).state.units.find(unit => unit.typeId === typeId);
+    assert(Math.abs(result.col - (4.4 - .2 * (typeId === 'bucket' ? .6 : 1))) < 1e-8);
+    assert.equal(result.hp, getUnit(typeId).hp - (typeId === 'bucket' ? 1 : 0));
+    // Away from the tile, ground speed is restored without lingering slow.
+    const outside = { ...state, units: state.units.map(unit => unit.typeId === typeId ? { ...unit, col: 3.5 } : unit) };
+    assert(Math.abs(advance(outside, 1).state.units.find(unit => unit.typeId === typeId).col - 3.3) < 1e-8);
+  }
+});
+
+test('ice impacts slow thirty percent for four seconds; renewed ice never multiplies spike slowing', () => {
+  let state = withoutCPU(createLiveMatch());
+  state.units = [injectedUnit('snow-pea', 0, 1, { shootCooldown: 0 }), injectedUnit('bucket', 0, 6)];
+  const hit = stepLive(state, 1 / 60);
+  const shot = hit.events.find(event => event.type === 'shot');
+  assert.equal(shot.typeId, 'snow-pea'); assert.equal(shot.ice, true);
+  assert(hit.events.some(event => event.type === 'freeze'));
+  assert.equal(hit.state.units.find(unit => unit.typeId === 'bucket').hp, 11);
+  assert.equal(liveSnapshot(hit.state).units.find(unit => unit.typeId === 'bucket').freezeUntil, 4 + 1 / 60);
+  state = { ...hit.state, units: hit.state.units.map(unit => unit.typeId === 'snow-pea' ? { ...unit, shootCooldown: 1000 } : unit) };
+  const ice = advance(state, 1);
+  const before = state.units.find(unit => unit.typeId === 'bucket').col;
+  assert(Math.abs(ice.state.units.find(unit => unit.typeId === 'bucket').col - (before - .2 * .7)) < 1e-8);
+  const expired = advance(state, 4.1).state;
+  const unfrozen = advance(expired, 1).state;
+  assert(Math.abs(expired.units.find(unit => unit.typeId === 'bucket').col - unfrozen.units.find(unit => unit.typeId === 'bucket').col - .2) < 1e-8);
+  const combined = withoutCPU(createLiveMatch());
+  combined.units = [injectedUnit('spikeweed', 0, 4), injectedUnit('bucket', 0, 4.4, { freezeUntil: 4 })];
+  assert(Math.abs(advance(combined, 1).state.units.find(unit => unit.typeId === 'bucket').col - 4.28) < 1e-8);
+  const renewed = advance(hit.state, 2.4).state;
+  assert(renewed.units.find(unit => unit.typeId === 'bucket').freezeUntil > 6.4);
+});
+
+test('dragons float over mines and chewing plants without either terrestrial effect', () => {
+  const state = withoutCPU(createLiveMatch());
+  state.units = [injectedUnit('potato-mine', 0, 4), injectedUnit('chomper', 0, 3), injectedUnit('dragon', 0, 4.4)];
+  const result = advance(state, 8);
+  assert.equal(result.state.units.find(unit => unit.typeId === 'dragon').hp, 19);
+  assert(!result.events.some(event => ['chomp', 'mine', 'bite'].includes(event.type)));
 });

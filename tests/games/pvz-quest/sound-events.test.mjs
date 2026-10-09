@@ -23,3 +23,8 @@ test('duplicate combat events do not create duplicate voices and mowers suppress
   assert.deepEqual(events,before);
   assert.deepEqual(combatSoundNames(),[]);
 });
+
+test('ice impacts request one local synthesized sound, not a missing recording', () => {
+  assert.deepEqual(combatSoundNames([{ type: 'freeze' }, { type: 'freeze' }]), ['freeze']);
+  assert.equal(EFFECT_NAMES.includes('freeze'), false);
+});

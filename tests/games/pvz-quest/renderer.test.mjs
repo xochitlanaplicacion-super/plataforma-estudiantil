@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, test } from 'node:test';
-import { BoardRenderer } from '../../../public/games/pvz-quest/classroom/renderer.js';
+import { BoardRenderer, UNIT_VISUAL_STATES, unitVisualState } from '../../../public/games/pvz-quest/classroom/renderer.js';
+import { getUnit } from '../../../public/games/pvz-quest/classroom/catalog.js';
 
 const globals = new Map();
 const timers = new Map();
@@ -41,7 +42,7 @@ function advanceClock(milliseconds) {
 
 function board({ reduced = false, sunAsset = true } = {}) {
   const calls = [];
-  const context = new Proxy({}, { get: (target, key) => key in target ? target[key] : (...args) => calls.push({ operation: key, args, alpha: target.globalAlpha ?? 1 }) });
+  const context = new Proxy({ filter: 'none' }, { get: (target, key) => key in target ? target[key] : (...args) => calls.push({ operation: key, args, alpha: target.globalAlpha ?? 1, fillStyle: target.fillStyle, strokeStyle: target.strokeStyle, filter: target.filter }) });
   const canvas = {
     style: {}, getContext: () => context, setAttribute() {}, addEventListener() {}, removeEventListener() {},
     getBoundingClientRect: () => ({ left: 200, top: 120, width: 960, height: 540 }),
@@ -244,4 +245,138 @@ test('reduced motion consumes the mower with short stationary feedback and cance
   assert.equal(renderer.stage, null);
   assert.equal(renderer.liveMowers.size, 0);
   assert.equal(timers.size, 0);
+});
+
+function spriteFixture(typeId, extras = {}) {
+  const definition = getUnit(typeId);
+  const fixture = board();
+  const image = {};
+  fixture.renderer.images.set(definition.sprite.src, image);
+  const unit = { id: `${typeId}-visual`, typeId, side: definition.side, row: 2, col: 3, hp: definition.hp, maxHp: definition.hp, ...extras };
+  return { ...fixture, unit, image, definition };
+}
+
+function spriteDraw(fixture, timestamp = clock) {
+  fixture.calls.length = 0;
+  fixture.renderer.drawUnit(fixture.unit, timestamp);
+  return fixture.calls.find(call => call.operation === 'drawImage' && call.args[0] === fixture.image);
+}
+
+test('walnut selects original chipped and severely damaged animation frames from remaining health', () => {
+  const fixture = spriteFixture('wallnut', { hp: 10, maxHp: 10 });
+  assert.equal(unitVisualState(fixture.unit).range, null);
+  fixture.unit.hp = 6;
+  assert.equal(unitVisualState(fixture.unit).range, UNIT_VISUAL_STATES.wallnut.damaged);
+  for (const timestamp of [0, 130, 1000, 3000]) {
+    const drawing = spriteDraw(fixture, timestamp);
+    const index = drawing.args[2] / 73 * 11 + drawing.args[1] / 65;
+    assert(index >= 17 && index <= 32, 'Damaged shells use frames 17–32, not an intact portrait');
+  }
+  fixture.unit.hp = 3;
+  assert.equal(unitVisualState(fixture.unit).range, UNIT_VISUAL_STATES.wallnut.critical);
+  for (const timestamp of [0, 130, 1000, 3000, 10000]) {
+    const drawing = spriteDraw(fixture, timestamp);
+    const index = drawing.args[2] / 73 * 11 + drawing.args[1] / 65;
+    assert(index >= 33 && index <= 50, 'Critical shells never enter the transparent last four frames');
+  }
+  fixture.renderer.view.units = [fixture.unit];
+  fixture.calls.length = 0;
+  fixture.renderer.drawEffects([{ type: 'damage', unitId: fixture.unit.id, row: 2, col: 3, amount: 1 }], 0.7);
+  assert(fixture.calls.some(call => call.operation === 'fillRect' && call.fillStyle === '#d7a044'), 'Being bitten drops visible shell crumbs');
+  fixture.renderer.destroy();
+});
+
+test('chomper closes its jaws, visibly chews for the cooldown, swallows and becomes ready again', () => {
+  const fixture = spriteFixture('chomper', { chompCooldown: 30 });
+  fixture.renderer.view.elapsed = 10;
+  assert.equal(unitVisualState(fixture.unit, fixture.renderer.view).range, UNIT_VISUAL_STATES.chomper.bite);
+  fixture.renderer.view.elapsed = 12;
+  assert.equal(unitVisualState(fixture.unit, fixture.renderer.view).range, UNIT_VISUAL_STATES.chomper.chew);
+  let drawing = spriteDraw(fixture, 1000);
+  let index = drawing.args[2] / 114 * 11 + drawing.args[1] / 130;
+  assert(index >= 44 && index <= 54);
+  assert(fixture.calls.some(call => call.operation === 'fillText' && call.args[0] === 'Masticando · 18 s'));
+  fixture.renderer.view.elapsed = 29;
+  assert.equal(unitVisualState(fixture.unit, fixture.renderer.view).range, UNIT_VISUAL_STATES.chomper.swallow);
+  drawing = spriteDraw(fixture, 1500);
+  index = drawing.args[2] / 114 * 11 + drawing.args[1] / 130;
+  assert(index >= 55 && index <= 65);
+  fixture.renderer.view.elapsed = 30;
+  assert.equal(unitVisualState(fixture.unit, fixture.renderer.view).range, undefined);
+  spriteDraw(fixture, 2000);
+  assert(!fixture.calls.some(call => call.operation === 'fillText' && call.args[0].startsWith('Masticando')));
+  fixture.renderer.destroy();
+});
+
+test('chomper animation and cooldown freeze with battle time while paused and reduced motion is static', () => {
+  const fixture = spriteFixture('chomper', { chompCooldown: 30 });
+  fixture.renderer.view.elapsed = 15;
+  fixture.renderer.view.paused = true;
+  const first = spriteDraw(fixture, 1000);
+  const later = spriteDraw(fixture, 25000);
+  assert.deepEqual(first.args.slice(1, 5), later.args.slice(1, 5));
+  assert(fixture.calls.some(call => call.operation === 'fillText' && call.args[0] === 'Masticando · 15 s'));
+  fixture.renderer.reducedMotion = true;
+  fixture.renderer.view.elapsed = 16;
+  const reducedFirst = spriteDraw(fixture, 30000);
+  fixture.renderer.view.elapsed = 17;
+  const reducedLater = spriteDraw(fixture, 35000);
+  assert.deepEqual(reducedFirst.args.slice(1, 5), reducedLater.args.slice(1, 5));
+  assert.equal(reducedFirst.args[2], 4 * 114, 'The chewing pose is retained without animated jaw motion');
+  fixture.renderer.destroy();
+});
+
+test('frozen zombies turn blue only until the engine freeze time expires', () => {
+  const fixture = spriteFixture('common', { freezeUntil: 14 });
+  fixture.renderer.view.elapsed = 10;
+  const frozen = spriteDraw(fixture, 500);
+  assert.match(frozen.filter, /hue-rotate\(155deg\)/);
+  assert(fixture.calls.some(call => call.operation === 'stroke' && call.strokeStyle === '#a5ebff'), 'The blue body carries a visible frost symbol');
+  assert.equal(fixture.renderer.context.filter, 'none', 'HP bars and the lawn cannot inherit the sprite tint');
+  fixture.renderer.view.elapsed = 14;
+  const thawed = spriteDraw(fixture, 4500);
+  assert.equal(thawed.filter, 'none');
+  fixture.renderer.destroy();
+});
+
+test('snow pea portraits on the board and projectiles are blue rather than green', () => {
+  const fixture = spriteFixture('snow-pea');
+  const drawing = spriteDraw(fixture, 500);
+  assert.match(drawing.filter, /hue-rotate\(155deg\)/);
+  fixture.calls.length = 0;
+  fixture.renderer.drawEffects([{ type: 'shot', ice: true, typeId: 'snow-pea', row: 2, fromCol: 3, toCol: 6 }], 0.3);
+  assert(fixture.calls.some(call => call.operation === 'fill' && call.fillStyle === '#86ddff'));
+  assert(fixture.calls.some(call => call.operation === 'stroke' && call.strokeStyle === '#e5faff'));
+  fixture.renderer.setLiveView({ ...snapshot(), elapsed: 1 });
+  fixture.renderer.showLiveEvents([{ type: 'freeze', row: 2, col: 6, unitId: 'common-ice', until: 5 }]);
+  assert.equal(fixture.renderer.liveEffects.at(-1).event.type, 'freeze');
+  fixture.renderer.destroy();
+});
+
+test('round playback adopts stage battle time for freezing and chomper cooldowns', async () => {
+  const fixture = spriteFixture('chomper', { chompCooldown: 25 });
+  fixture.renderer.view.elapsed = 0;
+  const result = fixture.renderer.play([{ name: 'bites', elapsed: 10, units: [fixture.unit], events: [], mowers: Array(5).fill(true) }]);
+  assert.equal(fixture.renderer.view.elapsed, 10);
+  assert(fixture.calls.some(call => call.operation === 'fillText' && call.args[0] === 'Masticando · 15 s'));
+  advanceClock(650);
+  assert.equal(await result, true);
+  fixture.renderer.destroy();
+});
+
+test('round-mode chomper animates the actual jaw-closing stage before staying in a chewing pose', async () => {
+  const fixture = spriteFixture('chomper', { chompCooldown: 25 });
+  fixture.renderer.view.config = { mode: 'duel' };
+  const result = fixture.renderer.play([{ name: 'bites', elapsed: 5, units: [fixture.unit],
+    events: [{ type: 'chomp', sourceId: fixture.unit.id, row: 2, col: 4 }], mowers: Array(5).fill(true) }]);
+  const first = spriteDraw(fixture, 0).args;
+  const later = spriteDraw(fixture, 600).args;
+  assert.notDeepEqual(first.slice(1, 3), later.slice(1, 3), 'The bite closes even while round battle time is fixed');
+  assert(first[2] / 114 * 11 + first[1] / 130 >= 25);
+  advanceClock(650);
+  assert.equal(await result, true);
+  const chewing = spriteDraw(fixture, 650).args;
+  const index = chewing[2] / 114 * 11 + chewing[1] / 130;
+  assert(index >= 44 && index <= 54, 'After the bite, the mouth stays chewing instead of reopening at frame 25');
+  fixture.renderer.destroy();
 });

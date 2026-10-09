@@ -10,6 +10,7 @@ export function combatSoundNames(events = []) {
   const types = new Set(events.map(event => event.type));
   if (types.has('mower')) names.add('zombieFinalKill');
   if (types.has('mine')) names.add('puff');
+  if (types.has('freeze')) names.add('freeze');
   if (types.has('bite') || types.has('chomp')) names.add('chomp');
   if (types.has('shot')) {
     names.add('pea_shoot');

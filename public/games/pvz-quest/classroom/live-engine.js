@@ -1,4 +1,4 @@
-import { UNITS, getUnit } from './catalog.js';
+import { UNITS, getUnit, ZOMBIE_SPEED_PRESETS, zombieSpeedForWave } from './catalog.js';
 
 /**
  * Continuous classroom combat, deliberately separate from the round engine.
@@ -18,7 +18,10 @@ export const LIVE_RULES = Object.freeze({
   shotSeconds: 2.4,
   biteSeconds: 1.5,
   mineArmSeconds: 5,
-  chompRestSeconds: 8,
+  chompRestSeconds: 20,
+  freezeSeconds: 4,
+  iceSlowFactor: 0.7,
+  spikeSlowFactor: 0.6,
   spikeSeconds: 2,
   purchaseCooldownSeconds: 1,
   firstZombieDelaySeconds: 5,
@@ -30,8 +33,7 @@ export const LIVE_RULES = Object.freeze({
   sunflowerSeconds: 12,
   maxSunflowers: 4,
   maxResources: 1500,
-  maxHumanPurchasesPerWave: 10,
-  maxZombies: 30,
+  maxZombies: 200,
   assistantFirstWaveCount: 5,
   assistantAddedPerWave: 1,
   assistantMaxWaveCount: 20,
@@ -40,20 +42,21 @@ export const LIVE_RULES = Object.freeze({
   overtimeSeconds: 120,
 });
 
-export const LIVE_ZOMBIE_SPEED_PRESETS = Object.freeze([0.35, 0.55, 0.8, 1, 1.3, 1.7]);
+export const LIVE_ZOMBIE_SPEED_PRESETS = ZOMBIE_SPEED_PRESETS;
+export { zombieSpeedForWave };
 
 const copy = value => structuredClone(value);
 const pair = value => ({ plants: value, zombies: value });
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
 const epsilon = 1e-8;
-const shooters = new Set(['peashooter', 'repeater', 'threepeater', 'corn-pult']);
+const shooters = new Set(['peashooter', 'snow-pea', 'repeater', 'threepeater', 'corn-pult']);
 const groundPlants = new Set(['potato-mine', 'spikeweed']);
 const sideOfClass = state => state.config.mode === 'duel' ? state.activeSide : state.config.mode === 'coop-plants' ? 'plants' : 'zombies';
 const canHumanControl = (state, side) => ['plants', 'zombies'].includes(side)
   && (state.config.mode === 'duel' || side === sideOfClass(state));
 const sideOfCPU = state => state.config.mode === 'coop-zombies' ? 'plants' : null;
 const alive = unit => unit.hp > 0;
-const flying = unit => unit.typeId === 'balloon';
+const flying = unit => ['balloon', 'dragon'].includes(unit.typeId);
 const definition = typeId => {
   const unit = getUnit(typeId);
   assert(unit, 'Esta unidad no existe en el repertorio disponible.');
@@ -146,6 +149,8 @@ function prepareWaveBudget(state, events, first = false) {
 
 function beginWave(state, events, first = false, prepared = false) {
   if (!prepared) prepareWaveBudget(state, events, first);
+  state.zombieSpeed = zombieSpeedForWave(state.round);
+  state.zombieSpeedMode = 'auto';
   state.waveElapsed = 0;
   state.waveEnding = false;
   state.cpuNextActionAt = sideOfCPU(state) ? state.elapsed + LIVE_RULES.plantCPUReactionSeconds : Infinity;
@@ -190,14 +195,14 @@ export function createLiveMatch(config = {}) {
   assert(typeof settings.seed === 'string' || (typeof settings.seed === 'number' && Number.isFinite(settings.seed)), 'La semilla de la partida debe ser texto o un número válido.');
   assert(typeof settings.startPaused === 'boolean', 'Indica si el combate debe comenzar en pausa.');
   assert(typeof settings.tacticalPauses === 'boolean', 'Indica si quieres pausas tácticas entre oleadas.');
-  const zombieSpeed = config.zombieSpeed ?? 0.55;
+  const zombieSpeed = config.zombieSpeed ?? zombieSpeedForWave(1);
   validateZombieSpeed(zombieSpeed);
   const state = {
     config: settings, phase: 'live', activeSide: settings.mode === 'coop-zombies' ? 'zombies' : 'plants',
     humanSide: settings.mode === 'coop-zombies' ? 'zombies' : 'plants',
     round: 1, maxRounds: settings.waves, elapsed: 0, waveElapsed: 0,
     tickCount: 0, accumulator: 0, paused: settings.startPaused, closing: false, closingAt: null,
-    initialStaging: settings.mode === 'duel' && settings.startPaused, zombieSpeed,
+    initialStaging: settings.mode === 'duel' && settings.startPaused, zombieSpeed, zombieSpeedMode: 'auto',
     tacticalPhase: null, tacticalOrder: [], tacticalIndex: 0, pendingWave: null, waveEnding: false,
     tacticalPublicBaseline: null, tacticalPublicResources: null,
     resources: pair(200), units: [], plans: { plants: [], zombies: [] },
@@ -215,6 +220,10 @@ export function createLiveMatch(config = {}) {
     spawn(state, 'peashooter', 4, 2, [], 'starter');
   }
   beginWave(state, [], true);
+  if (config.zombieSpeed != null) {
+    state.zombieSpeed = zombieSpeed;
+    state.zombieSpeedMode = 'manual';
+  }
   if (state.initialStaging && settings.tacticalPauses) {
     state.tacticalPhase = 'briefing';
     state.pendingWave = 1;
@@ -297,6 +306,10 @@ export function resumeLiveTacticalWave(original) {
   state.paused = false;
   state.accumulator = 0;
   if (!initial) beginWave(state, [], false, true);
+  else {
+    state.zombieSpeed = zombieSpeedForWave(state.round);
+    state.zombieSpeedMode = 'auto';
+  }
   if (state.config.mode !== 'duel') state.activeSide = sideOfClass(state);
   state.humanSide = state.activeSide;
   state.humanPurchasesThisWave = state.purchasesBySideThisWave[state.activeSide];
@@ -304,8 +317,8 @@ export function resumeLiveTacticalWave(original) {
 }
 
 function validateZombieSpeed(value) {
-  assert(typeof value === 'number' && Number.isFinite(value) && value >= 0.25 && value <= 2,
-    'La velocidad de los zombis debe estar entre 0.25 y 2.');
+  assert(typeof value === 'number' && Number.isFinite(value) && value >= ZOMBIE_SPEED_PRESETS[0] && value <= ZOMBIE_SPEED_PRESETS.at(-1),
+    'La velocidad de los zombis debe estar entre 0.35 y 1.7.');
 }
 
 export function setLiveZombieSpeed(original, value) {
@@ -313,6 +326,7 @@ export function setLiveZombieSpeed(original, value) {
   validateZombieSpeed(value);
   const state = copy(original);
   state.zombieSpeed = value;
+  state.zombieSpeedMode = 'manual';
   return state;
 }
 
@@ -324,10 +338,9 @@ function purchaseProblem(state, side, typeId, row, col, checkPosition = true) {
   if (state.tacticalPhase && side !== state.activeSide) return 'Sólo puede comprar el equipo que tiene el turno de la moneda.';
   if (state.closing) return 'Terminó la última oleada: se resolverán las unidades que ya están en el tablero.';
   if (!type || type.side !== side) return 'Esta unidad no pertenece al equipo seleccionado.';
-  if (state.purchasesBySideThisWave[side] >= LIVE_RULES.maxHumanPurchasesPerWave) return 'El máximo es 10 compras por equipo y oleada.';
-  if (!state.initialStaging && !state.tacticalPhase && (state.purchaseReadyAt[typeId] || 0) > state.elapsed + epsilon) return 'Esta unidad se está recargando; espera un segundo de juego.';
+  if (!state.paused && !state.initialStaging && !state.tacticalPhase && (state.purchaseReadyAt[typeId] || 0) > state.elapsed + epsilon) return 'Esta unidad se está recargando; espera un segundo de juego.';
   if (state.resources[side] < type.cost) return 'No hay suficientes recursos para comprar esta unidad.';
-  if (side === 'zombies' && state.units.filter(unit => unit.side === 'zombies').length >= LIVE_RULES.maxZombies) return 'Ya hay 30 zombis en el tablero.';
+  if (side === 'zombies' && state.units.filter(unit => unit.side === 'zombies' && alive(unit)).length >= LIVE_RULES.maxZombies) return `Límite de seguridad: ${LIVE_RULES.maxZombies} zombis simultáneos en el tablero.`;
   if (!checkPosition) return null;
   if (!Number.isInteger(row) || row < 0 || row > 4 || !Number.isInteger(col)) return 'Selecciona una casilla válida del tablero.';
   if (side === 'plants') {
@@ -464,9 +477,15 @@ function shoot(state, events) {
   }
   for (const { plant, target, damage } of attacks) {
     emit(events, 'shot', { sourceId: plant.id, targetId: target.id, row: target.row,
-      fromCol: plant.col, toCol: target.col, lob: plant.typeId === 'corn-pult' });
+      fromCol: plant.col, toCol: target.col, lob: plant.typeId === 'corn-pult',
+      typeId: plant.typeId, ice: plant.typeId === 'snow-pea' });
     state.stats.shots += 1;
     hurt(state, target, damage, events, plant.id);
+    if (plant.typeId === 'snow-pea' && alive(target)) {
+      target.freezeUntil = state.elapsed + LIVE_RULES.freezeSeconds;
+      emit(events, 'freeze', { sourceId: plant.id, targetId: target.id, unitId: target.id,
+        row: target.row, col: target.col, until: target.freezeUntil });
+    }
   }
   removeDead(state, events);
 }
@@ -495,7 +514,7 @@ function chomp(state, events) {
     if (!target) continue;
     hurt(state, target, target.hp, events, plant.id);
     plant.chompCooldown = state.elapsed + LIVE_RULES.chompRestSeconds;
-    emit(events, 'chomp', { sourceId: plant.id, targetId: target.id, row: plant.row, col: plant.col });
+    emit(events, 'chomp', { sourceId: plant.id, targetId: target.id, row: plant.row, col: plant.col, duration: LIVE_RULES.chompRestSeconds });
   }
   removeDead(state, events);
 }
@@ -503,7 +522,13 @@ function chomp(state, events) {
 function advanceAndBite(state, events) {
   for (const zombie of state.units.filter(unit => unit.side === 'zombies')) {
     if (!alive(zombie)) continue;
-    const nextCol = zombie.col - Math.max(0, zombie.move) * state.zombieSpeed / LIVE_RULES.secondsPerCell * LIVE_RULES.fixedStep;
+    const onSpikes = !flying(zombie) && state.units.some(plant => plant.side === 'plants' && alive(plant)
+      && plant.typeId === 'spikeweed' && plant.row === zombie.row && Math.abs(plant.col - zombie.col) <= 0.46);
+    // Status effects are relative to the current wave's speed and never stack
+    // multiplicatively: the strongest active reduction takes precedence.
+    const slowFactor = Math.min(state.elapsed < (zombie.freezeUntil || 0) ? LIVE_RULES.iceSlowFactor : 1,
+      onSpikes ? LIVE_RULES.spikeSlowFactor : 1);
+    const nextCol = zombie.col - Math.max(0, zombie.move) * state.zombieSpeed * slowFactor / LIVE_RULES.secondsPerCell * LIVE_RULES.fixedStep;
     const blocker = !flying(zombie) && state.units.filter(unit => unit.side === 'plants' && alive(unit) && unit.row === zombie.row && !groundPlants.has(unit.typeId)
       && unit.col + 0.42 <= zombie.col + epsilon && unit.col + 0.42 >= nextCol - epsilon)
       .sort((a, b) => b.col - a.col)[0];
@@ -607,7 +632,7 @@ export function liveSnapshot(state) {
     config: { mode: state.config.mode, tempo: 'continuous', waves: state.config.waves, waveSeconds: state.config.waveSeconds, tacticalPauses: state.config.tacticalPauses },
     phase: state.phase, activeSide: state.activeSide, humanSide: state.humanSide,
     round: state.round, maxRounds: state.maxRounds, elapsed: state.elapsed, waveElapsed: state.waveElapsed,
-    paused: state.paused, initialStaging: state.initialStaging, zombieSpeed: state.zombieSpeed,
+    paused: state.paused, initialStaging: state.initialStaging, zombieSpeed: state.zombieSpeed, zombieSpeedMode: state.zombieSpeedMode,
     tacticalPhase: state.tacticalPhase, tacticalOrder: state.tacticalOrder,
     tacticalIndex: state.tacticalIndex, pendingWave: state.pendingWave, waveEnding: state.waveEnding,
     closing: state.closing, closingAt: state.closingAt,
@@ -618,6 +643,9 @@ export function liveSnapshot(state) {
     resources: hidden ? state.tacticalPublicResources : state.resources, units: units.map(unit => ({
       id: unit.id, typeId: unit.typeId, side: unit.side, row: unit.row, col: unit.col,
       hp: unit.hp, maxHp: unit.maxHp, placedAt: unit.placedAt, readyAt: unit.readyAt,
+      freezeUntil: unit.freezeUntil || 0, chompCooldown: unit.chompCooldown || 0,
+      cooldownSeconds: unit.typeId === 'chomper' ? Math.max(0, (unit.chompCooldown || 0) - state.elapsed) : 0,
+      digesting: unit.typeId === 'chomper' && (unit.chompCooldown || 0) > state.elapsed,
     })),
     plans: { plants: [], zombies: [] }, mowers: state.mowers, winner: state.winner, stats: hidden ? state.tacticalPublicBaseline.stats : state.stats,
   });

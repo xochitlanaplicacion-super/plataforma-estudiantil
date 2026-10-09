@@ -9,10 +9,10 @@ function advance(state, seconds) {
 }
 function resume(state) { state = beginLiveTacticalShopping(state); for (let turn = 0; turn < 2; turn++) state = confirmLiveTacticalTurn(state,state.activeSide); return resumeLiveTacticalWave(state); }
 
-test('all three continuous modes start Lenta; durations extend to ten minutes', () => {
+test('all three continuous modes start Muy lenta automatically; durations extend to ten minutes', () => {
   for (const mode of ['duel','coop-plants','coop-zombies']) {
     const state = createLiveMatch({mode,waveSeconds:600,startPaused: mode === 'duel'});
-    assert.equal(state.zombieSpeed,.55); assert.equal(state.config.tacticalPauses,true); assert.equal(state.config.waveSeconds,600);
+    assert.equal(state.zombieSpeed,.35); assert.equal(state.zombieSpeedMode,'auto'); assert.equal(state.config.tacticalPauses,true); assert.equal(state.config.waveSeconds,600);
   }
   for (const waveSeconds of [29,601,600.5,'600']) assert.throws(() => createLiveMatch({waveSeconds}));
 });
@@ -108,4 +108,18 @@ test('final wave closes without a new coin; survivors advance and teacher still 
   let state = advance(createLiveMatch({mode:'duel',waves:1,waveSeconds:30}),30).state;
   assert.equal(state.closing,true); assert.equal(state.tacticalPhase,null); assert.equal(state.paused,false);
   state = awardLiveResources(state,'plants',100); assert.equal(state.stats.resourcesAwarded.plants,100);
+});
+
+test('automatic acceleration waits for the tactical reveal, not the paused shopping boundary', () => {
+  for (const mode of ['duel','coop-plants','coop-zombies']) {
+    let state = createLiveMatch({ mode, waves: 3, waveSeconds: 30 });
+    state = engine.setLiveZombieSpeed(state, 1.3);
+    state = advance(state,30).state;
+    assert.equal(state.round,1); assert.equal(state.pendingWave,2);
+    assert.equal(state.zombieSpeed,1.3); assert.equal(state.zombieSpeedMode,'manual');
+    const unchanged = advance(state,5).state;
+    assert.equal(unchanged.zombieSpeed,1.3);
+    state = resume(unchanged);
+    assert.equal(state.round,2); assert.equal(state.zombieSpeed,.55); assert.equal(state.zombieSpeedMode,'auto');
+  }
 });

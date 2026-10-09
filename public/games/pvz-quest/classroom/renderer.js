@@ -21,6 +21,21 @@ const ASSETS = {
 };
 const imageLoader = createImageLoader({ resolveURL: assetURL });
 const cropCache = new Map();
+const tintCache = new Map();
+const TINT_CACHE_LIMIT = 96;
+// Verified against the packaged sheets: the last four WallNut cells are
+// transparent, and Chomper's final two rows contain chewing/swallowing art.
+export const UNIT_VISUAL_STATES = Object.freeze({
+  wallnut: Object.freeze({
+    damaged: Object.freeze({ startX: 6, startY: 1, endX: 10, endY: 2 }),
+    critical: Object.freeze({ startX: 0, startY: 3, endX: 6, endY: 4 }),
+  }),
+  chomper: Object.freeze({
+    bite: Object.freeze({ startX: 3, startY: 2, endX: 10, endY: 3 }),
+    chew: Object.freeze({ startX: 0, startY: 4, endX: 10, endY: 4 }),
+    swallow: Object.freeze({ startX: 0, startY: 5, endX: 10, endY: 5 }),
+  }),
+});
 const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 const centre = (row, col) => ({ x: GRID.x + (col + 0.5) * CELL_W, y: GRID.y + (row + 0.5) * CELL_H });
 const ease = value => value * value * (3 - 2 * value);
@@ -33,6 +48,41 @@ function frameFor(sprite, clock, phase = 0) {
   const count = Math.max(1, end - start + 1);
   const frame = start + Math.floor(clock / 135 + phase) % count;
   return { x: frame % SHEET_COLS, y: Math.floor(frame / SHEET_COLS) };
+}
+
+function frameAtProgress(range, progress) {
+  const first = range.startY * SHEET_COLS + range.startX;
+  const last = range.endY * SHEET_COLS + range.endX;
+  const index = first + Math.min(last - first, Math.floor(clamp(progress, 0, 1) * (last - first + 1)));
+  return { x: index % SHEET_COLS, y: Math.floor(index / SHEET_COLS) };
+}
+
+/** Sprite states depend on battle time, never wall-clock time while paused. */
+export function unitVisualState(unit, snapshot = {}) {
+  const elapsed = Number.isFinite(snapshot.elapsed) ? snapshot.elapsed : 0;
+  const state = { frozen: unit.side === 'zombies' && Number.isFinite(unit.freezeUntil) && unit.freezeUntil > elapsed };
+  if (unit.typeId === 'wallnut') {
+    const definition = getUnit(unit.typeId);
+    const maxHp = unit.maxHp ?? definition.hp;
+    const ratio = clamp((unit.hp ?? maxHp) / maxHp, 0, 1);
+    state.range = ratio <= 1 / 3 ? UNIT_VISUAL_STATES.wallnut.critical : ratio <= 2 / 3 ? UNIT_VISUAL_STATES.wallnut.damaged : null;
+  }
+  if (unit.typeId === 'chomper') {
+    state.cooldownSeconds = Number.isFinite(unit.chompCooldown)
+      ? Math.max(0, unit.chompCooldown - elapsed) : Math.max(0, unit.cooldownSeconds || 0);
+    if (state.cooldownSeconds > 0) {
+      if (state.cooldownSeconds > 18.5) {
+        state.range = UNIT_VISUAL_STATES.chomper.bite;
+        state.frame = frameAtProgress(state.range, (20 - state.cooldownSeconds) / 1.5);
+      } else if (state.cooldownSeconds <= 1.5) {
+        state.range = UNIT_VISUAL_STATES.chomper.swallow;
+        state.frame = frameAtProgress(state.range, (1.5 - state.cooldownSeconds) / 1.5);
+      } else {
+        state.range = UNIT_VISUAL_STATES.chomper.chew;
+      }
+    }
+  }
+  return state;
 }
 
 function hash(value) {
@@ -75,21 +125,54 @@ function cropFor(definition, image) {
   return crop;
 }
 
-function drawSprite(context, image, definition, x, y, maxWidth, maxHeight, clock, phase = 0) {
+function tintedFrame(image, sprite, crop, frame, width, height, colour) {
+  const key = `${sprite.src}:${frame.x}:${frame.y}:${Math.ceil(width)}:${Math.ceil(height)}:${colour}`;
+  if (tintCache.has(key)) return tintCache.get(key);
+  try {
+    const surface = document.createElement('canvas');
+    surface.width = Math.ceil(width); surface.height = Math.ceil(height);
+    const paint = surface.getContext('2d');
+    if (!paint) return null;
+    paint.drawImage(image, frame.x * sprite.width + crop.x, frame.y * sprite.height + crop.y,
+      crop.width, crop.height, 0, 0, surface.width, surface.height);
+    // Tint only opaque character pixels. A blue rectangle must never cover
+    // the lawn; this also works on iPad browsers without Canvas filter support.
+    paint.globalCompositeOperation = 'source-atop';
+    paint.fillStyle = colour; paint.fillRect(0, 0, surface.width, surface.height);
+    tintCache.set(key, surface);
+    if (tintCache.size > TINT_CACHE_LIMIT) tintCache.delete(tintCache.keys().next().value);
+    return surface;
+  } catch { return null; }
+}
+
+function drawSprite(context, image, definition, x, y, maxWidth, maxHeight, clock, phase = 0, options = {}) {
   if (!image) {
-    context.fillStyle = definition.side === 'plants' ? '#396e25' : '#6d536b';
+    context.fillStyle = options.tint || definition.id === 'snow-pea' ? '#5dbfff' : definition.side === 'plants' ? '#396e25' : '#6d536b';
     context.beginPath(); context.arc(x, y, Math.min(maxWidth, maxHeight) * 0.3, 0, Math.PI * 2); context.fill();
     context.fillStyle = '#fff'; context.font = 'bold 12px sans-serif'; context.textAlign = 'center';
     context.fillText(definition.name.slice(0, 10), x, y + 4);
     return;
   }
-  const sprite = definition.sprite;
-  const crop = cropFor(definition, image);
-  const frame = frameFor(sprite, clock, phase);
+  const sprite = options.range ? { ...definition.sprite, ...options.range } : definition.sprite;
+  // Attack/damage frames can extend beyond an idle frame's trimmed bounds.
+  // Use their whole cell so a closing jaw or broken shell is never clipped.
+  const crop = options.range ? { x: 0, y: 0, width: sprite.width, height: sprite.height } : cropFor(definition, image);
+  const frame = options.frame ?? frameFor(sprite, clock, phase);
   const scale = Math.min(maxWidth / crop.width, maxHeight / crop.height);
   const width = crop.width * scale, height = crop.height * scale;
+  const tint = options.tint ?? (definition.id === 'snow-pea' ? 'rgba(95,191,255,.72)' : null);
+  if (tint) {
+    const surface = tintedFrame(image, sprite, crop, frame, width, height, tint);
+    if (surface) {
+      context.drawImage(surface, x - width / 2, y - height / 2, width, height);
+      return;
+    }
+  }
+  const previousFilter = context.filter;
+  if (tint) context.filter = 'sepia(1) saturate(3) hue-rotate(155deg)';
   context.drawImage(image, frame.x * sprite.width + crop.x, frame.y * sprite.height + crop.y,
     crop.width, crop.height, x - width / 2, y - height / 2, width, height);
+  if (tint) context.filter = previousFilter ?? 'none';
 }
 
 /** Draw one catalogue portrait, not an inherited card with incorrect prices. */
@@ -248,7 +331,7 @@ export class BoardRenderer {
     const clock = now();
     this.liveEffects = this.liveEffects.filter(effect => clock < effect.started + effect.duration);
     this.expireLiveMowers(clock);
-    const drawable = new Set(['shot', 'damage', 'defeat', 'death', 'mine', 'chomp', 'bite', 'mower', 'invasion', 'sun']);
+    const drawable = new Set(['shot', 'freeze', 'damage', 'defeat', 'death', 'mine', 'chomp', 'bite', 'mower', 'invasion', 'sun']);
     for (const event of events) {
       if (!event || !drawable.has(event.type) || !Number.isFinite(event.row) || event.row < 0 || event.row >= GRID.rows) continue;
       if (event.type === 'mower') {
@@ -306,7 +389,7 @@ export class BoardRenderer {
       const hasMower = stage.events?.some(event => event.type === 'mower');
       const effectDuration = this.reducedMotion ? hasSun ? 400 : 240 : hasSun ? SUN_EFFECT_MS : 650;
       const duration = hasMower ? Math.max(effectDuration, this.reducedMotion ? 400 : MOWER_EFFECT_MS) : effectDuration;
-      this.view = { ...this.view, units: (stage.units || []).map(unit => ({ ...unit })), mowers: [...(stage.mowers || this.view.mowers)] };
+      this.view = { ...this.view, ...(Number.isFinite(stage.elapsed) ? { elapsed: stage.elapsed } : {}), units: (stage.units || []).map(unit => ({ ...unit })), mowers: [...(stage.mowers || this.view.mowers)] };
       this.stage = { ...stage, events: stage.events || [], previous, started: now(), duration, effectDuration };
       for (const event of this.stage.events) if (event.type === 'mower') this.usedMowerRows.add(event.row);
       try { onStage?.(stage, index); } catch (error) { this.cancelPlay(); throw error; }
@@ -424,6 +507,15 @@ export class BoardRenderer {
     point.x += stack ? ((stack % 3) - 1) * 10 : 0;
     point.y += floor ? CELL_H * 0.23 : stack ? -(stack % 3) * 5 : 0;
     const height = floor ? CELL_H * (unit.typeId === 'spikeweed' ? 0.34 : 0.46) : CELL_H * 0.8;
+    const visual = unitVisualState(unit, this.view);
+    const tactical = !this.live && !!this.view.config?.mode;
+    if (tactical && visual.cooldownSeconds > 18.5) {
+      const chomp = this.stage?.events.find(event => event.type === 'chomp' && event.sourceId === unit.id);
+      // Round battle time advances in discrete steps. Animate the actual bite
+      // within its stage, then retain the chewing pose between round steps.
+      visual.range = chomp ? UNIT_VISUAL_STATES.chomper.bite : UNIT_VISUAL_STATES.chomper.chew;
+      visual.frame = chomp ? frameAtProgress(visual.range, (clock - this.stage.started) / this.stage.effectDuration) : null;
+    }
     context.save();
     context.globalAlpha = alpha * (unit.planned ? 0.55 : 1);
     if (defeated) {
@@ -431,8 +523,27 @@ export class BoardRenderer {
     }
     context.fillStyle = 'rgba(15,35,14,.25)'; context.beginPath();
     context.ellipse(point.x, centre(unit.row, col).y + CELL_H * 0.32, CELL_W * 0.25, 6, 0, 0, Math.PI * 2); context.fill();
+    const spriteClock = visual.cooldownSeconds > 0 && (!tactical || this.view.paused) ? (this.view.elapsed ?? 0) * 1000 : clock;
+    const options = { range: visual.range, ...(visual.frozen ? { tint: 'rgba(89,181,255,.68)' } : {}) };
+    if (!this.reducedMotion && visual.frame) options.frame = visual.frame;
     drawSprite(context, this.images.get(definition.sprite.src), definition, point.x, point.y, CELL_W * 0.84, height,
-      this.reducedMotion ? 0 : clock, hash(unit.id || unit.typeId) % 16);
+      this.reducedMotion ? 0 : spriteClock, visual.cooldownSeconds > 0 || this.reducedMotion ? 0 : hash(unit.id || unit.typeId) % 16, options);
+    if (visual.frozen && !defeated) {
+      context.strokeStyle = '#a5ebff'; context.lineWidth = 2;
+      const frostY = point.y - height * 0.36;
+      for (let spoke = 0; spoke < 3; spoke += 1) {
+        const angle = spoke * Math.PI / 3;
+        context.beginPath(); context.moveTo(point.x - Math.cos(angle) * 7, frostY - Math.sin(angle) * 7);
+        context.lineTo(point.x + Math.cos(angle) * 7, frostY + Math.sin(angle) * 7); context.stroke();
+      }
+    }
+    if (visual.cooldownSeconds > 0 && !defeated && !unit.planned) {
+      context.fillStyle = '#fcf0b3'; context.strokeStyle = '#354414'; context.lineWidth = 3;
+      context.font = 'bold 11px system-ui, sans-serif'; context.textAlign = 'center'; context.textBaseline = 'middle';
+      const label = `Masticando · ${Math.ceil(visual.cooldownSeconds)} s`;
+      context.strokeText(label, point.x, GRID.y + unit.row * CELL_H + 8);
+      context.fillText(label, point.x, GRID.y + unit.row * CELL_H + 8);
+    }
     if (!defeated && !unit.planned) {
       const maxHp = unit.maxHp ?? definition.hp, hp = unit.hp ?? maxHp;
       const barWidth = 42, barY = GRID.y + unit.row * CELL_H + CELL_H - 13;
@@ -487,10 +598,27 @@ export class BoardRenderer {
         const x = from.x + (to.x - from.x) * travel;
         const y = from.y - (event.lob ? Math.sin(travel * Math.PI) * 70 : 0);
         context.globalAlpha = progress > 0.78 ? Math.max(0, (1 - progress) / 0.22) : 1;
-        context.fillStyle = event.lob ? '#f8db4f' : '#a6f15e'; context.strokeStyle = event.lob ? '#a26d22' : '#3c731f';
+        const ice = event.ice || event.typeId === 'snow-pea';
+        context.fillStyle = ice ? '#86ddff' : event.lob ? '#f8db4f' : '#a6f15e'; context.strokeStyle = ice ? '#e5faff' : event.lob ? '#a26d22' : '#3c731f';
         context.lineWidth = 2; context.beginPath();
         // An actual yellow corn kernel: never the old watermelon image.
         context.ellipse(x, y, event.lob ? 8 : 7, event.lob ? 5 : 7, event.lob ? travel * 4 : 0, 0, Math.PI * 2); context.fill(); context.stroke();
+        if (ice && !this.reducedMotion) {
+          context.fillStyle = '#dcf8ff';
+          for (let spark = 1; spark <= 3; spark += 1) {
+            context.beginPath(); context.arc(x - spark * 8, y + Math.sin(spark + progress * 7) * 3, 2, 0, Math.PI * 2); context.fill();
+          }
+        }
+      }
+      if (event.type === 'freeze') {
+        const point = centre(event.row, event.col ?? 0);
+        context.globalAlpha = 1 - progress; context.strokeStyle = '#a5ebff'; context.lineWidth = 2;
+        const radius = this.reducedMotion ? 12 : 9 + progress * 24;
+        for (let spoke = 0; spoke < 3; spoke += 1) {
+          const angle = spoke * Math.PI / 3;
+          context.beginPath(); context.moveTo(point.x - Math.cos(angle) * radius, point.y - Math.sin(angle) * radius);
+          context.lineTo(point.x + Math.cos(angle) * radius, point.y + Math.sin(angle) * radius); context.stroke();
+        }
       }
       if (['damage', 'defeat', 'death', 'mine', 'chomp', 'bite'].includes(event.type)) {
         const point = centre(event.row, event.col ?? 0);
@@ -498,13 +626,18 @@ export class BoardRenderer {
         const local = clamp((progress - start) / (1 - start), 0, 1);
         if (progress < start) continue;
         context.globalAlpha = 1 - local;
-        const colour = event.type === 'mine' ? '#ffde5a' : event.type === 'damage' ? '#ffad6b' : '#f4efc6';
+        const damagedUnit = event.type === 'damage' && (this.view.units.find(unit => unit.id === event.unitId)
+          || this.liveRetired.get(event.unitId)?.unit || this.stage?.previous.find(unit => unit.id === event.unitId));
+        const nutCrumbs = damagedUnit?.typeId === 'wallnut';
+        const colour = nutCrumbs ? '#d7a044' : event.type === 'mine' ? '#ffde5a' : event.type === 'damage' ? '#ffad6b' : '#f4efc6';
         context.fillStyle = colour;
         const seed = hash(event.unitId || event.sourceId || `${event.row}:${event.col}`);
         for (let index = 0; index < (this.reducedMotion ? 4 : 11); index += 1) {
           const angle = index * Math.PI * 2 / 11 + seed % 9;
           const distance = local * (23 + index % 4 * 8);
-          context.beginPath(); context.arc(point.x + Math.cos(angle) * distance, point.y + Math.sin(angle) * distance + local * local * 15, 3 + index % 3, 0, Math.PI * 2); context.fill();
+          const x = point.x + Math.cos(angle) * distance, y = point.y + Math.sin(angle) * distance + local * local * 15;
+          if (nutCrumbs) context.fillRect(x, y, 3 + index % 3, 4 + index % 2);
+          else { context.beginPath(); context.arc(x, y, 3 + index % 3, 0, Math.PI * 2); context.fill(); }
         }
         if (event.type === 'damage') {
           context.font = 'bold 24px system-ui, sans-serif'; context.textAlign = 'center';

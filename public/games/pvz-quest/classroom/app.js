@@ -1,9 +1,11 @@
 import { getUnit } from './catalog.js';
-import { createMatch, grantResources, beginPlanning, addOrder, removeOrder, commitPlan, continuePlanning, resolveRound, resolveCleanup, orderLimit, publicSnapshot, availableUnits } from './engine.js';
+import { createMatch, grantResources, beginPlanning, addOrder, removeOrder, commitPlan, continuePlanning, resolveRound, resolveCleanup, publicSnapshot, availableUnits } from './engine.js';
 import { LIVE_RULES, LIVE_ZOMBIE_SPEED_PRESETS, createLiveMatch, awardLiveResources, buyLiveUnit, pauseLive, stepLive, liveSnapshot, availableLiveUnits, selectLiveSide, setLiveZombieSpeed, beginLiveInitialCoin, beginLiveTacticalShopping, confirmLiveTacticalTurn, resumeLiveTacticalWave } from './live-engine.js';
 import { normalizeQuestions, createQuestionPool, takeQuestion, gradeQuestion, buildQuestionPrompt } from './questions.js';
 import { BoardRenderer, renderCard } from './renderer.js';
 import { EFFECT_NAMES, combatSoundNames } from './sound-events.js';
+import { createIceSound } from './ice-audio.js';
+import { compactCombatEvents } from './combat-events.js';
 import { assetURL, platformMode, questionsAPI, statusAPI } from './runtime.js';
 import { createWavePresentation } from './wave-presentation.js';
 
@@ -55,6 +57,7 @@ music.loop = true; music.volume = 0.3; music.preload = 'none';
 const effects = new Map();
 const unlockedEffects = new Set();
 const lastSounds = new Map();
+const iceSound = createIceSound({ onError: audioFailure });
 const renderer = new BoardRenderer($('#board'), { onCell: ({ row, col }) => place(row, col) });
 const continuous = () => settings?.tempo === 'continuous';
 const snapshot = () => continuous() ? livePublicSnapshot() : publicSnapshot(match);
@@ -127,7 +130,7 @@ function focusActionsHTML() {
   const open = '<button type="button" data-action="focus">Ver controles / tienda</button>';
   if (busy) return '<strong>Combate en curso</strong>';
   if (continuous() && match.phase === 'live') return `<span>${match.tacticalPhase ? 'Preparación táctica' : match.initialStaging ? 'Primera compra' : 'Compras directas'}: ${sideName(match.activeSide)}${selection ? ` · ${escape(getUnit(selection).name)}` : ''}${match.paused ? ' · en pausa' : ''}</span>${focusedLiveRewardsHTML()}${livePreparationButton()}${liveQuestionButtons()}${open}`;
-  if (match.phase === 'planning') return `<span>${sideName(match.activeSide)} · ${match.plans[match.activeSide].length}/${orderLimit(match.activeSide)} compras${selection ? ` · ${escape(getUnit(selection).name)}` : ''}</span><button type="button" class="primary" data-action="commit">Confirmar compras ✓</button>${open}`;
+  if (match.phase === 'planning') return `<span>${sideName(match.activeSide)} · ${match.plans[match.activeSide].length} compras${selection ? ` · ${escape(getUnit(selection).name)}` : ''}</span><button type="button" class="primary" data-action="commit">Confirmar compras ✓</button>${open}`;
   if (match.phase === 'resources') return `<span>Responder y ganar soles / cerebros</span><button type="button" data-action="focus">Abrir preguntas / premios</button><button class="primary" type="button" data-action="plan" ${settings.questionMode === 'bank' && humanSides().some(side => !answered[side]) ? 'disabled' : ''}>Comenzar compras →</button>`;
   if (match.phase === 'handover') return `<span>Cambio de equipo</span><button class="primary" type="button" data-action="handover">Abrir siguiente turno →</button>`;
   if (['ready','cleanup'].includes(match.phase)) return `<span>${match.phase === 'cleanup' ? 'Última horda' : 'Planes listos'}</span><button class="primary" type="button" data-action="resolve">${match.phase === 'cleanup' ? 'Resolver siguiente paso' : 'Revelar y resolver ronda'} →</button>`;
@@ -158,10 +161,11 @@ function prepareSounds() {
 }
 
 function sound(name) {
-  if (!soundEnabled || !EFFECT_NAMES.includes(name)) return;
+  if (!soundEnabled || !(EFFECT_NAMES.includes(name) || name === 'freeze')) return;
   const now = performance.now();
   if (now - (lastSounds.get(name) ?? -Infinity) < 150) return;
   lastSounds.set(name,now);
+  if (name === 'freeze') { iceSound.play(); return; }
   prepareSounds();
   const audio = effects.get(name);
   audio.muted = false; audio.questVoice = (audio.questVoice || 0) + 1;
@@ -176,6 +180,7 @@ function audioFailure() {
 
 function enableSound() {
   soundEnabled = true; prepareSounds();
+  iceSound.enable();
   $('#settings [name="audio"]').checked = true;
   $('#sound-toggle').textContent = 'Silenciar'; $('#sound-toggle').setAttribute('aria-pressed','true');
   // Called directly from the user's click: unlock media before any await.
@@ -197,6 +202,7 @@ function enableSound() {
 
 function disableSound() {
   soundEnabled = false;
+  iceSound.disable();
   $('#settings [name="audio"]').checked = false;
   $('#sound-toggle').textContent = 'Activar sonido'; $('#sound-toggle').setAttribute('aria-pressed','false');
   music.pause(); for (const audio of effects.values()) audio.pause();
@@ -334,7 +340,7 @@ function controlsHTML() {
   }
   if (match.phase === 'planning') {
     const side = match.activeSide;
-    return `<div class="control-intro"><p class="eyebrow">TIENDA · ${sideName(side)}</p><p>${side === 'plants' ? 'Siembra en 1–6.' : 'Envía por entrada 7.'}</p></div><div class="shop-area">${renderCards(side)}${cardInfoHTML()}</div><div class="shop-footer"><h3>Compras: ${match.plans[side].length}/${orderLimit(side)}</h3><ul class="orders">${match.plans[side].map(order => `<li><span>${escape(getUnit(order.typeId).name)} · ${'ABCDE'[order.row]}${order.col}</span><button data-action="undo" data-id="${escape(order.id)}" type="button" aria-label="Deshacer ${escape(getUnit(order.typeId).name)}">↶</button></li>`).join('')}</ul><button type="button" class="primary full-button" data-action="commit">Confirmar ${match.plans[side].length ? 'compras' : 'sin compras'} ✓</button></div>`;
+    return `<div class="control-intro"><p class="eyebrow">TIENDA · ${sideName(side)}</p><p>${side === 'plants' ? 'Siembra en 1–6.' : 'Envía por entrada 7.'} Compra mientras haya saldo y espacio.</p></div><div class="shop-area">${renderCards(side)}${cardInfoHTML()}</div><div class="shop-footer"><h3>Compras: ${match.plans[side].length}</h3><ul class="orders">${match.plans[side].map(order => `<li><span>${escape(getUnit(order.typeId).name)} · ${'ABCDE'[order.row]}${order.col}</span><button data-action="undo" data-id="${escape(order.id)}" type="button" aria-label="Deshacer ${escape(getUnit(order.typeId).name)}">↶</button></li>`).join('')}</ul><button type="button" class="primary full-button" data-action="commit">Confirmar ${match.plans[side].length ? 'compras' : 'sin compras'} ✓</button></div>`;
   }
   if (match.phase === 'handover') return `<div class="phase-controls handover"><strong>Turno de ${sideName(match.activeSide === 'plants' ? 'zombies' : 'plants')}</strong><span>${settings.planning === 'secret' ? 'Mantén el proyector congelado durante la compra privada.' : 'El segundo equipo puede preparar su jugada.'}</span><button type="button" class="primary" data-action="handover">Abrir su turno →</button></div>`;
   if (match.phase === 'ready') return `<div class="phase-controls"><strong>Ambos planes están listos.</strong><span>${settings.planning === 'secret' ? 'Reactiva el proyector antes de revelar.' : 'Observen el despliegue y el combate.'}</span><button type="button" class="primary" data-action="resolve">Revelar y resolver ronda →</button></div>`;
@@ -346,11 +352,12 @@ function controlsHTML() {
 function liveControlsHTML() {
   const side = match.activeSide;
   const locked = match.initialStaging && livePreparedSides[side];
-  return `<div class="control-intro"><p class="eyebrow">TIENDA · ${sideName(side)}</p>${settings.mode === 'duel' ? `<div class="live-side-switch">${humanSides().map(team => `<button type="button" data-action="live-side" data-side="${team}" aria-pressed="${team === side}" ${match.tacticalPhase || (match.initialStaging && settings.planning === 'secret') ? 'disabled' : ''}>${sideName(team)}${match.initialStaging && livePreparedSides[team] ? ' ✓' : ''}</button>`).join('')}</div>` : ''}</div><div class="shop-area">${renderCards(side)}</div><div class="live-rewards">${humanSides().map(team => `<div class="reward-section"><strong>${team === 'plants' ? '☀' : '🧠'} ${sideName(team)}</strong><div class="button-row">${[25,50,100].map(amount => `<button data-action="award" data-side="${team}" data-amount="${amount}" type="button">+${amount}</button>`).join('')}</div></div>`).join('')}</div><div class="shop-footer"><p id="live-closing-note">${match.initialStaging ? locked ? 'Primera compra confirmada.' : 'Primero responder y lanzar la moneda; el combate no ha comenzado.' : match.closing ? 'Última horda: compras cerradas; premios disponibles.' : 'Compra al tocar el mapa. Sin confirmación fuera de la pausa táctica.'}</p>${livePreparationButton()}${settings.questionMode === 'bank' ? `<div class="live-question-actions">${liveQuestionButtons()}</div><details class="shop-help"><summary>Banco: <span id="live-bank-count">${pool?.remaining.length || 0}</span></summary><div class="button-row"><button type="button" data-action="bank">Ampliar banco</button><button type="button" data-action="manual">Premio manual</button></div></details>` : ''}${cardInfoHTML(true)}<details class="shop-help"><summary>Reglas / asistente</summary><p>10 compras por equipo y oleada · recarga de 1 s por tarjeta durante el combate · máximo 30 zombis. Hasta 4 girasoles vivos producen 25 soles cada 12 s y se recogen solos. El copiloto envía 5 zombis en la primera oleada (uno por carril), después uno adicional por oleada hasta 20: cono desde la 2, cubeta 3, jugador 4, globo 5 y dragón 6. Son refuerzos gratuitos para el bando zombi. Los premios del profesor no tienen tope por oleada; saldo máximo 1,500. Pausar combate no bloquea premios ni preguntas. Con pausas tácticas, la moneda fija el orden y cada bando confirma antes de revelar; la primera moneda del duelo llega después de las preguntas iniciales. Cada unidad descuenta su precio al colocarla: confirmar no cobra de nuevo. No se mueve ni se retira ninguna planta. Entre pausas, el combate y las compras directas continúan.</p></details></div>`;
+  const rules = `Compra mientras haya saldo y espacio, sin cupo de compras por oleada. Recarga de 1 s por tarjeta durante el combate para evitar dobles clics; límite técnico de ${LIVE_RULES.maxZombies} zombis simultáneos. Hasta 4 girasoles producen 25 soles cada 12 s y se recogen solos; puedes plantar más, pero no aumentan la producción. La velocidad sube automáticamente: Muy lenta → Lenta → Tranquila → Normal → Rápida → Muy rápida (máximo desde la oleada 6). Un cambio manual dura hasta la próxima oleada. El hielo frena 30% durante 4 s renovables y los pinchos 40% mientras los cruzan; se usa el efecto mayor, no se multiplican. Globos y dragones evitan los pinchos. La carnívora mastica 20 s antes de devorar otra vez. El copiloto envía 5 zombis en la primera oleada, después uno adicional por oleada hasta 20: cono desde la 2, cubeta 3, jugador 4, globo 5 y dragón 6. Los premios siguen habilitados durante combate y pausas; saldo máximo 1,500. La moneda fija el orden de compra, incluida la preparación inicial después de las preguntas. Cada unidad descuenta su precio al colocarla; confirmar no cobra otra vez. No se mueve ni se retira ninguna planta.`;
+  return `<div class="control-intro"><p class="eyebrow">TIENDA · ${sideName(side)}</p>${settings.mode === 'duel' ? `<div class="live-side-switch">${humanSides().map(team => `<button type="button" data-action="live-side" data-side="${team}" aria-pressed="${team === side}" ${match.tacticalPhase || (match.initialStaging && settings.planning === 'secret') ? 'disabled' : ''}>${sideName(team)}${match.initialStaging && livePreparedSides[team] ? ' ✓' : ''}</button>`).join('')}</div>` : ''}</div><div class="shop-area">${renderCards(side)}</div><div class="live-rewards">${humanSides().map(team => `<div class="reward-section"><strong>${team === 'plants' ? '☀' : '🧠'} ${sideName(team)}</strong><div class="button-row">${[25,50,100].map(amount => `<button data-action="award" data-side="${team}" data-amount="${amount}" type="button">+${amount}</button>`).join('')}</div></div>`).join('')}</div><div class="shop-footer"><p id="live-closing-note">${match.initialStaging ? locked ? 'Primera compra confirmada.' : 'Primero responder y lanzar la moneda; el combate no ha comenzado.' : match.closing ? 'Última horda: compras cerradas; premios disponibles.' : 'Compra al tocar el mapa. Sin confirmación fuera de la pausa táctica.'}</p>${livePreparationButton()}${settings.questionMode === 'bank' ? `<div class="live-question-actions">${liveQuestionButtons()}</div><details class="shop-help"><summary>Banco: <span id="live-bank-count">${pool?.remaining.length || 0}</span></summary><div class="button-row"><button type="button" data-action="bank">Ampliar banco</button><button type="button" data-action="manual">Premio manual</button></div></details>` : ''}${cardInfoHTML(true)}<details class="shop-help"><summary>Reglas / asistente</summary><p>${rules}</p></details></div>`;
 }
 
 function liveDescription(unit) {
-  const timings = { sunflower: 'Produce 25 soles cada 12 segundos de combate, recogidos automáticamente; máximo 4 productores efectivos.', mine: 'Se arma en 5 segundos de combate. Elimina al primer zombi terrestre que la pisa.', chomper: 'Devora un zombi terrestre cercano y necesita 8 segundos antes de volver a comer.', spikes: 'Causa 1 de daño por cada 2 segundos de contacto a zombis terrestres.', wall: 'Bloquea el avance de los zombis terrestres y absorbe sus mordidas.', flying: 'Avanza volando y evita minas, pinchos y bloqueadores; los tiradores pueden alcanzarlo.' };
+  const timings = { sunflower: 'Produce 25 soles cada 12 segundos de combate, recogidos automáticamente; máximo 4 productores efectivos.', mine: 'Se arma en 5 segundos de combate. Elimina al primer zombi terrestre que la pisa; globo y dragón la evitan.', chomper: 'Devora un zombi terrestre cercano y mastica durante 20 segundos de combate antes de volver a comer. No devora globos ni dragones.', spikes: 'Causa 1 de daño cada 2 segundos de contacto y reduce el avance terrestre un 40% mientras la cruzan. No daña ni frena globos o dragones.', 'ice-shooter': 'Dispara cada 2.4 s; cada impacto causa 1 de daño y reduce el avance un 30% durante 4 segundos, renovables. No acumula porcentajes con otros impactos.', wall: 'Bloquea el avance de los zombis terrestres y absorbe sus mordidas; su aspecto se deteriora al perder vida.', flying: 'Avanza volando y evita minas, pinchos y bloqueadores; los tiradores pueden alcanzarlo.', 'flying-heavy': 'El dragón flota: evita minas, pinchos y ralentización terrestre; los tiradores pueden alcanzarlo.' };
   return `${unit.name}: ${timings[unit.ability] || (unit.side === 'plants' ? `Dispara cada 2.4 s. Daño por disparo: ${unit.damage}.` : `Avanza ${unit.move} casilla(s) cada 5 s y muerde con daño ${unit.damage} cada 1.5 s.`)} Vida: ${unit.hp}.`;
 }
 
@@ -377,7 +384,7 @@ function updateLiveUI(events = []) {
   const caption = match.phase === 'finished' ? `Resultado: ${match.winner === 'draw' ? 'Empate' : sideName(match.winner)}` : match.tacticalPhase ? tacticalText[match.tacticalPhase] : match.initialStaging ? 'Preparen ambos equipos · una sola revelación inicial · premios disponibles' : `${match.paused ? 'Combate pausado · premios habilitados' : 'Combate en marcha'} · ${match.closing ? 'Resolviendo supervivientes' : `${left} s para siguiente oleada`}`;
   $('#status').textContent = caption;
   const assistCount = match.assistantWavePlan.length;
-  $('#board-caption').textContent = `Asistente zombi: ${match.assistantSpawnedThisWave}/${assistCount} refuerzos · Velocidad ${match.zombieSpeed.toFixed(2)}× · Soles automáticos`;
+  $('#board-caption').textContent = `Asistente zombi: ${match.assistantSpawnedThisWave}/${assistCount} refuerzos · ${zombieSpeedDescription(match)} · Soles automáticos`;
   const side = match.activeSide;
   if ($('#live-bank-count')) $('#live-bank-count').textContent = pool?.remaining.length || 0;
   if (quiz?.done) quizElement('result').textContent = quizResultText();
@@ -419,9 +426,16 @@ function handleLivePresentation(state, events = []) {
     }
     return;
   }
-  if (events.some(event => event.type === 'wave-ending')) presentation.showWaveAnnouncement({ title: `¡La oleada ${state.round} está por terminar!`, subtitle: state.round === state.maxRounds ? 'Última horda: resuelvan los supervivientes' : 'Prepárense para la pausa táctica', kind: 'end' });
+  if (events.some(event => event.type === 'wave-ending')) presentation.showWaveAnnouncement({ title: `¡La oleada ${state.round} está por terminar!`, subtitle: state.round === state.maxRounds ? 'Última horda: resuelvan los supervivientes' : state.config.tacticalPauses ? 'Prepárense para la pausa táctica' : 'La próxima oleada llegará sin detener el combate', kind: 'end' });
   else if (events.some(event => event.type === 'closing')) presentation.showWaveAnnouncement({ title: '¡Última horda!', subtitle: 'El combate sigue hasta resolver las unidades restantes', kind: 'final' });
-  else if (events.some(event => event.type === 'wave-start')) presentation.showWaveAnnouncement({ title: `¡Comienza la oleada ${state.round}!`, subtitle: 'El combate continúa mientras responden y compran', kind: 'start' });
+  else if (events.some(event => event.type === 'wave-start' || event.type === 'wave')) presentation.showWaveAnnouncement({ title: `¡Comienza la oleada ${state.round}!`, subtitle: `${zombieSpeedDescription(state)} · respondan y compren mientras avanza el combate`, kind: 'start' });
+}
+
+function zombieSpeedDescription(state) {
+  const names = ['Muy lenta', 'Lenta', 'Tranquila', 'Normal', 'Rápida', 'Muy rápida'];
+  const index = LIVE_ZOMBIE_SPEED_PRESETS.findIndex(value => Math.abs(value - state.zombieSpeed) < .001);
+  const label = index < 0 ? 'Personalizada' : names[index];
+  return `${state.zombieSpeedMode === 'manual' ? 'Manual hasta la próxima oleada' : 'Velocidad automática'}: ${label} · ${state.zombieSpeed.toFixed(2)}×`;
 }
 
 function updateSpeedUI() {
@@ -430,6 +444,7 @@ function updateSpeedUI() {
   const speed = match.zombieSpeed;
   $('#zombie-speed').value = speed;
   $('#zombie-speed-label').textContent = `${speed.toFixed(2)}×`;
+  $('#zombie-speed-mode').textContent = zombieSpeedDescription(match);
   for (const button of document.querySelectorAll('[data-action="speed-preset"]')) {
     button.setAttribute('aria-pressed', String(Math.abs(Number(button.dataset.speed)-speed) < .001));
   }
@@ -464,7 +479,7 @@ function startLiveLoop() {
         // Movement already lives in fractional coordinates. Broadcast only
         // combat effects, not a separate movement event for every frame/unit.
         pendingLiveEvents.push(...result.events.filter(event => event.type !== 'move'));
-        if (pendingLiveEvents.length > 200) pendingLiveEvents = pendingLiveEvents.slice(-200);
+        pendingLiveEvents = compactCombatEvents(pendingLiveEvents);
       }
       if (time-liveLastUpdate >= 100 || match.phase === 'finished') {
         liveSounds(pendingLiveEvents);
@@ -513,7 +528,7 @@ function render() {
   const plans = settings.planning === 'secret' ? (match.phase === 'planning' ? match.plans[match.activeSide] : []) : match.plans;
   renderer.setView(match, { plans, selected: selectedCell });
   if (settings.planning === 'secret' && match.phase === 'handover') $('#board-caption').textContent = 'Las compras del primer equipo siguen ocultas.';
-  else $('#board-caption').textContent = 'Casa · Plantas en columnas 1–6 · Entrada zombi en 7';
+  else $('#board-caption').textContent = `Casa · Plantas en columnas 1–6 · Entrada zombi en 7 · ${zombieSpeedDescription(match)}`;
   publish(publicSnapshot(match));
   updateClock();
 }
@@ -687,6 +702,7 @@ function stopGame() {
   runToken++; busy = false; match = null; quiz = null; selection = null; resetClock();
   renderer.setView({units:[],mowers:[true,true,true,true,true]});
   music.pause();
+  iceSound.stop();
   for (const audio of effects.values()) audio.pause();
   $('#live-question').hidden = true; $('#quiz-dialog').close();
   $('#zombie-controls').hidden = true;
@@ -796,7 +812,7 @@ async function action(button) {
         if (match?.phase !== 'live' || !continuous() || match.initialStaging || match.tacticalPhase) return;
         match = pauseLive(match,!match.paused);
         livePrevious = 0;
-        if (match.paused) { music.pause(); for (const audio of effects.values()) audio.pause(); }
+        if (match.paused) { music.pause(); iceSound.stop(); for (const audio of effects.values()) audio.pause(); }
         else if (soundEnabled) music.play().catch(audioFailure);
         updateLiveUI();
         if (!liveRAF) startLiveLoop();
@@ -826,7 +842,7 @@ function renderPublic(snapshot, notice, draw = true) {
   $('#zombie-money').textContent = snapshot.resources.zombies;
   const secret = snapshot.config.planning === 'secret' && ['planning','handover','ready'].includes(snapshot.phase);
   $('#status').textContent = notice || (secret ? 'Compras privadas · se revelarán ambos planes juntos' : snapshot.phase === 'finished' ? snapshot.winner === 'draw' ? 'Resultado: empate' : `¡Ganan ${sideName(snapshot.winner)}!` : snapshot.phase === 'planning' ? `Compra ${sideName(snapshot.activeSide)}` : 'La clase prepara su siguiente jugada');
-  $('#board-caption').textContent = secret ? 'Vista pública: no muestra compras ni gasto privado de ningún equipo.' : 'Casa · Plantas · Entrada zombi';
+  $('#board-caption').textContent = secret ? 'Vista pública: no muestra compras ni gasto privado de ningún equipo.' : `Casa · Plantas · Entrada zombi${Number.isFinite(snapshot.zombieSpeed) ? ` · ${zombieSpeedDescription(snapshot)}` : ''}`;
   if (draw) {
     if (snapshot.config.tempo === 'continuous') renderer.setLiveView(snapshot);
     else renderer.setView(snapshot, {plans: snapshot.plans});
@@ -902,4 +918,4 @@ renderer.load().then(() => {
   requestBoardFit();
 }).catch(() => { notify('Faltó un recurso gráfico. Recarga la página para reintentar antes de empezar.'); });
 
-window.addEventListener('pagehide',() => { stopLiveLoop(); cancelAnimationFrame(boardFitRAF); boardObserver?.disconnect(); presentation.destroy(); renderer.destroy(); music.pause(); for (const audio of effects.values()) audio.pause(); channel?.close(); }, {once:true});
+window.addEventListener('pagehide',() => { stopLiveLoop(); cancelAnimationFrame(boardFitRAF); boardObserver?.disconnect(); presentation.destroy(); renderer.destroy(); music.pause(); iceSound.destroy(); for (const audio of effects.values()) audio.pause(); channel?.close(); }, {once:true});
