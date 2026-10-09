@@ -57,11 +57,15 @@ try {
     try {
       await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'domcontentloaded' });
       await page.waitForFunction(() => window.questTest && !document.querySelector('#start').disabled);
+      // This regression covers the previously approved classroom balance;
+      // result-hud.mjs separately verifies Classic is the default on every screen.
+      await page.selectOption('#balance-profile', 'aula');
       await page.selectOption('[name="mode"]', scenario.mode);
       await page.selectOption('[name="timer"]', '0');
       await page.fill('[name="rounds"]', '7');
       await page.click('#start');
       await page.evaluate(() => window.questTest.stop());
+      assert.equal((await page.evaluate(() => window.questTest.state())).config.balanceProfile, 'aula');
       assert.equal((await page.evaluate(() => window.questTest.state())).zombieSpeed, .35);
       const sides = scenario.mode === 'duel' ? ['plants', 'zombies'] : [scenario.mode === 'coop-plants' ? 'plants' : 'zombies'];
       for (const side of sides) for (let reward = 0; reward < 13; reward++) await page.click(`#controls [data-action="award"][data-side="${side}"][data-amount="100"]`);

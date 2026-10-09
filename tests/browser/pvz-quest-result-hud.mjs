@@ -67,9 +67,17 @@ try {
     try {
       await page.goto(`http://127.0.0.1:${server.address().port}/`);
       await page.waitForFunction(()=>window.questUITest&&!document.querySelector('#start').disabled);
+      assert.equal(await page.locator('#balance-profile').inputValue(),'classic','New classroom sessions default to Classic');
+      assert.match(await page.locator('#balance-summary').textContent(),/2,000.*750.*55%/);
+      assert.match(await page.locator('#balance-profile option[value="aula"]').textContent(),/balance anterior/);
       await page.selectOption('[name="mode"]','coop-plants');await page.selectOption('[name="timer"]','0');
       await page.uncheck('[name="audio"]');await page.click('#start');
       await page.evaluate(()=>window.questUITest.wave(9));
+      assert.equal(await page.evaluate(()=>window.questUITest.snapshot().config.balanceProfile),'classic');
+      assert.match(await page.locator('#profile-label').textContent(),/Clásico/);
+      assert.match(await page.locator('#active-profile').textContent(),/Clásico/);
+      assert.equal((await page.locator('#controls [data-id="peashooter"] .card-hp').textContent()).trim(),'♥ 300');
+      assert.equal((await page.locator('#controls [data-id="wallnut"] .card-hp').textContent()).trim(),'♥ 4000');
       assert.equal(await page.locator('#timer .quest-countdown-value').textContent(),'00:09');
       assert.match(await page.locator('#timer').getAttribute('class'),/urgent/);
       const timerBox=await page.locator('#timer').boundingBox();
@@ -83,6 +91,11 @@ try {
       await page.evaluate(()=>window.questUITest.wave(9,true));
       assert.match(await page.locator('#timer').getAttribute('class'),/paused/);
       assert(!/urgent/.test(await page.locator('#timer').getAttribute('class')));
+      await page.click('#controls [data-action="select"][data-id="peashooter"]');
+      let board=await page.locator('#board').boundingBox();
+      await page.mouse.click(board.x+(48+1.5*108)/960*board.width,board.y+(44+.5*90)/540*board.height);
+      const classicPlant=await page.evaluate(()=>window.questUITest.snapshot().units.find(unit=>unit.typeId==='peashooter'));
+      assert.equal(classicPlant.hp,300);assert.equal(classicPlant.maxHp,300);
       await page.evaluate(()=>window.questUITest.question());
       assert.equal(await page.locator('#timer .quest-countdown-label').textContent(),'Responder');
       if(scenario.name==='PC') {
@@ -93,6 +106,7 @@ try {
         await publicPage.waitForLoadState('domcontentloaded');
         await publicPage.waitForFunction(()=>document.querySelector('#timer .quest-countdown-label')?.textContent==='Responder');
         assert.equal(await publicPage.locator('#timer').isVisible(),true);
+        assert.match(await publicPage.locator('#profile-label').textContent(),/Clásico/);
         await page.evaluate(()=>window.questUITest.actualPlantWin());
         await page.waitForSelector('.quest-match-result-title');await publicPage.waitForSelector('.quest-match-result-title');
         assert.match(await publicPage.locator('.quest-match-result-title').textContent(),/Ganan Plantas/);
@@ -128,8 +142,20 @@ try {
       await page.click('.quest-match-result-replay');
       assert.equal(await page.locator('.quest-match-result').count(),0);
       assert.equal(await page.locator('#setup').isVisible(),true);
+      await page.selectOption('#balance-profile','aula');
+      assert.match(await page.locator('#balance-summary').textContent(),/sin cambios/);
+      await page.click('#start');await page.evaluate(()=>window.questUITest.wave(9,true));
+      assert.equal(await page.evaluate(()=>window.questUITest.snapshot().config.balanceProfile),'aula');
+      assert.match(await page.locator('#profile-label').textContent(),/Aula/);
+      assert.equal((await page.locator('#controls [data-id="peashooter"] .card-hp').textContent()).trim(),'♥ 5');
+      assert.equal((await page.locator('#controls [data-id="wallnut"] .card-hp').textContent()).trim(),'♥ 10');
+      await page.click('#controls [data-action="select"][data-id="peashooter"]');
+      board=await page.locator('#board').boundingBox();
+      await page.mouse.click(board.x+(48+1.5*108)/960*board.width,board.y+(44+.5*90)/540*board.height);
+      assert.equal(await page.evaluate(()=>window.questUITest.snapshot().units.find(unit=>unit.typeId==='peashooter').hp),5);
+      await page.evaluate(()=>window.questUITest.result('draw'));await page.click('.quest-match-result-replay');
       assert.deepEqual(errors,[]);
-      console.log(`PASS ${scenario.name}: large clock, urgency/pause, quiz countdown, centered persistent winner, draw and restart`);
+      console.log(`PASS ${scenario.name}: Classic default, Aula restored, cards/purchases/projected profile, large clock, quiz, persistent winner and restart`);
     } finally { await context.close(); }
   }
   console.log(`Screenshots: ${screenshots}`);

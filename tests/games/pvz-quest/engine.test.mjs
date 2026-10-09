@@ -371,7 +371,7 @@ test('question-bank extras cannot leak through the projected configuration', () 
   const before = clone(config);
   const state = beginPlanning(createMatch(config));
   assert.deepEqual(config, before);
-  assert.deepEqual(Object.keys(state.config).sort(), ['mode', 'planning', 'rounds', 'seed']);
+  assert.deepEqual(Object.keys(state.config).sort(), ['balanceProfile', 'mode', 'planning', 'rounds', 'seed']);
   const projected = JSON.stringify(publicSnapshot(state));
   assert.equal(projected.includes('teacher-only-answer'), false);
   assert.equal(projected.includes('never-project-this'), false);

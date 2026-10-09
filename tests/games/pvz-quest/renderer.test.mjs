@@ -262,6 +262,37 @@ function spriteDraw(fixture, timestamp = clock) {
   return fixture.calls.find(call => call.operation === 'drawImage' && call.args[0] === fixture.image);
 }
 
+test('Classic chomper closes only at the start, chews during the longer cooldown and swallows at the end', () => {
+  const fixture = spriteFixture('chomper', { hp:300, maxHp:300, chompDuration:42, chompCooldown:52 });
+  fixture.renderer.view.config = { balanceProfile:'classic' };
+  fixture.renderer.view.elapsed = 10;
+  assert.equal(unitVisualState(fixture.unit,fixture.renderer.view).range, UNIT_VISUAL_STATES.chomper.bite);
+  fixture.renderer.view.elapsed = 12;
+  assert.equal(unitVisualState(fixture.unit,fixture.renderer.view).range, UNIT_VISUAL_STATES.chomper.chew);
+  const drawing = spriteDraw(fixture,1000);
+  const index = drawing.args[2] / 114 * 11 + drawing.args[1] / 130;
+  assert(index >= 44 && index <= 54, 'Forty remaining seconds is chewing, not a frozen bite');
+  assert(fixture.calls.some(call => call.operation === 'fillText' && call.args[0] === 'Masticando · 40 s'));
+  fixture.renderer.view.elapsed = 51;
+  assert.equal(unitVisualState(fixture.unit,fixture.renderer.view).range, UNIT_VISUAL_STATES.chomper.swallow);
+  fixture.renderer.view.elapsed = 52;
+  assert.equal(unitVisualState(fixture.unit,fixture.renderer.view).range, undefined);
+  fixture.renderer.destroy();
+});
+
+test('profile fallback and large Classic HP retain correct damaged shells and readable health labels', () => {
+  const fixture = spriteFixture('wallnut', { hp:2000 });
+  delete fixture.unit.maxHp;
+  fixture.renderer.view.config = { balanceProfile:'classic' };
+  assert.equal(unitVisualState(fixture.unit,fixture.renderer.view).range, UNIT_VISUAL_STATES.wallnut.damaged);
+  spriteDraw(fixture,1000);
+  assert(fixture.calls.some(call => call.operation === 'fillText' && call.args[0] === '2000/4000'));
+  const chomper = { typeId:'chomper',side:'plants',chompCooldown:42 };
+  assert.equal(unitVisualState(chomper,{elapsed:0,config:{balanceProfile:'classic'}}).chompDuration,42);
+  assert.equal(unitVisualState(chomper,{elapsed:2,config:{balanceProfile:'classic'}}).range,UNIT_VISUAL_STATES.chomper.chew);
+  fixture.renderer.destroy();
+});
+
 test('walnut selects original chipped and severely damaged animation frames from remaining health', () => {
   const fixture = spriteFixture('wallnut', { hp: 10, maxHp: 10 });
   assert.equal(unitVisualState(fixture.unit).range, null);

@@ -1,4 +1,10 @@
 .setup { background: linear-gradient(#eef3d2e8,#fcf5dfef); }
+.balance-selector { padding: 14px; margin: 12px 0 18px; border: 3px solid #628531; border-radius: 12px; background: linear-gradient(#f0facf,#e4edbd); box-shadow: 0 3px #435d21; }
+.balance-selector label { display: block; color: #284915; font-weight: 900; margin-bottom: 8px; }
+.balance-selector select { width: 100%; min-height: 48px; border: 2px solid #648039; font-weight: 800; color: #294316; background: #fffde7; }
+.balance-summary { margin: 10px 0 0; font-size: .85rem; line-height: 1.45; color: #405025; }
+.balance-selector[data-profile='aula'] { border-color: #967038; background: linear-gradient(#fff2cb,#f2dfb0); box-shadow: 0 3px #76532b; }
+.game .menu-items .profile-note { font-size: .76rem; line-height: 1.4; margin: 0; padding: 6px; background: #fff5ce; border-radius: 6px; }
 .hero.quest-hero { min-height: 315px; border: 6px ridge #92692f; border-radius: 22px; padding: 25px clamp(20px,4vw,48px); background: linear-gradient(90deg,#102413f5,#1d431bcc 52%,#0002),url('../assets/images/startmenu1.jpg') center/cover; box-shadow: 0 10px 0 #243e23,0 18px 35px #14241235; }
 .hero.quest-hero h1 { max-width: 720px; font-family: Impact,'Arial Black',fantasy; text-transform: uppercase; letter-spacing: -.025em; line-height: .95; font-size: clamp(2.4rem,7vw,5.4rem); color: #a8e459; -webkit-text-stroke: 1px #253614; text-shadow: 3px 4px #13311c,5px 6px #071709,0 -2px #eaff92; transform: rotate(-2deg); }
 .quest-hero h1 .quest-zombies { color: #e0dfbc; text-shadow: 3px 4px #494b39,5px 6px #071709; }

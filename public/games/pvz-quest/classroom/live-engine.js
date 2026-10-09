@@ -1,4 +1,5 @@
-import { UNITS, getUnit, ZOMBIE_SPEED_PRESETS, zombieSpeedForWave } from './catalog.js';
+import { getUnit, getUnits, ZOMBIE_SPEED_PRESETS, zombieSpeedForWave } from './catalog.js';
+import { getBalanceProfile, profileRules } from './balance-profiles.js';
 
 /**
  * Continuous classroom combat, deliberately separate from the round engine.
@@ -9,7 +10,8 @@ import { UNITS, getUnit, ZOMBIE_SPEED_PRESETS, zombieSpeedForWave } from './cata
  * add one arrival and introduce stronger types at stated wave numbers; student
  * answers and board strength never change that schedule. In coop-zombies the
  * plant CPU receives +100 per wave and still pays for its two purchases.
- * These are educational combat values, not the original game's engine.
+ * Profiles select educational values or classic-style values. Neither profile
+ * replaces this classroom simulation with the original game's engine.
  */
 export const LIVE_RULES = Object.freeze({
   fixedStep: 1 / 60,
@@ -51,14 +53,22 @@ const assert = (condition, message) => { if (!condition) throw new Error(message
 const epsilon = 1e-8;
 const shooters = new Set(['peashooter', 'snow-pea', 'repeater', 'threepeater', 'corn-pult']);
 const groundPlants = new Set(['potato-mine', 'spikeweed']);
+const decapitatingZombies = new Set(['common', 'cone', 'bucket', 'football', 'balloon']);
+const profileId = state => state.config.balanceProfile ?? 'aula';
+const combatRules = new Map();
+const rulesFor = state => {
+  const id = profileId(state);
+  if (!combatRules.has(id)) combatRules.set(id, Object.freeze({ ...LIVE_RULES, ...profileRules(id) }));
+  return combatRules.get(id);
+};
 const sideOfClass = state => state.config.mode === 'duel' ? state.activeSide : state.config.mode === 'coop-plants' ? 'plants' : 'zombies';
 const canHumanControl = (state, side) => ['plants', 'zombies'].includes(side)
   && (state.config.mode === 'duel' || side === sideOfClass(state));
 const sideOfCPU = state => state.config.mode === 'coop-zombies' ? 'plants' : null;
 const alive = unit => unit.hp > 0;
 const flying = unit => ['balloon', 'dragon'].includes(unit.typeId);
-const definition = typeId => {
-  const unit = getUnit(typeId);
+const definition = (state, typeId) => {
+  const unit = getUnit(typeId, profileId(state));
   assert(unit, 'Esta unidad no existe en el repertorio disponible.');
   return unit;
 };
@@ -84,14 +94,14 @@ function random(state, count) {
 }
 
 function spawn(state, typeId, row, col, events = [], source = 'purchase') {
-  const type = definition(typeId);
+  const type = definition(state, typeId), rules = rulesFor(state);
   const unit = {
     id: nextId(state), typeId, side: type.side, row, col,
     hp: type.hp, maxHp: type.hp, damage: type.damage, move: type.move,
     ability: type.ability, placedRound: state.pendingWave ?? state.round, placedAt: state.elapsed,
-    readyAt: state.elapsed + (typeId === 'potato-mine' ? LIVE_RULES.mineArmSeconds : 0),
-    shootCooldown: state.elapsed + LIVE_RULES.shotSeconds,
-    biteCooldown: state.elapsed + LIVE_RULES.biteSeconds,
+    readyAt: state.elapsed + (typeId === 'potato-mine' ? rules.mineArmSeconds : 0),
+    shootCooldown: state.elapsed + rules.shotSeconds,
+    biteCooldown: state.elapsed + rules.biteSeconds,
     chompCooldown: state.elapsed,
     sunReadyAt: typeId === 'sunflower' ? state.elapsed + LIVE_RULES.sunflowerSeconds : null,
     groundHits: {},
@@ -188,6 +198,7 @@ export function createLiveMatch(config = {}) {
     seed: config.seed ?? 'aula-continua',
     startPaused: config.startPaused ?? false,
     tacticalPauses: config.tacticalPauses ?? true,
+    balanceProfile: config.balanceProfile ?? 'aula',
   };
   assert(['duel', 'coop-plants', 'coop-zombies'].includes(settings.mode), 'Elige duelo o un modo cooperativo.');
   assert(Number.isInteger(settings.waves) && settings.waves >= 1 && settings.waves <= 30, 'Elige entre 1 y 30 oleadas.');
@@ -195,6 +206,7 @@ export function createLiveMatch(config = {}) {
   assert(typeof settings.seed === 'string' || (typeof settings.seed === 'number' && Number.isFinite(settings.seed)), 'La semilla de la partida debe ser texto o un número válido.');
   assert(typeof settings.startPaused === 'boolean', 'Indica si el combate debe comenzar en pausa.');
   assert(typeof settings.tacticalPauses === 'boolean', 'Indica si quieres pausas tácticas entre oleadas.');
+  getBalanceProfile(settings.balanceProfile);
   const zombieSpeed = config.zombieSpeed ?? zombieSpeedForWave(1);
   validateZombieSpeed(zombieSpeed);
   const state = {
@@ -331,7 +343,7 @@ export function setLiveZombieSpeed(original, value) {
 }
 
 function purchaseProblem(state, side, typeId, row, col, checkPosition = true) {
-  const type = getUnit(typeId);
+  const type = getUnit(typeId, profileId(state));
   if (state.phase !== 'live') return 'Esta partida ya terminó.';
   if (!canHumanControl(state, side)) return 'Sólo el equipo del salón puede comprar unidades.';
   if (state.tacticalPhase && state.tacticalPhase !== 'shopping') return 'Espera a que la moneda abra el turno de compras.';
@@ -353,7 +365,7 @@ function purchaseProblem(state, side, typeId, row, col, checkPosition = true) {
 export function buyLiveUnit(original, side, typeId, row, col) {
   const error = purchaseProblem(original, side, typeId, row, col);
   assert(!error, error);
-  const state = copy(original), unit = definition(typeId);
+  const state = copy(original), unit = definition(state, typeId);
   state.resources[side] -= unit.cost;
   state.stats.resourcesSpent[side] += unit.cost;
   state.purchasesBySideThisWave[side] += 1;
@@ -364,7 +376,7 @@ export function buyLiveUnit(original, side, typeId, row, col) {
 }
 
 export function availableLiveUnits(state, side = sideOfClass(state)) {
-  return Object.values(UNITS).filter(unit => unit.side === side).map(unit => {
+  return getUnits(profileId(state)).filter(unit => unit.side === side).map(unit => {
     const disabledReason = purchaseProblem(state, side, unit.id, 0, side === 'plants' ? 1 : 7, false);
     return { ...unit, affordable: !disabledReason, disabledReason };
   });
@@ -385,18 +397,26 @@ function hurt(state, unit, amount, events, sourceId) {
   const actual = Math.min(unit.hp, amount);
   unit.hp = Math.max(0, unit.hp - amount);
   emit(events, 'damage', { unitId: unit.id, side: unit.side, row: unit.row, col: unit.col, amount: actual, sourceId });
+  // Classic body health loses its head below 90 HP. Helm health is included
+  // in the total pool; unlike the original game, classroom combat retires the
+  // now harmless zombie rather than keeping a headless walking corpse.
+  if (unit.hp > 0 && unit.hp < (rulesFor(state).zombieRetireHp || 0) && decapitatingZombies.has(unit.typeId)) {
+    unit.hp = 0;
+    unit.defeatReason = 'decapitated';
+  }
 }
 
 function removeDead(state, events) {
   for (const unit of state.units.filter(unit => !alive(unit))) {
     state.stats.unitsDefeated[unit.side] += 1;
-    emit(events, 'defeat', { unitId: unit.id, typeId: unit.typeId, side: unit.side, row: unit.row, col: unit.col });
+    emit(events, 'defeat', { unitId: unit.id, typeId: unit.typeId, side: unit.side, row: unit.row, col: unit.col,
+      ...(unit.defeatReason ? { reason: unit.defeatReason } : {}) });
   }
   state.units = state.units.filter(alive);
 }
 
 function cpuPurchase(state, typeId, row, col, events) {
-  const type = definition(typeId);
+  const type = definition(state, typeId);
   if (type.cost > state.resources[type.side]) return false;
   if (type.side === 'zombies' && state.units.filter(unit => unit.side === 'zombies').length >= LIVE_RULES.maxZombies) return false;
   if (type.side === 'plants' && state.units.some(unit => unit.row === row && (unit.side === 'plants' ? unit.col === col : Math.abs(unit.col - col) < 0.65))) return false;
@@ -460,6 +480,7 @@ function produceSun(state, events) {
 }
 
 function shoot(state, events) {
+  const rules = rulesFor(state);
   const attacks = [];
   for (const plant of state.units.filter(unit => unit.side === 'plants' && shooters.has(unit.typeId))) {
     if (state.elapsed + epsilon < plant.shootCooldown) continue;
@@ -473,7 +494,7 @@ function shoot(state, events) {
       attacks.push({ plant, target, damage: Math.max(1, plant.damage) });
     }
     // An idle shooter is ready immediately when the next target enters range.
-    if (fired) plant.shootCooldown = state.elapsed + LIVE_RULES.shotSeconds;
+    if (fired) plant.shootCooldown = state.elapsed + rules.shotSeconds;
   }
   for (const { plant, target, damage } of attacks) {
     emit(events, 'shot', { sourceId: plant.id, targetId: target.id, row: target.row,
@@ -482,7 +503,7 @@ function shoot(state, events) {
     state.stats.shots += 1;
     hurt(state, target, damage, events, plant.id);
     if (plant.typeId === 'snow-pea' && alive(target)) {
-      target.freezeUntil = state.elapsed + LIVE_RULES.freezeSeconds;
+      target.freezeUntil = state.elapsed + rules.freezeSeconds;
       emit(events, 'freeze', { sourceId: plant.id, targetId: target.id, unitId: target.id,
         row: target.row, col: target.col, until: target.freezeUntil });
     }
@@ -500,46 +521,64 @@ function groundContact(state, zombie, events) {
       break;
     }
     if (plant.typeId === 'spikeweed' && state.elapsed + epsilon >= (zombie.groundHits[plant.id] || 0)) {
-      zombie.groundHits[plant.id] = state.elapsed + LIVE_RULES.spikeSeconds;
-      hurt(state, zombie, 1, events, plant.id);
+      zombie.groundHits[plant.id] = state.elapsed + rulesFor(state).spikeSeconds;
+      hurt(state, zombie, Math.max(1, plant.damage), events, plant.id);
     }
   }
 }
 
 function chomp(state, events) {
+  const rules = rulesFor(state);
   for (const plant of state.units.filter(unit => unit.side === 'plants' && unit.typeId === 'chomper' && alive(unit))) {
     if (state.elapsed + epsilon < plant.chompCooldown) continue;
     const target = state.units.filter(unit => unit.side === 'zombies' && alive(unit) && !flying(unit) && unit.row === plant.row && unit.col >= plant.col - 0.25 && unit.col <= plant.col + 0.66)
       .sort((a, b) => a.col - b.col)[0];
     if (!target) continue;
     hurt(state, target, target.hp, events, plant.id);
-    plant.chompCooldown = state.elapsed + LIVE_RULES.chompRestSeconds;
-    emit(events, 'chomp', { sourceId: plant.id, targetId: target.id, row: plant.row, col: plant.col, duration: LIVE_RULES.chompRestSeconds });
+    plant.chompCooldown = state.elapsed + rules.chompRestSeconds;
+    emit(events, 'chomp', { sourceId: plant.id, targetId: target.id, row: plant.row, col: plant.col, duration: rules.chompRestSeconds });
   }
   removeDead(state, events);
 }
 
 function advanceAndBite(state, events) {
+  const rules = rulesFor(state);
   for (const zombie of state.units.filter(unit => unit.side === 'zombies')) {
     if (!alive(zombie)) continue;
     const onSpikes = !flying(zombie) && state.units.some(plant => plant.side === 'plants' && alive(plant)
       && plant.typeId === 'spikeweed' && plant.row === zombie.row && Math.abs(plant.col - zombie.col) <= 0.46);
     // Status effects are relative to the current wave's speed and never stack
     // multiplicatively: the strongest active reduction takes precedence.
-    const slowFactor = Math.min(state.elapsed < (zombie.freezeUntil || 0) ? LIVE_RULES.iceSlowFactor : 1,
-      onSpikes ? LIVE_RULES.spikeSlowFactor : 1);
+    const slowFactor = Math.min(state.elapsed < (zombie.freezeUntil || 0) ? rules.iceSlowFactor : 1,
+      onSpikes ? rules.spikeSlowFactor : 1);
     const nextCol = zombie.col - Math.max(0, zombie.move) * state.zombieSpeed * slowFactor / LIVE_RULES.secondsPerCell * LIVE_RULES.fixedStep;
     const blocker = !flying(zombie) && state.units.filter(unit => unit.side === 'plants' && alive(unit) && unit.row === zombie.row && !groundPlants.has(unit.typeId)
       && unit.col + 0.42 <= zombie.col + epsilon && unit.col + 0.42 >= nextCol - epsilon)
       .sort((a, b) => b.col - a.col)[0];
     if (blocker) {
       zombie.col = blocker.col + 0.42;
-      if (state.elapsed + epsilon >= zombie.biteCooldown) {
+      if (profileId(state) === 'classic') {
+        // Preserve the 40 ms rhythm across 60 Hz ticks (do not round it to
+        // 50 ms by scheduling from the last rendered/rule tick). Time spent
+        // walking must not bank damage to unload on a new plant later.
+        if (zombie.biteTargetId !== blocker.id) {
+          zombie.biteTargetId = blocker.id;
+          zombie.biteCooldown = Math.max(zombie.biteCooldown, state.elapsed);
+        }
+        while (alive(blocker) && state.elapsed + epsilon >= zombie.biteCooldown) {
+          emit(events, 'bite', { sourceId: zombie.id, targetId: blocker.id, row: zombie.row, col: blocker.col });
+          hurt(state, blocker, zombie.damage, events, zombie.id);
+          zombie.biteCooldown += rules.biteSeconds;
+        }
+      } else if (state.elapsed + epsilon >= zombie.biteCooldown) {
         emit(events, 'bite', { sourceId: zombie.id, targetId: blocker.id, row: zombie.row, col: blocker.col });
         hurt(state, blocker, zombie.damage, events, zombie.id);
-        zombie.biteCooldown = state.elapsed + LIVE_RULES.biteSeconds;
+        zombie.biteCooldown = state.elapsed + rules.biteSeconds;
       }
-    } else zombie.col = nextCol;
+    } else {
+      zombie.col = nextCol;
+      if (profileId(state) === 'classic') zombie.biteTargetId = null;
+    }
     groundContact(state, zombie, events);
   }
   removeDead(state, events);
@@ -629,7 +668,8 @@ export function liveSnapshot(state) {
   const hidden = !!state.tacticalPhase;
   const units = hidden ? state.tacticalPublicBaseline.units : state.units;
   return copy({
-    config: { mode: state.config.mode, tempo: 'continuous', waves: state.config.waves, waveSeconds: state.config.waveSeconds, tacticalPauses: state.config.tacticalPauses },
+    config: { mode: state.config.mode, tempo: 'continuous', waves: state.config.waves, waveSeconds: state.config.waveSeconds,
+      tacticalPauses: state.config.tacticalPauses, balanceProfile: profileId(state) },
     phase: state.phase, activeSide: state.activeSide, humanSide: state.humanSide,
     round: state.round, maxRounds: state.maxRounds, elapsed: state.elapsed, waveElapsed: state.waveElapsed,
     paused: state.paused, initialStaging: state.initialStaging, zombieSpeed: state.zombieSpeed, zombieSpeedMode: state.zombieSpeedMode,
@@ -644,6 +684,7 @@ export function liveSnapshot(state) {
       id: unit.id, typeId: unit.typeId, side: unit.side, row: unit.row, col: unit.col,
       hp: unit.hp, maxHp: unit.maxHp, placedAt: unit.placedAt, readyAt: unit.readyAt,
       freezeUntil: unit.freezeUntil || 0, chompCooldown: unit.chompCooldown || 0,
+      chompDuration: unit.typeId === 'chomper' ? rulesFor(state).chompRestSeconds : 0,
       cooldownSeconds: unit.typeId === 'chomper' ? Math.max(0, (unit.chompCooldown || 0) - state.elapsed) : 0,
       digesting: unit.typeId === 'chomper' && (unit.chompCooldown || 0) > state.elapsed,
     })),

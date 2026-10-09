@@ -1,3 +1,5 @@
+import { unitForProfile, getBalanceProfile } from './balance-profiles.js';
+
 /**
  * Classroom-only rules for the characters actually present in this copy.
  * These are round-based teaching values, not the original real-time values.
@@ -143,7 +145,20 @@ export const UNITS = Object.freeze(Object.fromEntries(
     [...PLANTS, ...ZOMBIES].map((unit) => [unit.id, unit]),
 ));
 
-/** Returns the definition, or undefined when the id is not in this copy. */
-export function getUnit(id) {
-    return Object.hasOwn(UNITS, id) ? UNITS[id] : undefined;
+const CLASSIC_UNITS = Object.freeze(Object.fromEntries(
+    Object.values(UNITS).map(unit => [unit.id, unitForProfile(unit, 'classic')]),
+));
+const PROFILE_UNITS = Object.freeze({ aula: UNITS, classic: CLASSIC_UNITS });
+const PROFILE_LISTS = Object.freeze(Object.fromEntries(Object.entries(PROFILE_UNITS)
+    .map(([id, units]) => [id, Object.freeze(Object.values(units))])));
+
+/** The omitted profile keeps legacy callers and sprite metadata unchanged. */
+export function getUnit(id, profile = 'aula') {
+    getBalanceProfile(profile);
+    const units = PROFILE_UNITS[profile];
+    return Object.hasOwn(units, id) ? units[id] : undefined;
+}
+export function getUnits(profile = 'aula') {
+    getBalanceProfile(profile);
+    return PROFILE_LISTS[profile];
 }

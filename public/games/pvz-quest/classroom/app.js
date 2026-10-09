@@ -1,4 +1,5 @@
-import { getUnit } from './catalog.js';
+import { getUnit as catalogUnit } from './catalog.js';
+import { DEFAULT_BALANCE_PROFILE, getBalanceProfile, profileRules } from './balance-profiles.js';
 import { createMatch, grantResources, beginPlanning, addOrder, removeOrder, commitPlan, continuePlanning, resolveRound, resolveCleanup, publicSnapshot, availableUnits } from './engine.js';
 import { LIVE_RULES, LIVE_ZOMBIE_SPEED_PRESETS, createLiveMatch, awardLiveResources, buyLiveUnit, pauseLive, stepLive, liveSnapshot, availableLiveUnits, selectLiveSide, setLiveZombieSpeed, beginLiveInitialCoin, beginLiveTacticalShopping, confirmLiveTacticalTurn, resumeLiveTacticalWave } from './live-engine.js';
 import { normalizeQuestions, createQuestionPool, takeQuestion, gradeQuestion, buildQuestionPrompt } from './questions.js';
@@ -67,6 +68,25 @@ const snapshot = () => continuous() ? livePublicSnapshot() : publicSnapshot(matc
 const quizElement = part => $(`${continuous() ? '#live-quiz-' : '#quiz-'}${part}`);
 const controlsAllowed = () => match && (continuous() ? match.phase === 'live' : match.phase === 'resources');
 const award = (state,side,amount) => continuous() ? awardLiveResources(state,side,amount) : grantResources(state,side,amount);
+const currentProfileId = () => match?.config.balanceProfile ?? settings?.balanceProfile ?? DEFAULT_BALANCE_PROFILE;
+const getUnit = id => catalogUnit(id, currentProfileId());
+
+function updateProfileChoice() {
+  const profile = getBalanceProfile($('#balance-profile').value);
+  $('#balance-summary').textContent = profile.description;
+  $('#balance-selector').dataset.profile = profile.id;
+}
+
+function updateActiveProfile(state) {
+  const profile = getBalanceProfile(state.config.balanceProfile ?? 'aula');
+  $('#profile-label').textContent = `PVZ QUEST · ${profile.shortName}`;
+  let note = $('#active-profile');
+  if (!note) {
+    note = document.createElement('p'); note.id = 'active-profile'; note.className = 'profile-note';
+    $('.menu-items').prepend(note);
+  }
+  note.textContent = `Perfil activo: ${profile.name}. Para cambiarlo, termina esta partida y elige otro antes de comenzar.`;
+}
 
 function livePublicSnapshot() {
   const view = liveSnapshot(match);
@@ -363,11 +383,13 @@ function controlsHTML() {
 function liveControlsHTML() {
   const side = match.activeSide;
   const locked = match.initialStaging && livePreparedSides[side];
+  const combat = profileRules(currentProfileId());
   const rules = `Compra mientras haya saldo y espacio, sin cupo de compras por oleada. Recarga de 1 s por tarjeta durante el combate para evitar dobles clics; límite técnico de ${LIVE_RULES.maxZombies} zombis simultáneos. Hasta 4 girasoles producen 25 soles cada 12 s y se recogen solos; puedes plantar más, pero no aumentan la producción. La velocidad sube automáticamente: Muy lenta → Lenta → Tranquila → Normal → Rápida → Muy rápida (máximo desde la oleada 6). Un cambio manual dura hasta la próxima oleada. El hielo frena 30% durante 4 s renovables y los pinchos 40% mientras los cruzan; se usa el efecto mayor, no se multiplican. Globos y dragones evitan los pinchos. La carnívora mastica 20 s antes de devorar otra vez. El copiloto envía 5 zombis en la primera oleada, después uno adicional por oleada hasta 20: cono desde la 2, cubeta 3, jugador 4, globo 5 y dragón 6. Los premios siguen habilitados durante combate y pausas; saldo máximo 1,500. La moneda fija el orden de compra, incluida la preparación inicial después de las preguntas. Cada unidad descuenta su precio al colocarla; confirmar no cobra otra vez. No se mueve ni se retira ninguna planta.`;
-  return `<div class="control-intro"><p class="eyebrow">TIENDA · ${sideName(side)}</p>${settings.mode === 'duel' ? `<div class="live-side-switch">${humanSides().map(team => `<button type="button" data-action="live-side" data-side="${team}" aria-pressed="${team === side}" ${match.tacticalPhase || (match.initialStaging && settings.planning === 'secret') ? 'disabled' : ''}>${sideName(team)}${match.initialStaging && livePreparedSides[team] ? ' ✓' : ''}</button>`).join('')}</div>` : ''}</div><div class="shop-area">${renderCards(side)}</div><div class="live-rewards">${humanSides().map(team => `<div class="reward-section"><strong>${team === 'plants' ? '☀' : '🧠'} ${sideName(team)}</strong><div class="button-row">${[25,50,100].map(amount => `<button data-action="award" data-side="${team}" data-amount="${amount}" type="button">+${amount}</button>`).join('')}</div></div>`).join('')}</div><div class="shop-footer"><p id="live-closing-note">${match.initialStaging ? locked ? 'Primera compra confirmada.' : 'Primero responder y lanzar la moneda; el combate no ha comenzado.' : match.closing ? 'Última horda: compras cerradas; premios disponibles.' : 'Compra al tocar el mapa. Sin confirmación fuera de la pausa táctica.'}</p>${livePreparationButton()}${settings.questionMode === 'bank' ? `<div class="live-question-actions">${liveQuestionButtons()}</div><details class="shop-help"><summary>Banco: <span id="live-bank-count">${pool?.remaining.length || 0}</span></summary><div class="button-row"><button type="button" data-action="bank">Ampliar banco</button><button type="button" data-action="manual">Premio manual</button></div></details>` : ''}${cardInfoHTML(true)}<details class="shop-help"><summary>Reglas / asistente</summary><p>${rules}</p></details></div>`;
+  return `<div class="control-intro"><p class="eyebrow">TIENDA · ${sideName(side)}</p>${settings.mode === 'duel' ? `<div class="live-side-switch">${humanSides().map(team => `<button type="button" data-action="live-side" data-side="${team}" aria-pressed="${team === side}" ${match.tacticalPhase || (match.initialStaging && settings.planning === 'secret') ? 'disabled' : ''}>${sideName(team)}${match.initialStaging && livePreparedSides[team] ? ' ✓' : ''}</button>`).join('')}</div>` : ''}</div><div class="shop-area">${renderCards(side)}</div><div class="live-rewards">${humanSides().map(team => `<div class="reward-section"><strong>${team === 'plants' ? '☀' : '🧠'} ${sideName(team)}</strong><div class="button-row">${[25,50,100].map(amount => `<button data-action="award" data-side="${team}" data-amount="${amount}" type="button">+${amount}</button>`).join('')}</div></div>`).join('')}</div><div class="shop-footer"><p id="live-closing-note">${match.initialStaging ? locked ? 'Primera compra confirmada.' : 'Primero responder y lanzar la moneda; el combate no ha comenzado.' : match.closing ? 'Última horda: compras cerradas; premios disponibles.' : 'Compra al tocar el mapa. Sin confirmación fuera de la pausa táctica.'}</p>${livePreparationButton()}${settings.questionMode === 'bank' ? `<div class="live-question-actions">${liveQuestionButtons()}</div><details class="shop-help"><summary>Banco: <span id="live-bank-count">${pool?.remaining.length || 0}</span></summary><div class="button-row"><button type="button" data-action="bank">Ampliar banco</button><button type="button" data-action="manual">Premio manual</button></div></details>` : ''}${cardInfoHTML(true)}<details class="shop-help"><summary>Reglas / asistente</summary><p>${escape(getBalanceProfile(currentProfileId()).description)}</p><p>${rules.replace('La carnívora mastica 20 s', `La carnívora mastica ${combat.chompRestSeconds} s`)}</p></details></div>`;
 }
 
 function liveDescription(unit) {
+  if (currentProfileId() === 'classic') return `${unit.name}: ${unit.description} Vida: ${unit.hp}.`;
   const timings = { sunflower: 'Produce 25 soles cada 12 segundos de combate, recogidos automáticamente; máximo 4 productores efectivos.', mine: 'Se arma en 5 segundos de combate. Elimina al primer zombi terrestre que la pisa; globo y dragón la evitan.', chomper: 'Devora un zombi terrestre cercano y mastica durante 20 segundos de combate antes de volver a comer. No devora globos ni dragones.', spikes: 'Causa 1 de daño cada 2 segundos de contacto y reduce el avance terrestre un 40% mientras la cruzan. No daña ni frena globos o dragones.', 'ice-shooter': 'Dispara cada 2.4 s; cada impacto causa 1 de daño y reduce el avance un 30% durante 4 segundos, renovables. No acumula porcentajes con otros impactos.', wall: 'Bloquea el avance de los zombis terrestres y absorbe sus mordidas; su aspecto se deteriora al perder vida.', flying: 'Avanza volando y evita minas, pinchos y bloqueadores; los tiradores pueden alcanzarlo.', 'flying-heavy': 'El dragón flota: evita minas, pinchos y ralentización terrestre; los tiradores pueden alcanzarlo.' };
   return `${unit.name}: ${timings[unit.ability] || (unit.side === 'plants' ? `Dispara cada 2.4 s. Daño por disparo: ${unit.damage}.` : `Avanza ${unit.move} casilla(s) cada 5 s y muerde con daño ${unit.damage} cada 1.5 s.`)} Vida: ${unit.hp}.`;
 }
@@ -501,7 +523,7 @@ function startLiveLoop() {
         // Movement already lives in fractional coordinates. Broadcast only
         // combat effects, not a separate movement event for every frame/unit.
         pendingLiveEvents.push(...result.events.filter(event => event.type !== 'move'));
-        pendingLiveEvents = compactCombatEvents(pendingLiveEvents);
+        pendingLiveEvents = compactCombatEvents(pendingLiveEvents,200,{ aggregateDamage: match.config.balanceProfile === 'classic' });
       }
       if (time-liveLastUpdate >= 100 || match.phase === 'finished') {
         liveSounds(pendingLiveEvents);
@@ -526,6 +548,7 @@ function startLiveLoop() {
 
 function render() {
   if (!match) return;
+  updateActiveProfile(match);
   document.body.dataset.phase = match.phase;
   document.body.dataset.tempo = settings.tempo;
   $('#game').dataset.phase = match.phase;
@@ -560,12 +583,12 @@ function startGame(event) {
   event.preventDefault();
   if (!rendererReady || match) return;
   const form = new FormData($('#settings'));
-  settings = { mode: form.get('mode'), tempo: form.get('tempo') || 'rounds', waveSeconds:Number(form.get('waveSeconds')), planning: form.get('planning') || 'open', rounds: Number(form.get('rounds')), questionMode: form.get('questionMode'), reward: Number(form.get('reward')), timer: Number(form.get('timer')) };
+  settings = { mode: form.get('mode'), balanceProfile: form.get('balanceProfile') || DEFAULT_BALANCE_PROFILE, tempo: form.get('tempo') || 'rounds', waveSeconds:Number(form.get('waveSeconds')), planning: form.get('planning') || 'open', rounds: Number(form.get('rounds')), questionMode: form.get('questionMode'), reward: Number(form.get('reward')), timer: Number(form.get('timer')) };
   if (continuous() && settings.mode !== 'duel') settings.planning = 'open';
   if (settings.planning === 'secret' && settings.mode === 'duel' && !form.has('privacy')) return notify('Confirma cómo vas a mantener privadas las compras de ambos equipos.');
   if (settings.questionMode === 'bank' && (!approved || !bank.length)) return notify('Primero importa o genera preguntas, revísalas y aprueba el banco.');
   try {
-    match = continuous() ? createLiveMatch({mode:settings.mode,waves:settings.rounds,waveSeconds:settings.waveSeconds,seed:uid(),startPaused:settings.mode === 'duel', tacticalPauses: form.get('tacticalPauses') !== 'off'}) : createMatch({ mode: settings.mode, planning: settings.planning, rounds: settings.rounds, seed: uid() });
+    match = continuous() ? createLiveMatch({mode:settings.mode,balanceProfile:settings.balanceProfile,waves:settings.rounds,waveSeconds:settings.waveSeconds,seed:uid(),startPaused:settings.mode === 'duel', tacticalPauses: form.get('tacticalPauses') !== 'off'}) : createMatch({ mode: settings.mode, balanceProfile:settings.balanceProfile, planning: settings.planning, rounds: settings.rounds, seed: uid() });
     livePreparedSides = { plants: false, zombies: false };
     liveInitialResources = { plants: 200, zombies: 200 };
     pool = approved && bank.length ? createQuestionPool(bank) : null;
@@ -858,6 +881,7 @@ async function action(button) {
 function renderPublic(snapshot, notice, draw = true) {
   publicView = snapshot;
   if (!snapshot) { presentation.clear(); tacticalVisualKey = ''; publicDebateClock = null; renderCountdown($('#timer'), null); $('#status').textContent = notice || 'Esperando al profesor…'; renderer.setView({units:[],mowers:[true,true,true,true,true]}); return; }
+  updateActiveProfile(snapshot);
   document.body.dataset.phase = snapshot.phase; document.body.dataset.tempo = snapshot.config.tempo || 'rounds';
   $('#game').dataset.phase = snapshot.phase; $('#game').dataset.tempo = snapshot.config.tempo || 'rounds';
   $('#round-title').textContent = titleFor(snapshot);
@@ -920,6 +944,8 @@ if (isPublic) {
     $('#secret-notice').hidden = $('#settings [name="planning"]').value !== 'secret' || cooperative;
   };
   $('#settings').addEventListener('change',updatePrivacy);
+  $('#balance-profile').addEventListener('change',updateProfileChoice);
+  updateProfileChoice();
   updatePrivacy();
   $('#quiz-dialog').addEventListener('cancel',event => { event.preventDefault(); notify('Responde la pregunta o espera al temporizador antes de continuar.'); });
   $('#bank-dialog').addEventListener('cancel',event => { if (generating) event.preventDefault(); });

@@ -1,4 +1,5 @@
 import { UNITS, getUnit } from './catalog.js';
+import { profileRules } from './balance-profiles.js';
 import { assetURL } from './runtime.js';
 import { createImageLoader } from './image-loader.js';
 
@@ -62,18 +63,19 @@ export function unitVisualState(unit, snapshot = {}) {
   const elapsed = Number.isFinite(snapshot.elapsed) ? snapshot.elapsed : 0;
   const state = { frozen: unit.side === 'zombies' && Number.isFinite(unit.freezeUntil) && unit.freezeUntil > elapsed };
   if (unit.typeId === 'wallnut') {
-    const definition = getUnit(unit.typeId);
+    const definition = getUnit(unit.typeId, snapshot.config?.balanceProfile ?? 'aula');
     const maxHp = unit.maxHp ?? definition.hp;
     const ratio = clamp((unit.hp ?? maxHp) / maxHp, 0, 1);
     state.range = ratio <= 1 / 3 ? UNIT_VISUAL_STATES.wallnut.critical : ratio <= 2 / 3 ? UNIT_VISUAL_STATES.wallnut.damaged : null;
   }
   if (unit.typeId === 'chomper') {
+    state.chompDuration = unit.chompDuration > 0 ? unit.chompDuration : profileRules(snapshot.config?.balanceProfile ?? 'aula').chompRestSeconds;
     state.cooldownSeconds = Number.isFinite(unit.chompCooldown)
       ? Math.max(0, unit.chompCooldown - elapsed) : Math.max(0, unit.cooldownSeconds || 0);
     if (state.cooldownSeconds > 0) {
-      if (state.cooldownSeconds > 18.5) {
+      if (state.cooldownSeconds > state.chompDuration - 1.5) {
         state.range = UNIT_VISUAL_STATES.chomper.bite;
-        state.frame = frameAtProgress(state.range, (20 - state.cooldownSeconds) / 1.5);
+        state.frame = frameAtProgress(state.range, (state.chompDuration - state.cooldownSeconds) / 1.5);
       } else if (state.cooldownSeconds <= 1.5) {
         state.range = UNIT_VISUAL_STATES.chomper.swallow;
         state.frame = frameAtProgress(state.range, (1.5 - state.cooldownSeconds) / 1.5);
@@ -499,7 +501,7 @@ export class BoardRenderer {
   }
 
   drawUnit(unit, clock, col = unit.col, stack = 0, alpha = 1, defeated = false) {
-    const definition = getUnit(unit.typeId);
+    const definition = getUnit(unit.typeId, this.view.config?.balanceProfile ?? 'aula');
     if (!definition || !Number.isFinite(unit.row) || !Number.isFinite(col)) return;
     const context = this.context;
     const point = centre(unit.row, col);
@@ -509,7 +511,7 @@ export class BoardRenderer {
     const height = floor ? CELL_H * (unit.typeId === 'spikeweed' ? 0.34 : 0.46) : CELL_H * 0.8;
     const visual = unitVisualState(unit, this.view);
     const tactical = !this.live && !!this.view.config?.mode;
-    if (tactical && visual.cooldownSeconds > 18.5) {
+    if (tactical && visual.cooldownSeconds > visual.chompDuration - 1.5) {
       const chomp = this.stage?.events.find(event => event.type === 'chomp' && event.sourceId === unit.id);
       // Round battle time advances in discrete steps. Animate the actual bite
       // within its stage, then retain the chewing pose between round steps.
