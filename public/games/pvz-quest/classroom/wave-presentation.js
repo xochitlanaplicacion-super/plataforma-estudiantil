@@ -1,11 +1,12 @@
 import { renderCard } from './renderer.js';
 
 export class WavePresentation {
-  constructor(root) { this.root = root; this.node = null; this.timer = null; this.cancel = null; }
+  constructor(root) { this.root = root; this.node = null; this.timer = null; this.cancel = null; this.resultKey = null; }
   clear() {
     clearTimeout(this.timer); this.timer = null;
     this.node?.remove(); this.node = null;
     this.cancel?.(false); this.cancel = null;
+    this.resultKey = null;
   }
   showWaveAnnouncement({ title, subtitle = '', kind = 'next' }) {
     this.clear();
@@ -46,6 +47,46 @@ export class WavePresentation {
         this.cancel = null; this.clear(); resolve(true); onComplete?.(side);
       }, reduced ? 850 : 2800);
     });
+  }
+  /** Persistent end-of-match result, also visible on the public projector. */
+  showMatchResult({ winner, isPublic = false, onReplay } = {}) {
+    const side = winner === 'plants' || winner === 'zombies' ? winner : 'draw';
+    const key = `${side}:${isPublic ? 'public' : 'teacher'}`;
+    // Continuous snapshots arrive frequently. Do not replay the entrance,
+    // rebuild its action button or announce the same result every 100 ms.
+    if (this.resultKey === key && this.node) return this.node;
+    this.clear();
+    const node = document.createElement('section');
+    node.className = `quest-match-result winner-${side}`;
+    node.setAttribute('role', 'status'); node.setAttribute('aria-live', 'polite'); node.setAttribute('aria-atomic', 'true');
+    const card = document.createElement('div'); card.className = 'quest-match-result-card';
+    const label = document.createElement('strong'); label.className = 'quest-match-result-label'; label.textContent = 'Partida terminada';
+    const portraits = document.createElement('div'); portraits.className = 'quest-match-result-portraits'; portraits.setAttribute('aria-hidden', 'true');
+    const types = side === 'plants' ? ['sunflower', 'peashooter'] : side === 'zombies' ? ['common', 'football'] : ['peashooter', 'common'];
+    for (const typeId of types) {
+      const portrait = document.createElement('canvas'); portrait.width = 112; portrait.height = 90;
+      portraits.append(portrait);
+      renderCard(portrait, typeId).catch(() => {});
+    }
+    const heading = document.createElement('h2'); heading.className = 'quest-match-result-title';
+    heading.textContent = side === 'plants' ? '¡Ganan Plantas!' : side === 'zombies' ? '¡Ganan Zombis!' : '¡Empate!';
+    const detail = document.createElement('p'); detail.className = 'quest-match-result-detail';
+    detail.textContent = side === 'plants' ? 'La casa resistió. ¡El jardín queda a salvo!'
+      : side === 'zombies' ? 'Los zombis atravesaron la última defensa y llegaron a la casa.'
+        : 'Quedan fuerzas de ambos bandos. No se declara una victoria automática.';
+    card.append(label, portraits, heading, detail);
+    if (!isPublic) {
+      const replay = document.createElement('button'); replay.type = 'button'; replay.className = 'quest-match-result-replay primary';
+      replay.dataset.action = 'confirm-exit'; replay.textContent = 'Preparar otra clase';
+      if (typeof onReplay === 'function') replay.addEventListener('click', event => { event.stopPropagation(); onReplay(); });
+      card.append(replay);
+    }
+    node.append(card);
+    (this.root.closest?.('#game') || this.root).append(node);
+    this.node = node; this.resultKey = key;
+    // No automatic dismissal and no autofocus: the class can read the result
+    // at its own pace, without moving a teacher's keyboard focus unexpectedly.
+    return node;
   }
   destroy() { this.clear(); }
 }

@@ -31,6 +31,28 @@
 .quest-coin-shadow { position: absolute; width: 135px; height: 21px; bottom: 15px; left: 33px; border-radius: 50%; background: #0008; filter: blur(4px); animation: quest-shadow 2.25s ease-out both; }
 .quest-coin-result { font: 800 clamp(1.2rem,3vw,2rem) Impact,'Arial Black',sans-serif; text-transform: uppercase; color: #fff1b3; text-shadow: 2px 3px #112605; animation: quest-result 2.5s ease-out both; }
 .quest-coin-overlay > span { color: #fff3c7; font-size: .8rem; margin-top: 6px; }
+.quest-match-result { position: fixed; z-index: 30; inset: 0; display: grid; place-items: center; text-align: center; padding: max(12px,env(safe-area-inset-top)) max(12px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left)); background: radial-gradient(ellipse,#102510bd,#071207ed); pointer-events: none; }
+.quest-match-result-card { width: min(740px,100%); max-height: 100%; overflow: auto; overscroll-behavior: contain; pointer-events: auto; display: grid; justify-items: center; gap: 8px; padding: clamp(16px,3vw,32px); border: 7px ridge #a8813d; border-radius: 20px; background: radial-gradient(ellipse at top,#456a28,#163319 70%); box-shadow: 0 8px 0 #071509,0 0 55px #cbe98e40,inset 0 0 0 3px #253714; animation: quest-banner-in .35s ease-out both; }
+.quest-match-result-label { color: #ffe4a0; font: 800 clamp(.8rem,2vw,1.15rem) Impact,'Arial Black',sans-serif; text-transform: uppercase; letter-spacing: .16em; text-shadow: 2px 2px #1c240b; }
+.quest-match-result-portraits { display: flex; align-items: center; justify-content: center; gap: clamp(12px,4vw,36px); }
+.quest-match-result-portraits canvas { width: clamp(76px,11vw,120px); height: auto; filter: drop-shadow(0 4px 2px #061907); }
+.quest-match-result-title { color: #b5eb69; font: 900 clamp(2.1rem,7vw,5rem)/1.04 Impact,'Arial Black','DejaVu Sans',system-ui,sans-serif; text-transform: uppercase; letter-spacing: -.025em; margin: 0; -webkit-text-stroke: 1px #152d0a; text-shadow: 3px 4px #071d08,0 -2px #efffaf; }
+.quest-match-result.winner-zombies .quest-match-result-card { background: radial-gradient(ellipse at top,#645567,#26242f 70%); box-shadow: 0 8px 0 #13111d,0 0 55px #d6b8e440,inset 0 0 0 3px #39303d; }
+.quest-match-result.winner-zombies .quest-match-result-title { color: #e4e4c2; -webkit-text-stroke-color: #292b20; text-shadow: 3px 4px #171a10,0 -2px #ffffdb; }
+.quest-match-result.winner-draw .quest-match-result-title { color: #ffe290; }
+.quest-match-result-detail { color: #fff3d0; max-width: 34rem; margin: 4px 0 8px; font-size: clamp(.88rem,2.2vw,1.2rem); line-height: 1.4; font-weight: 700; text-shadow: 1px 2px #101b0b; }
+.game .quest-match-result-replay { width: auto; min-height: 44px; max-width: 100%; padding: 10px 24px; font-size: clamp(.92rem,2vw,1.12rem); border: 3px solid #294409; border-radius: 9px; box-shadow: 0 4px #152e05; background: linear-gradient(#87ad32,#427414); color: #fffbe0; cursor: pointer; }
+.quest-match-result-replay:focus-visible { outline: 4px solid #fff09d; outline-offset: 4px; }
+.quest-countdown { flex: 0 0 auto; display: grid; place-items: center; min-width: 102px; min-height: 58px; padding: 3px 10px; gap: 0; border: 3px ridge #a18336; border-radius: 9px; background: linear-gradient(#fff5c2,#ebd695); color: #393715; box-shadow: inset 0 0 0 1px #fff4c9,0 2px 0 #573915; line-height: 1; text-align: center; }
+.quest-countdown[hidden] { display: none !important; }
+.quest-countdown-label { color: #655016; font-size: .57rem; font-weight: 900; text-transform: uppercase; letter-spacing: .05em; }
+.quest-countdown-value { color: #294913; font: 800 clamp(1.55rem,3vw,2.2rem)/1.03 Impact,'Arial Black',monospace; font-variant-numeric: tabular-nums; letter-spacing: .04em; white-space: nowrap; }
+.quest-countdown-note { color: #675220; font-size: .54rem; font-weight: 800; white-space: nowrap; }
+.quest-countdown.urgent { border-color: #aa4c30; background: linear-gradient(#fff1c2,#efb776); animation: quest-countdown-pulse 1s ease-in-out infinite; }
+.quest-countdown.urgent .quest-countdown-value,.quest-countdown.expired .quest-countdown-value { color: #961f18; }
+.quest-countdown.paused { background: linear-gradient(#efeee1,#c7c9b9); border-color: #879280; animation: none; }
+.quest-countdown.paused .quest-countdown-value { color: #415044; }
+.quest-countdown.expired { background: linear-gradient(#ffdfca,#ecb39e); border-color: #a54133; animation: none; }
 .live-tactical-info { color: #6b4216; font-weight: 800; }
 .game[data-tactical='briefing'] #controls,.game[data-tactical='coin'] #controls,.game[data-tactical='ready'] #controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .game[data-tactical='briefing'] .shop-area,.game[data-tactical='coin'] .shop-area,.game[data-tactical='ready'] .shop-area { display: none; }
@@ -43,5 +65,9 @@
 @keyframes quest-shadow { 0%,55%,85%,100% { transform: scale(1); opacity: .8; } 20% { transform: scale(.4); opacity: .25; } 70% { transform: scale(.65); opacity: .45; } }
 @keyframes quest-result { 0%,80% { opacity: 0; transform: translateY(10px); } 100% { opacity: 1; transform: translateY(0); } }
 @keyframes quest-banner-in { from { opacity: 0; transform: scale(1.2); } to { opacity: 1; transform: scale(1); } }
+@keyframes quest-countdown-pulse { 0%,100% { box-shadow: inset 0 0 0 1px #fff4c9,0 2px 0 #573915; } 50% { box-shadow: inset 0 0 0 1px #fff4c9,0 0 12px #fb7d4b; } }
+@media(max-width:1000px) { .game .game-bar { flex-wrap: wrap; } .game .toolbar [data-action="fullscreen"] span { display: none; } }
+@media(max-width:760px) { .quest-countdown { min-width: 82px; min-height: 48px; padding: 3px 5px; } .quest-countdown-value { font-size: 1.65rem; } .quest-countdown-label,.quest-countdown-note { font-size: .5rem; } }
+@media(max-height:440px) { .quest-match-result-card { gap: 3px; padding: 12px 20px; border-width: 5px; } .quest-match-result-portraits canvas { width: 68px; } .quest-match-result-title { font-size: clamp(1.8rem,5vw,3.1rem); } .quest-match-result-detail { font-size: .85rem; margin: 2px 0 6px; } .quest-countdown { min-height: 42px; min-width: 82px; padding: 1px 5px; } .quest-countdown-value { font-size: 1.5rem; } }
 @media(max-height:440px) { .quest-coin-scene { width: 170px; height: 135px; transform: scale(.75); margin: -20px 0; } .quest-coin-overlay > span { font-size: .65rem; } }
-@media(prefers-reduced-motion:reduce) { .quest-announcement,.quest-coin,.quest-coin-toss,.quest-coin-shadow,.quest-coin-result { animation: none; } .winner-zombies .quest-coin { transform: rotateY(180deg); } }
+@media(prefers-reduced-motion:reduce) { .quest-announcement,.quest-coin,.quest-coin-toss,.quest-coin-shadow,.quest-coin-result,.quest-match-result-card,.quest-countdown.urgent { animation: none; } .winner-zombies .quest-coin { transform: rotateY(180deg); } }

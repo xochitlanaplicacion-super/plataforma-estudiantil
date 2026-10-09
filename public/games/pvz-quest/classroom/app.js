@@ -6,6 +6,7 @@ import { BoardRenderer, renderCard } from './renderer.js';
 import { EFFECT_NAMES, combatSoundNames } from './sound-events.js';
 import { createIceSound } from './ice-audio.js';
 import { compactCombatEvents } from './combat-events.js';
+import { countdownView, renderCountdown } from './hud-countdown.js';
 import { assetURL, platformMode, questionsAPI, statusAPI } from './runtime.js';
 import { createWavePresentation } from './wave-presentation.js';
 
@@ -36,6 +37,8 @@ let clock = { end: 0, remaining: 0, kind: '', paused: false, expired: false };
 let toastTimeout;
 let projection = null;
 let publicView = null;
+let publicDebateClock = null;
+let lastClockBroadcast = '';
 let generating = false;
 let rendererReady = false;
 let soundEnabled = false;
@@ -285,11 +288,19 @@ function resetClock(kind = '', seconds = settings?.timer || 0) {
 }
 
 function updateClock() {
+  if (isPublic) return;
   const remaining = clock.paused ? clock.remaining : Math.max(0, clock.end - Date.now());
   const seconds = Math.ceil(remaining / 1000);
   const enabled = !!clock.kind && !!settings?.timer;
-  $('#timer').textContent = !enabled ? '' : clock.expired ? 'Tiempo de debate terminado' : `${clock.kind === 'quiz' ? 'Respuesta' : 'Compra'} · ${seconds} s${clock.paused ? ' · en pausa' : ''}`;
-  $('#timer').classList.toggle('expired', clock.expired);
+  const debate = { kind: clock.kind, seconds, paused: clock.paused, expired: clock.expired,
+    active: enabled && (clock.kind === 'quiz' ? !!quiz && !quiz.done : match?.phase === 'planning') };
+  renderCountdown($('#timer'), countdownView(match, debate));
+  renderCountdown($('#quiz-countdown'), !continuous() && quiz && !quiz.done ? countdownView(match, debate) : null);
+  const message = JSON.stringify(debate);
+  if (message !== lastClockBroadcast) {
+    lastClockBroadcast = message;
+    channel?.postMessage({ type: 'countdown', view: debate });
+  }
   $('#timer-toggle').hidden = !enabled || clock.expired || clock.kind === 'quiz';
   $('#timer-toggle').textContent = clock.paused ? 'Reanudar reloj' : 'Pausar reloj';
   if (quiz) quizElement('team').textContent = `Pregunta para ${sideName(quiz.side)}${enabled ? ` · ${seconds} s` : ''}`;
@@ -412,7 +423,18 @@ function updateLiveUI(events = []) {
   handleLivePresentation(match, events);
 }
 
+function showResultBanner(state) {
+  if (state.phase !== 'finished') return false;
+  // Native dialogs live above every z-index; a completed game must be visible.
+  $('#quiz-dialog').close();
+  $('#bank-dialog').close();
+  $('#exit-dialog').close();
+  presentation.showMatchResult({ winner: state.winner, isPublic });
+  return true;
+}
+
 function handleLivePresentation(state, events = []) {
+  if (showResultBanner(state)) return;
   if (state.tacticalPhase === 'coin') {
     const key = `${state.pendingWave}:coin`;
     if (tacticalVisualKey !== key) {
@@ -519,6 +541,7 @@ function render() {
   const descriptions = { resources: 'Responder → comprar → revelar', planning: `Compra ${sideName(match.activeSide)} · ${settings.planning === 'secret' ? 'plan privado' : 'jugada abierta'}`, handover: 'Cambio de equipo · compras confirmadas', ready: 'Planes confirmados · listos para revelar', cleanup: 'Última horda · todavía puede ganar cualquiera', finished: `Resultado: ${match.winner === 'draw' ? 'Empate' : sideName(match.winner)}` };
   $('#status').textContent = busy ? 'Resolviendo la ronda…' : descriptions[match.phase];
   $('#controls').innerHTML = controlsHTML();
+  showResultBanner(match);
   for (const canvas of document.querySelectorAll('[data-card]')) renderCard(canvas, canvas.dataset.card).catch(() => notify('No se pudo dibujar una tarjeta.'));
   updateBoardFocus();
   if (continuous()) {
@@ -698,7 +721,7 @@ async function toggleFullscreen() {
 
 function stopGame() {
   stopLiveLoop();
-  presentation.clear(); tacticalVisualKey = '';
+  presentation.clear(); tacticalVisualKey = ''; lastClockBroadcast = '';
   runToken++; busy = false; match = null; quiz = null; selection = null; resetClock();
   renderer.setView({units:[],mowers:[true,true,true,true,true]});
   music.pause();
@@ -834,7 +857,7 @@ async function action(button) {
 
 function renderPublic(snapshot, notice, draw = true) {
   publicView = snapshot;
-  if (!snapshot) { presentation.clear(); tacticalVisualKey = ''; $('#status').textContent = notice || 'Esperando al profesor…'; renderer.setView({units:[],mowers:[true,true,true,true,true]}); return; }
+  if (!snapshot) { presentation.clear(); tacticalVisualKey = ''; publicDebateClock = null; renderCountdown($('#timer'), null); $('#status').textContent = notice || 'Esperando al profesor…'; renderer.setView({units:[],mowers:[true,true,true,true,true]}); return; }
   document.body.dataset.phase = snapshot.phase; document.body.dataset.tempo = snapshot.config.tempo || 'rounds';
   $('#game').dataset.phase = snapshot.phase; $('#game').dataset.tempo = snapshot.config.tempo || 'rounds';
   $('#round-title').textContent = titleFor(snapshot);
@@ -843,6 +866,11 @@ function renderPublic(snapshot, notice, draw = true) {
   const secret = snapshot.config.planning === 'secret' && ['planning','handover','ready'].includes(snapshot.phase);
   $('#status').textContent = notice || (secret ? 'Compras privadas · se revelarán ambos planes juntos' : snapshot.phase === 'finished' ? snapshot.winner === 'draw' ? 'Resultado: empate' : `¡Ganan ${sideName(snapshot.winner)}!` : snapshot.phase === 'planning' ? `Compra ${sideName(snapshot.activeSide)}` : 'La clase prepara su siguiente jugada');
   $('#board-caption').textContent = secret ? 'Vista pública: no muestra compras ni gasto privado de ningún equipo.' : `Casa · Plantas · Entrada zombi${Number.isFinite(snapshot.zombieSpeed) ? ` · ${zombieSpeedDescription(snapshot)}` : ''}`;
+  renderCountdown($('#timer'), countdownView(snapshot, publicDebateClock));
+  if (snapshot.phase === 'finished') {
+    $('#public-question').hidden = true;
+    showResultBanner(snapshot);
+  }
   if (draw) {
     if (snapshot.config.tempo === 'continuous') renderer.setLiveView(snapshot);
     else renderer.setView(snapshot, {plans: snapshot.plans});
@@ -872,6 +900,9 @@ if (isPublic) {
         if (event.data.liveEvents) animateSunRewards(event.data.liveEvents);
         if (event.data.snapshot?.config.tempo === 'continuous') handleLivePresentation(event.data.snapshot,event.data.liveEvents || []);
         if (event.data.stage) renderer.play([event.data.stage]).catch(() => notify('No se pudo mostrar una animación; el tablero sigue disponible.'));
+      } else if (event.data?.type === 'countdown') {
+        publicDebateClock = event.data.view;
+        renderCountdown($('#timer'), countdownView(publicView, publicDebateClock));
       } else if (event.data?.type === 'quiz') renderPublicQuiz(event.data.view);
       else if (event.data?.type === 'reward' && ['plants','zombies'].includes(event.data.side) && Number.isFinite(event.data.amount) && event.data.amount > 0 && event.data.amount <= 100) animateReward(event.data.side,event.data.amount,$('#public-question').hidden ? $('#board') : $('#public-question'),false);
     };
@@ -893,7 +924,7 @@ if (isPublic) {
   $('#quiz-dialog').addEventListener('cancel',event => { event.preventDefault(); notify('Responde la pregunta o espera al temporizador antes de continuar.'); });
   $('#bank-dialog').addEventListener('cancel',event => { if (generating) event.preventDefault(); });
   $('#question-type').addEventListener('change',() => { $('#option-count').disabled = $('#question-type').value === 'truefalse'; });
-  if (channel) channel.onmessage = event => { if (event.data?.type === 'ready') { publish(match ? snapshot() : null); publishQuiz(); } };
+  if (channel) channel.onmessage = event => { if (event.data?.type === 'ready') { publish(match ? snapshot() : null); publishQuiz(); lastClockBroadcast = ''; updateClock(); } };
   fetch(statusAPI).then(response => response.json()).then(status => { $('#ai-status').textContent = status.configured ? `IA disponible (${status.model}). No se genera nada sin tu solicitud.` : 'IA no habilitada o sin configurar. Puedes importar JSON o copiar el prompt; no pegues claves en este campo.'; }).catch(() => { $('#ai-status').textContent = 'Puedes importar un banco JSON; no se pudo comprobar la IA.'; });
   if (platformMode) { $('#question-count').max = '12'; $('[data-local-only]').hidden = true; $('[data-platform-only]').hidden = false; $('.platform-description').textContent = 'Partida presencial del profesor, sin cuentas de alumnos ni calificaciones. Los puntos sólo pertenecen a esta partida.'; }
   setInterval(updateClock,500);

@@ -71,6 +71,7 @@
     "classroom/combat-events.js",
     "classroom/classroom.css",
     "classroom/engine.js",
+    "classroom/hud-countdown.js",
     "classroom/image-loader.js",
     "classroom/ice-audio.js",
     "classroom/live-engine.js",
