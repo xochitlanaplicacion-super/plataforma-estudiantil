@@ -1,5 +1,6 @@
 import { getUnit, getUnits, zombieSpeedForWave } from './catalog.js';
 import { getBalanceProfile, profileRules } from './balance-profiles.js';
+import { queueZombieEntry, isWaitingZombie, isCombatUnit, releaseZombieEntries } from './entry-queue.js';
 
 // Pure classroom rules: one click resolves exactly one finite round. Animation
 // and questions live outside this module and never drive combat timing.
@@ -60,8 +61,10 @@ function spawn(state, order) {
     placedRound: state.round, placedStep: combatClock(state), lastChompRound: -2, lastSpikeRound: -1,
     movementCredit: 0, chompCooldown: 0, freezeUntil: 0,
     placedAt: Math.max(0, (state.elapsed || 0) - ROUND_COMBAT_SECONDS),
+    ...(unit.side === 'zombies' ? { entryFree: !!order.free } : {}),
     ...(order.typeId === 'chomper' ? { chompDuration: rules(state).chompRestSeconds } : {}),
   };
+  queueZombieEntry(state.units, result);
   state.units.push(result);
   state.stats.unitsPlaced[unit.side] += 1;
   return result;
@@ -132,7 +135,7 @@ function checkOrder(state, side, typeId, row, col) {
   assert(side === 'plants' ? col >= 1 && col <= 6 : col === 7, side === 'plants' ? 'Las plantas se colocan en las columnas 1 a 6.' : 'Los zombis entran por la columna 7.');
   assert(state.resources[side] >= unit.cost, 'No hay suficientes recursos para comprar esta unidad.');
   if (side === 'plants') {
-    assert(!state.units.some(item => item.row === row && item.col === col) && !state.plans.plants.some(item => item.row === row && item.col === col), 'Esta casilla ya está ocupada.');
+    assert(!state.units.some(item => isCombatUnit(item) && item.row === row && item.col === col) && !state.plans.plants.some(item => item.row === row && item.col === col), 'Esta casilla ya está ocupada.');
   } else {
     assert(state.units.filter(item => item.side === 'zombies').length + state.plans.zombies.length < MAX_ZOMBIES, `Límite de seguridad: ${MAX_ZOMBIES} zombis simultáneos en el tablero o preparados para entrar.`);
   }
@@ -201,7 +204,7 @@ function cpuPlan(state, side) {
       const typeId = hasShooter ? 'wallnut' : 'peashooter';
       if (definition(typeId, state).cost > budget - spent) continue;
       const positions = hasShooter ? [5, 4, 3] : [2, 1, 3];
-      const col = positions.find(column => !state.units.some(unit => unit.row === row && unit.col === column) && !state.plans.plants.some(order => order.row === row && order.col === column));
+      const col = positions.find(column => !state.units.some(unit => isCombatUnit(unit) && unit.row === row && unit.col === column) && !state.plans.plants.some(order => order.row === row && order.col === column));
       if (col == null) continue;
       purchase(state, side, typeId, row, col);
       spent += definition(typeId, state).cost;
@@ -239,7 +242,7 @@ export function continuePlanning(original) {
 function event(list, type, data = {}) { list.push({ type, ...data }); }
 const retired = (state, unit) => unit.hp <= 0 || (unit.side === 'zombies' && unit.typeId !== 'dragon' && unit.hp < rules(state).zombieRetireHp);
 function hurt(state, unit, amount, events, sourceId) {
-  if (!unit || retired(state, unit)) return;
+  if (!unit || !isCombatUnit(unit) || retired(state, unit)) return;
   const actual = Math.min(unit.hp, amount);
   unit.hp -= amount;
   if (retired(state, unit)) unit.hp = 0;
@@ -284,7 +287,7 @@ function shootClassic(state, events) {
   // another shooter's later projectiles on behalf of the zombie behind it.
   pulses.sort((a, b) => a.at - b.at || a.plant.id.localeCompare(b.plant.id) || a.row - b.row);
   for (const { plant, row } of pulses) {
-    const target = state.units.filter(unit => unit.side === 'zombies' && unit.hp > 0 && unit.row === row && unit.col >= plant.col)
+    const target = state.units.filter(unit => unit.side === 'zombies' && isCombatUnit(unit) && unit.hp > 0 && unit.row === row && unit.col >= plant.col)
       .sort((a, b) => a.col - b.col || a.id.localeCompare(b.id))[0];
     if (target) fireShot(state, plant, target, row, events);
   }
@@ -298,7 +301,7 @@ function shoot(state, events) {
     if (!['peashooter', 'snow-pea', 'repeater', 'threepeater', 'corn-pult'].includes(plant.typeId)) continue;
     const rows = plant.typeId === 'threepeater' ? [plant.row - 1, plant.row, plant.row + 1] : [plant.row];
     for (const row of rows) {
-      const target = state.units.filter(unit => unit.side === 'zombies' && unit.row === row && unit.col >= plant.col).sort((a, b) => a.col - b.col || a.id.localeCompare(b.id))[0];
+      const target = state.units.filter(unit => unit.side === 'zombies' && isCombatUnit(unit) && unit.row === row && unit.col >= plant.col).sort((a, b) => a.col - b.col || a.id.localeCompare(b.id))[0];
       if (!target) continue;
       shots.push({ plant, target, damage: Math.max(1, plant.damage) });
     }
@@ -316,7 +319,7 @@ function shoot(state, events) {
 }
 
 function groundContact(state, zombie, events) {
-  if (flying(zombie) || zombie.hp <= 0) return;
+  if (!isCombatUnit(zombie) || flying(zombie) || zombie.hp <= 0) return;
   for (const plant of state.units.filter(unit => unit.side === 'plants' && unit.hp > 0 && unit.row === zombie.row && unit.col === zombie.col)) {
     const mineArmed = classic(state) ? state.elapsed - (plant.placedAt ?? Math.max(0, (plant.placedStep || 0) * ROUND_COMBAT_SECONDS)) >= rules(state).mineArmSeconds
       : combatClock(state) > (plant.placedStep ?? plant.placedRound);
@@ -335,7 +338,7 @@ function groundContact(state, zombie, events) {
 }
 
 function advance(state, events) {
-  for (const zombie of state.units.filter(unit => unit.side === 'zombies').sort((a, b) => a.col - b.col)) {
+  for (const zombie of state.units.filter(unit => unit.side === 'zombies' && isCombatUnit(unit)).sort((a, b) => a.col - b.col)) {
     groundContact(state, zombie, events);
     if (zombie.hp <= 0) continue;
     // Consume travel time one crossed tile at a time. A fast zombie can enter
@@ -382,7 +385,7 @@ function bites(state, events) {
   // Digestion uses battle seconds from the selected profile, never UI time.
   for (const plant of state.units.filter(unit => unit.side === 'plants' && unit.typeId === 'chomper')) {
     if (state.elapsed < (plant.chompCooldown || 0)) continue;
-    const target = state.units.find(unit => unit.side === 'zombies' && unit.hp > 0 && !flying(unit) && unit.row === plant.row && unit.col >= plant.col && unit.col <= plant.col + 1);
+    const target = state.units.find(unit => unit.side === 'zombies' && isCombatUnit(unit) && unit.hp > 0 && !flying(unit) && unit.row === plant.row && unit.col >= plant.col && unit.col <= plant.col + 1);
     if (target) {
       hurt(state, target, target.hp, events, plant.id);
       plant.lastChompRound = state.round;
@@ -393,7 +396,7 @@ function bites(state, events) {
       event(events, 'chomp', { sourceId: plant.id, targetId: target.id, row: plant.row, col: plant.col, duration });
     }
   }
-  for (const zombie of state.units.filter(unit => unit.side === 'zombies' && unit.hp > 0 && !flying(unit))) {
+  for (const zombie of state.units.filter(unit => unit.side === 'zombies' && isCombatUnit(unit) && unit.hp > 0 && !flying(unit))) {
     const plant = state.units.filter(unit => unit.side === 'plants' && unit.hp > 0 && unit.row === zombie.row
       && (!classic(state) || !floorPlant(unit))
       && (unit.col === zombie.col || unit.col === zombie.col - 1)).sort((a, b) => b.col - a.col)[0];
@@ -413,12 +416,12 @@ function bites(state, events) {
 
 function mow(state, events) {
   for (let row = 0; row < BOARD_ROWS; row += 1) {
-    if (!state.units.some(unit => unit.side === 'zombies' && unit.hp > 0 && unit.row === row && unit.col <= 0)) continue;
+    if (!state.units.some(unit => unit.side === 'zombies' && isCombatUnit(unit) && unit.hp > 0 && unit.row === row && unit.col <= 0)) continue;
     if (state.mowers[row]) {
       state.mowers[row] = false;
       // A triggered mower clears every living zombie in its lane once.
       event(events, 'mower', { row, col: 0 });
-      for (const zombie of state.units.filter(unit => unit.side === 'zombies' && unit.hp > 0 && unit.row === row)) hurt(state, zombie, zombie.hp, events, 'mower');
+      for (const zombie of state.units.filter(unit => unit.side === 'zombies' && isCombatUnit(unit) && unit.hp > 0 && unit.row === row)) hurt(state, zombie, zombie.hp, events, 'mower');
     } else {
       state.winner = 'zombies';
       event(events, 'invasion', { row });
@@ -440,13 +443,27 @@ function battleStages(state, deploy) {
   if (deploy) stage('deployment', list => {
     for (const side of SIDES) for (const order of state.plans[side]) {
       const unit = spawn(state, order);
-      event(list, 'deploy', { unitId: unit.id, typeId: unit.typeId, side, row: unit.row, col: unit.col, free: !!order.free });
+      if (!isWaitingZombie(unit)) event(list, 'deploy', { unitId: unit.id, typeId: unit.typeId, side, row: unit.row, col: unit.col, free: !!order.free });
     }
   });
   stage('shots', list => shoot(state, list));
   stage('advance', list => advance(state, list));
   stage('bites', list => bites(state, list));
-  stage('mowers', list => mow(state, list));
+  stage('mowers', list => {
+    mow(state, list);
+    // Queued reinforcements were outside when this step's shots, bites and
+    // mower sweep happened. Enter only afterward, without banking wait time
+    // as movement or bite credit; the next tactical step starts their combat.
+    if (!state.winner) releaseZombieEntries(state.units, unit => {
+      unit.placedAt = state.elapsed;
+      unit.placedStep = combatClock(state);
+      unit.placedRound = state.round;
+      unit.freezeUntil = 0;
+      unit.biteCreditSeconds = 0;
+      event(list, 'deploy', { unitId: unit.id, typeId: unit.typeId, side: unit.side,
+        row: unit.row, col: unit.col, free: !!unit.entryFree });
+    });
+  });
   return { stages, events };
 }
 

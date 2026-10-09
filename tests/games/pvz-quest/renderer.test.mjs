@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, test } from 'node:test';
-import { BoardRenderer, UNIT_VISUAL_STATES, unitVisualState } from '../../../public/games/pvz-quest/classroom/renderer.js';
+import { BoardRenderer, UNIT_VISUAL_STATES, unitVisualState, entranceView } from '../../../public/games/pvz-quest/classroom/renderer.js';
 import { getUnit } from '../../../public/games/pvz-quest/classroom/catalog.js';
 
 const globals = new Map();
@@ -58,6 +58,56 @@ function board({ reduced = false, sunAsset = true } = {}) {
 const flower = { id: 'flower-1', typeId: 'sunflower', row: 2, col: 2, side: 'plants', hp: 2, maxHp: 2 };
 const event = { type: 'sun', unitId: flower.id, row: flower.row, col: flower.col, side: 'plants', amount: 25 };
 const snapshot = () => ({ config: { tempo: 'continuous' }, resources: { plants: 225, zombies: 200 }, units: [{ ...flower }], mowers: Array(5).fill(true) });
+
+test('waiting zombies are not drawn as a pile, and queue badges remain inside the canvas outside the road', () => {
+  const { renderer, calls } = board();
+  const state = snapshot();
+  const zombie = { id: 'first', side: 'zombies', typeId: 'common', row: 2, col: 7, hp: 270, maxHp: 270 };
+  state.units = [zombie, ...Array.from({ length: 12 }, (_, index) => ({ ...zombie, id: `waiting-${index}`, entryPending: true }))];
+  const before = structuredClone(state);
+  const drawn = [];
+  renderer.drawUnit = unit => drawn.push(unit.id);
+  renderer.setLiveView(state);
+  drawn.length = 0; calls.length = 0;
+  renderer.draw(100);
+  assert.deepEqual(drawn, ['first']);
+  assert(calls.some(call => call.operation === 'fillText' && call.args[0] === 'Fila'));
+  const badge = calls.find(call => call.operation === 'fillText' && call.args[0] === '12');
+  assert.deepEqual(badge.args, ['12', 934, 269]);
+  assert(calls.some(call => call.operation === 'fillRect' && call.args[0] === 916 && call.args[2] === 36));
+  assert.deepEqual(state, before, 'Rendering does not deploy or charge anything');
+  renderer.destroy();
+});
+
+test('planning previews show one entrance zombie per lane and count later orders without altering plans', () => {
+  const orders = [
+    { id: 'first', side: 'zombies', typeId: 'common', row: 0, col: 7 },
+    { id: 'second', side: 'zombies', typeId: 'football', row: 0, col: 7 },
+    { id: 'third', side: 'zombies', typeId: 'dragon', row: 0, col: 7 },
+    { id: 'other-lane', side: 'zombies', typeId: 'common', row: 1, col: 7 },
+  ];
+  const before = structuredClone(orders);
+  const result = entranceView([], orders);
+  assert.deepEqual(result.visible.map(unit => unit.id), ['first', 'other-lane']);
+  assert.deepEqual(result.queued, [2, 0, 0, 0, 0]);
+  assert.deepEqual(orders, before);
+  const existing = [{ ...orders[0], hp: 270 }, { ...orders[1], hp: 1670, entryPending: true }];
+  assert.deepEqual(entranceView(existing, [orders[2]]).queued, [2, 0, 0, 0, 0]);
+});
+
+test('a released zombie becomes visible without restarting the live renderer, even after pausing', () => {
+  const { renderer } = board({ reduced: true });
+  const first = { id: 'first', side: 'zombies', typeId: 'common', row: 0, col: 7, hp: 270 };
+  const waiting = { ...first, id: 'waiting', entryPending: true };
+  const state = { ...snapshot(), paused: true, units: [first, waiting] };
+  renderer.setLiveView(state);
+  assert.deepEqual(entranceView(renderer.view.units).visible.map(unit => unit.id), ['first']);
+  renderer.setLiveView({ ...state, paused: false, units: [{ ...first, col: 6 }, { ...waiting, entryPending: false }] });
+  assert.deepEqual(entranceView(renderer.view.units).visible.map(unit => unit.id), ['first', 'waiting']);
+  assert.deepEqual(entranceView(renderer.view.units).queued, [0, 0, 0, 0, 0]);
+  assert.equal(renderer.livePositions.size, 2);
+  renderer.destroy();
+});
 
 test('automatic sun survives frequent live snapshots and expires without changing resources', () => {
   const { renderer } = board();

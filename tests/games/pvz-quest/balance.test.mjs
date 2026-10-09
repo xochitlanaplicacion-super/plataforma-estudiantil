@@ -43,8 +43,8 @@ test('six accelerating waves cannot declare plants winners before post-mower rei
   for (let round = 1; round <= 6; round += 1) {
     state = beginPlanning(state);
     if (state.activeSide === 'plants') state = continuePlanning(commitPlan(state));
-    // The fast pioneer consumes the mower in round five. The final slow
-    // reinforcement is purchased afterwards, so it survives that lane sweep.
+    // The fast pioneer consumes the mower in round five. Reinforcements
+    // waiting outside are not on its path and enter afterward in FIFO order.
     state = addOrder(state, 'zombies', round === 1 ? 'football' : 'common', 0, 7);
     state = commitPlan(state);
     if (state.phase === 'handover') state = commitPlan(continuePlanning(state));
@@ -52,7 +52,9 @@ test('six accelerating waves cannot declare plants winners before post-mower rei
     state = result.state;
     if (round === 5) {
       assert.equal(state.mowers[0], false);
-      assert.equal(state.units.length, 0);
+      assert.equal(state.units.length, 2);
+      assert.deepEqual(state.units.map(unit => unit.entryPending), [false, true]);
+      assert.equal(result.events.filter(event => event.type === 'damage' && event.sourceId === 'mower').length, 3);
       assert.equal(result.events.filter(event => event.type === 'mower').length, 1);
       assert.equal(result.events.some(event => event.type === 'invasion'), false);
     }
@@ -60,8 +62,10 @@ test('six accelerating waves cannot declare plants winners before post-mower rei
   assert.equal(state.phase, 'cleanup');
   assert.equal(state.winner, null);
   assert.equal(state.mowers[0], false);
-  assert.equal(state.units.length, 1);
+  assert.equal(state.units.length, 3);
   assert.equal(state.units[0].col, 6);
+  assert.deepEqual(state.units.map(unit => unit.entryPending), [false, false, true]);
+  const queuedIds = new Set(state.units.filter(unit => unit.entryPending).map(unit => unit.id));
   const budget = structuredClone(state.resources);
   const placed = structuredClone(state.stats.unitsPlaced);
   const rounds = state.stats.roundsResolved;
@@ -73,7 +77,10 @@ test('six accelerating waves cannot declare plants winners before post-mower rei
   }
   assert.equal(state.winner, 'zombies');
   assert.deepEqual(cleanupEvents.filter(event => event.type === 'invasion'), [{ type: 'invasion', row: 0 }]);
-  assert.equal(cleanupEvents.some(event => ['mower', 'deploy', 'income'].includes(event.type)), false);
+  assert.equal(cleanupEvents.some(event => ['mower', 'income'].includes(event.type)), false);
+  const entries = cleanupEvents.filter(event => event.type === 'deploy');
+  assert.equal(entries.length, 1);
+  assert(entries.every(event => queuedIds.has(event.unitId)));
   assert.equal(state.round, 6);
   assert.equal(state.stats.roundsResolved, rounds);
   assert.deepEqual(state.resources, budget);
@@ -159,7 +166,7 @@ function distributedDefense(state) {
   return state;
 }
 
-function equalRewardSimulation(plantStrategy) {
+function equalRewardSimulation(plantStrategy, { hordeSize = 8, zombieLanes = [0] } = {}) {
   let state = createMatch({ rounds: 8, seed: 'equal-100-each-team' });
   const events = [];
   for (let round = 0; round < state.maxRounds && state.phase !== 'finished'; round += 1) {
@@ -168,10 +175,9 @@ function equalRewardSimulation(plantStrategy) {
     for (let turn = 0; turn < 2; turn += 1) {
       if (state.activeSide === 'plants') state = plantStrategy(state);
       else {
-        // Flyers can bypass the distributed wall and consume its mower in
-        // round seven. Round eight then supplies a genuinely later horde.
-        if (round === 0) for (let index = 0; index < 3; index += 1) state = buyIfPossible(state, 'balloon', 0, 7);
-        for (let index = 0; index < 8; index += 1) state = buyIfPossible(state, 'common', 0, 7);
+        // Every purchased horde now uses the real FIFO lane entrances.
+        if (round === 0) for (let index = 0; index < 3; index += 1) state = buyIfPossible(state, 'balloon', zombieLanes[index % zombieLanes.length], 7);
+        for (let index = 0; index < hordeSize; index += 1) state = buyIfPossible(state, 'common', zombieLanes[(round * hordeSize + index) % zombieLanes.length], 7);
       }
       state = commitPlan(state);
       if (state.phase === 'handover') state = continuePlanning(state);
@@ -189,21 +195,35 @@ function equalRewardSimulation(plantStrategy) {
 }
 
 test('equal +100 prizes allow either side to win depending on defense and horde strategy, not an automatic horizon winner', () => {
-  const { state: defended } = equalRewardSimulation(focusedDefense);
+  const { state: defended } = equalRewardSimulation(focusedDefense, { hordeSize: 3 });
   const { state: breached, events } = equalRewardSimulation(distributedDefense);
+  const { state: backlog } = equalRewardSimulation(focusedDefense);
   assert.equal(defended.winner, 'plants');
+  assert.equal(defended.units.some(unit => unit.side === 'zombies'), false, 'Plant victory requires no active or waiting zombie');
   assert.equal(breached.winner, 'zombies');
+  assert.equal(backlog.winner, 'draw', 'A finite closing timer cannot declare victory over unprocessed purchases outside the board');
+  assert(backlog.units.some(unit => unit.side === 'zombies' && unit.entryPending));
   const mowerIndex = events.findIndex(event => event.type === 'mower' && event.row === 0);
   assert.ok(mowerIndex >= 0);
   const reinforcementIndex = events.findIndex((event, index) => index > mowerIndex && event.type === 'deploy' && event.side === 'zombies');
   assert.ok(reinforcementIndex > mowerIndex);
   assert.ok(events.findIndex(event => event.type === 'invasion' && event.row === 0) > reinforcementIndex);
   assert.equal(events.filter(event => event.type === 'mower' && event.row === 0).length, 1);
-  for (const result of [defended, breached]) {
+  for (const result of [defended, breached, backlog]) {
     assert.deepEqual(result.stats.resourcesAwarded, { plants: 800, zombies: 800 });
     assert.equal(result.stats.roundsResolved, 8);
     assert.ok(result.stats.cleanupSteps <= MAX_CLEANUP_STEPS);
-    assert.ok(result.stats.unitsPlaced.zombies >= 25);
+    assert.ok(result.stats.unitsPlaced.zombies >= 20);
   }
   // This is a reproducible sanity check, not a claim of a 50/50 global win rate.
+});
+
+test('a valid FIFO horde spread over all five lanes can defeat a defense concentrated on only one lane', () => {
+  const { state, events } = equalRewardSimulation(focusedDefense, { hordeSize: 3, zombieLanes: [0, 1, 2, 3, 4] });
+  assert.equal(state.winner, 'zombies');
+  assert(events.some(event => event.type === 'invasion' && event.row !== 0));
+  const enteredLanes = new Set(events.filter(event => event.type === 'deploy' && event.side === 'zombies').map(event => event.row));
+  assert.equal(enteredLanes.size, 5);
+  assert(events.filter(event => event.type === 'mower').length <= 5);
+  assert(state.stats.cleanupSteps <= MAX_CLEANUP_STEPS);
 });

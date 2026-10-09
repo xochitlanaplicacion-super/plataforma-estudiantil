@@ -3,7 +3,7 @@ import { DEFAULT_BALANCE_PROFILE, getBalanceProfile, profileRules } from './bala
 import { createMatch, grantResources, beginPlanning, addOrder, removeOrder, commitPlan, continuePlanning, resolveRound, resolveCleanup, publicSnapshot, availableUnits } from './engine.js';
 import { LIVE_RULES, LIVE_ZOMBIE_SPEED_PRESETS, createLiveMatch, awardLiveResources, buyLiveUnit, pauseLive, stepLive, liveSnapshot, availableLiveUnits, selectLiveSide, setLiveZombieSpeed, beginLiveInitialCoin, beginLiveTacticalShopping, confirmLiveTacticalTurn, resumeLiveTacticalWave } from './live-engine.js';
 import { normalizeQuestions, createQuestionPool, takeQuestion, gradeQuestion, buildQuestionPrompt } from './questions.js';
-import { BoardRenderer, renderCard } from './renderer.js';
+import { BoardRenderer, renderCard, entranceView } from './renderer.js';
 import { EFFECT_NAMES, combatSoundNames } from './sound-events.js';
 import { createIceSound } from './ice-audio.js';
 import { compactCombatEvents } from './combat-events.js';
@@ -70,6 +70,11 @@ const controlsAllowed = () => match && (continuous() ? match.phase === 'live' : 
 const award = (state,side,amount) => continuous() ? awardLiveResources(state,side,amount) : grantResources(state,side,amount);
 const currentProfileId = () => match?.config.balanceProfile ?? settings?.balanceProfile ?? DEFAULT_BALANCE_PROFILE;
 const getUnit = id => catalogUnit(id, currentProfileId());
+
+function entryQueueCaption(units, plans = []) {
+  const lanes = entranceView(units, plans).queued.map((count, row) => count ? `${String.fromCharCode(65 + row)}: ${count}` : '').filter(Boolean);
+  return lanes.length ? ` · En fila: ${lanes.join(' · ')} (salen uno a uno)` : '';
+}
 
 function updateProfileChoice() {
   const profile = getBalanceProfile($('#balance-profile').value);
@@ -436,6 +441,7 @@ function updateLiveUI(events = []) {
   const baseline = match.tacticalPublicBaseline?.units || [];
   const baselineIds = new Set(baseline.map(unit => unit.id));
   const privateView = (match.initialStaging || match.tacticalPhase) && settings.planning === 'secret' ? { ...match, units: match.units.filter(unit => baselineIds.has(unit.id) || unit.side === side) } : match;
+  $('#board-caption').textContent += entryQueueCaption(privateView.units);
   renderer.setLiveView(privateView,{selected:selectedCell});
   renderer.showLiveEvents(events);
   animateSunRewards(events);
@@ -575,6 +581,7 @@ function render() {
   renderer.setView(match, { plans, selected: selectedCell });
   if (settings.planning === 'secret' && match.phase === 'handover') $('#board-caption').textContent = 'Las compras del primer equipo siguen ocultas.';
   else $('#board-caption').textContent = `Casa · Plantas en columnas 1–6 · Entrada zombi en 7 · ${zombieSpeedDescription(match)}`;
+  $('#board-caption').textContent += entryQueueCaption(match.units, plans);
   publish(publicSnapshot(match));
   updateClock();
 }
@@ -890,6 +897,7 @@ function renderPublic(snapshot, notice, draw = true) {
   const secret = snapshot.config.planning === 'secret' && ['planning','handover','ready'].includes(snapshot.phase);
   $('#status').textContent = notice || (secret ? 'Compras privadas · se revelarán ambos planes juntos' : snapshot.phase === 'finished' ? snapshot.winner === 'draw' ? 'Resultado: empate' : `¡Ganan ${sideName(snapshot.winner)}!` : snapshot.phase === 'planning' ? `Compra ${sideName(snapshot.activeSide)}` : 'La clase prepara su siguiente jugada');
   $('#board-caption').textContent = secret ? 'Vista pública: no muestra compras ni gasto privado de ningún equipo.' : `Casa · Plantas · Entrada zombi${Number.isFinite(snapshot.zombieSpeed) ? ` · ${zombieSpeedDescription(snapshot)}` : ''}`;
+  $('#board-caption').textContent += entryQueueCaption(snapshot.units, snapshot.plans);
   renderCountdown($('#timer'), countdownView(snapshot, publicDebateClock));
   if (snapshot.phase === 'finished') {
     $('#public-question').hidden = true;

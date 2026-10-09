@@ -1,5 +1,6 @@
 import { UNITS, getUnit } from './catalog.js';
 import { profileRules } from './balance-profiles.js';
+import { isCombatUnit, isWaitingZombie, zombieEntryQueueCounts } from './entry-queue.js';
 import { assetURL } from './runtime.js';
 import { createImageLoader } from './image-loader.js';
 
@@ -42,6 +43,20 @@ const centre = (row, col) => ({ x: GRID.x + (col + 0.5) * CELL_W, y: GRID.y + (r
 const ease = value => value * value * (3 - 2 * value);
 const now = () => performance.now();
 const plansArray = plans => Array.isArray(plans) ? plans : [...(plans?.plants || []), ...(plans?.zombies || [])];
+
+/** Planning previews use the same entrance rule, without changing real orders. */
+export function entranceView(units = [], plans = []) {
+  const visible = units.filter(isCombatUnit);
+  const queued = zombieEntryQueueCounts(units);
+  for (const order of plansArray(plans)) {
+    const preview = { ...order, planned: true };
+    const occupied = order.side === 'zombies' && (queued[order.row] > 0 || visible.some(unit => unit.side === 'zombies'
+      && unit.row === order.row && (unit.planned || unit.hp == null || unit.hp > 0) && unit.col > 6 + 1e-8));
+    if (occupied) queued[order.row] += 1;
+    else visible.push(preview);
+  }
+  return { visible, queued };
+}
 
 function frameFor(sprite, clock, phase = 0) {
   const start = sprite.startY * SHEET_COLS + sprite.startX;
@@ -429,7 +444,7 @@ export class BoardRenderer {
     const progress = this.stage ? clamp((clock - this.stage.started) / this.stage.effectDuration, 0, 1) : 1;
     const mowerProgress = this.stage ? clamp((clock - this.stage.started) / (this.reducedMotion ? 400 : MOWER_EFFECT_MS), 0, 1) : 1;
     const events = this.stage?.events || [];
-    const visible = [...this.view.units, ...this.plans.map(order => ({ ...order, planned: true }))];
+    const { visible, queued } = entranceView(this.view.units, this.plans);
     const stacks = new Map();
     for (const unit of visible) {
       const key = `${unit.row}:${unit.col}:${unit.side}`;
@@ -454,6 +469,7 @@ export class BoardRenderer {
     this.drawEffects(events, progress);
     for (const effect of this.liveEffects) this.drawEffects([effect.event], clamp((clock - effect.started) / effect.duration, 0, 1));
     for (const effect of this.liveMowers.values()) this.drawEffects([effect.event], clamp((clock - effect.started) / effect.duration, 0, 1));
+    this.drawEntryQueues(queued);
     // Income flies above the garden toward the resource bar, so it must not
     // inherit the clipping used by combat particles inside the lawn.
     for (const event of events) if (event.type === 'sun') this.drawSun(event, progress);
@@ -501,6 +517,7 @@ export class BoardRenderer {
   }
 
   drawUnit(unit, clock, col = unit.col, stack = 0, alpha = 1, defeated = false) {
+    if (isWaitingZombie(unit)) return;
     const definition = getUnit(unit.typeId, this.view.config?.balanceProfile ?? 'aula');
     if (!definition || !Number.isFinite(unit.row) || !Number.isFinite(col)) return;
     const context = this.context;
@@ -555,6 +572,25 @@ export class BoardRenderer {
       context.fillStyle = '#fff'; context.strokeStyle = '#213822'; context.lineWidth = 3;
       context.font = 'bold 11px system-ui, sans-serif'; context.textAlign = 'center'; context.textBaseline = 'middle';
       context.strokeText(`${Math.max(0, hp)}/${maxHp}`, point.x, barY + 12); context.fillText(`${Math.max(0, hp)}/${maxHp}`, point.x, barY + 12);
+    }
+    context.restore();
+  }
+
+  drawEntryQueues(counts) {
+    const context = this.context;
+    if (!counts.some(count => count > 0)) return;
+    context.save();
+    context.textAlign = 'center'; context.textBaseline = 'middle';
+    context.fillStyle = '#ffe3a0'; context.font = 'bold 12px system-ui, sans-serif';
+    context.fillText('Fila', 934, 23);
+    for (const [row, count] of counts.entries()) {
+      if (!count) continue;
+      const y = centre(row, 7).y;
+      // The badges sit outside the road, never over the zombie or its HP.
+      context.fillStyle = '#4c2b15'; context.fillRect(916, y - 14, 36, 28);
+      context.strokeStyle = '#dfbd6a'; context.lineWidth = 2; context.strokeRect(917, y - 13, 34, 26);
+      context.fillStyle = '#fff0ad'; context.font = 'bold 16px system-ui, sans-serif';
+      context.fillText(String(count), 934, y);
     }
     context.restore();
   }
