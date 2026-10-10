@@ -4,8 +4,8 @@ import { createMatch, grantResources, beginPlanning, addOrder, removeOrder, comm
 import { LIVE_RULES, LIVE_ZOMBIE_SPEED_PRESETS, createLiveMatch, awardLiveResources, buyLiveUnit, pauseLive, stepLive, liveSnapshot, availableLiveUnits, selectLiveSide, setLiveZombieSpeed, beginLiveInitialCoin, beginLiveTacticalShopping, confirmLiveTacticalTurn, resumeLiveTacticalWave } from './live-engine.js';
 import { normalizeQuestions, createQuestionPool, takeQuestion, gradeQuestion, buildQuestionPrompt } from './questions.js';
 import { BoardRenderer, renderCard, entranceView } from './renderer.js';
-import { EFFECT_NAMES, combatSoundNames } from './sound-events.js';
-import { createIceSound } from './ice-audio.js';
+import { combatSoundNames } from './sound-events.js';
+import { createGameAudio } from './game-audio.js';
 import { compactCombatEvents } from './combat-events.js';
 import { countdownView, renderCountdown } from './hud-countdown.js';
 import { assetURL, platformMode, questionsAPI, statusAPI } from './runtime.js';
@@ -55,13 +55,10 @@ let focusMarkup = '';
 let livePreparedSides = { plants: false, zombies: false };
 let liveInitialResources = { plants: 200, zombies: 200 };
 let tacticalVisualKey = '';
+const sunRewardTimers = new Set();
 const presentation = createWavePresentation($('#board-stage'));
-const music = new Audio(assetURL('/assets/audio/theme.mp3'));
-music.loop = true; music.volume = 0.3; music.preload = 'none';
-const effects = new Map();
-const unlockedEffects = new Set();
-const lastSounds = new Map();
-const iceSound = createIceSound({ onError: audioFailure });
+const gameAudio = createGameAudio({ assetURL, onError: audioFailure });
+const music = { play: () => gameAudio.playMusic(), pause: () => gameAudio.pauseMusic() };
 const renderer = new BoardRenderer($('#board'), { onCell: ({ row, col }) => place(row, col) });
 const continuous = () => settings?.tempo === 'continuous';
 const snapshot = () => continuous() ? livePublicSnapshot() : publicSnapshot(match);
@@ -178,26 +175,8 @@ function updateBoardFocus() {
   requestBoardFit();
 }
 
-function prepareSounds() {
-  for (const name of EFFECT_NAMES) {
-    if (effects.has(name)) continue;
-    const audio = new Audio(assetURL(`/assets/audio/${name}.mp3`));
-    audio.volume = 0.55; audio.preload = 'auto'; audio.load();
-    effects.set(name,audio);
-  }
-  music.preload = 'auto';
-}
-
 function sound(name) {
-  if (!soundEnabled || !(EFFECT_NAMES.includes(name) || name === 'freeze')) return;
-  const now = performance.now();
-  if (now - (lastSounds.get(name) ?? -Infinity) < 150) return;
-  lastSounds.set(name,now);
-  if (name === 'freeze') { iceSound.play(); return; }
-  prepareSounds();
-  const audio = effects.get(name);
-  audio.muted = false; audio.questVoice = (audio.questVoice || 0) + 1;
-  try { audio.currentTime = 0; audio.play().catch(audioFailure); } catch { audioFailure(); }
+  if (soundEnabled) gameAudio.play(name);
 }
 
 function audioFailure() {
@@ -207,33 +186,27 @@ function audioFailure() {
 }
 
 function enableSound() {
-  soundEnabled = true; prepareSounds();
-  iceSound.enable();
+  soundEnabled = true;
+  if (!gameAudio.enable()) {
+    soundEnabled = false;
+    $('#audio-status').textContent = 'No se pudo activar el audio. Revisa el volumen y vuelve a pulsar Activar sonido.';
+    return;
+  }
   $('#settings [name="audio"]').checked = true;
   $('#sound-toggle').textContent = 'Silenciar'; $('#sound-toggle').setAttribute('aria-pressed','true');
-  // Called directly from the user's click: unlock media before any await.
-  // Some touch browsers grant playback per media element, not per page.
-  // Prime each existing effect silently in this same click, without pausing
-  // a real effect if a later click has already started that element.
-  for (const [name, audio] of effects) {
-    if (name === 'points' || unlockedEffects.has(name)) continue;
-    const voice = audio.questVoice || 0; audio.muted = true;
-    audio.play().then(() => {
-      if ((audio.questVoice || 0) === voice) { audio.pause(); audio.currentTime = 0; }
-      audio.muted = false; unlockedEffects.add(name);
-    }).catch(() => { audio.muted = false; });
-  }
+  // The Start/toggle click unlocks the sole mixer synchronously. The theme
+  // starts as soon as decoded, including the initial preparation screen.
+  // A checked sound option never requires pressing "Probar sonido" first.
   sound('points');
-  if (!match?.paused) music.play().catch(audioFailure);
+  music.play().catch(audioFailure);
   $('#audio-status').textContent = 'Sonido activado. Puedes silenciar desde Menú durante la partida.';
 }
 
 function disableSound() {
   soundEnabled = false;
-  iceSound.disable();
+  gameAudio.disable();
   $('#settings [name="audio"]').checked = false;
   $('#sound-toggle').textContent = 'Activar sonido'; $('#sound-toggle').setAttribute('aria-pressed','false');
-  music.pause(); for (const audio of effects.values()) audio.pause();
   $('#audio-status').textContent = 'Sonido desactivado. Pulsa Probar sonido o actívalo desde Menú.';
 }
 
@@ -255,6 +228,7 @@ function animateReward(side,amount,source,broadcast = true) {
   const from = source?.getBoundingClientRect?.() || $('#board').getBoundingClientRect();
   const to = destination.getBoundingClientRect();
   const flight = document.createElement('span'); flight.className = `reward-flight ${side}`;
+  if (source?.passiveSun) flight.dataset.passiveSun = 'true';
   flight.textContent = `${side === 'plants' ? '☀' : '🧠'} +${amount}`;
   flight.setAttribute('aria-hidden','true');
   flight.style.setProperty('--start-x',`${from.left+from.width/2}px`);
@@ -272,15 +246,33 @@ function animateReward(side,amount,source,broadcast = true) {
   setTimeout(() => destination.classList.remove('resource-pop'),700);
 }
 
+function sunAnimationsAllowed() {
+  const view = isPublic ? publicView : match;
+  return view?.phase === 'live' && !view.paused && !view.initialStaging && !view.tacticalPhase;
+}
+
+function clearSunRewards() {
+  for (const timer of sunRewardTimers) clearTimeout(timer);
+  sunRewardTimers.clear();
+  // Teacher awards remain visible/available while paused. Only the delayed
+  // passive sunflower flights are cancelled; this never changes earned money.
+  for (const flight of document.querySelectorAll('[data-passive-sun]')) flight.remove();
+}
+
 function animateSunRewards(events) {
+  if (!sunAnimationsAllowed()) { clearSunRewards(); return; }
   for (const event of events.filter(event => event.type === 'sun' && event.amount > 0)) {
     const box = $('#board').getBoundingClientRect();
     const x = box.left + (48 + (event.col + 0.5) * 108) / 960 * box.width;
     // Finish the canvas sun's upward flight with a HUD reward flight. No
     // collection click is required and this animation never grants resources.
-    const origin = { getBoundingClientRect: () => ({ left: x, top: box.top, width: 0, height: 0 }) };
+    const origin = { passiveSun: true, getBoundingClientRect: () => ({ left: x, top: box.top, width: 0, height: 0 }) };
     const token = runToken;
-    setTimeout(() => { if (token === runToken && !$('#game').hidden) animateReward('plants',event.amount,origin,false); },650);
+    const timer = setTimeout(() => {
+      sunRewardTimers.delete(timer);
+      if (token === runToken && !$('#game').hidden && sunAnimationsAllowed()) animateReward('plants',event.amount,origin,false);
+    },650);
+    sunRewardTimers.add(timer);
   }
 }
 
@@ -751,12 +743,12 @@ async function toggleFullscreen() {
 
 function stopGame() {
   stopLiveLoop();
+  clearSunRewards();
   presentation.clear(); tacticalVisualKey = ''; lastClockBroadcast = '';
   runToken++; busy = false; match = null; quiz = null; selection = null; resetClock();
   renderer.setView({units:[],mowers:[true,true,true,true,true]});
   music.pause();
-  iceSound.stop();
-  for (const audio of effects.values()) audio.pause();
+  gameAudio.stopEffects();
   $('#live-question').hidden = true; $('#quiz-dialog').close();
   $('#zombie-controls').hidden = true;
   publish(null, 'El profesor terminó la partida.');
@@ -865,7 +857,7 @@ async function action(button) {
         if (match?.phase !== 'live' || !continuous() || match.initialStaging || match.tacticalPhase) return;
         match = pauseLive(match,!match.paused);
         livePrevious = 0;
-        if (match.paused) { music.pause(); iceSound.stop(); for (const audio of effects.values()) audio.pause(); }
+        if (match.paused) { music.pause(); gameAudio.stopEffects(); }
         else if (soundEnabled) music.play().catch(audioFailure);
         updateLiveUI();
         if (!liveRAF) startLiveLoop();
@@ -887,6 +879,7 @@ async function action(button) {
 
 function renderPublic(snapshot, notice, draw = true) {
   publicView = snapshot;
+  if (!sunAnimationsAllowed()) clearSunRewards();
   if (!snapshot) { presentation.clear(); tacticalVisualKey = ''; publicDebateClock = null; renderCountdown($('#timer'), null); $('#status').textContent = notice || 'Esperando al profesor…'; renderer.setView({units:[],mowers:[true,true,true,true,true]}); return; }
   updateActiveProfile(snapshot);
   document.body.dataset.phase = snapshot.phase; document.body.dataset.tempo = snapshot.config.tempo || 'rounds';
@@ -942,7 +935,7 @@ if (isPublic) {
   }
 } else {
   $('#settings').addEventListener('submit',startGame);
-  $('#settings [name="audio"]').addEventListener('change',event => { if (!event.target.checked) disableSound(); });
+  $('#settings [name="audio"]').addEventListener('change',event => { if (event.target.checked) enableSound(); else disableSound(); });
   const updatePrivacy = () => {
     const cooperative = $('#settings [name="mode"]').value !== 'duel';
     const live = $('#settings [name="tempo"]').value === 'continuous';
@@ -983,4 +976,9 @@ renderer.load().then(() => {
   requestBoardFit();
 }).catch(() => { notify('Faltó un recurso gráfico. Recarga la página para reintentar antes de empezar.'); });
 
-window.addEventListener('pagehide',() => { stopLiveLoop(); cancelAnimationFrame(boardFitRAF); boardObserver?.disconnect(); presentation.destroy(); renderer.destroy(); music.pause(); iceSound.destroy(); for (const audio of effects.values()) audio.pause(); channel?.close(); }, {once:true});
+document.addEventListener('visibilitychange', () => gameAudio.setVisible(!document.hidden));
+// Restore an interrupted Safari context on the next real interaction, without
+// turning audio back on if the teacher has muted it. No audio work per frame.
+document.addEventListener('pointerdown', () => { if (soundEnabled) gameAudio.resume(); }, { passive: true });
+document.addEventListener('keydown', () => { if (soundEnabled) gameAudio.resume(); });
+window.addEventListener('pagehide',() => { stopLiveLoop(); clearSunRewards(); cancelAnimationFrame(boardFitRAF); boardObserver?.disconnect(); presentation.destroy(); renderer.destroy(); gameAudio.destroy(); channel?.close(); }, {once:true});

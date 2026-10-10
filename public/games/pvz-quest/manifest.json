@@ -73,6 +73,7 @@
     "classroom/classroom.css",
     "classroom/engine.js",
     "classroom/entry-queue.js",
+    "classroom/game-audio.js",
     "classroom/hud-countdown.js",
     "classroom/image-loader.js",
     "classroom/ice-audio.js",

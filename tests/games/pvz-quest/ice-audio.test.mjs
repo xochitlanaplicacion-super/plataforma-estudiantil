@@ -5,11 +5,14 @@ import { createIceSound } from '../../../public/games/pvz-quest/classroom/ice-au
 function audioHarness() {
   const contexts = [];
   class Context {
-    constructor() { this.state = 'suspended'; this.currentTime = 10; this.destination = {}; this.tones = []; contexts.push(this); }
+    constructor() { this.state = 'suspended'; this.currentTime = 10; this.destination = {}; this.tones = []; this.gains = []; contexts.push(this); }
     resume() { this.state = 'running'; return Promise.resolve(); }
     suspend() { this.state = 'suspended'; return Promise.resolve(); }
     close() { this.state = 'closed'; return Promise.resolve(); }
-    createGain() { return { gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {}, disconnect() {} }; }
+    createGain() {
+      const node = { gain: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect(destination) { this.destination = destination; }, disconnect() {} };
+      this.gains.push(node); return node;
+    }
     createOscillator() {
       const tone = { frequency: { setValueAtTime() {}, exponentialRampToValueAtTime() {} }, connect() {}, disconnect() {},
         start(at) { this.started = at; }, stop(at) { if (at == null) this.stopped = true; else this.endAt = at; } };
@@ -67,4 +70,63 @@ test('missing or rejected Web Audio never throws into combat', () => {
   assert.equal(errors, 1);
   assert.equal(broken.play(), false);
   broken.destroy();
+});
+
+test('shared ice audio uses the mixer output without owning its context lifecycle', () => {
+  const { Context, contexts } = audioHarness();
+  const context = new Context();
+  const destination = {};
+  const sound = createIceSound({ AudioContext: null, getContext: () => context, getOutput: () => destination });
+  assert.equal(sound.enable(), true);
+  assert.equal(context.state, 'suspended', 'Only the mixer may resume the shared context');
+  assert.equal(sound.play(), false);
+  context.state = 'running';
+  assert.equal(sound.play(), true);
+  assert.equal(context.gains[0].destination, destination);
+  assert.equal(contexts.length, 1, 'Ice must not create another AudioContext');
+  sound.disable();
+  assert(context.tones.every(tone => tone.stopped));
+  assert.equal(context.state, 'running', 'Muting ice must not suspend music or other mixer sounds');
+  assert.equal(sound.play(), false);
+  assert.equal(sound.enable(), true);
+  assert.equal(sound.play(), true);
+  sound.destroy();
+  assert.equal(context.state, 'running', 'Destroying ice must not close the mixer');
+  assert.equal(sound.play(), false);
+});
+
+test('shared ice audio reacquires a recreated context and falls back to its destination', () => {
+  const { Context } = audioHarness();
+  const previousContext = new Context();
+  previousContext.state = 'running';
+  let currentContext = previousContext;
+  const sound = createIceSound({ getContext: () => currentContext, getOutput: () => null });
+  sound.enable();
+  sound.play();
+  assert.equal(previousContext.gains[0].destination, previousContext.destination);
+  currentContext = new Context();
+  currentContext.state = 'running';
+  assert.equal(sound.enable(), true);
+  assert(previousContext.tones.every(tone => tone.stopped), 'Old voices are discarded when the mixer context changes');
+  assert.equal(sound.play(), true);
+  assert.equal(currentContext.gains[0].destination, currentContext.destination);
+  currentContext = null;
+  assert.equal(sound.enable(), false);
+  assert.equal(sound.play(), false);
+  sound.destroy();
+  assert.equal(previousContext.state, 'running');
+});
+
+test('shared ice audio caps simultaneous freeze effects at two voices', () => {
+  const { Context } = audioHarness();
+  const context = new Context();
+  context.state = 'running';
+  const sound = createIceSound({ getContext: () => context });
+  sound.enable();
+  for (let index = 0; index < 3; index += 1) sound.play();
+  assert(context.tones.slice(0, 3).every(tone => tone.stopped));
+  assert(context.tones.slice(3).every(tone => !tone.stopped));
+  sound.destroy();
+  assert(context.tones.every(tone => tone.stopped));
+  assert.equal(context.state, 'running');
 });

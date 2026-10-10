@@ -67,6 +67,11 @@ const canHumanControl = (state, side) => ['plants', 'zombies'].includes(side)
   && (state.config.mode === 'duel' || side === sideOfClass(state));
 const sideOfCPU = state => state.config.mode === 'coop-zombies' ? 'plants' : null;
 const alive = unit => unit.hp > 0;
+// Preparation phases are intrinsically paused. Restored state or an accidental
+// caller changing `paused` must never advance combat or sunflower production
+// while the coin, shop, or joint reveal is still pending.
+const clockRunning = state => state.phase === 'live' && !state.paused
+  && !state.initialStaging && !state.tacticalPhase;
 const flying = unit => ['balloon', 'dragon'].includes(unit.typeId);
 const definition = (state, typeId) => {
   const unit = getUnit(typeId, profileId(state));
@@ -670,10 +675,10 @@ export function stepLive(original, dtSeconds) {
   assert(typeof dtSeconds === 'number' && Number.isFinite(dtSeconds) && dtSeconds >= 0 && dtSeconds <= LIVE_RULES.maxExternalStep,
     'El paso de simulación debe estar entre 0 y 0.25 segundos.');
   const state = copy(original), events = [];
-  if (state.phase !== 'live' || state.paused || dtSeconds === 0) return { state, events };
+  if (!clockRunning(state) || dtSeconds === 0) return { state, events };
   const previousPositions = new Map(state.units.filter(unit => unit.side === 'zombies' && isCombatUnit(unit)).map(unit => [unit.id, unit.col]));
   state.accumulator += dtSeconds;
-  while (state.accumulator + epsilon >= LIVE_RULES.fixedStep && state.phase === 'live' && !state.paused) {
+  while (state.accumulator + epsilon >= LIVE_RULES.fixedStep && clockRunning(state)) {
     state.accumulator = Math.max(0, state.accumulator - LIVE_RULES.fixedStep);
     tick(state, events);
   }

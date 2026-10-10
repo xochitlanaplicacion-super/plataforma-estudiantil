@@ -330,6 +330,9 @@ export class BoardRenderer {
     for (const [id, entry] of this.liveRetired) if (entry.expires < clock) this.liveRetired.delete(id);
     while (this.liveRetired.size > LIVE_EFFECT_LIMIT) this.liveRetired.delete(this.liveRetired.keys().next().value);
     this.view = { ...snapshot, units: incoming, mowers: [...(snapshot?.mowers || Array(5).fill(false))] };
+    if (snapshot?.paused || snapshot?.initialStaging || snapshot?.tacticalPhase || snapshot?.phase === 'finished') {
+      this.liveEffects = this.liveEffects.filter(effect => effect.event.type !== 'sun');
+    }
     this.plans = [];
     this.selected = selected ? { ...selected } : null;
     if (first) this.draw(clock);
@@ -351,6 +354,7 @@ export class BoardRenderer {
     const drawable = new Set(['shot', 'freeze', 'damage', 'defeat', 'death', 'mine', 'chomp', 'bite', 'mower', 'invasion', 'sun']);
     for (const event of events) {
       if (!event || !drawable.has(event.type) || !Number.isFinite(event.row) || event.row < 0 || event.row >= GRID.rows) continue;
+      if (event.type === 'sun' && (this.view.paused || this.view.initialStaging || this.view.tacticalPhase || this.view.phase === 'finished')) continue;
       if (event.type === 'mower') {
         if (!Number.isInteger(event.row) || this.usedMowerRows.has(event.row)) continue;
         this.usedMowerRows.add(event.row);

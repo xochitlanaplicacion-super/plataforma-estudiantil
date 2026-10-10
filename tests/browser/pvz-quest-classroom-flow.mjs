@@ -13,7 +13,7 @@ const bridge = `
 window.questTest = {
   state: () => structuredClone(match),
   stop: stopLiveLoop,
-  ice: () => iceSound.play(),
+  ice: () => gameAudio.play('freeze'),
   boundary(round, tacticalPauses = match.config.tacticalPauses) {
     stopLiveLoop();
     const elapsed = round * match.config.waveSeconds - .1;

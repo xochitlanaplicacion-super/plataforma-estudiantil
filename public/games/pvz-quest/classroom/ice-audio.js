@@ -1,7 +1,9 @@
 /** Local ice shimmer: no recording download, playback only after a user gesture. */
-export function createIceSound({ AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext, onError = () => {} } = {}) {
+export function createIceSound({ AudioContext = globalThis.AudioContext || globalThis.webkitAudioContext, onError = () => {}, getContext = null, getOutput = null } = {}) {
   let context = null;
   let enabled = false;
+  const shared = typeof getContext === 'function';
+  const voiceLimit = shared ? 2 : 4;
   const voices = new Set();
   const fail = () => { try { onError(); } catch { /* Audio never interrupts combat. */ } };
   const stop = () => {
@@ -10,8 +12,14 @@ export function createIceSound({ AudioContext = globalThis.AudioContext || globa
   return {
     enable() {
       enabled = true;
-      if (!AudioContext) return false;
       try {
+        if (shared) {
+          const nextContext = getContext() || null;
+          if (context !== nextContext) stop();
+          context = nextContext;
+          return Boolean(context && context.state !== 'closed');
+        }
+        if (!AudioContext) return false;
         context ||= new AudioContext();
         if (context.state === 'suspended') Promise.resolve(context.resume()).catch(fail);
         return true;
@@ -20,13 +28,14 @@ export function createIceSound({ AudioContext = globalThis.AudioContext || globa
     play() {
       if (!enabled || !context || context.state !== 'running') return false;
       try {
-        while (voices.size >= 4) voices.values().next().value.stop();
+        const destination = (typeof getOutput === 'function' ? getOutput() : null) ?? context.destination;
+        while (voices.size >= voiceLimit) voices.values().next().value.stop();
         const output = context.createGain();
         const at = context.currentTime;
         output.gain.setValueAtTime(0.0001, at);
         output.gain.exponentialRampToValueAtTime(0.12, at + 0.015);
         output.gain.exponentialRampToValueAtTime(0.0001, at + 0.38);
-        output.connect(context.destination);
+        output.connect(destination);
         const nodes = [];
         let ended = 0;
         const voice = { stop() {
@@ -52,12 +61,12 @@ export function createIceSound({ AudioContext = globalThis.AudioContext || globa
     disable() {
       enabled = false;
       stop();
-      if (context?.state === 'running') Promise.resolve(context.suspend()).catch(fail);
+      if (!shared && context?.state === 'running') Promise.resolve(context.suspend()).catch(fail);
     },
     destroy() {
       enabled = false;
       stop();
-      if (context && context.state !== 'closed') Promise.resolve(context.close()).catch(() => {});
+      if (!shared && context && context.state !== 'closed') Promise.resolve(context.close()).catch(() => {});
       context = null;
     },
   };

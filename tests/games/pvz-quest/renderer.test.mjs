@@ -128,6 +128,75 @@ test('automatic sun survives frequent live snapshots and expires without changin
   renderer.destroy();
 });
 
+for (const [label, flags] of [
+  ['manual pause', { paused: true }],
+  ['initial preparation', { initialStaging: true, paused: false }],
+  ['initial briefing', { tacticalPhase: 'briefing', paused: false }],
+  ['coin animation', { tacticalPhase: 'coin', paused: false }],
+  ['tactical shopping', { tacticalPhase: 'shopping', paused: false }],
+  ['tactical reveal pending', { tacticalPhase: 'ready', paused: false }],
+  ['finished battle', { phase: 'finished', paused: false }],
+]) {
+  test(`${label} cancels only passive sun visuals and ignores delayed sun events without changing earned resources`, () => {
+    const { renderer, calls } = board();
+    const state = { ...snapshot(), phase: 'live', elapsed: 12 };
+    const before = structuredClone(state);
+    const shot = { type: 'shot', row: 2, fromCol: 1, toCol: 5 };
+    const events = [event, shot];
+    const beforeEvents = structuredClone(events);
+    renderer.setLiveView(state);
+    renderer.showLiveEvents(events);
+    const existingShot = renderer.liveEffects.find(effect => effect.event.type === 'shot');
+    assert.equal(renderer.liveEffects.filter(effect => effect.event.type === 'sun').length, 1);
+
+    advanceClock(100);
+    const suspended = { ...state, ...flags };
+    const beforeSuspended = structuredClone(suspended);
+    renderer.setLiveView(suspended);
+    assert.deepEqual(renderer.liveEffects, [existingShot], 'Pause clears a flying sun, not ordinary combat feedback');
+    renderer.showLiveEvents(events);
+    assert.deepEqual(renderer.liveEffects.map(effect => effect.event.type), ['shot', 'shot']);
+    calls.length = 0;
+    renderer.draw(clock);
+    const sunImage = renderer.images.get('/assets/images/Interface/SunSprite_79x79.png');
+    assert(!calls.some(call => call.operation === 'drawImage' && call.args[0] === sunImage));
+
+    // The teacher can still grant points while battle production is stopped;
+    // rendering the new total neither manufactures a sun nor rolls it back.
+    const manuallyAwarded = { ...suspended, resources: { ...suspended.resources, plants: 325 } };
+    const beforeAwarded = structuredClone(manuallyAwarded);
+    renderer.setLiveView(manuallyAwarded);
+    assert.equal(renderer.view.resources.plants, 325);
+    assert.equal(renderer.liveEffects.some(effect => effect.event.type === 'sun'), false);
+    assert.deepEqual(manuallyAwarded, beforeAwarded);
+    assert.deepEqual(suspended, beforeSuspended);
+    assert.deepEqual(state, before);
+    assert.deepEqual(events, beforeEvents);
+    renderer.destroy();
+  });
+}
+
+test('resuming combat accepts a fresh sunflower event without resurrecting pre-pause flights', () => {
+  const { renderer } = board();
+  const state = { ...snapshot(), phase: 'live', paused: false, elapsed: 12 };
+  renderer.setLiveView(state);
+  renderer.showLiveEvents([event]);
+  const original = renderer.liveEffects[0];
+  advanceClock(100);
+  renderer.setLiveView({ ...state, paused: true, tacticalPhase: 'coin' });
+  assert.equal(renderer.liveEffects.length, 0);
+  advanceClock(10000);
+  renderer.setLiveView({ ...state, elapsed: 12, paused: false, tacticalPhase: null });
+  assert.equal(renderer.liveEffects.length, 0, 'Returning to play cannot replay an old sunflower award');
+  renderer.showLiveEvents([{ ...event, amount: 10 }]);
+  assert.equal(renderer.liveEffects.length, 1);
+  assert.notEqual(renderer.liveEffects[0], original);
+  assert.equal(renderer.liveEffects[0].started, clock);
+  assert.equal(renderer.liveEffects[0].event.amount, 10);
+  assert.deepEqual(state.resources, { plants: 225, zombies: 200 });
+  renderer.destroy();
+});
+
 test('sun sprite pops at its producer, then flies upward beyond lawn clipping', () => {
   const { renderer, calls } = board();
   renderer.drawSun(event, 0.25);
