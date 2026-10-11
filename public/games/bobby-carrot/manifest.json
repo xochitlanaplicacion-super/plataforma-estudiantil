@@ -1,0 +1,23 @@
+{
+  "name": "Bobby Carrot Remastered",
+  "short_name": "BobbyCarrot",
+  "description": "Bobby Carrot Remastered Web Edition",
+  "start_url": "/api/classroom/bobby-carrot/play",
+  "scope": "/",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#0d131a",
+  "theme_color": "#ff7b00",
+  "icons": [
+    {
+      "src": "assets/tiles/carrot.png",
+      "sizes": "16x16 32x32 48x48",
+      "type": "image/png"
+    },
+    {
+      "src": "assets/logo.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png"
+    }
+  ]
+}

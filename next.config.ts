@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     '/api/classroom/pvz-quest/play': ['./src/lib/games/pvz-quest/template.html'],
     '/api/classroom/squeak-and-destroy/play': ['./src/lib/games/squeak-and-destroy/template.html'],
+    '/api/classroom/bobby-carrot/play': ['./src/lib/games/bobby-carrot/template.html'],
   },
   /* config options here */
   typescript: {

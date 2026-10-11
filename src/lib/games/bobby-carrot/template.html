@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="description" content="Bobby Carrot Remastered - Clásico juego de puzzles de Java ME remasterizado en alta calidad para navegador web.">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Bobby Carrot">
+  <link rel="apple-touch-icon" href="assets/tiles/carrot.png">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="assets/tiles/carrot.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+  <!-- BARRA SUPERIOR DE ACCIONES -->
+  <header class="header-bar">
+    <div class="brand">
+      <span class="brand-icon">🥕</span>
+      <h1 class="brand-title">Bobby Carrot</h1>
+    </div>
+    <div class="quick-actions">
+      <button id="btn-render-mode" class="icon-btn highlight-btn" title="Modo Gráfico: Clásico / HD xBR (H)">✨ HD</button>
+      <button id="btn-restart" class="icon-btn" title="Reiniciar Nivel (R)">🔄</button>
+      <button id="btn-levels" class="icon-btn" title="Selector de Niveles">🗺️</button>
+      <button id="btn-mute" class="icon-btn" title="Silenciar / Activar Sonido (M)">🔊</button>
+      <button id="btn-fullscreen" class="icon-btn" title="Pantalla Completa (F)">⛶</button>
+      <button id="btn-menu" class="icon-btn" title="Menú Principal (Esc)">☰</button>
+    </div>
+  </header>
+
+  <!-- PANTALLA PRINCIPAL / CANVAS ARCADE -->
+  <main class="screen-wrapper">
+    <div class="arcade-bezel">
+      <canvas id="game-canvas" width="256" height="192"></canvas>
+      <div class="crt-overlay"></div>
+      <div id="render-mode-toast" class="render-mode-toast hidden">✨ Modo: HD Suave (xBR)</div>
+    </div>
+
+    <!-- GUÍA DE TECLADO PARA PC -->
+    <footer class="keyboard-hints">
+      <span>Moverse: <kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> o <kbd>WASD</kbd></span>
+      <span>Filtro HD/Pixel: <kbd>H</kbd></span>
+      <span>Reiniciar: <kbd>R</kbd></span>
+      <span>Sonido: <kbd>M</kbd></span>
+      <span>Menú: <kbd>Esc</kbd></span>
+    </footer>
+
+    <!-- CONTROLES TÁCTILES VIRTUALES (PARA MÓVILES E IPADS) -->
+    <section class="touch-controls" id="touch-controls">
+      <div class="dpad-container">
+        <button id="dpad-up" class="dpad-btn" aria-label="Arriba">▲</button>
+        <button id="dpad-left" class="dpad-btn" aria-label="Izquierda">◀</button>
+        <button id="dpad-right" class="dpad-btn" aria-label="Derecha">▶</button>
+        <button id="dpad-down" class="dpad-btn" aria-label="Abajo">▼</button>
+      </div>
+      <div class="action-buttons">
+        <button id="touch-btn-render-mode" class="action-pill-btn highlight-pill">✨ Modo HD</button>
+        <button id="touch-btn-restart" class="action-pill-btn">🔄 Reiniciar</button>
+        <button id="touch-btn-levels" class="action-pill-btn">🗺️ Niveles</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- MODAL: MENÚ PRINCIPAL -->
+  <div id="menu-overlay" class="modal-overlay">
+    <div class="modal-card">
+      <div class="modal-header">
+        <img src="assets/logo.png" alt="Bobby Carrot" style="image-rendering: pixelated; width: 140px; margin: 0 auto 8px;">
+        <h2>Bobby Carrot</h2>
+        <p>Remastered Web Edition</p>
+      </div>
+
+      <div class="campaign-switcher">
+        <button id="tab-carrot" class="tab-btn active">🥕 Zanahorias (30)</button>
+        <button id="tab-eggs" class="tab-btn">🥚 Pascua (20)</button>
+        <button id="tab-procedural" class="tab-btn">🎲 Procedural · Desafío (∞)</button>
+      </div>
+
+      <!-- SELECTOR DE FILTRO DE RENDERIZADO -->
+      <div class="render-mode-box">
+        <span class="render-mode-title">Filtro Visual / Renderizado:</span>
+        <div class="render-mode-tabs">
+          <button id="menu-mode-classic" class="filter-tab-btn">👾 Clásico (Pixel Retro)</button>
+          <button id="menu-mode-hd" class="filter-tab-btn active">✨ HD Suave (Filtro xBR)</button>
+        </div>
+      </div>
+
+      <div id="procedural-options" class="procedural-options hidden">
+        <span class="render-mode-title">🎯 Dificultad:</span>
+        <div class="difficulty-tabs">
+          <button id="diff-easy" class="filter-tab-btn">🟢 Fácil</button>
+          <button id="diff-normal" class="filter-tab-btn active">🟡 Normal</button>
+          <button id="diff-hard" class="filter-tab-btn">🔴 Difícil</button>
+        </div>
+        <p class="procedural-hint">Rutas con llaves, compuertas y trampas. Cada mapa cambia y sigue siendo resoluble.</p>
+      </div>
+
+      <button id="btn-play" class="btn-primary">▶ Jugar</button>
+      <button id="btn-open-levels" class="btn-secondary">🗺️ Seleccionar Nivel</button>
+      <button id="btn-reset-save" class="btn-secondary" style="font-size: 0.8rem; opacity: 0.7;">🗑️ Borrar Progreso</button>
+    </div>
+  </div>
+
+  <!-- MODAL: SELECTOR DE NIVELES -->
+  <div id="level-select-modal" class="modal-overlay hidden">
+    <div class="modal-card level-select-card">
+      <div class="modal-header">
+        <h2 id="campaign-title">NIVELES</h2>
+        <p>Selecciona un nivel desbloqueado</p>
+      </div>
+      <div id="level-grid" class="level-grid"></div>
+      <button id="btn-close-levels" class="btn-secondary">Cerrar</button>
+    </div>
+  </div>
+
+  <!-- MODAL: VICTORIA (NIVEL SUPERADO) -->
+  <div id="victory-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <img src="assets/hud/success.png" alt="Éxito" style="image-rendering: pixelated; width: 64px; margin: 0 auto 6px;">
+        <h2>¡NIVEL SUPERADO!</h2>
+        <p id="modal-vic-level">Nivel 1</p>
+      </div>
+      <div class="stats-row">
+        <div class="stat-item">
+          <span class="stat-label">Tiempo</span>
+          <span id="modal-vic-time" class="stat-value">00:00</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-label">Pasos</span>
+          <span id="modal-vic-steps" class="stat-value">0</span>
+        </div>
+      </div>
+      <button id="btn-next-level" class="btn-primary">Siguiente Nivel ▶</button>
+      <button id="btn-replay-level" class="btn-secondary">Repetir Nivel 🔄</button>
+    </div>
+  </div>
+
+  <!-- MODAL: DERROTA / TRAMPA -->
+  <div id="death-modal" class="modal-overlay hidden">
+    <div class="modal-card">
+      <div class="modal-header">
+        <span style="font-size: 2.4rem;">💥</span>
+        <h2>¡OH NO!</h2>
+        <p>¡Bobby ha caído en una trampa de pinchos!</p>
+      </div>
+      <button id="btn-retry-death" class="btn-primary">Intentar de Nuevo 🔄</button>
+      <button id="btn-menu-death" class="btn-secondary">Menú Principal</button>
+    </div>
+  </div>
+
+  <!-- CARGA UNIVERSAL DEL JUEGO (COMPATIBLE CON ARCHIVOS LOCALES FILE:// Y SERVIDOR HTTP) -->
+  <script src="app.js"></script>
+</body>
+</html>
