@@ -1,0 +1,44 @@
+{
+  "name": "Animal Battle Ground",
+  "short_name": "Animal Battle Ground",
+  "description": "Batalla de artillería por turnos con animales, terreno destructible y estrategia.",
+  "lang": "hu",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#0e1217",
+  "theme_color": "#0e1217",
+  "start_url": "./",
+  "scope": "./",
+  "icons": [
+    {
+      "src": "assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "assets/species/capybara.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/appicon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/appicon.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

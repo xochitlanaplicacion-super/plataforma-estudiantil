@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Animal Battle Ground — v5.1.0</title>
+<!-- PWA / home-screen icon (capybara) + standalone behaviour -->
+<!-- web favicon: transparent inline SVG (the appicon.png is opaque RGB → showed a
+     white box). apple-touch-icon stays the PNG (iOS home-screen wants opaque). -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ctext x='4' y='50' font-size='48'%3E%F0%9F%90%B9%3C/text%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="assets/appicon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Animal Battle Ground">
+<meta name="theme-color" content="#0e1217">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="css/style.css">
+<link rel="stylesheet" href="css/menu.css">
+<link rel="stylesheet" href="css/armory.css">
+<!-- BRAND INTRO + boot splash: shown INSTANTLY (inline CSS, no dependency on the
+     bundle/CSS). A 2.5s fade-in/out "KIBO" studio bumper that ALSO
+     covers the menu's brief "logged-out" frame; hidden once BOTH the intro elapsed
+     AND the account state resolved (safety cap 3s). -->
+<style>
+  #boot-splash{position:fixed;inset:0;z-index:9999;background:#0e1217;transition:opacity .5s ease;}
+  /* two overlapping centered stages: brand text first, then the logo fades in+out */
+  #boot-splash .bs-stage{position:absolute;inset:0;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:8px;text-align:center;padding:6vw;box-sizing:border-box;}
+  #boot-splash .bs-brand{animation:bs-brand 1.8s ease both;}
+  #boot-splash .bs-co{font:800 clamp(22px,5vw,42px)/1.12 'Baloo 2',system-ui,-apple-system,sans-serif;
+    color:#E8711A;letter-spacing:.5px;text-shadow:0 6px 22px rgba(0,0,0,.55);}
+  #boot-splash .bs-sub{font:600 clamp(11px,2vw,14px) system-ui,-apple-system,sans-serif;
+    color:#b9a89a;letter-spacing:3px;text-transform:uppercase;opacity:.85;}
+  #boot-splash .bs-rule{width:min(60vw,260px);height:2px;
+    background:linear-gradient(90deg,transparent,#E8711A,transparent);border-radius:2px;}
+  #boot-splash .bs-logo{width:min(60vw,320px);max-height:54vh;object-fit:contain;opacity:0;
+    filter:drop-shadow(0 12px 34px rgba(0,0,0,.55));animation:bs-logo 1.55s ease 1.6s both;}
+  /* small yellow Los Polos mark above the studio text */
+  #boot-splash .bs-mark{height:clamp(44px,9vw,76px);width:auto;margin-bottom:6px;
+    filter:drop-shadow(0 4px 14px rgba(0,0,0,.5));}
+  #boot-splash.bs-hide{opacity:0;pointer-events:none;}
+  @keyframes bs-brand{0%{opacity:0;transform:translateY(10px) scale(.96)}15%{opacity:1;transform:none}
+    68%{opacity:1;transform:none}100%{opacity:0;transform:scale(1.02)}}
+  @keyframes bs-logo{0%{opacity:0;transform:scale(.9)}28%{opacity:1;transform:scale(1)}
+    70%{opacity:1;transform:scale(1.015)}100%{opacity:0;transform:scale(1.04)}}
+  @media (prefers-reduced-motion:reduce){
+    #boot-splash .bs-brand{animation:none;} #boot-splash .bs-logo{animation:none;opacity:0;}
+  }
+  /* on-screen DEBUG console (bug button + slide-up panel) */
+  /* left-MIDDLE edge: clear of all gameplay controls (move ◀▶ bottom-left, fire
+     bottom-right, pause/mute top-right) so it can't steal taps */
+  #dbg-btn{position:fixed;left:2px;top:50%;transform:translateY(-50%);z-index:10000;width:26px;height:26px;border:0;border-radius:7px;
+    background:rgba(20,26,33,.5);color:#ffae5c;font-size:14px;line-height:26px;text-align:center;
+    cursor:pointer;opacity:.45;padding:0;-webkit-tap-highlight-color:transparent;}
+  #dbg-btn:hover{opacity:1;}
+  #dbg-panel{position:fixed;left:0;right:0;bottom:0;z-index:10000;max-height:46vh;display:none;
+    background:rgba(8,11,15,.96);border-top:2px solid #E8711A;color:#cfe;font:11px/1.4 ui-monospace,Menlo,monospace;}
+  #dbg-panel.show{display:flex;flex-direction:column;}
+  #dbg-head{display:flex;gap:8px;align-items:center;padding:6px 8px;border-bottom:1px solid #2a3340;color:#9fb;}
+  #dbg-head b{color:#ffae5c;} #dbg-head .sp{flex:1;}
+  #dbg-head button{background:#1b2530;color:#cde;border:1px solid #2a3340;border-radius:6px;padding:3px 8px;cursor:pointer;font:inherit;}
+  #dbg-log{overflow:auto;padding:6px 8px;-webkit-overflow-scrolling:touch;}
+  #dbg-log .e{color:#ff8d7a;} #dbg-log .w{color:#ffd479;} #dbg-log .i{color:#9fd;}
+  #dbg-log div{white-space:pre-wrap;word-break:break-word;border-bottom:1px solid #161d26;padding:2px 0;}
+</style>
+</head>
+<body>
+  <!-- brand intro / loading splash: brand text fades, then the logo fades in+out -->
+  <div id="boot-splash">
+    <div class="bs-stage bs-brand">
+      <img class="bs-mark" src="assets/logo-intro.png" alt="KIBO">
+      <div class="bs-co">KIBO</div>
+      <div class="bs-rule"></div>
+      <div class="bs-sub">bemutatja</div>
+    </div>
+    <div class="bs-stage"><img class="bs-logo" src="assets/logo.png" alt="Animal Battle Ground"></div>
+  </div>
+  <script>(function(){try{var s=document.querySelector('#boot-splash .bs-sub');if(s)s.textContent=((navigator.language||'').slice(0,2).toLowerCase()==='hu')?'bemutatja':'presents';}catch(e){}})();</script>
+  <!-- on-screen DEBUG console: captures JS errors/warns so they can be read & quoted -->
+  <button id="dbg-btn" title="Debug">🐛</button>
+  <div id="dbg-panel">
+    <div id="dbg-head"><b>🐛 Debug</b><span id="dbg-count"></span><span class="sp"></span>
+      <button id="dbg-copy">Másol</button><button id="dbg-clear">Töröl</button><button id="dbg-close">Bezár</button></div>
+    <div id="dbg-log"></div>
+  </div>
+  <script>
+  (function(){
+    // DEBUG console only under /dev (or localhost / Electron file:// / ?dev) — hidden in normal play (Jani).
+    var DEV=(function(){try{return location.protocol==='file:'||/localhost|127\.0\.0\.1|\[::1\]/.test(location.hostname)||/(^|\/)dev(\/|$)/.test(location.pathname)||/[?&]dev\b/.test(location.search);}catch(e){return false;}})();
+    if(!DEV){ var _b=document.getElementById('dbg-btn'); if(_b)_b.style.display='none'; var _p=document.getElementById('dbg-panel'); if(_p)_p.style.display='none'; return; }
+    var logs=[], MAX=120;
+    function esc(s){return (s+'').replace(/[&<>]/g,function(c){return c==='&'?'&amp;':c==='<'?'&lt;':'&gt;';});}
+    function render(){var el=document.getElementById('dbg-log');if(!el)return;
+      el.innerHTML=logs.map(function(l){return '<div class="'+l.t+'">['+l.ts+'] '+esc(l.m)+'</div>';}).join('');
+      el.scrollTop=el.scrollHeight;
+      var n=0,i;for(i=0;i<logs.length;i++)if(logs[i].t==='e')n++;
+      var c=document.getElementById('dbg-count'); if(c)c.textContent=n?(n+' hiba'):'';
+      var b=document.getElementById('dbg-btn'); if(b)b.textContent=n?('🐛'+n):'🐛';}
+    function add(t,m){logs.push({t:t,m:m,ts:new Date().toLocaleTimeString()});if(logs.length>MAX)logs.shift();render();}
+    window.CA_DEBUG={log:function(m){add('i',m);},dump:function(){return logs;}};
+    window.addEventListener('error',function(e){add('e',(e.message||'error')+(e.filename?(' @'+(e.filename.split('/').pop())+':'+e.lineno):''));});
+    window.addEventListener('unhandledrejection',function(e){add('e','Promise: '+((e.reason&&e.reason.message)||e.reason||'rejection'));});
+    var _e=console.error,_w=console.warn;
+    console.error=function(){try{add('e',Array.prototype.join.call(arguments,' '));}catch(x){}return _e.apply(console,arguments);};
+    console.warn=function(){try{add('w',Array.prototype.join.call(arguments,' '));}catch(x){}return _w.apply(console,arguments);};
+    function on(id,fn){var el=document.getElementById(id);if(el)el.addEventListener('click',fn);}
+    function toggle(){var p=document.getElementById('dbg-panel');if(p)p.classList.toggle('show');}
+    document.addEventListener('DOMContentLoaded',function(){
+      on('dbg-btn',toggle); on('dbg-close',toggle); on('dbg-clear',function(){logs=[];render();});
+      on('dbg-copy',function(){try{navigator.clipboard.writeText(logs.map(function(l){return '['+l.ts+'] '+l.t.toUpperCase()+': '+l.m;}).join('\n'));}catch(x){}});
+    });
+    // Bridge gameplay events into the debug panel so it shows WHAT HAPPENS in-game
+    // (turns/shots/damage/deaths/round+game end), not just JS errors. Waits for CA.
+    var _tries=0, _iv=setInterval(function(){
+      _tries++;
+      var CA=window.CA;
+      if(CA && CA.events && CA.events.on){
+        clearInterval(_iv);
+        var L=function(m){ add('i', m); };
+        var nm=function(u){ return (u&&u.name)||'?'; };
+        try{
+          CA.events.on('gameStart',  function(){ L('🎮 Új játék indult'); });
+          CA.events.on('turnStart',  function(ti,u){ L('🔄 Kör: '+nm(u)); });
+          CA.events.on('weaponChanged',function(id){ L('🔧 Fegyver: '+id); });
+          CA.events.on('fired',      function(u,w){ L('🔫 '+nm(u)+' lőtt: '+((w&&(w.name||w.id))||'?')); });
+          CA.events.on('unitDamaged',function(u,amt,info){ L('💥 '+nm(u)+' −'+Math.round(amt||0)+' HP'+((info&&info.crit)?' ⚡KRIT':'')); });
+          CA.events.on('crit',       function(){ L('⚡ Kritikus találat'); });
+          CA.events.on('combo',      function(h){ L('🔥 Kombó ×'+h); });
+          CA.events.on('cratePickup',function(u,c,msg){ L('🎁 '+nm(u)+': '+(msg||'láda')); });
+          CA.events.on('unitDied',   function(u){ L('☠️ '+nm(u)+' meghalt'); });
+          CA.events.on('newRound',   function(r){ L('🔁 Új menet: '+r); });
+          CA.events.on('gameOver',   function(w){ L('🏁 Játék vége — győztes: '+(w==null?'döntetlen':w)); });
+          L('🐛 Debug bekötve — innentől a játék-események ide íródnak.');
+        }catch(e){ add('e','debug-hook: '+e.message); }
+      }
+      if(_tries>40){ clearInterval(_iv); }   // give up after ~10s
+    }, 250);
+  })();
+  </script>
+  <div id="game-wrap">
+    <canvas id="game"></canvas>
+    <button id="fs-btn" title="Teljes képernyő (F)">⛶</button>
+    <div id="rotate-hint">
+      <div class="rh-card">
+        <div class="rh-phone">📱</div>
+        <div class="rh-label">Fordítsd el a telefont fekvőbe!</div>
+      </div>
+    </div>
+  </div>
+  <!-- HTML menu overlay (built by js/menu.js; shown when CA.state.mode===MENU) -->
+  <div id="menu-root"></div>
+
+  <!-- Script loading: on LOCALHOST load the individual js/*.js files (instant
+       edits, no rebuild); in PRODUCTION load the single minified bundle.min.js
+       (16 requests -> 1, ~53% smaller). document.write keeps synchronous load
+       order. Rebuild the bundle with `node build.js` before deploying. -->
+  <script>
+    (function(){
+      // DEV (individual files): localhost OR Electron/desktop (file:// — the
+      // packaged build ships js/*.js, so load those directly and reliably).
+      var dev = location.protocol === 'file:' ||
+                /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+      if (dev) {
+        var mods = ['contract','i18n','maps','weather','species','classes','terrain','entities','weapons',
+                    'hazards','fx','voices','ai','modes','meta','account','entitlement','ads','net','share','challenge','clans','ranked','screens','ui','armory','portal','perf-tier','postfx','core','intro','puzzles','menu','menu-editor','menu-lobby','menu-profile','menu-achievements','menu-leaderboard','menu-challenge','menu-clan','menu-ranked','menu-puzzles','menu-credits','menu-teamedit','menu-skilltree','menu-account','menu-daily','menu-shop','menu-battlepass','menu-gauntlet','menu-help','menu-contact'];
+        for (var i=0;i<mods.length;i++) document.write('<script src="js/'+mods[i]+'.js"><\/script>');
+      } else {
+        document.write('<script src="bundle.min.js?v=5.1.0"><\/script>');
+      }
+    })();
+  </script>
+  <script>
+    // PWA: register service worker (relative path -> scope respects /animals/ subpath).
+    // NEVER on file:// — a SW under file:// either throws or caches the packaged
+    // build and white-screens it on the next Electron/desktop launch (footgun).
+    if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+      window.addEventListener('load', function(){
+        navigator.serviceWorker.register('sw.js').catch(function(){});
+      });
+    }
+    window.addEventListener('load', function(){
+      // HARD safety net: never let the brand splash hang. If the bundle fails to
+      // load/parse (CA undefined) or CA.boot throws, the reveal pipeline below
+      // never installs — so register an unconditional splash-kill FIRST.
+      setTimeout(function(){
+        var sp=document.getElementById('boot-splash');
+        if(sp){ sp.classList.add('bs-hide');
+          setTimeout(function(){ if(sp&&sp.parentNode) sp.parentNode.removeChild(sp); }, 520); }
+      }, 4000);
+      try { CA.boot(document.getElementById('game')); }
+      catch(e){ /* fatal load error — the safety timeout above tears the splash down */ }
+      // localize the two static HTML chrome strings (EN entries live in i18n.js).
+      // Re-run on every langChanged so the rotate hint / FS title follow the
+      // current language instead of being frozen to whatever was active at load.
+      function localizeChrome(){
+        try {
+          if (CA.t){
+            var rh=document.getElementById('rotate-hint');
+            if(rh){
+              var lbl=rh.querySelector('.rh-label');
+              if(lbl) lbl.textContent=CA.t('Fordítsd el a telefont fekvőbe!');
+              else    rh.textContent='📱 '+CA.t('Fordítsd el a telefont fekvőbe!');
+            }
+            var fb2=document.getElementById('fs-btn'); if(fb2) fb2.title=CA.t('Teljes képernyő (F)');
+          }
+        } catch(e){}
+      }
+      localizeChrome();
+      try { if (CA.events && CA.events.on) CA.events.on('langChanged', localizeChrome); } catch(e){}
+      // ---- brand intro + splash: reveal the menu only AFTER (a) the ~2.5s studio
+      // bumper has played AND (b) the account state resolved — so the intro is
+      // always seen in full and the brief "logged-out" frame never shows. Cap 3s.
+      var INTRO_MS=3200, _t0=Date.now(), _acctDone=false, _splashGone=false;
+      function reveal(){ if(_splashGone) return;
+        if(!_acctDone) return;                         // wait for account
+        var wait=INTRO_MS-(Date.now()-_t0);
+        if(wait>0){ setTimeout(reveal, wait); return; } // hold the intro its full length
+        _splashGone=true;
+        var sp=document.getElementById('boot-splash'); if(!sp) return;
+        sp.classList.add('bs-hide');
+        setTimeout(function(){ if(sp&&sp.parentNode) sp.parentNode.removeChild(sp); }, 520); }
+      function acctDone(){ _acctDone=true; reveal(); }
+      // detect SkyNet SSO / restore a regular account (async, best-effort)
+      if (CA.Account && CA.Account.init) {
+        try { var _ap=CA.Account.init(); if(_ap && _ap.then){ _ap.then(acctDone, acctDone); } else { acctDone(); } }
+        catch(e){ acctDone(); }
+      } else { acctDone(); }
+      setTimeout(acctDone, 3000);   // never let the splash hang (slow net / offline)
+      // resolve demo vs full unlock (web demo / Apple IAP / Steam ownership)
+      if (CA.Entitlement && CA.Entitlement.init) { try { CA.Entitlement.init(); } catch(e){} }
+      // ?duel=<code> deep-link: a shared friend-duel link drops you straight into
+      // the identical async challenge match (the viral hook). Runs after boot.
+      if (/[?&]duel=/.test(location.search) && CA.Challenge && CA.Challenge.openDuel) {
+        setTimeout(function(){ try {
+          var m = location.search.match(/[?&]duel=([^&]+)/);
+          if (m && m[1]) CA.Challenge.openDuel(decodeURIComponent(m[1]));
+        } catch(e){} }, 80);
+      }
+      // DEV sandbox (/animals/dev or ?dev): jump straight into a weapon test arena
+      if (/[?&]dev\b/.test(location.search) && CA.startDev) { setTimeout(function(){ try{ CA.startDev(); }catch(e){} }, 60); }
+      // start at menu; UI renders menu + Start buttons. Fallback auto-start:
+      else if (!CA.UI || !CA.UI.renderMenu) { CA.newGame({ vsAI:true, aiLevel:1 }); }
+
+      // desktop fullscreen toggle (hidden on touch via CSS)
+      var fs = document.getElementById('fs-btn');
+      fs.addEventListener('click', function(){ if (CA.toggleFullscreen) CA.toggleFullscreen(); });
+      // keyboard shortcut: F toggles fullscreen (not while typing a team name)
+      window.addEventListener('keydown', function(e){
+        var ae = document.activeElement;
+        var inField = ae && /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName);
+        var typing = inField || (CA.UI && CA.UI.isTextInputActive && CA.UI.isTextInputActive());
+        if (e.key!=='f' && e.key!=='F') return;
+        // don't steal F for fullscreen while a timed grenade is in hand on the
+        // player's controllable turn — there F is the fuse-set / detonate key (ui.js).
+        try {
+          var cw = window.CA && CA.Weapons && CA.Weapons.currentWeapon && CA.Weapons.currentWeapon();
+          if (cw && cw.id==='timergrenade' && CA.canControl && CA.canControl()) return;
+        } catch(_e){}
+        if (CA.toggleFullscreen && !typing) CA.toggleFullscreen();
+      });
+    });
+  </script>
+</body>
+</html>

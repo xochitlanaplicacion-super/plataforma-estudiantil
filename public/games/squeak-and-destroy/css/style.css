@@ -1,0 +1,73 @@
+/* SELF-HOSTED Baloo 2 (variable font, latin + latin-ext for HU ő/ű) — a Poki
+ * MINDEN external requestet blokkol, a Google Fonts CDN beküldés-blokkoló volt.
+ * Egy woff2/subset fedi a 400–800 súlytartományt (variable font). */
+@font-face{
+  font-family:'Baloo 2'; font-style:normal; font-weight:400 800; font-display:swap;
+  src:url('../assets/fonts/baloo2-latin.woff2') format('woff2');
+  unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+2000-206F,U+2074,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD;
+}
+@font-face{
+  font-family:'Baloo 2'; font-style:normal; font-weight:400 800; font-display:swap;
+  src:url('../assets/fonts/baloo2-latin-ext.woff2') format('woff2');
+  unicode-range:U+0100-024F,U+0259,U+1E00-1EFF,U+2020,U+20A0-20AB,U+20AD-20CF,U+2113,U+2C60-2C7F,U+A720-A7FF;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html,body { width:100%; height:100%; background:#0e1217; overflow:hidden;
+  font-family:'Segoe UI',system-ui,-apple-system,sans-serif; -webkit-user-select:none; user-select:none; touch-action:none; }
+/* In iOS standalone ("Add to Home Screen") the page is laid out under the
+   notch / home-indicator. We pad #game-wrap by the safe-area insets so the
+   canvas origin lines up with the visible area — otherwise taps land offset
+   (getBoundingClientRect would include the inset gap). The canvas itself keeps
+   NO margin / NO border so the rect maps 1:1 to backing pixels. */
+#game-wrap { position:fixed; inset:0; display:flex; align-items:center; justify-content:center; background:#0e1217;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+/* size is set in JS (core.resize) to preserve the backing aspect ratio — never
+   stretch. The flex wrap centers it; letterbox bars (if any) use the dark bg. */
+#game { background:#0e1217; display:block; margin:0; border:0; image-rendering:auto; }
+#fs-btn { position:fixed; top:calc(10px + env(safe-area-inset-top)); left:calc(10px + env(safe-area-inset-left));
+  z-index:40; width:40px; height:40px;
+  border:none; border-radius:8px; background:rgba(0,0,0,.4); color:#fff; font-size:20px;
+  cursor:pointer; line-height:40px; padding:0; transition:background .15s; }
+#fs-btn:hover { background:rgba(0,0,0,.65); }
+/* hide the fullscreen button on touch devices (phones already fill the screen) */
+@media (hover:none),(pointer:coarse){ #fs-btn{ display:none; } }
+/* ---- "rotate your phone" hint (portrait phones) ---------------------------
+   A nicer "effektes" card: rounded panel, brand-orange accent ring, soft
+   drop-shadow, and a phone glyph that gently rocks landscape↔portrait so the
+   action is self-explanatory. */
+#rotate-hint { position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+  background:radial-gradient(900px 600px at 50% 35%, #1a2230 0%, #0e1217 70%);
+  color:#fff; text-align:center; z-index:50;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left); }
+#rotate-hint .rh-card{
+  display:flex; flex-direction:column; align-items:center; gap:18px;
+  padding:30px 34px; border-radius:22px;
+  background:linear-gradient(160deg, rgba(46,58,76,0.85), rgba(24,30,42,0.85));
+  border:1px solid rgba(232,113,26,0.45);
+  box-shadow:0 18px 48px rgba(0,0,0,0.55), 0 0 0 4px rgba(232,113,26,0.12), inset 0 1px 0 rgba(255,255,255,0.08);
+  -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+  max-width:86vw; }
+#rotate-hint .rh-phone{
+  font-size:64px; line-height:1; filter:drop-shadow(0 6px 14px rgba(0,0,0,0.5));
+  transform-origin:50% 60%;
+  animation:rh-rock 2.4s ease-in-out infinite; }
+#rotate-hint .rh-label{
+  font-family:'Baloo 2','Segoe UI',system-ui,-apple-system,sans-serif;
+  font-weight:800; font-size:clamp(18px,5vw,26px); line-height:1.25;
+  color:#fff; letter-spacing:.2px;
+  border-top:3px solid #E8711A; padding-top:14px; }
+@keyframes rh-rock{
+  0%,18%   { transform:rotate(0deg); }
+  46%,72%  { transform:rotate(-90deg) scale(1.04); }
+  100%     { transform:rotate(0deg); }
+}
+@media (prefers-reduced-motion:reduce){
+  #rotate-hint .rh-phone{ animation:rh-pulse 2.2s ease-in-out infinite; }
+  @keyframes rh-pulse{ 0%,100%{ opacity:.7; } 50%{ opacity:1; } }
+}
+/* QA P2: pointer:coarse guard — a forgasd-el kártya CSAK érintőkijelzőn jelenjen
+ * meg; PC-n egy keskeny/álló böngészőablak (tiling WM) eddig kizárta a játékost
+ * (nincs mit "elforgatni" asztali gépen). */
+@media (orientation:portrait) and (max-width:920px) and (pointer:coarse){
+  #rotate-hint{ display:flex; } #game{ display:none; }
+}

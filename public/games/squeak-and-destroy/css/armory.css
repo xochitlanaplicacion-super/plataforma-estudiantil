@@ -1,0 +1,125 @@
+/* Large turn chooser. All selectors are scoped so the canvas HUD and menu
+ * keep their own layout. Its grid scrolls independently on touch devices. */
+#armory-root{
+  position:fixed; inset:0; z-index:60;
+  display:flex; align-items:center; justify-content:center;
+  padding:max(18px,env(safe-area-inset-top)) max(18px,env(safe-area-inset-right)) max(18px,env(safe-area-inset-bottom)) max(18px,env(safe-area-inset-left));
+  background:rgba(9,8,20,.79); color:#f8f0df;
+  font-family:'Baloo 2','Segoe UI',system-ui,-apple-system,sans-serif;
+  -webkit-tap-highlight-color:transparent;
+  touch-action:pan-y; overscroll-behavior:contain;
+}
+#armory-root[hidden]{ display:none; }
+#armory-launcher{
+  position:fixed; top:calc(128px + env(safe-area-inset-top)); left:12px; z-index:39;
+  border:1px solid #d6b1ff80; border-radius:12px; padding:9px 16px; min-height:44px;
+  background:#33263eee; color:#f4e5ff; box-shadow:0 3px 14px #0005;
+  font:700 14px/1.1 'Baloo 2','Segoe UI',system-ui,sans-serif; cursor:pointer; touch-action:manipulation;
+}
+#armory-launcher[hidden]{ display:none; }
+#armory-launcher:focus-visible{ outline:3px solid #fff2a8; outline-offset:3px; }
+#armory-root *, #armory-root *::before, #armory-root *::after{ box-sizing:border-box; }
+#armory-root .armory-panel{
+  display:flex; flex-direction:column; min-height:0;
+  width:min(1100px,100%); max-height:calc(100dvh - 36px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  border:1px solid #8e69b2; border-radius:26px; overflow:hidden;
+  background:radial-gradient(ellipse at 20% 0,rgba(115,71,157,.26),transparent 65%),linear-gradient(150deg,#30283e,#201e2c 75%);
+  box-shadow:0 25px 85px #0009,0 0 0 5px #b38ee913,inset 0 1px 0 #ffffff12;
+}
+#armory-root .armory-header{ display:flex; align-items:center; justify-content:space-between; gap:16px; padding:22px 26px 4px; flex-shrink:0; }
+#armory-root .armory-title-block{ min-width:0; }
+#armory-root .armory-eyebrow{ color:#d7b6ff; text-transform:uppercase; letter-spacing:1.6px; font-size:12px; font-weight:800; line-height:1.45; }
+#armory-root .armory-title{ color:#fff1c9; font-size:clamp(25px,3.6vw,38px); font-weight:800; line-height:1.12; margin:4px 0 0; }
+#armory-root button{
+  font:700 15px/1.15 'Baloo 2','Segoe UI',system-ui,-apple-system,sans-serif;
+  border:0; cursor:pointer; touch-action:manipulation; min-height:44px;
+  transition:background .15s,transform .15s,border-color .15s;
+}
+#armory-root button:focus-visible{ outline:3px solid #fff2a8; outline-offset:3px; }
+#armory-root .armory-close{
+  width:48px; height:48px; min-width:48px; font:400 34px/1 system-ui,sans-serif;
+  border:1px solid #b598cb70; border-radius:15px; background:#ffffff10; color:#f8f0df;
+}
+#armory-root .armory-hint{ padding:8px 26px 15px; color:#d5c9df; font-size:15px; line-height:1.45; flex-shrink:0; }
+#armory-root .armory-grid{
+  display:grid; grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),1fr));
+  align-items:start; gap:14px; min-height:0; overflow-y:auto; overflow-x:hidden;
+  padding:4px 24px 22px; scrollbar-width:thin; scrollbar-color:#b88be0 #211a2a;
+  -webkit-overflow-scrolling:touch; touch-action:pan-y; overscroll-behavior:contain;
+}
+#armory-root .armory-grid::-webkit-scrollbar{ width:9px; }
+#armory-root .armory-grid::-webkit-scrollbar-track{ background:#211a2a; }
+#armory-root .armory-grid::-webkit-scrollbar-thumb{ background:#9166b7; border-radius:12px; border:2px solid #211a2a; }
+#armory-root .armory-card{
+  min-width:0; padding:16px; border:1px solid #826a9c75; border-radius:19px;
+  background:linear-gradient(140deg,#46354f,#302839); box-shadow:0 4px 16px #0002;
+}
+#armory-root .armory-card-selected{ border-color:#ffd880; box-shadow:0 0 0 2px #ffd88055,0 5px 22px #0003; background:linear-gradient(140deg,#55404e,#39303d); }
+#armory-root .armory-card-unavailable{ background:linear-gradient(140deg,#38323f,#29252f); border-color:#74678280; }
+#armory-root .armory-card-top{ display:flex; align-items:center; gap:14px; }
+#armory-root .armory-card-info{ min-width:0; }
+#armory-root .armory-icon{
+  display:grid; place-items:center; flex:0 0 76px; width:76px; height:76px; position:relative;
+  border-radius:20px; background:radial-gradient(circle at 32% 26%,#c997ed35,#a06cff10);
+  box-shadow:inset 0 0 0 1px #e2c2ff20;
+}
+#armory-root .armory-emoji{ font-family:'Apple Color Emoji','Segoe UI Emoji','Noto Color Emoji',sans-serif; font-size:49px; line-height:1; filter:drop-shadow(0 4px 4px #0004); }
+#armory-root .armory-emoji[hidden]{ display:none; }
+#armory-root .armory-icon-image{ display:none; width:56px; height:56px; object-fit:contain; filter:drop-shadow(0 4px 4px #0005); }
+#armory-root .armory-icon-image.armory-icon-loaded{ display:block; }
+#armory-root .armory-card-kind{ color:#d3b4ed; font-size:11px; font-weight:800; letter-spacing:.8px; text-transform:uppercase; }
+#armory-root .armory-card-name{ font-size:20px; color:#fff1dc; font-weight:800; line-height:1.2; margin-top:3px; overflow-wrap:anywhere; }
+#armory-root .armory-card-description{ margin-top:13px; min-height:3.1em; color:#e2d6e7; font-size:14px; line-height:1.5; }
+#armory-root .armory-card-status{ color:#bce9c6; font-size:12px; font-weight:700; line-height:1.4; margin:12px 0; }
+#armory-root .armory-card-status-locked{ color:#ffcb98; }
+#armory-root .armory-card-actions{ display:grid; grid-template-columns:1.15fr 1fr; gap:8px; }
+#armory-root .armory-explain{ color:#eee2fa; border:1px solid #ae8cca80; border-radius:11px; background:#eee0ff0b; font-size:13px; padding:9px 6px; }
+#armory-root .armory-choose{ color:#25172f; border:1px solid #e4bbff; border-radius:11px; background:#cda2f1; padding:9px 6px; }
+#armory-root .armory-choose[aria-pressed="true"]{ color:#392715; border-color:#ffdd9c; background:#ffdc8e; }
+#armory-root .armory-choose:disabled{ color:#b6aebd; background:#4b4154; border-color:#6a5d7580; cursor:default; }
+#armory-root .armory-explanation{ border-top:1px solid #bd9bcc45; margin-top:15px; padding-top:13px; color:#e6ddea; font-size:13px; line-height:1.5; -webkit-user-select:text; user-select:text; }
+#armory-root .armory-explanation[hidden]{ display:none; }
+#armory-root .armory-explanation p+p{ margin-top:9px; }
+#armory-root .armory-specs{ color:#ffe3a3; }
+#armory-root .armory-explanation-hint{ color:#c9b5e0; }
+#armory-root .armory-footer{
+  display:flex; align-items:center; justify-content:space-between; gap:20px; flex-shrink:0;
+  padding:15px 26px 19px; border-top:1px solid #ba98d54d; background:#1b1728e6;
+}
+#armory-root .armory-footer-copy{ min-width:0; }
+#armory-root .armory-selected{ color:#ffe3a3; font-size:17px; font-weight:800; line-height:1.25; }
+#armory-root .armory-default-hint{ max-width:600px; margin-top:5px; color:#c5b7cf; font-size:12px; line-height:1.35; }
+#armory-root .armory-empty{ color:#e1d4ed; padding:32px 0; font-size:18px; }
+#armory-root .armory-sr-only{ position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
+@media(hover:hover){
+  #armory-root button:not(:disabled):hover{ filter:brightness(1.13); }
+  #armory-root .armory-card:hover{ border-color:#cba6e8; }
+}
+@media(max-width:600px){
+  #armory-launcher{ top:calc(108px + env(safe-area-inset-top)); left:8px; }
+  #armory-root{ padding:max(8px,env(safe-area-inset-top)) max(8px,env(safe-area-inset-right)) max(8px,env(safe-area-inset-bottom)) max(8px,env(safe-area-inset-left)); }
+  #armory-root .armory-panel{ max-height:calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); border-radius:20px; }
+  #armory-root .armory-header{ padding:16px 16px 4px; gap:8px; }
+  #armory-root .armory-eyebrow{ font-size:10px; letter-spacing:1px; }
+  #armory-root .armory-title{ font-size:27px; }
+  #armory-root .armory-hint{ padding:7px 16px 13px; font-size:13px; }
+  #armory-root .armory-grid{ padding:4px 14px 18px; gap:12px; }
+  #armory-root .armory-card{ padding:14px; }
+  #armory-root .armory-footer{ padding:12px 16px 15px; gap:12px; align-items:flex-start; }
+  #armory-root .armory-selected{ font-size:15px; }
+  #armory-root .armory-default-hint{ font-size:11px; }
+}
+@media(max-height:520px){
+  #armory-launcher{ top:calc(108px + env(safe-area-inset-top)); left:8px; }
+  #armory-root{ padding:8px max(10px,env(safe-area-inset-right)) 8px max(10px,env(safe-area-inset-left)); }
+  #armory-root .armory-panel{ max-height:calc(100dvh - 16px); border-radius:18px; }
+  #armory-root .armory-header{ padding:10px 20px 2px; }
+  #armory-root .armory-title{ font-size:25px; }
+  #armory-root .armory-eyebrow{ font-size:10px; }
+  #armory-root .armory-close{ width:44px; height:44px; min-width:44px; }
+  #armory-root .armory-hint{ padding:4px 20px 9px; font-size:12px; }
+  #armory-root .armory-grid{ padding:2px 18px 14px; grid-template-columns:repeat(auto-fit,minmax(min(225px,100%),1fr)); }
+  #armory-root .armory-footer{ padding:9px 20px 11px; }
+  #armory-root .armory-default-hint{ font-size:11px; }
+}
+@media(prefers-reduced-motion:reduce){ #armory-root button{ transition:none; } }
