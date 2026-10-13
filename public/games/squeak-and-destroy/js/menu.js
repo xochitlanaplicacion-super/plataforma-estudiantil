@@ -321,7 +321,7 @@
   const _seasonTheme=(function(){ try{ var s=(CA.Maps&&CA.Maps.seasonalTheme&&CA.Maps.seasonalTheme()); return (s && s!=='grass') ? s : 'jungle'; }catch(e){ return 'jungle'; } })();
   // per-team slots for the FFA / AI vs AI configurator (hot-seat up to 4). Each
   // slot: { isAI:bool, aiLevel:0-2, species:id }. Lazily defaulted in syncSlots().
-  let ng={ mode:'classic', theme:_seasonTheme, weather:'clear', water:false, teamUltimate:true, ai:1, size:4, teams:2, species:'capybara', species2:'frog', classes:[], savedTid:null,
+  let ng={ mode:'classic', theme:_seasonTheme, weather:'clear', water:false, teamUltimate:true, ai:1, size:4, teams:2, species:'capybara', species2:'frog', classicHuman2:false, classes:[], savedTid:null,
     savedMap:null,    // name of a saved level-editor map to play (null => generated)
     slots:null,
     // custom rule-set ("Egyedi szabályok"). enabled=false -> engine defaults are
@@ -602,9 +602,20 @@
     };
     spSec.append(rndTeam);
     // Player 2 (Classic only)
-    const spSec2=el('div','section'); spSec2.append(el('h3',null,'<span data-t="Ellenfél csapata (gép)">Ellenfél csapata (gép)</span>'));
+    const spSec2=el('div','section');
+    const spH2=el('h3',null,'Equipo 2 (computadora)'); spSec2.append(spH2);
     const spGrid2=dropdown(spItems, ()=>ng.species2, v=>ng.species2=v); spSec2.append(spGrid2);
     const spDesc2=el('div','ng-sp-desc muted'); spSec2.append(spDesc2);
+    const p2Mode=el('div','section ng-human-choice');
+    p2Mode.append(el('h3',null,'¿Quién controla el equipo 2?'));
+    p2Mode.append(el('p','muted','Para una batalla entre alumnos o equipos, elige «Dos equipos humanos». Ambos juegan por turnos en esta pantalla.'));
+    const p2Seg=el('div','seg');
+    [['🤖 Contra la computadora',false],['🙂 Dos equipos humanos',true]].forEach(([label,isHuman])=>{
+      const b=el('button',null,label); b.dataset.human=isHuman?'1':'0';
+      b.onclick=()=>{ ng.classicHuman2=isHuman; renderNG(); };
+      p2Seg.appendChild(b);
+    });
+    p2Mode.append(p2Seg); p2Mode._humanSeg=p2Seg;
 
     // ---- Per-team configurator (FFA / AI vs AI hot-seat up to 4) ----
     // Lets the user pick, FOR EACH team: Ember (Player N) vs Gép (+ AI level) and
@@ -768,7 +779,7 @@
     const advWrap=el('div'); advWrap.append(oSec, tcSec, spSec, spSec2, cSec);
     // Saved team + Saved map + Custom rules are FULL-VERSION features — hidden in the demo (Jani).
     if(!(window.CA && CA.DEMO)){ advWrap.append(tSec, mSecSaved, rSec.el); }
-    panel.append(mSec, grid, advWrap);
+    panel.append(mSec, p2Mode, grid, advWrap);
     body.append(panel);
 
     // start bar
@@ -806,7 +817,7 @@
     }
 
     sc.append(body);
-    sc._ng={ mChips, desc, mapGrid:mapSel, wGrid:wSel, seg, szSeg, tmSeg, spGrid, spGrid2, spSec, spSec2, cSec, spH, water:waterIn, cRow, ids, rules:rSec, tSec, tGrid, tcSec, mSecSaved, mmGrid, mapPrev, mapPrevWrap, spDesc, spDesc2, cDesc, estEl };
+    sc._ng={ mChips, desc, mapGrid:mapSel, wGrid:wSel, seg, szSeg, tmSeg, spGrid, spGrid2, spSec, spSec2, p2Mode, cSec, spH, spH2, water:waterIn, cRow, ids, rules:rSec, tSec, tGrid, tcSec, mSecSaved, mmGrid, mapPrev, mapPrevWrap, spDesc, spDesc2, cDesc, estEl };
     // P2 FIX: a nagy pálya-előnézet modál (closeMapModal) eddig CSAK a backdrop/X/Escape-re
     // záródott. A globális Vissza gombbal elhagyva a fix z-index:9999 overlay + a document
     // keydown listener a következő képernyő fölött ragadt. → a screen onHide-jára kötjük.
@@ -928,6 +939,11 @@
     if(r.tmSeg) [...r.tmSeg.children].forEach(b=>b.classList.toggle('sel', (+b.dataset.teams)===ng.teams));
     if(r.spGrid){ r.spGrid.value=ng.species; if(r.spGrid._reloc) r.spGrid._reloc(); }
     if(r.spGrid2){ r.spGrid2.value=ng.species2; if(r.spGrid2._reloc) r.spGrid2._reloc(); }
+    if(r.p2Mode){ r.p2Mode.style.display=ng.mode==='classic'?'':'none';
+      [...r.p2Mode._humanSeg.children].forEach(b=>{
+        const selected=(b.dataset.human==='1')===!!ng.classicHuman2;
+        b.classList.toggle('sel',selected); b.setAttribute('aria-pressed',String(selected));
+      }); }
     r.water.checked=ng.water;
     // saved-team picker: (re)build the list + reflect the selection.
     if(r.tSec && r.tSec._render) r.tSec._render();
@@ -948,6 +964,7 @@
     if(r.cSec)  r.cSec.style.display  = (aivs || hasSaved || usesCfg || !r.ids.length) ? 'none' : '';
     if(r.tSec)  r.tSec.style.display  = (aivs || usesCfg) ? 'none' : '';
     if(r.spSec2) r.spSec2.style.display = classic ? '' : 'none';
+    if(r.spH2) r.spH2.textContent=ng.classicHuman2?'Equipo 2 (humano)':'Equipo 2 (computadora)';
     if(r.spH) r.spH.innerHTML = classic ? '<span data-t="Player 1 csapata">Player 1 csapata</span>' : '<span data-t="A te csapatod">A te csapatod</span>';
     const spEmoji=ANIMAL_EMOJI[ng.species]||'🐹';
     // osztály szerep-leírás (passiveDesc) egy adott id-hez.
@@ -1112,7 +1129,7 @@
         const p2=(ng.mode==='classic') ? ng.species2 : (pool[1]||'worm');
         opts.teams=[
           { kind:p1, isAI:allAI, name:teamName(p1), classes:ng.classes.slice(0,n), size:n },
-          { kind:p2, isAI:true, aiLevel:ng.ai, name:teamName(p2), classes:balancedClasses(n,1), size:n },
+          { kind:p2, isAI:!ng.classicHuman2, aiLevel:ng.ai, name:teamName(p2), classes:balancedClasses(n,1), size:n },
         ];
       }
       // PLAYER picked a saved team (Team Editor): replace team[0] (the player team)
@@ -1154,6 +1171,10 @@
     const p3=el('div','panel section');
     p3.append(el('h3',null,'<span data-t="Kényelem">Kényelem</span>'));
     p3.append(sliderRow('🎯 <span data-t="Célzás-érzékenység">Célzás-érzékenység</span>', ()=>(G.aimSensitivity-0.5)/1.5, v=>{ G.aimSensitivity=+(0.5+v*1.5).toFixed(2); G.save&&G.save(); }, x=>(0.5+(x)/100*1.5).toFixed(2)+'×'));
+    p3.append(sliderRow('🖐 <span data-t="Tamaño de botones táctiles">Tamaño de botones táctiles</span>', ()=>(G.touchScale-0.75)/0.75, v=>{ G.touchScale=+(0.75+v*0.75).toFixed(2); G.save&&G.save(); }, x=>(0.75+(x)/100*0.75).toFixed(2)+'×'));
+    const editTouch=el('button','btn btn--gold btn--block','✋ Ajustar posición de cada botón táctil');
+    editTouch.type='button'; editTouch.onclick=()=>{ if(CA.openTouchEditor) CA.openTouchEditor(); };
+    p3.append(editTouch);
     p3.append(toggleRow('🤚 <span data-t="Balkezes">Balkezes</span>', ()=>!!G.leftHanded, v=>{ G.leftHanded=v; G.save&&G.save(); }));
     p3.append(toggleRow('📳 <span data-t="Rezgés">Rezgés</span>', ()=>!!G.haptics, v=>{ G.haptics=v; G.save&&G.save(); }));
     p3.append(toggleRow('🍃 <span data-t="Mozgáscsökkentés">Mozgáscsökkentés</span>', ()=>!!G.reducedMotion, v=>{ G.reducedMotion=v; G.save&&G.save(); }));

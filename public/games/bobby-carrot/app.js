@@ -2919,6 +2919,7 @@ class UIManager {
     this.canvas = canvas;
     this.renderer = renderer;
     this.toastTimeout = null;
+    this.classSession = null;
 
     // References to DOM elements
     this.elements = {};
@@ -2956,33 +2957,49 @@ class UIManager {
       diffEasy: document.getElementById('diff-easy'),
       diffNormal: document.getElementById('diff-normal'),
       diffHard: document.getElementById('diff-hard'),
+      classModeBtn: document.getElementById('btn-class-mode'),
+      classRoomModal: document.getElementById('class-room-modal'),
+      classCampaign: document.getElementById('class-campaign'),
+      classRangeStart: document.getElementById('class-range-start'),
+      classRangeEnd: document.getElementById('class-range-end'),
+      classStudentCount: document.getElementById('class-student-count'),
+      classRoulette: document.getElementById('class-roulette'),
+      classRouletteWheel: document.getElementById('class-roulette-wheel'),
+      classRouletteNumber: document.getElementById('class-roulette-number'),
+      classRouletteResult: document.getElementById('class-roulette-result'),
+      classSpin: document.getElementById('btn-class-spin'),
+      classStart: document.getElementById('btn-class-start'),
+      classVolunteer: document.getElementById('btn-class-volunteer'),
+      classVolunteerNumber: document.getElementById('class-volunteer-number'),
+      classReset: document.getElementById('btn-class-reset'),
+      classClose: document.getElementById('btn-class-close'),
     };
+    this.setupClassMode();
   }
 
   setupAutoScaling() {
     const resize = () => {
-      const isTouch = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
-      const isPortrait = window.innerHeight > window.innerWidth;
-
       const header = document.querySelector('.header-bar');
       const headerH = header ? header.offsetHeight : 48;
       const touchControls = document.getElementById('touch-controls');
-
-      // Medidas visibles exactas (usando visualViewport para máxima fidelidad en Safari iOS)
       const windowW = window.visualViewport ? window.visualViewport.width : window.innerWidth;
       const windowH = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-
+      // The visible viewport changes when Safari expands/collapses browser UI.
+      // Size the fixed game shell to that actual space instead of 100vh.
+      document.body.style.height = `${Math.floor(windowH)}px`;
+      const controlsVisible = touchControls && getComputedStyle(touchControls).display !== 'none';
+      const sideRails = controlsVisible && window.matchMedia('(orientation: landscape) and (max-height: 600px)').matches;
+      const controlsH = controlsVisible && !sideRails ? touchControls.offsetHeight : 0;
+      document.body.style.setProperty('--bobby-controls-height', `${controlsH}px`);
       let availableW = windowW - 12;
-      let availableH = windowH - headerH - 12;
-
-      // En modo táctil vertical: descontar exactamente el alto del D-pad inferior
-      if (isTouch && isPortrait) {
-        const controlsH = touchControls ? touchControls.offsetHeight || 135 : 135;
-        availableH = Math.max(120, availableH - controlsH - 8);
-      } else if (isTouch && !isPortrait) {
-        // En modo horizontal táctil: dejar margen lateral para los pulgares
-        availableW = Math.max(180, availableW - 140);
+      let availableH = windowH - headerH - controlsH - 16;
+      if (sideRails) {
+        const dpadW = touchControls.querySelector('.dpad-container')?.offsetWidth || 140;
+        const actionsW = touchControls.querySelector('.action-buttons')?.offsetWidth || 140;
+        availableW -= dpadW + actionsW + 48;
       }
+      availableW = Math.max(150, availableW);
+      availableH = Math.max(110, availableH);
 
       // Aspect ratio de la pantalla interna 256x192 (4:3)
       const aspect = 256 / 192;
@@ -3013,6 +3030,7 @@ class UIManager {
     window.addEventListener('keydown', (e) => {
       // First interaction unlocks Safari Web Audio
       audio.init();
+      if (!this.elements.classRoomModal.classList.contains('hidden')) return;
 
       if (e.repeat && (e.key === 'r' || e.key === 'R')) return;
 
@@ -3117,14 +3135,19 @@ class UIManager {
     let touchStartTime = 0;
 
     this.canvas.addEventListener('touchstart', (e) => {
+      e.preventDefault();
       if (e.touches.length === 1) {
         touchStartX = e.touches[0].clientX;
         touchStartY = e.touches[0].clientY;
         touchStartTime = performance.now();
       }
-    }, { passive: true });
+    }, { passive: false });
 
     this.canvas.addEventListener('touchmove', (e) => {
+      // Keep a swipe inside the game. Without this, Safari/Chrome may treat a
+      // downward gesture as page navigation or address-bar interaction and
+      // leave the immersive state.
+      e.preventDefault();
       if (e.touches.length === 1) {
         const dx = e.touches[0].clientX - touchStartX;
         const dy = e.touches[0].clientY - touchStartY;
@@ -3142,7 +3165,195 @@ class UIManager {
           touchStartY = e.touches[0].clientY;
         }
       }
-    }, { passive: true });
+    }, { passive: false });
+  }
+
+  setupClassMode() {
+    const els = this.elements;
+    if (!els.classModeBtn || !els.classRoomModal) return;
+    const fillRange = () => {
+      const campaign = els.classCampaign.value;
+      const length = campaign === 'Easter_Eggs' ? EGG_LEVELS.length : CARROT_LEVELS.length;
+      for (const select of [els.classRangeStart, els.classRangeEnd]) {
+        select.replaceChildren();
+        for (let index = 0; index < length; index++) {
+          const option = document.createElement('option');
+          option.value = String(index);
+          option.textContent = `Nivel ${index + 1}`;
+          select.appendChild(option);
+        }
+      }
+      els.classRangeStart.value = '0';
+      els.classRangeEnd.value = String(Math.min(14, length - 1));
+    };
+    els.classModeBtn.onclick = () => {
+      if (!this.classSession) {
+        els.classCampaign.value = this.game.campaign === 'Easter_Eggs' ? 'Easter_Eggs' : 'Carrot_Harvest';
+        fillRange();
+        this.prepareClassSession();
+      } else {
+        this.refreshClassControls();
+      }
+      els.classRoomModal.classList.remove('hidden');
+    };
+    els.classCampaign.onchange = () => { fillRange(); this.prepareClassSession(); };
+    for (const select of [els.classRangeStart, els.classRangeEnd, els.classStudentCount]) {
+      select.addEventListener('change', () => this.prepareClassSession());
+    }
+    els.classClose.onclick = () => {
+      if (this.classSpinTimer) clearTimeout(this.classSpinTimer);
+      this.classSpinTimer = null;
+      els.classRoomModal.classList.add('hidden');
+      if (this.game.state !== 'PLAYING') this.showMenu();
+    };
+    els.classSpin.onclick = () => this.spinClassRound();
+    els.classVolunteer.onclick = () => this.spinClassRound(Number(els.classVolunteerNumber.value));
+    els.classStart.onclick = () => this.startClassRound();
+    els.classReset.onclick = () => this.prepareClassSession();
+  }
+
+  classConfig() {
+    const els = this.elements;
+    const campaign = els.classCampaign.value === 'Easter_Eggs' ? 'Easter_Eggs' : 'Carrot_Harvest';
+    const max = (campaign === 'Easter_Eggs' ? EGG_LEVELS : CARROT_LEVELS).length - 1;
+    const start = Math.max(0, Math.min(max, Number(els.classRangeStart.value) || 0));
+    const end = Math.max(start, Math.min(max, Number(els.classRangeEnd.value) || 0));
+    const count = Math.max(1, Math.min(60, Math.floor(Number(els.classStudentCount.value) || 1)));
+    els.classRangeEnd.value = String(end);
+    els.classStudentCount.value = String(count);
+    return { campaign, start, end, count };
+  }
+
+  shuffleClassItems(items) {
+    const result = items.slice();
+    // Fisher–Yates: every remaining student and level is equally likely.
+    for (let i = result.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result;
+  }
+
+  prepareClassSession() {
+    const els = this.elements;
+    if (this.classSpinTimer) clearTimeout(this.classSpinTimer);
+    this.classSpinTimer = null;
+    const { campaign, start, end, count } = this.classConfig();
+    this.classSession = {
+      campaign, start, end, count,
+      students: this.shuffleClassItems(Array.from({ length: count }, (_, i) => i + 1)),
+      levels: this.shuffleClassItems(Array.from({ length: end - start + 1 }, (_, i) => start + i)),
+      currentStudent: null,
+      currentLevel: null,
+      pending: false,
+    };
+    this.classWheelRotation = 0;
+    if (els.classRouletteWheel) els.classRouletteWheel.style.transform = 'rotate(0deg)';
+    if (els.classRouletteNumber) els.classRouletteNumber.textContent = '?';
+    if (els.classRouletteResult) els.classRouletteResult.textContent = 'Gira la ruleta o selecciona un voluntario. Después, haz tu pregunta y pulsa «Empezar nivel».';
+    this.refreshClassControls();
+  }
+
+  drawClassWheel(students) {
+    const canvas = this.elements.classRouletteWheel;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const center = canvas.width / 2;
+    const radius = center - 8;
+    const step = Math.PI * 2 / Math.max(1, students.length);
+    const fills = ['#ea823b', '#66ad45', '#e7a93f', '#4eab8d'];
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    students.forEach((number, index) => {
+      const angle = -Math.PI / 2 + step * index;
+      ctx.beginPath();
+      ctx.moveTo(center, center);
+      ctx.arc(center, center, radius, angle - step / 2, angle + step / 2);
+      ctx.closePath();
+      ctx.fillStyle = fills[index % fills.length];
+      ctx.fill();
+      ctx.lineWidth = students.length > 32 ? 1 : 3;
+      ctx.strokeStyle = '#fff3bc';
+      ctx.stroke();
+      const labelRadius = radius * (students.length > 28 ? .84 : .78);
+      ctx.fillStyle = '#1f341c';
+      ctx.font = `900 ${students.length > 40 ? 13 : students.length > 24 ? 18 : 27}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(number), center + Math.cos(angle) * labelRadius, center + Math.sin(angle) * labelRadius);
+    });
+  }
+
+  refreshClassControls() {
+    const els = this.elements;
+    const session = this.classSession;
+    if (!session) return;
+    const available = Array.from({ length: session.count }, (_, index) => index + 1)
+      .filter((number) => session.students.includes(number));
+    const wheelStudents = session.pending
+      ? [...available, session.currentStudent].sort((a, b) => a - b)
+      : available;
+    this.drawClassWheel(wheelStudents);
+    const selected = els.classVolunteerNumber.value;
+    els.classVolunteerNumber.replaceChildren(new Option('Número', ''));
+    for (const number of available) els.classVolunteerNumber.add(new Option(`Alumno ${number}`, String(number)));
+    if (available.some((number) => String(number) === selected)) els.classVolunteerNumber.value = selected;
+    els.classSpin.disabled = session.pending || !available.length;
+    els.classVolunteer.disabled = session.pending || !available.length;
+    els.classVolunteerNumber.disabled = session.pending || !available.length;
+    els.classClose.disabled = !!this.classSpinTimer;
+    els.classStart.disabled = !session.pending || !!this.classSpinTimer;
+    els.classStart.classList.toggle('hidden', !session.pending);
+    if (!available.length && !session.pending) {
+      els.classRouletteResult.textContent = 'Todos los alumnos ya jugaron. Pulsa «Nueva ruleta» para repetir la clase.';
+    }
+  }
+
+  spinClassRound(voluntaryNumber) {
+    const els = this.elements;
+    const session = this.classSession;
+    if (!session || session.pending || !session.students.length || this.classSpinTimer) return;
+    if (voluntaryNumber !== undefined && !session.students.includes(voluntaryNumber)) {
+      els.classRouletteResult.textContent = 'Selecciona el número del alumno voluntario.';
+      return;
+    }
+    const remaining = Array.from({ length: session.count }, (_, index) => index + 1)
+      .filter((number) => session.students.includes(number));
+    const student = voluntaryNumber === undefined ? session.students.shift() : voluntaryNumber;
+    if (voluntaryNumber !== undefined) session.students.splice(session.students.indexOf(student), 1);
+    if (!session.levels.length) {
+      session.levels = this.shuffleClassItems(Array.from({ length: session.end - session.start + 1 }, (_, i) => session.start + i));
+    }
+    session.currentStudent = student;
+    session.currentLevel = session.levels.shift();
+    session.pending = true;
+    this.drawClassWheel(remaining);
+    const index = remaining.indexOf(student);
+    const sector = 360 / remaining.length;
+    const rotation = this.classWheelRotation || 0;
+    const alignment = (360 - ((rotation + index * sector) % 360)) % 360;
+    this.classWheelRotation = rotation + (4 + Math.floor(Math.random() * 3)) * 360 + alignment;
+    els.classRouletteNumber.textContent = '…';
+    els.classRouletteResult.textContent = 'La ruleta está girando…';
+    els.classRouletteWheel.style.transform = `rotate(${this.classWheelRotation}deg)`;
+    this.classSpinTimer = setTimeout(() => {
+      this.classSpinTimer = null;
+      els.classRouletteNumber.textContent = String(student);
+      els.classRouletteResult.textContent = `${voluntaryNumber === undefined ? 'La ruleta eligió' : 'Voluntario'}: alumno ${student} · ${session.campaign === 'Easter_Eggs' ? 'Huevos' : 'Zanahorias'} nivel ${session.currentLevel + 1}. Haz la pregunta; después pulsa «Empezar nivel».`;
+      this.refreshClassControls();
+    }, 1600);
+    this.refreshClassControls();
+  }
+
+  startClassRound() {
+    const session = this.classSession;
+    if (!session || !session.pending || this.classSpinTimer) return;
+    session.pending = false;
+    this.hideMenu();
+    this.elements.classRoomModal.classList.add('hidden');
+    if (!(document.fullscreenElement || document.webkitFullscreenElement)) this.toggleFullscreen();
+    this.game.campaign = session.campaign;
+    this.game.startLevel(session.currentLevel);
   }
 
   toggleMute() {
@@ -3161,10 +3372,6 @@ class UIManager {
       if (root.requestFullscreen) request = root.requestFullscreen({ navigationUI: 'hide' });
       else if (root.webkitRequestFullscreen) request = root.webkitRequestFullscreen();
       if (request && typeof request.catch === 'function') request.catch(() => {});
-      // Safari iOS cannot hide its browser chrome through the Fullscreen API.
-      // This harmless scroll lets Safari collapse the address bar when it allows
-      // it, while the standalone/PWA metadata handles installed launches.
-      setTimeout(() => { try { window.scrollTo(0, 1); } catch (_) {} }, 80);
     } else if (document.exitFullscreen) {
       document.exitFullscreen().catch(() => {});
     } else if (document.webkitExitFullscreen) {
@@ -3174,10 +3381,13 @@ class UIManager {
   }
 
   showMenu() {
+    if (this.classSpinTimer) clearTimeout(this.classSpinTimer);
+    this.classSpinTimer = null;
     this.elements.menuOverlay.classList.remove('hidden');
     this.elements.levelSelectModal.classList.add('hidden');
     this.elements.victoryModal.classList.add('hidden');
     this.elements.deathModal.classList.add('hidden');
+    this.elements.classRoomModal?.classList.add('hidden');
   }
 
   hideMenu() {
@@ -3218,6 +3428,7 @@ class UIManager {
         }
         btn.innerHTML = `<strong>${idx + 1}</strong>${bestText}`;
         btn.onclick = () => {
+          this.classSession = null;
           this.hideMenu();
           this.game.startLevel(idx);
         };
@@ -3245,9 +3456,23 @@ class UIManager {
       } else {
         document.getElementById('modal-vic-level').innerText = `Nivel ${this.game.levelIndex + 1}`;
       }
-      this.elements.victoryModal.classList.remove('hidden');
+      if (this.classSession) {
+        this.elements.victoryModal.classList.add('hidden');
+        this.elements.classRoomModal.classList.remove('hidden');
+        if (this.elements.classRouletteResult) this.elements.classRouletteResult.textContent = `¡Nivel superado por el alumno ${this.classSession.currentStudent}! Gira para continuar.`;
+        this.refreshClassControls();
+      } else {
+        this.elements.victoryModal.classList.remove('hidden');
+      }
     } else if (state === 'DEAD') {
-      this.elements.deathModal.classList.remove('hidden');
+      if (this.classSession) {
+        this.elements.deathModal.classList.add('hidden');
+        this.elements.classRoomModal.classList.remove('hidden');
+        if (this.elements.classRouletteResult) this.elements.classRouletteResult.textContent = `El alumno ${this.classSession.currentStudent} cayó en una trampa. Gira para el siguiente turno.`;
+        this.refreshClassControls();
+      } else {
+        this.elements.deathModal.classList.remove('hidden');
+      }
     } else if (state === 'PLAYING') {
       this.elements.victoryModal.classList.add('hidden');
       this.elements.deathModal.classList.add('hidden');
@@ -3363,6 +3588,7 @@ async function startApp() {
   const btnPlay = document.getElementById("btn-play");
   if (btnPlay) {
     btnPlay.onclick = () => {
+      ui.classSession = null;
       ui.hideMenu();
       // User gesture: this is the most reliable moment to request immersive
       // mode on Android Chrome and desktop browsers. iOS Safari may decline it,
@@ -3509,7 +3735,7 @@ async function startApp() {
     const dt = Math.min(0.1, (now - lastTime) / 1000);
     lastTime = now;
 
-    game.update(dt);
+    if (ui.elements.classRoomModal.classList.contains('hidden')) game.update(dt);
     game.render(offscreenCtx);
     renderer.render(offscreenCanvas);
 

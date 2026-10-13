@@ -410,6 +410,10 @@ CA.settings = {
   /* ---- accessibility / comfort (idea #39) — owned by ui.js settings screen ---- */
   aimSensitivity: 1.0,    // 0.5..2.0 multiplier for keyboard/touch aim speed
   leftHanded: false,      // mirror the mobile touch controls (move<->fire sides)
+  touchScale: 1.0,        // size multiplier for the touch action pads
+  touchOffsetX: 0,        // horizontal placement offset (-1..1 of screen width)
+  touchOffsetY: 0,        // vertical placement offset (-1..1 of screen height)
+  touchPositions: {},     // optional normalized x/y center per touch button
   colorblind: 'off',      // 'off'|'deuter'|'protan'|'tritan' team-color remap hint
   haptics: true,          // mobile vibration feedback on hits/fire
   reducedMotion: false,   // suppress screen-shake / slow-mo / kill-cam (comfort/a11y)
@@ -428,6 +432,17 @@ CA.settings = {
     var clamp01=function(v,d){ return (typeof v==='number'&&isFinite(v))?Math.max(0,Math.min(1,v)):d; };
     this.musicVol=clamp01(this.musicVol,0.3); this.sfxVol=clamp01(this.sfxVol,0.8);
     this.aimSensitivity=(typeof this.aimSensitivity==='number'&&isFinite(this.aimSensitivity))?Math.max(0.5,Math.min(2,this.aimSensitivity)):1.0;
+    this.touchScale=(typeof this.touchScale==='number'&&isFinite(this.touchScale))?Math.max(0.75,Math.min(1.5,this.touchScale)):1.0;
+    this.touchOffsetX=(typeof this.touchOffsetX==='number'&&isFinite(this.touchOffsetX))?Math.max(-0.25,Math.min(0.25,this.touchOffsetX)):0;
+    this.touchOffsetY=(typeof this.touchOffsetY==='number'&&isFinite(this.touchOffsetY))?Math.max(-0.25,Math.min(0.25,this.touchOffsetY)):0;
+    var savedPositions=this.touchPositions, cleanPositions={};
+    ['left','right','aimUp','aimDown','jump','fire'].forEach(function(id){
+      var p=savedPositions&&savedPositions[id];
+      if(p&&typeof p.x==='number'&&isFinite(p.x)&&typeof p.y==='number'&&isFinite(p.y)){
+        cleanPositions[id]={x:Math.max(0.04,Math.min(0.96,p.x)),y:Math.max(0.08,Math.min(0.96,p.y))};
+      }
+    });
+    this.touchPositions=cleanPositions;
     if(this.quality!=='low'&&this.quality!=='normal'&&this.quality!=='high') this.quality='high';  // 'ultra' retired → coerces to high
     if(['off','deuter','protan','tritan'].indexOf(this.colorblind)<0) this.colorblind='off';
     // QA P0: a whitelist a ES/PT/ZH bővítés ELŐTTI volt ('hu'/'en') → minden
@@ -445,7 +460,9 @@ CA.settings = {
          persisting it could cause a stuck silent start. */
       musicVol:this.musicVol, sfxVol:this.sfxVol, quality:this.quality, postfx:this.postfx,
       showTrajectory:this.showTrajectory, killcam:this.killcam, keymap:this.keymap,
-      aimSensitivity:this.aimSensitivity, leftHanded:this.leftHanded, colorblind:this.colorblind,
+      aimSensitivity:this.aimSensitivity, leftHanded:this.leftHanded, touchScale:this.touchScale,
+      touchOffsetX:this.touchOffsetX, touchOffsetY:this.touchOffsetY, colorblind:this.colorblind,
+      touchPositions:this.touchPositions,
       haptics:this.haptics, reducedMotion:this.reducedMotion, music:this.music, lang:this.lang })); }
     catch(e){}
   },

@@ -24,6 +24,36 @@ html,body { width:100%; height:100%; background:#0e1217; overflow:hidden;
 /* size is set in JS (core.resize) to preserve the backing aspect ratio — never
    stretch. The flex wrap centers it; letterbox bars (if any) use the dark bg. */
 #game { background:#0e1217; display:block; margin:0; border:0; image-rendering:auto; }
+.abg-touch-editor{ position:fixed; inset:0; z-index:10020; background:rgba(12,17,25,.83);
+  color:#fff; font:600 16px/1.3 system-ui,sans-serif; touch-action:none; }
+.abg-touch-editor-stage{ position:absolute; overflow:hidden; border:2px dashed rgba(255,220,131,.65);
+  background:linear-gradient(145deg,rgba(89,125,157,.32),rgba(90,135,90,.16)); }
+.abg-touch-editor-control{ position:absolute; transform:translate(-50%,-50%);
+  width:var(--touch-edit-size,62px); height:var(--touch-edit-size,62px);
+  display:grid; place-items:center; border:2px solid rgba(255,255,255,.8);
+  border-radius:16px; background:rgba(36,55,71,.95); color:white;
+  font:bold 26px/1 system-ui; box-shadow:0 8px 22px rgba(0,0,0,.45);
+  touch-action:none; user-select:none; cursor:grab; }
+.abg-touch-editor-control[data-control="fire"]{ background:#b8462e; }
+.abg-touch-editor-control.dragging{ cursor:grabbing; border-color:#ffe695; z-index:3; }
+.abg-touch-editor-bar{ position:absolute; z-index:4; top:calc(8px + env(safe-area-inset-top));
+  left:50%; transform:translateX(-50%); width:min(96vw,760px);
+  display:flex; align-items:center; gap:12px; flex-wrap:wrap;
+  background:rgba(22,31,41,.97); border:1px solid #c9934d; border-radius:14px;
+  padding:10px 14px; box-shadow:0 10px 24px rgba(0,0,0,.4); }
+.abg-touch-editor-title{ display:flex; flex-direction:column; min-width:180px; flex:1; }
+.abg-touch-editor-title small{ font-size:11px; color:#d1d9e0; }
+.abg-touch-editor-bar label{ display:flex; gap:7px; align-items:center; white-space:nowrap; font-size:13px; }
+.abg-touch-editor-bar input{ width:100px; accent-color:#f8b85f; }
+.abg-touch-editor-bar button{ min-height:42px; border:1px solid #f2ca80; border-radius:9px;
+  background:#334657; color:#fff; font-weight:800; padding:7px 12px; }
+.abg-touch-editor-bar .abg-touch-editor-done{ background:#257348; }
+.abg-touch-editor-note{ position:absolute; z-index:3; bottom:calc(6px + env(safe-area-inset-bottom));
+  left:50%; transform:translateX(-50%); width:max-content; max-width:96vw;
+  padding:4px 9px; border-radius:6px; background:rgba(22,31,41,.93); font-size:11px; text-align:center; }
+@media(max-height:540px){ .abg-touch-editor-bar{ width:min(99vw,760px); padding:4px 9px; gap:6px; }
+  .abg-touch-editor-title small,.abg-touch-editor-note{ display:none; }
+  .abg-touch-editor-title{ min-width:110px; flex:0 1 auto; font-size:13px; } }
 #fs-btn { position:fixed; top:calc(10px + env(safe-area-inset-top)); left:calc(10px + env(safe-area-inset-left));
   z-index:40; width:40px; height:40px;
   border:none; border-radius:8px; background:rgba(0,0,0,.4); color:#fff; font-size:20px;

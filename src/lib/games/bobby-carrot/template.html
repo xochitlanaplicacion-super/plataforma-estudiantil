@@ -14,7 +14,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=classroom-2">
 </head>
 <body>
 
@@ -82,6 +82,8 @@
         <button id="tab-procedural" class="tab-btn">🎲 Procedural · Desafío (∞)</button>
       </div>
 
+      <button id="btn-class-mode" class="btn-class-mode">🎲 Modo clase · ruleta de alumnos</button>
+
       <!-- SELECTOR DE FILTRO DE RENDERIZADO -->
       <div class="render-mode-box">
         <span class="render-mode-title">Filtro Visual / Renderizado:</span>
@@ -104,6 +106,36 @@
       <button id="btn-play" class="btn-primary">▶ Jugar</button>
       <button id="btn-open-levels" class="btn-secondary">🗺️ Seleccionar Nivel</button>
       <button id="btn-reset-save" class="btn-secondary" style="font-size: 0.8rem; opacity: 0.7;">🗑️ Borrar Progreso</button>
+    </div>
+  </div>
+
+  <!-- MODAL: MODO CLASE (NIVEL Y ALUMNO AL AZAR) -->
+  <div id="class-room-modal" class="modal-overlay hidden">
+    <div class="modal-card class-room-card">
+      <div class="modal-header">
+        <span class="class-room-kicker">🎓 ACTIVIDAD EN CLASE</span>
+        <h2>Ruleta de la clase</h2>
+        <p>Asigna un número a cada alumno. Elige un rango y pregunta antes de darle el turno.</p>
+      </div>
+      <div class="class-settings-grid">
+        <label class="class-campaign">Campaña<select id="class-campaign"><option value="Carrot_Harvest">🥕 Zanahorias (30)</option><option value="Easter_Eggs">🥚 Huevos (20)</option></select></label>
+        <label>Desde nivel<select id="class-range-start"></select></label>
+        <label>Hasta nivel<select id="class-range-end"></select></label>
+        <label class="class-student-count">Alumnos numerados<input id="class-student-count" type="number" min="1" max="60" value="10" inputmode="numeric"></label>
+      </div>
+      <div id="class-roulette" class="class-roulette" aria-live="polite">
+        <canvas id="class-roulette-wheel" width="480" height="480" aria-label="Ruleta de alumnos numerados"></canvas>
+        <span id="class-roulette-number">?</span>
+      </div>
+      <p id="class-roulette-result" class="class-roulette-result" aria-live="polite">Configura la actividad y gira la ruleta.</p>
+      <div class="class-room-actions">
+        <button id="btn-class-spin" class="btn-primary">🎡 Girar ruleta</button>
+        <button id="btn-class-start" class="btn-primary hidden" disabled>▶ Empezar nivel</button>
+        <label class="class-volunteer-label">Voluntario<select id="class-volunteer-number"><option value="">Número</option></select></label>
+        <button id="btn-class-volunteer" class="btn-secondary">🙋 Asignar voluntario</button>
+        <button id="btn-class-reset" class="btn-secondary">↻ Nueva ruleta</button>
+        <button id="btn-class-close" class="btn-secondary">Cerrar</button>
+      </div>
     </div>
   </div>
 
@@ -156,6 +188,6 @@
   </div>
 
   <!-- CARGA UNIVERSAL DEL JUEGO (COMPATIBLE CON ARCHIVOS LOCALES FILE:// Y SERVIDOR HTTP) -->
-  <script src="app.js"></script>
+  <script src="app.js?v=classroom-2"></script>
 </body>
 </html>

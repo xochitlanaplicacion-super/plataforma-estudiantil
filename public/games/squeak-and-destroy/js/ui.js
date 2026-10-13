@@ -965,6 +965,16 @@
         for(const b of hudBtns){
           if(b.id==='timerfuse' && hit(b,p)){ b.act&&b.act(); return; }
         }
+        // Custom touch buttons can be moved near the weapon strip. Their visible
+        // position must win the tap so a move/fire gesture never buys a weapon.
+        for(const b of touchBtns){
+          if(hit(b,p)){
+            try{ cv.setPointerCapture(e.pointerId); }catch(_){}
+            activePointers[e.pointerId]={kind:b.kind, dir:b.dir, id:b.id};
+            applyTouch(b, true);
+            return;
+          }
+        }
         // v4 ability-bar selection (on-cooldown abilities are not selectable)
         for(const b of abilityBtns){
           if(hit(b,p)){
@@ -981,15 +991,6 @@
           if(hit(b,p)){
             if(weaponUnavailable(b.id)){ return; }   // depleted/cd/forbidden/spent: ignore the tap
             clickSfx(); S.selectedWeapon=b.id; if(CA.events)CA.events.emit('sfx','select'); return;
-          }
-        }
-        // on-screen touch controls (hold buttons)
-        for(const b of touchBtns){
-          if(hit(b,p)){
-            try{ cv.setPointerCapture(e.pointerId); }catch(_){}
-            activePointers[e.pointerId]={kind:b.kind, dir:b.dir, id:b.id};
-            applyTouch(b, true);
-            return;
           }
         }
       });
@@ -1902,6 +1903,7 @@
       // + leftHanded/colorblind 58 + haptics/music 58 + reducedMotion/killcam 58 = 256
       const baseH = 58 + 50+12 + 54+58 + (showFS?58:0) + 58 + 60 + 10
                   + 256
+                  + (IS_TOUCH ? 58 : 0)
                   + (showKeys ? rebindRows*(38+8) + 18 + 28 : 0);   // key-rebind block (hidden on touch)
       let ui=M.ui;
       if(scroll){
@@ -1976,6 +1978,13 @@
       // We store the raw 0.5..2.0 value but the slider widget works in 0..1, so
       // we draw a custom sensitivity slider here (label + value + track).
       this._aimSlider(ctx, x, y, colW, ui); y+=54*ui;
+
+      if(IS_TOUCH){
+        this._menuButton(ctx,{x,y,w:colW,h:46*ui,
+          label:'✋ Ajustar botones táctiles',col:'#9b6637',fs:16*ui,
+          act:()=>{ if(CA.openTouchEditor) CA.openTouchEditor(); }});
+        y+=58*ui;
+      }
 
       // leftHanded toggle + colorblind cycle (one row)
       const cbNames={off:t('KI'), deuter:'Deuter', protan:'Protan', tritan:'Tritan'};
@@ -4204,7 +4213,17 @@
         ctx.fillText(label, b.x+b.w/2, b.y+b.h/2);
         ctx.textBaseline='alphabetic';
       };
-      const reg=(x,y,kind,dir,id)=>{ const b={x,y,w:big,h:big,kind,dir,id}; touchBtns.push(b); return b; };
+      const position=(id,x,y)=>{
+        const p=CA.settings&&CA.settings.touchPositions&&CA.settings.touchPositions[id];
+        if(p && Number.isFinite(p.x) && Number.isFinite(p.y)){
+          x=p.x*C.VIEW_W-big/2;
+          y=p.y*C.VIEW_H-big/2;
+        }
+        return {x:Math.round(U.clamp(x,pad,C.VIEW_W-big-pad)),
+          y:Math.round(U.clamp(y,pad,C.VIEW_H-big-pad-tl.inset))};
+      };
+      const reg=(x,y,kind,dir,id)=>{ const p=position(id,x,y);
+        const b={x:p.x,y:p.y,w:big,h:big,kind,dir,id}; touchBtns.push(b); return b; };
 
       // #39 left-handed: mirror the two clusters horizontally so the MOVE cluster
       // lives on the RIGHT and the AIM/FIRE+JUMP cluster on the LEFT.
@@ -4242,7 +4261,8 @@
       const ab_dn=reg(aimX, bottom, 'aim', -1, 'aimDown');            // alul (jump szintje)
       const ab_up=reg(aimX, bottom-big-gap, 'aim', 1, 'aimUp');       // fölötte
       // FIRE a fal-oszlopban, az ugrás FÖLÖTT
-      const fvis={ x:aimWallX, y:Math.round(bottom-fbig-gap), w:fbig, h:fbig };
+      const firePos=position('fire',aimWallX,bottom-fbig-gap);
+      const fvis={ x:firePos.x, y:firePos.y, w:fbig, h:fbig };
       const fb={ x:fvis.x, y:fvis.y, w:fvis.w, h:fvis.h, kind:'fire', dir:0, id:'fire' };
       touchBtns.push(fb);
       draw(ab_up,'▲', S.input.up);
@@ -4712,7 +4732,9 @@
 
   function touchLayout(ui){
     ui=ui||1;
-    const big=64*ui, pad=16*ui, gap=10*ui;
+    const scale=CA.settings&&Number.isFinite(CA.settings.touchScale)
+      ? U.clamp(CA.settings.touchScale, 0.75, 1.5) : 1;
+    const big=64*ui*scale, pad=16*ui, gap=10*ui;
     // honour the iOS home-indicator: lift the whole bottom row by the inset so
     // the buttons don't sit UNDER the home bar. inset is CSS px → scale by dpr.
     const dpr=(metrics().dpr)||1;
@@ -4722,6 +4744,20 @@
     const padRight=2*big+pad+gap;           // band a side cluster spans from the wall
     return { big, pad, gap, bottom, top, padRight, inset };
   }
+
+  // Shared with the touch-control editor. Positions are normalized so that a
+  // layout saved on an iPad remains usable when the screen size changes.
+  CA.touchControlDefaults=function(){
+    const ui=metrics().ui, tl=touchLayout(ui), lefty=!!(CA.settings&&CA.settings.leftHanded);
+    const big=tl.big, gap=tl.gap, pad=tl.pad, bottom=tl.bottom;
+    const moveX=lefty ? C.VIEW_W-2*big-gap-pad : pad;
+    const wallX=lefty ? pad : C.VIEW_W-big-pad;
+    const aimX=lefty ? wallX+big+gap : wallX-big-gap;
+    const center=(x,y)=>({x:(x+big/2)/C.VIEW_W,y:(y+big/2)/C.VIEW_H});
+    return {left:center(moveX,bottom),right:center(moveX+big+gap,bottom),
+      jump:center(wallX,bottom),fire:center(wallX,bottom-big-gap),
+      aimDown:center(aimX,bottom),aimUp:center(aimX,bottom-big-gap)};
+  };
 
   // #39 haptics: short vibration on hit/fire when enabled and supported.
   function doHaptic(ms){

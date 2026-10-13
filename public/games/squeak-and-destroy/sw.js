@@ -7,13 +7,14 @@
 
 /* Bump this string on EVERY deploy so clients pick up new code (the activate
  * handler purges old caches). Keep in sync with the app version. */
-var CACHE = 'cute-animals-v5.1.1';
+var CACHE = 'cute-animals-v5.1.2';
 
 /* App shell — keep js list in index.html load order. Only files that exist. */
 var PRECACHE = [
   './',
   './index.html',
   './bundle.min.js',
+  './touch-editor.js',
   './manifest.webmanifest',
   './css/style.css',
   './css/menu.css',      // DOM menu design system (was missing → unstyled menu offline)
