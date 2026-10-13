@@ -4,6 +4,7 @@ import { getUnit } from '../../../public/games/pvz-quest/classroom/catalog.js';
 import {
   LIVE_RULES, LIVE_ZOMBIE_SPEED_PRESETS, createLiveMatch as createCurrentLiveMatch, awardLiveResources, buyLiveUnit,
   pauseLive, stepLive, liveSnapshot, availableLiveUnits, selectLiveSide, setLiveZombieSpeed,
+  beginLiveInitialCoin, beginLiveTacticalShopping, confirmLiveTacticalTurn, resumeLiveTacticalWave,
 } from '../../../public/games/pvz-quest/classroom/live-engine.js';
 
 // Keep this suite's original pure continuous combat fixtures at normal speed.
@@ -46,7 +47,9 @@ test('after eating a plant the zombie keeps advancing without another purchasing
   const result = advance(bite.state,1);
   assert(result.state.units[0].col < bite.state.units[0].col);
   assert.equal(result.state.round,1);
-  assert.throws(() => buyLiveUnit(result.state,'plants','wallnut',2,3),/ocupada/);
+  const replanted = buyLiveUnit(result.state,'plants','wallnut',2,3);
+  assert(replanted.units.some(unit => unit.typeId === 'wallnut' && unit.row === 2 && unit.col === 3),
+    'Planting is now allowed on a zombie, but not on another plant.');
 });
 
 test('continuous configuration is validated and never includes teacher-only data', () => {
@@ -119,12 +122,12 @@ test('double purchases are guarded and separate later purchases are allowed', ()
   assert.throws(() => buyLiveUnit(state, 'plants', 'peashooter', 2, 2), /salón/);
 });
 
-test('plants cannot overwrite units, place outside garden or plant under a zombie', () => {
+test('plants cannot overwrite another plant or leave the garden, but can be planted under a zombie', () => {
   const state = buyLiveUnit(createLiveMatch(), 'plants', 'wallnut', 1, 2);
   assert.throws(() => buyLiveUnit(state, 'plants', 'peashooter', 1, 2), /ocupada/);
   for (const [row, col] of [[-1, 2], [5, 2], [1, 0], [1, 7], [1.2, 2]]) assert.throws(() => buyLiveUnit(state, 'plants', 'peashooter', row, col));
   const under = { ...state, units: [...state.units, injectedUnit('common', 0, 3.2)] };
-  assert.throws(() => buyLiveUnit(under, 'plants', 'peashooter', 0, 3), /ocupada/);
+  assert(buyLiveUnit(under, 'plants', 'peashooter', 0, 3).units.some(unit => unit.typeId === 'peashooter' && unit.row === 0 && unit.col === 3));
   assert.throws(() => buyLiveUnit(state, 'plants', 'missing', 0, 2));
 });
 
@@ -279,25 +282,22 @@ test('house invasion wins immediately even on the final wave boundary', () => {
   state.units = [injectedUnit('common', 0, 0.3)];
   const result = stepLive(state, 1 / 60).state;
   assert.equal(result.winner, 'zombies');
-  assert.equal(result.closing, true);
+  assert.equal(result.phase, 'finished');
 });
 
-test('the final wave drains remaining zombies instead of declaring a false plant victory', () => {
+test('the final wave declares survival immediately even with zombies still on the lawn', () => {
   const state = withoutCPU(createLiveMatch({ waves: 1, waveSeconds: 30 }));
   state.units = [injectedUnit('bucket', 0, 7, { move: 0 })];
   const last = advance(state, 30).state;
-  assert.equal(last.closing, true);
-  assert.equal(last.phase, 'live');
-  assert.equal(last.winner, null);
-  assert.throws(() => buyLiveUnit(last, 'plants', 'wallnut', 0, 1), /última oleada/);
-  assert.equal(awardLiveResources(pauseLive(last, true), 'plants', 100).resources.plants, 300);
-  const draw = advance(last, 120).state;
-  assert.equal(draw.phase, 'finished');
-  assert.equal(draw.winner, 'draw');
-  assert.deepEqual(stepLive(draw, 0.25).state, draw);
+  assert.equal(last.closing, false);
+  assert.equal(last.phase, 'finished');
+  assert.equal(last.winner, 'plants');
+  assert.throws(() => buyLiveUnit(last, 'plants', 'wallnut', 0, 1), /terminó/);
+  assert.throws(() => awardLiveResources(last, 'plants', 100), /terminó/);
+  assert.deepEqual(stepLive(last, 0.25).state, last);
 });
 
-test('plants win at closing only after all existing zombies are defeated', () => {
+test('plants win at the selected time limit if the house remains intact', () => {
   const state = withoutCPU(createLiveMatch({ waves: 1, waveSeconds: 30 }));
   const result = advance(state, 30).state;
   assert.equal(result.winner, 'plants');
@@ -378,22 +378,30 @@ test('public snapshots omit answers, RNG and mutable combat internals', () => {
 
 test('duel preparation supports both human teams and combat starts only when resumed', () => {
   const original = createLiveMatch({ mode: 'duel', startPaused: true, waves: 2, waveSeconds: 30 });
-  let state = buyLiveUnit(original, 'plants', 'sunflower', 0, 1);
-  state = buyLiveUnit(state, 'plants', 'sunflower', 1, 1);
+  let state = original;
   state = awardLiveResources(state, 'plants', 25);
-  state = selectLiveSide(state, 'zombies');
   state = awardLiveResources(state, 'zombies', 100);
-  state = buyLiveUnit(state, 'zombies', 'common', 0, 7);
-  state = buyLiveUnit(state, 'zombies', 'common', 1, 7);
+  state = beginLiveTacticalShopping(beginLiveInitialCoin(state));
+  const firstSide = state.activeSide;
+  for (let turn = 0; turn < 2; turn += 1) {
+    if (state.activeSide === 'plants') {
+      state = buyLiveUnit(state, 'plants', 'sunflower', 0, 1);
+      state = buyLiveUnit(state, 'plants', 'sunflower', 1, 1);
+    } else {
+      state = buyLiveUnit(state, 'zombies', 'common', 0, 7);
+      state = buyLiveUnit(state, 'zombies', 'common', 1, 7);
+    }
+    state = confirmLiveTacticalTurn(state, state.activeSide);
+  }
   assert.equal(original.units.length, 0);
-  assert.equal(state.activeSide, 'zombies');
-  assert.equal(state.humanSide, 'zombies');
+  assert.equal(state.activeSide, firstSide === 'plants' ? 'zombies' : 'plants');
+  assert.equal(state.humanSide, state.activeSide);
   assert.deepEqual(state.purchasesBySideThisWave, { plants: 2, zombies: 2 });
   assert.equal(state.humanPurchasesThisWave, 2);
   assert.equal(state.cpuNextActionAt, Infinity);
   assert.equal(state.cpuPurchasesThisWave, 0);
   assert.deepEqual(advance(state, 20), { state, events: [] });
-  const started = advance(pauseLive(state, false), 1).state;
+  const started = advance(resumeLiveTacticalWave(state), 1).state;
   assert.equal(started.elapsed, 1);
   assert.equal(started.initialStaging, false);
   assert(started.units.find(unit => unit.typeId === 'common').col < 7);
@@ -405,7 +413,7 @@ test('duel preparation supports both human teams and combat starts only when res
 });
 
 test('duel purchases are counted independently for both sides', () => {
-  let state = createLiveMatch({ mode: 'duel', startPaused: true });
+  let state = createLiveMatch({ mode: 'duel', startPaused: false });
   state.purchasesBySideThisWave.plants = 10;
   state.humanPurchasesThisWave = 10;
   state = buyLiveUnit(state, 'plants', 'wallnut', 0, 1);
@@ -417,7 +425,7 @@ test('duel purchases are counted independently for both sides', () => {
   assert.equal(state.humanPurchasesThisWave, 1);
 });
 
-test('continuous rewards have no per-wave answer limit, including paused and closing combat', () => {
+test('continuous rewards have no per-wave answer limit while preparing or fighting, but stop at the deadline', () => {
   let state = withoutCPU(createLiveMatch({ mode: 'duel', startPaused: true, waves: 1, waveSeconds: 30 }));
   for (const side of ['plants', 'zombies']) {
     for (let index = 0; index < 9; index += 1) state = awardLiveResources(state, side, 100);
@@ -425,15 +433,19 @@ test('continuous rewards have no per-wave answer limit, including paused and clo
     assert.equal(state.bonusThisWave[side], 900);
   }
   state.units = [injectedUnit('bucket', 0, 7, { move: 0 })];
-  state = advance(pauseLive(state, false), 30).state;
-  assert.equal(state.closing, true);
+  state = beginLiveTacticalShopping(beginLiveInitialCoin(state));
+  state = confirmLiveTacticalTurn(state, state.activeSide);
+  state = confirmLiveTacticalTurn(state, state.activeSide);
+  state = withoutCPU(resumeLiveTacticalWave(state));
+  state = advance(state, 25).state;
+  assert.equal(state.phase, 'live');
   for (const side of ['plants', 'zombies']) state = awardLiveResources(state, side, 100);
   assert.deepEqual(state.resources, { plants: 1200, zombies: 1200 });
   state.resources.plants = 1490;
   const awarded = awardLiveResources(state, 'plants', 100);
   assert.equal(awarded.resources.plants, 1500);
   assert.equal(awarded.stats.resourcesAwarded.plants - state.stats.resourcesAwarded.plants, 10);
-  const finished = advance(state, 120).state;
+  const finished = advance(state, 5).state;
   assert.equal(finished.phase, 'finished');
   assert.throws(() => awardLiveResources(finished, 'zombies', 25), /terminó/);
 });
@@ -461,7 +473,7 @@ test('sunflowers automatically credit each producer and emit real sun amounts ev
 });
 
 test('extra sunflowers can be planted and a waiting producer takes over without stored income', () => {
-  let state = createLiveMatch({ mode: 'duel', startPaused: true });
+  let state = pauseLive(createLiveMatch({ mode: 'duel', startPaused: false }), true);
   state = awardLiveResources(state, 'plants', 100);
   for (let row = 0; row < 5; row += 1) state = buyLiveUnit(state, 'plants', 'sunflower', row, 1);
   assert.equal(state.units.length, 5);
@@ -508,7 +520,7 @@ test('assistant waves gain fixed counts and scheduled stronger types without ada
   }
 });
 
-test('a full board skips assisted arrivals and closing never schedules another zombie', () => {
+test('a full board skips assisted arrivals and the final deadline schedules none afterward', () => {
   const state = createLiveMatch({ mode: 'duel', waves: 1, waveSeconds: 30 });
   state.units = Array.from({ length: LIVE_RULES.maxZombies }, (_, index) => injectedUnit('common', index % 5, 7, { id: `limit-${index}`, move: 0 }));
   const crowded = advance(state, 25);
@@ -516,10 +528,12 @@ test('a full board skips assisted arrivals and closing never schedules another z
   assert.equal(crowded.state.stats.assistantUnitsSpawned, 0);
   assert(!crowded.events.some(event => event.source === 'assistant-wave'));
   crowded.state.units.pop();
-  const closing = advance(crowded.state, 6);
-  assert.equal(closing.state.closing, true);
-  assert.equal(closing.state.units.length, LIVE_RULES.maxZombies - 1);
-  assert(!closing.events.some(event => event.source === 'assistant-wave'));
+  const finished = advance(crowded.state, 6);
+  assert.equal(finished.state.phase, 'finished');
+  assert.equal(finished.state.winner, 'plants');
+  assert.equal(finished.state.units.length, LIVE_RULES.maxZombies - 1);
+  assert(!finished.events.some(event => event.source === 'assistant-wave'));
+  assert.deepEqual(stepLive(finished.state, .25).state, finished.state);
 });
 
 test('six speed presets change only zombie movement and publish their chosen speed', () => {

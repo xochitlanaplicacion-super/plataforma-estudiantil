@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100" role="img" aria-label="Dos cerezas explosivas">
+  <defs>
+    <radialGradient id="cherry" cx="35%" cy="25%" r="70%"><stop stop-color="#ff8a61"/><stop offset=".42" stop-color="#e83728"/><stop offset="1" stop-color="#9b1218"/></radialGradient>
+    <linearGradient id="stem" x2="1" y2="1"><stop stop-color="#538c2b"/><stop offset="1" stop-color="#234717"/></linearGradient>
+  </defs>
+  <ellipse cx="51" cy="88" rx="37" ry="7" fill="#263512" opacity=".28"/>
+  <path d="M36 48 C35 28 43 13 59 11 M67 48 C65 28 62 19 59 11" fill="none" stroke="url(#stem)" stroke-width="7" stroke-linecap="round"/>
+  <path d="M59 14 C66 4 84 6 87 16 C74 24 65 22 59 14Z" fill="#69aa36" stroke="#244e18" stroke-width="2"/>
+  <circle cx="36" cy="63" r="24" fill="url(#cherry)" stroke="#78110d" stroke-width="3"/>
+  <circle cx="68" cy="63" r="23" fill="url(#cherry)" stroke="#78110d" stroke-width="3"/>
+  <path d="M19 57 C21 49 27 45 32 44 M53 58 C56 50 61 46 67 45" fill="none" stroke="#ffd1a0" stroke-width="5" stroke-linecap="round" opacity=".7"/>
+  <path d="M25 62 L34 61 M41 61 L48 62 M58 62 L65 61 M73 61 L80 62" stroke="#311d1a" stroke-width="3" stroke-linecap="round"/>
+  <path d="M31 73 Q37 77 43 72 M64 73 Q69 77 74 72" fill="none" stroke="#4e160e" stroke-width="2.5" stroke-linecap="round"/>
+</svg>

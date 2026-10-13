@@ -45,6 +45,8 @@ function zombie(id, name, cost, hp, damage, move, ability, description, sprite) 
 }
 
 const pea = "/assets/images/Plants/PB00.png";
+export const CHERRY_BLAST_DAMAGE = 1800;
+export const CHERRY_SHOP_COOLDOWN_SECONDS = 30;
 
 export const ZOMBIE_SPEED_PRESETS = Object.freeze([0.35, 0.55, 0.8, 1, 1.3, 1.7]);
 export function zombieSpeedForWave(round) {
@@ -78,6 +80,11 @@ export const PLANTS = Object.freeze([
         "potato-mine", "Patatapum", 25, 1, 0, "mine",
         "Se arma después de una ronda. Al pisarla, elimina a un zombi terrestre y desaparece. No alcanza a globos ni dragones flotantes.",
         { src: "/assets/images/Plants/PotatoMineSprite_132x93.png", width: 132, height: 93, startX: 0, startY: 0, endX: 10, endY: 0 },
+    ),
+    plant(
+        "cherry-bomb", "Petacereza", 450, 5, 0, "cherry-bomb",
+        "Trampa: explota sólo cuando un zombi entra en su casilla. Inflige 1,800 de daño en un área de 3 × 3; los derrotados se desintegran. Compra con recarga de 30 segundos de combate.",
+        { src: "/assets/images/Plants/CherryBomb.svg", width: 100, height: 100, startX: 0, startY: 0, endX: 0, endY: 0 },
     ),
     plant(
         "repeater", "Repetidora", 200, 6, 2, "repeater",

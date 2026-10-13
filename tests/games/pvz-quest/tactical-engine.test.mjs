@@ -7,7 +7,13 @@ function advance(state, seconds) {
   for (let left = seconds; left > 1e-7; left -= .25) { const next = stepLive(state, Math.min(left,.25)); state = next.state; events.push(...next.events); }
   return { state, events };
 }
-function resume(state) { state = beginLiveTacticalShopping(state); for (let turn = 0; turn < 2; turn++) state = confirmLiveTacticalTurn(state,state.activeSide); return resumeLiveTacticalWave(state); }
+function resume(state) {
+  assert.equal(state.tacticalPhase, 'briefing');
+  state = beginLiveInitialCoin(state);
+  state = beginLiveTacticalShopping(state);
+  for (let turn = 0; turn < 2; turn++) state = confirmLiveTacticalTurn(state,state.activeSide);
+  return resumeLiveTacticalWave(state);
+}
 
 test('all three continuous modes start Muy lenta automatically; durations extend to ten minutes', () => {
   for (const mode of ['duel','coop-plants','coop-zombies']) {
@@ -23,6 +29,7 @@ test('initial duel briefing forbids purchases until first questions and coin; no
   assert.throws(() => buyLiveUnit(state,'plants','sunflower',0,1),/moneda/);
   assert.throws(() => pauseLive(state,false),/moneda/);
   state = beginLiveInitialCoin(state); assert.equal(state.tacticalPhase,'coin');
+  assert.throws(() => awardLiveResources(state,'plants',25),/antes de lanzar la moneda/);
   assert.throws(() => beginLiveInitialCoin(state));
   assert.deepEqual(advance(state,10).state,state);
 });
@@ -58,31 +65,43 @@ test('wave warning does not pause combat; boundary freezes before next wave', ()
   assert.equal(state.paused,false);
   next = advance(state,5); state = next.state;
   assert.equal(state.paused,true); assert.equal(state.elapsed,30); assert.equal(state.round,1); assert.equal(state.pendingWave,2);
-  assert.equal(state.tacticalPhase,'coin'); assert.equal(state.stats.wavesCompleted,1);
+  assert.equal(state.tacticalPhase,'briefing'); assert.equal(state.stats.wavesCompleted,1);
+  assert.deepEqual(state.tacticalOrder,[]);
+  assert.throws(() => buyLiveUnit(state,'plants','sunflower',0,1),/moneda/);
   assert.deepEqual(advance(state,30).state,state);
 });
-test('rewards remain available during coin, both shops and ready; frozen combat and no duplicate income', () => {
+test('teacher rewards belong to briefing, never coin or shops; frozen combat and no duplicate income', () => {
   let state = advance(createLiveMatch({mode:'duel',waves:3,waveSeconds:30}),30).state;
+  assert.equal(state.tacticalPhase,'briefing');
   const units = structuredClone(state.units); const clock = state.elapsed; const income = structuredClone(state.stats.resourcesIncome);
   state = awardLiveResources(state,'plants',100); state = awardLiveResources(state,'zombies',100);
+  state = beginLiveInitialCoin(state);
+  assert.throws(() => awardLiveResources(state,'plants',100),/antes de lanzar la moneda/);
   state = beginLiveTacticalShopping(state); state = confirmLiveTacticalTurn(state,state.activeSide);
-  state = awardLiveResources(state,'plants',100); state = confirmLiveTacticalTurn(state,state.activeSide);
-  state = awardLiveResources(state,'zombies',100); state = resumeLiveTacticalWave(state);
+  assert.throws(() => awardLiveResources(state,'plants',100),/antes de lanzar la moneda/);
+  state = confirmLiveTacticalTurn(state,state.activeSide);
+  assert.throws(() => awardLiveResources(state,'zombies',100),/antes de lanzar la moneda/);
+  state = resumeLiveTacticalWave(state);
   assert.equal(state.elapsed,clock); assert.deepEqual(state.units,units); assert.deepEqual(state.stats.resourcesIncome,income);
-  assert.equal(state.round,2); assert.equal(state.waveElapsed,0); assert.equal(state.stats.resourcesAwarded.plants,200);
-  assert.equal(state.stats.resourcesAwarded.zombies,200);
+  assert.equal(state.round,2); assert.equal(state.waveElapsed,0); assert.equal(state.stats.resourcesAwarded.plants,100);
+  assert.equal(state.stats.resourcesAwarded.zombies,100);
+  state = awardLiveResources(state,'plants',25);
+  assert.equal(state.stats.resourcesAwarded.plants,125,'teacher may still award during active combat');
   assert.equal(advance(state,1).state.elapsed,31);
 });
 test('secret projection conceals tactical spending, new units and clipped prizes until reveal', () => {
-  let state = beginLiveTacticalShopping(beginLiveInitialCoin(createLiveMatch({mode:'duel',startPaused:true})));
-  const side = state.activeSide;
+  let state = createLiveMatch({mode:'duel',startPaused:true});
+  const side = 'plants';
   for (let index=0; index<13; index++) state = awardLiveResources(state,side,100);
+  state = beginLiveTacticalShopping(beginLiveInitialCoin(state));
+  if (state.activeSide !== side) state = confirmLiveTacticalTurn(state,state.activeSide);
   state = buyLiveUnit(state,side,side === 'plants' ? 'sunflower' : 'common',0,side === 'plants' ? 1 : 7);
   const secret = liveSnapshot(state);
   assert.deepEqual(secret.units,[]); assert.equal(secret.resources[side],1500);
   assert.equal(secret.stats.resourcesSpent[side],0); assert.equal(secret.stats.unitsPlaced[side],0);
   assert.equal('randomState' in secret,false); assert.equal('tacticalPublicBaseline' in secret,false);
-  state = confirmLiveTacticalTurn(state,state.activeSide); state = confirmLiveTacticalTurn(state,state.activeSide);
+  state = confirmLiveTacticalTurn(state,state.activeSide);
+  if (state.tacticalPhase === 'shopping') state = confirmLiveTacticalTurn(state,state.activeSide);
   state = resumeLiveTacticalWave(state); assert.equal(liveSnapshot(state).units.length,1);
   assert.equal(liveSnapshot(state).resources[side],side === 'plants' ? 1450 : 1475);
 });
@@ -97,17 +116,18 @@ test('cooperative tactical CPU plants pay for up to two units, zombie CPU never 
     else assert.equal(state.stats.resourcesSpent.zombies,0);
   }
 });
-test('occupied plants cannot be replaced; move and uproot operations do not exist', () => {
+test('occupied plants cannot be replaced by another purchase', () => {
   let state = beginLiveTacticalShopping(beginLiveInitialCoin(createLiveMatch({mode:'duel',startPaused:true})));
   if (state.activeSide !== 'plants') state = confirmLiveTacticalTurn(state,state.activeSide);
   state = buyLiveUnit(state,'plants','sunflower',0,1);
   assert.throws(() => buyLiveUnit(state,'plants','sunflower',0,1),/ocupada/);
-  assert.equal('moveLivePlant' in engine,false); assert.equal('removeLivePlant' in engine,false);
 });
-test('final wave closes without a new coin; survivors advance and teacher still awards', () => {
-  let state = advance(createLiveMatch({mode:'duel',waves:1,waveSeconds:30}),30).state;
-  assert.equal(state.closing,true); assert.equal(state.tacticalPhase,null); assert.equal(state.paused,false);
-  state = awardLiveResources(state,'plants',100); assert.equal(state.stats.resourcesAwarded.plants,100);
+test('final wave ends at its selected deadline without a new coin or extra teacher awards', () => {
+  const state = advance(createLiveMatch({mode:'duel',waves:1,waveSeconds:30}),30).state;
+  assert.equal(state.phase,'finished'); assert.equal(state.winner,'plants');
+  assert.equal(state.tacticalPhase,null); assert.equal(state.stats.wavesCompleted,1);
+  assert.throws(() => awardLiveResources(state,'plants',100),/terminó/);
+  assert.deepEqual(advance(state,30).state,state);
 });
 
 test('automatic acceleration waits for the tactical reveal, not the paused shopping boundary', () => {

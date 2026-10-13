@@ -224,11 +224,84 @@ test('classic biting accumulates 4-damage pulses every 40 ms, rather than roundi
   assert(Math.abs(result.state.units.find(item => item.typeId === 'common').biteCooldown - 1.04) < 1e-8);
 });
 
-for (const [plantId, seconds] of [['sunflower', 3], ['wallnut', 40]]) {
+test('Classic bites ordinary plants for exactly 55 integer HP per second and records prior damage', () => {
+  const state = match();
+  state.units = [unit('sunflower', 0, 4), unit('common', 0, 4.42)];
+  const result = advance(state, 1);
+  const flower = result.state.units.find(item => item.typeId === 'sunflower');
+  assert.equal(result.events.filter(event => event.type === 'bite').length, 25);
+  assert.equal(flower.hp, 245);
+  assert.equal(flower.everDamaged, true);
+  assert(result.events.filter(event => event.type === 'damage' && event.side === 'plants')
+    .every(event => Number.isInteger(event.amount)));
+});
+
+test('continuous cherry costs 450, allows planting onto a zombie and blasts 3×3 on contact', () => {
+  const state = match('classic', { mode: 'duel' });
+  state.resources.plants = 450;
+  state.units = [unit('common', 2, 4.2, 'classic', { move: 0, id: 'near' }),
+    unit('dragon', 2, 5.2, 'classic', { move: 0, id: 'dragon' }),
+    unit('common', 0, 4.2, 'classic', { move: 0, id: 'far' })];
+  const purchased = buyLiveUnit(state, 'plants', 'cherry-bomb', 2, 4);
+  const cherry = purchased.units.find(item => item.typeId === 'cherry-bomb');
+  assert.equal(purchased.resources.plants, 0);
+  assert.equal(cherry.paidCost, 450);
+  assert.equal(cherry.purchasedBy, 'plants');
+  assert.equal(cherry.readyAt, 0);
+  const result = advance(purchased, 1 / 60);
+  assert.equal(result.events.filter(event => event.type === 'cherry-explosion').length, 1);
+  assert.equal(result.state.units.some(item => item.id === 'near'), false);
+  assert.equal(result.events.find(event => event.type === 'defeat' && event.unitId === 'near').reason, 'ash');
+  assert.equal(result.state.units.find(item => item.id === 'dragon').hp, 200);
+  assert.equal(result.state.units.find(item => item.id === 'far').hp, 270);
+  assert.equal(result.state.units.some(item => item.typeId === 'cherry-bomb'), false);
+});
+
+test('continuous cherry waits indefinitely until touched and its 30-second shop cooldown freezes on pause', () => {
+  const state = match('classic', { mode: 'duel' });
+  state.resources.plants = 1000;
+  const purchased = buyLiveUnit(state, 'plants', 'cherry-bomb', 2, 4);
+  assert.equal(availableLiveUnits(purchased, 'plants').find(item => item.id === 'cherry-bomb').cooldownRemaining, 30);
+  assert.throws(() => buyLiveUnit(purchased, 'plants', 'cherry-bomb', 1, 4), /recarga: 30 s/);
+  const paused = pauseLive(purchased, true);
+  assert.equal(advance(paused, 5).state.elapsed, 0);
+  const waiting = advance(purchased, 2).state;
+  assert(waiting.units.some(item => item.typeId === 'cherry-bomb'));
+  assert.equal(availableLiveUnits(waiting, 'plants').find(item => item.id === 'cherry-bomb').cooldownRemaining, 28);
+  waiting.units.push(unit('common', 2, 4.2, 'classic', { id: 'entrant', move: 0 }));
+  const blast = advance(waiting, 1 / 60);
+  assert(blast.events.some(event => event.type === 'cherry-explosion'));
+  assert.equal(blast.state.units.some(item => item.id === 'entrant'), false);
+});
+
+for (const profile of ['classic', 'aula']) {
+  test(`${profile} Tripitidora fires in three rows and shows harmless peas in empty rows`, () => {
+    const state = match(profile);
+    state.units = [unit('threepeater', 2, 2, profile), unit('dragon', 2, 7, profile, { move: 0 })];
+    const interval = profileRules(profile).shotSeconds;
+    const result = advance(state, interval);
+    const shots = result.events.filter(event => event.type === 'shot');
+    assert.deepEqual(shots.map(event => event.row).sort(), [1, 2, 3]);
+    assert(shots.every(event => event.fromRow === 2));
+    assert.equal(shots.filter(event => event.targetId).length, 1);
+    assert.equal(result.state.units.find(item => item.typeId === 'dragon').hp,
+      getUnit('dragon', profile).hp - getUnit('threepeater', profile).damage);
+  });
+}
+
+test('one plant per tile is enforced even when a zombie stands on that tile', () => {
+  let state = pauseLive(match('classic', { mode: 'duel' }), true);
+  state.units = [unit('common', 2, 4.2, 'classic', { move: 0 })];
+  state = buyLiveUnit(state, 'plants', 'peashooter', 2, 4);
+  assert.throws(() => buyLiveUnit(state, 'plants', 'sunflower', 2, 4), /ocupada por una planta/);
+});
+
+for (const [plantId, seconds] of [['sunflower', 5.48], ['wallnut', 40]]) {
   test(`one classic zombie eats a ${plantId} in ${seconds} seconds`, () => {
     const state = match();
     state.units = [unit(plantId, 0, 4), unit('common', 0, 4.42)];
-    const before = advance(state, seconds - 1 / 60);
+    const endingTick = Math.ceil(seconds * 60) / 60;
+    const before = advance(state, endingTick - 1 / 60);
     assert(before.state.units.some(item => item.typeId === plantId));
     const after = advance(before.state, 1 / 60);
     assert.equal(after.state.units.some(item => item.typeId === plantId), false);

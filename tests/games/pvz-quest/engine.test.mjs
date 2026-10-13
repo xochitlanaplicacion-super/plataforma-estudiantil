@@ -100,6 +100,26 @@ test('the first planning side alternates by round and confirmed plans lock', () 
   assert.throws(() => continuePlanning(resolved.state), /cambio/);
 });
 
+test('a coin winner may explicitly begin duel planning without changing cooperative ownership', () => {
+  const duel = createMatch({ mode: 'duel' });
+  const original = clone(duel);
+  const zombiesFirst = beginPlanning(duel, 'zombies');
+  assert.equal(zombiesFirst.activeSide, 'zombies');
+  assert.equal(zombiesFirst.phase, 'planning');
+  assert.deepEqual(duel, original);
+  assert.equal(continuePlanning(commitPlan(zombiesFirst)).activeSide, 'plants');
+  assert.equal(beginPlanning(duel, 'plants').activeSide, 'plants');
+  assert.throws(() => beginPlanning(duel, 'other'), /Elige el equipo/);
+
+  const coopPlants = createMatch({ mode: 'coop-plants' });
+  const coopZombies = createMatch({ mode: 'coop-zombies' });
+  assert.equal(beginPlanning(coopPlants).activeSide, 'plants');
+  assert.equal(beginPlanning(coopZombies).activeSide, 'zombies');
+  assert.equal(beginPlanning(coopPlants, 'plants').activeSide, 'plants');
+  assert.throws(() => beginPlanning(coopPlants, 'zombies'), /comienza el equipo del salón/);
+  assert.throws(() => beginPlanning(coopZombies, 'plants'), /comienza el equipo del salón/);
+});
+
 test('secret public snapshot reveals neither pending orders nor resource spending', () => {
   let state = beginPlanning(createMatch({ planning: 'secret' }));
   const initialSnapshot = publicSnapshot(state);
@@ -307,7 +327,7 @@ test('cooperative zombie mode has starter defenses and one explicitly free commo
 test('unit availability reports affordability and returns isolated catalog entries', () => {
   const state = createMatch(); state.resources.plants = 0;
   const units = availableUnits(state, 'plants');
-  assert.equal(units.length, 10);
+  assert.equal(units.length, 11);
   assert.ok(units.every(unit => !unit.affordable && unit.disabledReason));
   units[0].cost = 0;
   assert.notEqual(getUnit(units[0].id).cost, 0);

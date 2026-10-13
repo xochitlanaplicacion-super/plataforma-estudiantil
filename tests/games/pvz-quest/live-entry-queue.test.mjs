@@ -260,10 +260,14 @@ for (const profile of ['aula', 'classic']) {
       unit('bucket', 0, 7, profile, { id: 'old-waiting', entryPending: true }),
     ];
     const boundary = stepLive(state, LIVE_RULES.fixedStep);
-    assert.equal(boundary.state.tacticalPhase, 'coin');
+    assert.equal(boundary.state.tacticalPhase, 'briefing');
     assert.equal(boundary.state.units.find(item => item.id === 'old-waiting').entryPending, true);
     assert.equal(boundary.events.some(event => event.type === 'deployment'), false);
-    let shopping = beginLiveTacticalShopping(boundary.state);
+    assert.deepEqual(stepLive(boundary.state, 0.25), { state: boundary.state, events: [] });
+    const coin = beginLiveInitialCoin(boundary.state);
+    assert.equal(coin.tacticalPhase, 'coin');
+    assert.deepEqual(stepLive(coin, 0.25), { state: coin, events: [] });
+    let shopping = beginLiveTacticalShopping(coin);
     for (let index = 0; index < 2; index += 1) {
       if (shopping.activeSide === 'zombies') shopping = buyLiveUnit(shopping, 'zombies', 'common', 0, 7);
       assert.deepEqual(stepLive(shopping, 0.25), { state: shopping, events: [] });
@@ -334,17 +338,18 @@ for (const profile of ['aula', 'classic']) {
     assert.throws(() => buyLiveUnit(state, 'zombies', 'common', 0, 7), /recursos/);
   });
 
-  test(`${profile}: the final horde includes waiting zombies and does not declare a premature plant victory`, () => {
-    const state = match(profile);
-    state.closing = true;
-    state.closingAt = 0;
+  test(`${profile}: waiting zombies stay queued and cannot extend the match past the final deadline`, () => {
+    const state = match(profile, { waves: 1, waveSeconds: 30 });
+    state.tickCount = 30 * 60 - 1;
+    state.elapsed = state.tickCount / 60;
+    state.assistantNextActionAt = Infinity;
     state.units = [unit('common', 0, 7, profile, { id: 'last-waiting', entryPending: true })];
     const result = stepLive(state, LIVE_RULES.fixedStep);
-    assert.equal(result.state.phase, 'live');
-    assert.equal(result.state.winner, null);
-    assert.equal(result.state.units[0].entryPending, false);
-    assert.equal(result.events.filter(event => event.type === 'deployment').length, 1);
-    assert.throws(() => buyLiveUnit(result.state, 'zombies', 'common', 0, 7), /última oleada/);
+    assert.equal(result.state.phase, 'finished');
+    assert.equal(result.state.winner, 'plants');
+    assert.equal(result.state.units[0].entryPending, true);
+    assert.equal(result.events.filter(event => event.type === 'deployment').length, 0);
+    assert.throws(() => buyLiveUnit(result.state, 'zombies', 'common', 0, 7), /terminó/);
   });
 
   test(`${profile}: queue state and combat remain deterministic at 4, 10 and 60 FPS`, () => {

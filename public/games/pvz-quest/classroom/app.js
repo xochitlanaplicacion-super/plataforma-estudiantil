@@ -10,6 +10,7 @@ import { compactCombatEvents } from './combat-events.js';
 import { countdownView, renderCountdown } from './hud-countdown.js';
 import { assetURL, platformMode, questionsAPI, statusAPI } from './runtime.js';
 import { createWavePresentation } from './wave-presentation.js';
+import { uprootPlant } from './shovel.js';
 
 const $ = selector => document.querySelector(selector);
 const sideName = side => side === 'plants' ? 'Plantas' : side === 'draw' ? 'Empate' : 'Zombis';
@@ -33,7 +34,7 @@ let approved = false;
 let pool = null;
 let usedPrompts = [];
 let quiz = null;
-let answered = { plants: false, zombies: false };
+let questionCounts = { plants: 0, zombies: 0 };
 let clock = { end: 0, remaining: 0, kind: '', paused: false, expired: false };
 let toastTimeout;
 let projection = null;
@@ -63,10 +64,11 @@ const renderer = new BoardRenderer($('#board'), { onCell: ({ row, col }) => plac
 const continuous = () => settings?.tempo === 'continuous';
 const snapshot = () => continuous() ? livePublicSnapshot() : publicSnapshot(match);
 const quizElement = part => $(`${continuous() ? '#live-quiz-' : '#quiz-'}${part}`);
-const controlsAllowed = () => match && (continuous() ? match.phase === 'live' : match.phase === 'resources');
+const controlsAllowed = () => match && (continuous() ? match.phase === 'live' && (!match.tacticalPhase || match.tacticalPhase === 'briefing') : match.phase === 'resources');
 const award = (state,side,amount) => continuous() ? awardLiveResources(state,side,amount) : grantResources(state,side,amount);
 const currentProfileId = () => match?.config.balanceProfile ?? settings?.balanceProfile ?? DEFAULT_BALANCE_PROFILE;
 const getUnit = id => catalogUnit(id, currentProfileId());
+const canAwardNow = () => controlsAllowed() && (!continuous() || !match.tacticalPhase || match.tacticalPhase === 'briefing');
 
 function entryQueueCaption(units, plans = []) {
   const lanes = entranceView(units, plans).queued.map((count, row) => count ? `${String.fromCharCode(65 + row)}: ${count}` : '').filter(Boolean);
@@ -107,13 +109,8 @@ function livePublicSnapshot() {
   return view;
 }
 
-function liveQuestionButtons() {
-  if (settings.questionMode !== 'bank') return '';
-  return humanSides().map(side => `<button type="button" data-action="quiz" data-side="${side}" ${quiz || !pool?.remaining.length ? 'disabled' : ''}>Pregunta: ${sideName(side)}</button>`).join('');
-}
-
 function livePreparationButton() {
-  if (match.tacticalPhase === 'briefing') return `<button class="primary" type="button" data-action="initial-coin" ${settings.questionMode === 'bank' && humanSides().some(side => !answered[side]) ? 'disabled' : ''}>Lanzar moneda y abrir tiendas 🪙</button>`;
+  if (match.tacticalPhase === 'briefing') return `<button class="primary" type="button" data-action="initial-coin" ${quiz ? 'disabled' : ''}>Lanzar moneda y abrir tiendas 🪙</button>`;
   if (match.tacticalPhase === 'coin') return '<strong>La moneda decide quién compra primero…</strong>';
   if (match.tacticalPhase === 'shopping') return `<button class="primary" type="button" data-action="tactical-confirm" data-side="${match.activeSide}">Confirmar compras: ${sideName(match.activeSide)}${humanSides().includes(match.activeSide) ? '' : ' · computadora'} ✓</button>`;
   if (match.tacticalPhase === 'ready') return `<button id="live-deploy" class="primary" type="button" data-action="tactical-resume">${match.initialStaging ? 'Revelar ambos equipos y comenzar' : `Revelar compras y comenzar oleada ${match.pendingWave}`} ▶</button>`;
@@ -122,8 +119,34 @@ function livePreparationButton() {
   return `<button class="primary" type="button" data-action="live-lock" ${livePreparedSides[match.activeSide] ? 'disabled' : ''}>Confirmar primera compra: ${sideName(match.activeSide)} ✓</button>`;
 }
 
-function focusedLiveRewardsHTML() {
-  return humanSides().map(side => `<span class="live-focus-rewards"><strong>${side === 'plants' ? '☀' : '🧠'}</strong>${[25,50,100].map(amount => `<button type="button" data-action="focus-award" data-side="${side}" data-amount="${amount}" aria-label="Premiar ${sideName(side)} con ${amount}">+${amount}</button>`).join('')}</span>`).join('');
+function teacherRewardsHTML() {
+  return `<div class="teacher-reward-grid">${humanSides().map(side => {
+    return `<section class="teacher-reward-team ${side}"><h3>${side === 'plants' ? '☀' : '🧠'} ${sideName(side)}</h3><strong>${match.resources[side]} ${side === 'plants' ? 'soles' : 'cerebros'}</strong><div class="button-row">${[25,50,100].map(amount => `<button type="button" data-action="award" data-side="${side}" data-amount="${amount}" ${!canAwardNow() || (!continuous() && match.bonusThisRound[side] + amount > 300) ? 'disabled' : ''}>+${amount}</button>`).join('')}</div>${settings.questionMode === 'bank' ? `<small>${questionCounts[side]} ${questionCounts[side] === 1 ? 'pregunta realizada' : 'preguntas realizadas'}</small><button type="button" data-action="quiz" data-side="${side}" ${quiz || !pool?.remaining.length ? 'disabled' : ''}>${questionCounts[side] ? 'Otra pregunta' : 'Hacer pregunta'} para ${sideName(side)}</button>` : ''}</section>`;
+  }).join('')}</div>`;
+}
+
+function teacherBriefingHTML() {
+  return `<div class="teacher-briefing"><header class="teacher-briefing-header"><div><p class="eyebrow">RONDA DEL PROFESOR · ${match.initialStaging ? 'INICIO' : `OLEADA ${match.pendingWave}`}</p><h2>Preguntas y premios</h2><p>Haz varias preguntas a cada equipo si lo deseas. Sólo al pulsar «Lanzar moneda» se abrirán las compras.</p></div><span>① Preguntas → ② Moneda → ③ Compras</span></header>${teacherRewardsHTML()}<footer class="teacher-briefing-footer">${settings.questionMode === 'bank' ? `<button type="button" data-action="bank">Ampliar banco (${pool?.remaining.length || 0})</button><button type="button" data-action="manual">Premios manuales</button>` : ''}${livePreparationButton()}</footer></div>`;
+}
+
+function updateTeacherTools(rebuild = false) {
+  const button = $('#teacher-tools-button');
+  if (button) button.hidden = !match || !continuous() || match.phase !== 'live' || !!match.tacticalPhase || isPublic;
+  const dialog = $('#teacher-tools');
+  if (!dialog?.open) return;
+  if (!canAwardNow()) { dialog.close(); return; }
+  // The live loop runs many times a second. Replacing the dialog's buttons on
+  // every frame would discard a touch/click before it can finish on mobile.
+  if (rebuild) $('#teacher-tools-content').innerHTML = teacherRewardsHTML();
+  else for (const side of humanSides()) {
+    const section = dialog.querySelector(`.teacher-reward-team.${side}`);
+    if (!section) continue;
+    const balance = section.querySelector('strong');
+    if (balance) balance.textContent = `${match.resources[side]} ${side === 'plants' ? 'soles' : 'cerebros'}`;
+    for (const button of section.querySelectorAll('[data-action="award"]')) button.disabled = !canAwardNow();
+    const question = section.querySelector('[data-action="quiz"]');
+    if (question) question.disabled = !!quiz || !pool?.remaining.length;
+  }
 }
 
 // Size only the CSS presentation. Never reset the 960×540 bitmap, simulation
@@ -154,9 +177,11 @@ function focusActionsHTML() {
   if (!match) return '';
   const open = '<button type="button" data-action="focus">Ver controles / tienda</button>';
   if (busy) return '<strong>Combate en curso</strong>';
-  if (continuous() && match.phase === 'live') return `<span>${match.tacticalPhase ? 'Preparación táctica' : match.initialStaging ? 'Primera compra' : 'Compras directas'}: ${sideName(match.activeSide)}${selection ? ` · ${escape(getUnit(selection).name)}` : ''}${match.paused ? ' · en pausa' : ''}</span>${focusedLiveRewardsHTML()}${livePreparationButton()}${liveQuestionButtons()}${open}`;
-  if (match.phase === 'planning') return `<span>${sideName(match.activeSide)} · ${match.plans[match.activeSide].length} compras${selection ? ` · ${escape(getUnit(selection).name)}` : ''}</span><button type="button" class="primary" data-action="commit">Confirmar compras ✓</button>${open}`;
-  if (match.phase === 'resources') return `<span>Responder y ganar soles / cerebros</span><button type="button" data-action="focus">Abrir preguntas / premios</button><button class="primary" type="button" data-action="plan" ${settings.questionMode === 'bank' && humanSides().some(side => !answered[side]) ? 'disabled' : ''}>Comenzar compras →</button>`;
+  if (continuous() && match.phase === 'live') return match.tacticalPhase === 'briefing'
+    ? `<strong>Preguntas y premios del profesor</strong>${livePreparationButton()}${open}`
+    : `<span>${match.tacticalPhase ? 'Preparación táctica' : 'Compras directas'}: ${sideName(match.activeSide)}${selection ? ` · ${selection === 'shovel' ? 'Pala' : escape(getUnit(selection).name)}` : ''}${match.paused ? ' · en pausa' : ''}</span>${match.tacticalPhase === 'shopping' || !match.tacticalPhase ? livePreparationButton() : ''}${!match.tacticalPhase ? '<button type="button" data-action="teacher-tools">Profesor: premios</button>' : ''}${open}`;
+  if (match.phase === 'planning') return `<span>${sideName(match.activeSide)} · ${match.plans[match.activeSide].length} compras${selection ? ` · ${selection === 'shovel' ? 'Pala' : escape(getUnit(selection).name)}` : ''}</span><button type="button" class="primary" data-action="commit">Confirmar compras ✓</button>${open}`;
+  if (match.phase === 'resources') return `<span>Responder y ganar soles / cerebros</span><button type="button" data-action="focus">Abrir preguntas / premios</button><button class="primary" type="button" data-action="plan" ${quiz ? 'disabled' : ''}>${settings.mode === 'duel' ? 'Lanzar moneda y abrir tiendas 🪙' : 'Comenzar compras →'}</button>`;
   if (match.phase === 'handover') return `<span>Cambio de equipo</span><button class="primary" type="button" data-action="handover">Abrir siguiente turno →</button>`;
   if (['ready','cleanup'].includes(match.phase)) return `<span>${match.phase === 'cleanup' ? 'Última horda' : 'Planes listos'}</span><button class="primary" type="button" data-action="resolve">${match.phase === 'cleanup' ? 'Resolver siguiente paso' : 'Revelar y resolver ronda'} →</button>`;
   return `<strong>${match.winner === 'draw' ? 'Empate' : `¡Ganan ${sideName(match.winner)}!`}</strong><button class="primary" type="button" data-action="confirm-exit">Preparar otra clase</button>`;
@@ -338,10 +363,41 @@ function transition(operation) {
   } catch (error) { notify(error.message); }
 }
 
+function beginRoundCoin() {
+  if (!match || continuous() || match.config.mode !== 'duel' || match.phase !== 'resources' || quiz || busy) return;
+  const toss = new Uint32Array(1);
+  crypto.getRandomValues(toss);
+  const first = toss[0] & 1 ? 'plants' : 'zombies';
+  const round = match.round;
+  const token = runToken;
+  busy = true;
+  resetClock();
+  $('#status').textContent = 'La moneda decide quién compra primero…';
+  $('#controls').innerHTML = '<div class="phase-controls"><strong>Girando la moneda…</strong><span>Los premios ya están cerrados. Después compra cada equipo en su turno.</span></div>';
+  updateBoardFocus();
+  publish(publicSnapshot(match), 'La moneda decide quién compra primero…');
+  channel?.postMessage({ type: 'round-coin', side: first, round });
+  presentation.showTacticalCoin({ side: first, wave: round, label: `Moneda · ronda ${round}`, onComplete: () => {
+    if (token !== runToken || match?.phase !== 'resources') return;
+    busy = false;
+    transition(state => beginPlanning(state, first));
+    resetClock('planning');
+  } });
+}
+
 function place(row, col) {
   if (!match || busy || (continuous() ? match.phase !== 'live' : match.phase !== 'planning') || !selection || isPublic) return;
   if (continuous() && !match.tacticalPhase && match.initialStaging && livePreparedSides[match.activeSide]) return notify('Este equipo ya confirmó su primera compra. Revela ambos planes para comenzar.');
   try {
+    if (selection === 'shovel') {
+      const plant = match.units.find(unit => unit.side === 'plants' && unit.row === row && unit.col === col && unit.hp > 0);
+      if (!plant) return notify('La pala necesita una planta ya colocada en esa casilla. Si aún está en el plan, usa ↶ para cancelar la compra.');
+      match = uprootPlant(match, plant.id);
+      selectedCell = { row, col };
+      sound('plantation');
+      render();
+      return;
+    }
     match = continuous() ? buyLiveUnit(match, match.activeSide, selection,row,col) : addOrder(match, match.activeSide, selection, row, col);
     sound('plantation');
     selectedCell = { row, col };
@@ -352,19 +408,20 @@ function place(row, col) {
 
 function renderCards(side) {
   const cards = (continuous() ? availableLiveUnits : availableUnits)(match, side);
-  return `<div class="cards" aria-label="Tienda de ${sideName(side)}">${cards.map(unit => `<button type="button" class="unit-card ${side} ${selection === unit.id ? 'selected' : ''}" data-action="select" data-id="${unit.id}" ${unit.affordable ? '' : 'disabled'} title="${escape(unit.disabledReason || (continuous() ? liveDescription(unit) : unit.description))}"><canvas data-card="${unit.id}" width="100" height="80"></canvas><strong>${escape(unit.name)}</strong><small><span class="card-price">${side === 'plants' ? '☀' : '🧠'} ${unit.cost}</span><span class="card-hp">♥ ${unit.hp}</span></small></button>`).join('')}</div>`;
+  const shovel = side === 'plants' ? `<button type="button" class="unit-card shovel-card ${selection === 'shovel' ? 'selected' : ''}" data-action="shovel" aria-pressed="${selection === 'shovel'}" title="Retira una planta propia que nunca recibió daño y recupera todos sus soles. Después puedes comprarla y plantarla en otra casilla."><svg viewBox="0 0 64 64" width="43" height="30" aria-hidden="true"><path d="M17 6 9 14l7 7 6-6 5 5-8 8 3 3 8-8 22 22c2 2 5 2 7 0s2-5 0-7L37 16l8-8-3-3-8 8-5-5 6-6-7-7z" fill="#956031" stroke="#482b16" stroke-width="2"/><path d="M10 40c0 11 7 18 18 18 0-8-6-16-18-18z" fill="#cbb59a" stroke="#533b2c" stroke-width="3"/></svg><strong>🪏 Pala</strong><small>Reembolso</small></button>` : '';
+  return `<div class="cards" aria-label="Tienda de ${sideName(side)}">${cards.map(unit => `<button type="button" class="unit-card ${side} ${selection === unit.id ? 'selected' : ''}" data-action="select" data-id="${unit.id}" ${unit.affordable ? '' : 'disabled'} title="${escape(unit.disabledReason || (continuous() ? liveDescription(unit) : unit.description))}"><canvas data-card="${unit.id}" width="100" height="80"></canvas><strong>${escape(unit.name)}</strong><small><span class="card-price">${side === 'plants' ? '☀' : '🧠'} ${unit.cost}</span><span class="card-hp">♥ ${unit.hp}</span></small>${unit.id === 'cherry-bomb' ? `<span class="card-cooldown" ${unit.cooldownRemaining > 0 ? '' : 'hidden'}>⏳ ${Math.ceil(unit.cooldownRemaining || 0)} s</span>` : ''}</button>`).join('')}${shovel}</div>`;
 }
 
 function cardInfoHTML(live = false) {
-  const unit = selection ? getUnit(selection) : null;
-  return `<details class="card-info"><summary>${unit ? `Habilidad: ${escape(unit.name)}` : 'Cómo comprar / habilidades'}</summary><p>${unit ? escape(live ? liveDescription(unit) : unit.description) : 'Escoge una tarjeta y toca la casilla. Plantas en 1–6; zombis en entrada 7. Los precios y la vida aparecen en cada tarjeta.'}</p></details>`;
+  const unit = selection && selection !== 'shovel' ? getUnit(selection) : null;
+  return `<details class="card-info"><summary>${selection === 'shovel' ? 'Cómo usar la pala' : unit ? `Habilidad: ${escape(unit.name)}` : 'Cómo comprar / habilidades'}</summary><p>${selection === 'shovel' ? 'Toca una planta tuya que nunca haya sufrido daño. Recuperas todos los soles pagados; elige su tarjeta para volver a plantarla en una casilla libre de plantas. Si recibió daño, no podrás retirarla.' : unit ? escape(live ? liveDescription(unit) : unit.description) : 'Escoge una tarjeta y toca la casilla. Plantas en 1–6; zombis en entrada 7. Los precios y la vida aparecen en cada tarjeta.'}</p></details>`;
 }
 
 function controlsHTML() {
   if (busy) return '<div class="phase-controls"><strong>Combate en curso</strong><span>Observen el jardín · cada paso se ejecuta una sola vez.</span></div>';
   if (continuous() && match.phase === 'live') return liveControlsHTML();
   if (match.phase === 'resources') {
-    return `<div class="phase-controls"><strong>Responder y ganar recursos</strong>${humanSides().map(side => `<div class="reward-section"><strong>${sideName(side)}</strong><div class="button-row">${settings.questionMode === 'bank' ? `<button type="button" data-action="quiz" data-side="${side}" ${answered[side] ? 'disabled' : ''}>${answered[side] ? 'Pregunta resuelta ✓' : 'Responder pregunta'}</button>` : [25,50,100].map(amount => `<button type="button" data-action="award" data-side="${side}" data-amount="${amount}" ${match.bonusThisRound[side] + amount > 300 ? 'disabled' : ''}>+${amount}</button>`).join('')}</div></div>`).join('')}<button class="primary" type="button" data-action="plan" ${settings.questionMode === 'bank' && humanSides().some(side => !answered[side]) ? 'disabled' : ''}>Comenzar compras →</button>${settings.questionMode === 'bank' ? `<details class="shop-help"><summary>Banco: ${pool?.remaining.length || 0} preguntas</summary><div><button type="button" data-action="bank">Ampliar banco revisado</button><button type="button" data-action="manual">Pasar a premio manual</button></div></details>` : '<details class="shop-help"><summary>Ayuda</summary><p>Concede recursos por una respuesta o un buen debate. Para jugar sin preguntas, continúa sin premios.</p></details>'}</div>`;
+    return `<div class="teacher-briefing"><header class="teacher-briefing-header"><div><p class="eyebrow">RONDA DEL PROFESOR · RONDA ${match.round}</p><h2>Preguntas y premios</h2><p>Haz tantas preguntas como necesites. Sólo al pulsar el botón de ${settings.mode === 'duel' ? 'la moneda' : 'compras'} se cierra esta fase.</p></div><span>① Preguntas → ② ${settings.mode === 'duel' ? 'Moneda → ③ Compras' : 'Compras → ③ Combate'}</span></header>${teacherRewardsHTML()}<footer class="teacher-briefing-footer"><button class="primary" type="button" data-action="plan" ${quiz ? 'disabled' : ''}>${settings.mode === 'duel' ? 'Lanzar moneda y abrir tiendas 🪙' : 'Comenzar compras →'}</button>${settings.questionMode === 'bank' ? `<button type="button" data-action="bank">Ampliar banco (${pool?.remaining.length || 0})</button><button type="button" data-action="manual">Premios manuales</button>` : ''}</footer></div>`;
   }
   if (match.phase === 'planning') {
     const side = match.activeSide;
@@ -378,11 +435,14 @@ function controlsHTML() {
 }
 
 function liveControlsHTML() {
+  if (match.tacticalPhase === 'briefing') return teacherBriefingHTML();
+  if (match.tacticalPhase === 'coin') return '<div class="phase-controls"><strong>La moneda está decidiendo el primer equipo… 🪙</strong></div>';
+  if (match.tacticalPhase === 'ready') return `<div class="phase-controls"><strong>Las compras terminaron. ¡Preparen la siguiente oleada!</strong>${livePreparationButton()}</div>`;
   const side = match.activeSide;
   const locked = match.initialStaging && livePreparedSides[side];
   const combat = profileRules(currentProfileId());
-  const rules = `Compra mientras haya saldo y espacio, sin cupo de compras por oleada. Recarga de 1 s por tarjeta durante el combate para evitar dobles clics; límite técnico de ${LIVE_RULES.maxZombies} zombis simultáneos. Hasta 4 girasoles producen 25 soles cada 12 s y se recogen solos; puedes plantar más, pero no aumentan la producción. La velocidad sube automáticamente: Muy lenta → Lenta → Tranquila → Normal → Rápida → Muy rápida (máximo desde la oleada 6). Un cambio manual dura hasta la próxima oleada. El hielo frena 30% durante 4 s renovables y los pinchos 40% mientras los cruzan; se usa el efecto mayor, no se multiplican. Globos y dragones evitan los pinchos. La carnívora mastica 20 s antes de devorar otra vez. El copiloto envía 5 zombis en la primera oleada, después uno adicional por oleada hasta 20: cono desde la 2, cubeta 3, jugador 4, globo 5 y dragón 6. Los premios siguen habilitados durante combate y pausas; saldo máximo 1,500. La moneda fija el orden de compra, incluida la preparación inicial después de las preguntas. Cada unidad descuenta su precio al colocarla; confirmar no cobra otra vez. No se mueve ni se retira ninguna planta.`;
-  return `<div class="control-intro"><p class="eyebrow">TIENDA · ${sideName(side)}</p>${settings.mode === 'duel' ? `<div class="live-side-switch">${humanSides().map(team => `<button type="button" data-action="live-side" data-side="${team}" aria-pressed="${team === side}" ${match.tacticalPhase || (match.initialStaging && settings.planning === 'secret') ? 'disabled' : ''}>${sideName(team)}${match.initialStaging && livePreparedSides[team] ? ' ✓' : ''}</button>`).join('')}</div>` : ''}</div><div class="shop-area">${renderCards(side)}</div><div class="live-rewards">${humanSides().map(team => `<div class="reward-section"><strong>${team === 'plants' ? '☀' : '🧠'} ${sideName(team)}</strong><div class="button-row">${[25,50,100].map(amount => `<button data-action="award" data-side="${team}" data-amount="${amount}" type="button">+${amount}</button>`).join('')}</div></div>`).join('')}</div><div class="shop-footer"><p id="live-closing-note">${match.initialStaging ? locked ? 'Primera compra confirmada.' : 'Primero responder y lanzar la moneda; el combate no ha comenzado.' : match.closing ? 'Última horda: compras cerradas; premios disponibles.' : 'Compra al tocar el mapa. Sin confirmación fuera de la pausa táctica.'}</p>${livePreparationButton()}${settings.questionMode === 'bank' ? `<div class="live-question-actions">${liveQuestionButtons()}</div><details class="shop-help"><summary>Banco: <span id="live-bank-count">${pool?.remaining.length || 0}</span></summary><div class="button-row"><button type="button" data-action="bank">Ampliar banco</button><button type="button" data-action="manual">Premio manual</button></div></details>` : ''}${cardInfoHTML(true)}<details class="shop-help"><summary>Reglas / asistente</summary><p>${escape(getBalanceProfile(currentProfileId()).description)}</p><p>${rules.replace('La carnívora mastica 20 s', `La carnívora mastica ${combat.chompRestSeconds} s`)}</p></details></div>`;
+  const rules = `Compra mientras haya saldo y espacio, sin cupo de compras por oleada. Recarga de 1 s por tarjeta durante el combate para evitar dobles clics; límite técnico de ${LIVE_RULES.maxZombies} zombis simultáneos. Hasta 4 girasoles producen 25 soles cada 12 s y se recogen solos; puedes plantar más, pero no aumentan la producción. La velocidad sube automáticamente: Muy lenta → Lenta → Tranquila → Normal → Rápida → Muy rápida (máximo desde la oleada 6). Un cambio manual dura hasta la próxima oleada. El hielo frena 30% durante 4 s renovables y los pinchos 40% mientras los cruzan; se usa el efecto mayor, no se multiplican. Globos y dragones evitan los pinchos. La carnívora mastica 20 s antes de devorar otra vez. El copiloto envía 5 zombis en la primera oleada, después uno adicional por oleada hasta 20: cono desde la 2, cubeta 3, jugador 4, globo 5 y dragón 6. Los premios del profesor están separados de la tienda; saldo máximo 1,500. La moneda fija el orden de compra después de las preguntas. Cada unidad descuenta su precio al colocarla; confirmar no cobra otra vez. La pala sólo retira plantas propias que nunca recibieron daño y devuelve todos sus soles.`;
+  return `<div class="control-intro"><p class="eyebrow">TIENDA · ${sideName(side)}</p>${settings.mode === 'duel' ? `<div class="live-side-switch">${humanSides().map(team => `<button type="button" data-action="live-side" data-side="${team}" aria-pressed="${team === side}" ${match.tacticalPhase || (match.initialStaging && settings.planning === 'secret') ? 'disabled' : ''}>${sideName(team)}${match.initialStaging && livePreparedSides[team] ? ' ✓' : ''}</button>`).join('')}</div>` : ''}</div><div class="shop-area">${renderCards(side)}</div><div class="shop-footer"><p id="live-closing-note">${match.initialStaging ? locked ? 'Primera compra confirmada.' : 'La moneda eligió el orden; compra y confirma.' : match.closing ? 'Última horda: compras cerradas.' : 'Compra al tocar el mapa. Sin confirmación fuera de la pausa táctica.'}</p>${livePreparationButton()}${cardInfoHTML(true)}<details class="shop-help"><summary>Reglas / asistente</summary><p>${escape(getBalanceProfile(currentProfileId()).description)}</p><p>${rules.replace('La carnívora mastica 20 s', `La carnívora mastica ${combat.chompRestSeconds} s`)}</p></details></div>`;
 }
 
 function liveDescription(unit) {
@@ -410,8 +470,8 @@ function updateLiveUI(events = []) {
   $('#live-pause').textContent = match.paused ? 'Reanudar combate' : 'Pausar combate';
   $('#live-pause').setAttribute('aria-pressed', String(match.paused));
   const left = Math.max(0,Math.ceil(settings.waveSeconds - match.waveElapsed));
-  const tacticalText = { briefing: 'Primero responder / premiar · después lanzar moneda y abrir tiendas', coin: 'Pausa táctica · sorteando el primer turno de compra', shopping: `Pausa táctica · compra ${sideName(match.activeSide)}${humanSides().includes(match.activeSide) ? '' : ' (computadora)'} · los premios siguen disponibles`, ready: 'Ambos equipos confirmaron · revelar y reanudar combate' };
-  const caption = match.phase === 'finished' ? `Resultado: ${match.winner === 'draw' ? 'Empate' : sideName(match.winner)}` : match.tacticalPhase ? tacticalText[match.tacticalPhase] : match.initialStaging ? 'Preparen ambos equipos · una sola revelación inicial · premios disponibles' : `${match.paused ? 'Combate pausado · premios habilitados' : 'Combate en marcha'} · ${match.closing ? 'Resolviendo supervivientes' : `${left} s para siguiente oleada`}`;
+  const tacticalText = { briefing: 'Primero responder / premiar · después lanzar moneda y abrir tiendas', coin: 'Pausa táctica · sorteando el primer turno de compra', shopping: `Pausa táctica · compra ${sideName(match.activeSide)}${humanSides().includes(match.activeSide) ? '' : ' (computadora)'} · los premios están cerrados`, ready: 'Ambos equipos confirmaron · revelar y reanudar combate' };
+  const caption = match.phase === 'finished' ? `Resultado: ${match.winner === 'draw' ? 'Empate' : sideName(match.winner)}` : match.tacticalPhase ? tacticalText[match.tacticalPhase] : match.initialStaging ? 'Preparen ambos equipos · una sola revelación inicial' : `${match.paused ? 'Combate pausado · premios habilitados' : 'Combate en marcha'} · ${match.closing ? 'Resolviendo supervivientes' : `${left} s para siguiente oleada`}`;
   $('#status').textContent = caption;
   const assistCount = match.assistantWavePlan.length;
   $('#board-caption').textContent = `Asistente zombi: ${match.assistantSpawnedThisWave}/${assistCount} refuerzos · ${zombieSpeedDescription(match)} · Soles automáticos`;
@@ -421,14 +481,20 @@ function updateLiveUI(events = []) {
   if ($('#live-closing-note')) $('#live-closing-note').textContent = match.tacticalPhase ? tacticalText[match.tacticalPhase] : match.initialStaging ? livePreparedSides[side] ? 'Primera compra confirmada.' : 'Prepara la primera compra; el combate no ha comenzado.' : match.closing ? 'Última horda: compras cerradas; premios disponibles.' : `Compra inmediata · copiloto ${match.assistantSpawnedThisWave}/${assistCount} · avance ${match.zombieSpeed.toFixed(2)}×`;
   for (const button of $('#controls').querySelectorAll('[data-action="live-side"]')) button.disabled = !!match.tacticalPhase || (match.initialStaging && settings.planning === 'secret');
   const coinButton = $('#controls [data-action="initial-coin"]');
-  if (coinButton) coinButton.disabled = settings.questionMode === 'bank' && humanSides().some(team => !answered[team]);
-  for (const button of $('#controls').querySelectorAll('[data-action="award"]')) button.disabled = match.phase !== 'live';
+  if (coinButton) coinButton.disabled = !!quiz;
+  for (const button of $('#controls').querySelectorAll('[data-action="award"]')) button.disabled = !canAwardNow();
   for (const button of $('#controls').querySelectorAll('[data-action="quiz"]')) button.disabled = !!quiz || !pool?.remaining.length || match.phase !== 'live';
   const availability = new Map(availableLiveUnits(match,side).map(unit => [unit.id,unit]));
   for (const button of $('#controls').querySelectorAll('[data-action="select"]')) {
     const unit = availability.get(button.dataset.id);
     button.disabled = !unit?.affordable || !!(!match.tacticalPhase && match.initialStaging && livePreparedSides[side]);
     button.title = unit ? unit.disabledReason || liveDescription(unit) : 'Esta partida ya terminó.';
+    const countdown = button.querySelector('.card-cooldown');
+    if (countdown) {
+      const seconds = Math.ceil(unit?.cooldownRemaining || 0);
+      countdown.hidden = seconds <= 0;
+      countdown.textContent = `⏳ ${seconds} s`;
+    }
   }
   const baseline = match.tacticalPublicBaseline?.units || [];
   const baselineIds = new Set(baseline.map(unit => unit.id));
@@ -438,6 +504,7 @@ function updateLiveUI(events = []) {
   renderer.showLiveEvents(events);
   animateSunRewards(events);
   updateSpeedUI();
+  updateTeacherTools();
   publish(livePublicSnapshot(),caption,null,events);
   updateBoardFocus();
   handleLivePresentation(match, events);
@@ -468,8 +535,8 @@ function handleLivePresentation(state, events = []) {
     }
     return;
   }
-  if (events.some(event => event.type === 'wave-ending')) presentation.showWaveAnnouncement({ title: `¡La oleada ${state.round} está por terminar!`, subtitle: state.round === state.maxRounds ? 'Última horda: resuelvan los supervivientes' : state.config.tacticalPauses ? 'Prepárense para la pausa táctica' : 'La próxima oleada llegará sin detener el combate', kind: 'end' });
-  else if (events.some(event => event.type === 'closing')) presentation.showWaveAnnouncement({ title: '¡Última horda!', subtitle: 'El combate sigue hasta resolver las unidades restantes', kind: 'final' });
+  if (events.some(event => event.type === 'wave-ending')) presentation.showWaveAnnouncement({ title: `¡La oleada ${state.round} está por terminar!`, subtitle: state.round === state.maxRounds ? 'Últimos segundos: los zombis deben entrar a la casa antes de que termine el tiempo' : state.config.tacticalPauses ? 'Prepárense para la pausa táctica' : 'La próxima oleada llegará sin detener el combate', kind: 'end' });
+  else if (events.some(event => event.type === 'closing')) presentation.showWaveAnnouncement({ title: '¡Última horda!', subtitle: 'El tiempo terminó: se anuncia el resultado', kind: 'final' });
   else if (events.some(event => event.type === 'wave-start' || event.type === 'wave')) presentation.showWaveAnnouncement({ title: `¡Comienza la oleada ${state.round}!`, subtitle: `${zombieSpeedDescription(state)} · respondan y compren mientras avanza el combate`, kind: 'start' });
 }
 
@@ -520,6 +587,15 @@ function startLiveLoop() {
         const result = stepLive(match,dt); match = result.state;
         // Movement already lives in fractional coordinates. Broadcast only
         // combat effects, not a separate movement event for every frame/unit.
+        if (result.events.some(event => event.type === 'tactical' && event.tacticalPhase === 'briefing')) {
+          const unfinishedQuestion = quiz && !quiz.done;
+          quiz = null;
+          $('#live-question').hidden = true;
+          resetClock();
+          publishQuiz();
+          questionCounts = { plants: 0, zombies: 0 };
+          if (unfinishedQuestion) notify('Terminó la oleada: la pregunta pendiente se cerró sin premio. Haz una nueva durante la pausa táctica.');
+        }
         pendingLiveEvents.push(...result.events.filter(event => event.type !== 'move'));
         pendingLiveEvents = compactCombatEvents(pendingLiveEvents,200,{ aggregateDamage: match.config.balanceProfile === 'classic' });
       }
@@ -562,6 +638,7 @@ function render() {
   const descriptions = { resources: 'Responder → comprar → revelar', planning: `Compra ${sideName(match.activeSide)} · ${settings.planning === 'secret' ? 'plan privado' : 'jugada abierta'}`, handover: 'Cambio de equipo · compras confirmadas', ready: 'Planes confirmados · listos para revelar', cleanup: 'Última horda · todavía puede ganar cualquiera', finished: `Resultado: ${match.winner === 'draw' ? 'Empate' : sideName(match.winner)}` };
   $('#status').textContent = busy ? 'Resolviendo la ronda…' : descriptions[match.phase];
   $('#controls').innerHTML = controlsHTML();
+  updateTeacherTools(true);
   showResultBanner(match);
   for (const canvas of document.querySelectorAll('[data-card]')) renderCard(canvas, canvas.dataset.card).catch(() => notify('No se pudo dibujar una tarjeta.'));
   updateBoardFocus();
@@ -591,7 +668,7 @@ function startGame(event) {
     livePreparedSides = { plants: false, zombies: false };
     liveInitialResources = { plants: 200, zombies: 200 };
     pool = approved && bank.length ? createQuestionPool(bank) : null;
-    answered = { plants: false, zombies: false }; usedPrompts = [];
+    questionCounts = { plants: 0, zombies: 0 }; usedPrompts = [];
     $('#setup').hidden = true; $('#game').hidden = false;
     boardFocused = false; updateBoardFocus();
     $('#battle-log').replaceChildren();
@@ -619,7 +696,7 @@ async function resolveBattle() {
   });
   if (token !== runToken) return;
   match = result.state; busy = false;
-  answered = { plants: false, zombies: false }; selection = null; selectedCell = null;
+  questionCounts = { plants: 0, zombies: 0 }; selection = null; selectedCell = null;
   const attacks = result.events.filter(item => item.type === 'shot').length;
   const defeats = result.events.filter(item => item.type === 'defeat').length;
   const income = result.events.find(item => item.type === 'income');
@@ -691,7 +768,7 @@ async function generateBank() {
 }
 
 function openQuiz(side) {
-  if (!controlsAllowed() || busy || (!continuous() && answered[side]) || quiz || !humanSides().includes(side)) return;
+  if (!canAwardNow() || busy || quiz || !humanSides().includes(side)) return;
   try {
     const next = takeQuestion(pool);
     pool = next.pool;
@@ -701,7 +778,7 @@ function openQuiz(side) {
     quizElement('prompt').textContent = quiz.question.prompt;
     quizElement('options').replaceChildren(...quiz.question.options.map((text,index) => { const button = document.createElement('button'); button.type = 'button'; button.textContent = `${String.fromCharCode(65+index)}. ${text}`; button.dataset.action = 'answer'; button.dataset.index = index; return button; }));
     quizElement('result').textContent = ''; quizElement('next').hidden = true;
-    if (continuous()) { $('#live-question').hidden = false; updateLiveUI(); }
+    if (continuous()) { if ($('#teacher-tools').open) $('#teacher-tools').close(); $('#live-question').hidden = false; updateLiveUI(); }
     else $('#quiz-dialog').showModal();
     resetClock('quiz'); publishQuiz();
   } catch (error) { notify(error.message); }
@@ -709,7 +786,8 @@ function openQuiz(side) {
 
 function answerQuiz(index) {
   if (!quiz || quiz.done) return;
-  quiz.done = true; answered[quiz.side] = true;
+  quiz.done = true;
+  if (!continuous() || match.tacticalPhase === 'briefing') questionCounts[quiz.side] += 1;
   const grade = index < 0 ? { correct: false, explanation: quiz.question.explanation, correctAnswer: quiz.question.options[quiz.question.answerIndex] } : gradeQuestion(quiz.question, index);
   // Continuous questions/rewards never depend on wave transition or pause.
   // Keep the old 300 cap only for the explicitly selected round-based mode.
@@ -750,6 +828,7 @@ function stopGame() {
   music.pause();
   gameAudio.stopEffects();
   $('#live-question').hidden = true; $('#quiz-dialog').close();
+  if ($('#teacher-tools').open) $('#teacher-tools').close();
   $('#zombie-controls').hidden = true;
   publish(null, 'El profesor terminó la partida.');
   publishQuiz();
@@ -766,7 +845,7 @@ async function action(button) {
   if (button.disabled) return;
   if (isPublic) { if (name === 'fullscreen') await toggleFullscreen(); return; }
   if (button.closest('.menu') && name !== 'speed-preset') button.closest('.menu').open = false;
-  if (!['sound','award','focus-award','answer','live-pause'].includes(name)) sound('click');
+  if (!['sound','award','answer','live-pause'].includes(name)) sound('click');
   if (['select','award','undo','plan','commit','handover','quiz','resolve','manual'].includes(name) && busy) return;
   try {
     switch (name) {
@@ -778,7 +857,7 @@ async function action(button) {
         match = selectLiveSide(match,button.dataset.side);
         selection = null; selectedCell = null; render(); break;
       case 'initial-coin':
-        if (!continuous() || match?.tacticalPhase !== 'briefing' || (settings.questionMode === 'bank' && humanSides().some(team => !answered[team]))) return;
+        if (!continuous() || match?.tacticalPhase !== 'briefing' || quiz) return;
         match = beginLiveInitialCoin(match); selection = null; render(); break;
       case 'tactical-confirm':
         if (!continuous() || match?.tacticalPhase !== 'shopping') return;
@@ -810,9 +889,14 @@ async function action(button) {
         if (!liveRAF) startLiveLoop();
         break;
       case 'select': selection = button.dataset.id; selectedCell = null; render(); break;
-      case 'focus-award':
+      case 'shovel': selection = selection === 'shovel' ? null : 'shovel'; selectedCell = null; render(); break;
+      case 'teacher-tools':
+        if (!continuous() || !canAwardNow() || match.tacticalPhase) return;
+        $('#teacher-tools-content').innerHTML = teacherRewardsHTML();
+        $('#teacher-tools').showModal(); break;
+      case 'close-teacher-tools': $('#teacher-tools').close(); break;
       case 'award': {
-        if (!controlsAllowed()) return;
+        if (!canAwardNow()) return notify('El profesor premia durante las preguntas o el combate, no durante la moneda ni las compras.');
         const side = button.dataset.side, amount = Number(button.dataset.amount);
         const received = Math.min(amount,1500-match.resources[side]);
         match = award(match,side,amount);
@@ -822,7 +906,10 @@ async function action(button) {
         render(); break;
       }
       case 'undo': transition(state => removeOrder(state,state.activeSide,button.dataset.id)); break;
-      case 'plan': transition(beginPlanning); resetClock('planning'); break;
+      case 'plan':
+        if (match?.config.mode === 'duel') beginRoundCoin();
+        else { transition(beginPlanning); resetClock('planning'); }
+        break;
       case 'commit': transition(commitPlan); resetClock(); break;
       case 'handover': transition(continuePlanning); resetClock('planning'); break;
       case 'resolve': await resolveBattle(); break;
@@ -925,6 +1012,9 @@ if (isPublic) {
         if (event.data.liveEvents) animateSunRewards(event.data.liveEvents);
         if (event.data.snapshot?.config.tempo === 'continuous') handleLivePresentation(event.data.snapshot,event.data.liveEvents || []);
         if (event.data.stage) renderer.play([event.data.stage]).catch(() => notify('No se pudo mostrar una animación; el tablero sigue disponible.'));
+      } else if (event.data?.type === 'round-coin' && ['plants','zombies'].includes(event.data.side)) {
+        $('#status').textContent = 'La moneda decide quién compra primero…';
+        presentation.showTacticalCoin({ side: event.data.side, wave: event.data.round, label: `Moneda · ronda ${event.data.round}` });
       } else if (event.data?.type === 'countdown') {
         publicDebateClock = event.data.view;
         renderCountdown($('#timer'), countdownView(publicView, publicDebateClock));

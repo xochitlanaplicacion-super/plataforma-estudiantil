@@ -1,4 +1,4 @@
-import { getUnit, getUnits, zombieSpeedForWave } from './catalog.js';
+import { getUnit, getUnits, zombieSpeedForWave, CHERRY_BLAST_DAMAGE, CHERRY_SHOP_COOLDOWN_SECONDS } from './catalog.js';
 import { getBalanceProfile, profileRules } from './balance-profiles.js';
 import { queueZombieEntry, isWaitingZombie, isCombatUnit, releaseZombieEntries } from './entry-queue.js';
 
@@ -62,6 +62,7 @@ function spawn(state, order) {
     movementCredit: 0, chompCooldown: 0, freezeUntil: 0,
     placedAt: Math.max(0, (state.elapsed || 0) - ROUND_COMBAT_SECONDS),
     ...(unit.side === 'zombies' ? { entryFree: !!order.free } : {}),
+    ...(unit.side === 'plants' && order.purchasedBy === 'plants' ? { paidCost: order.paidCost, purchasedBy: 'plants' } : {}),
     ...(order.typeId === 'chomper' ? { chompDuration: rules(state).chompRestSeconds } : {}),
   };
   queueZombieEntry(state.units, result);
@@ -88,7 +89,7 @@ export function createMatch(config = {}) {
     && config.zombieSpeed >= 0.35 && config.zombieSpeed <= 1.7, 'La velocidad de los zombis debe estar entre 0.35 y 1.7.');
   const state = {
     config: settings, phase: 'resources', activeSide: null, round: 1, maxRounds: settings.rounds,
-    resources: pair(200), units: [], plans: { plants: [], zombies: [] }, planLocked: pair(false),
+    resources: pair(200), units: [], plans: { plants: [], zombies: [] }, planLocked: pair(false), purchaseReadyAt: {},
     mowers: Array(BOARD_ROWS).fill(true), winner: null, bonusThisRound: pair(0),
     randomState: seedNumber(settings.seed), nextId: 1, publicResources: pair(200), battleStep: 0,
     elapsed: 0, zombieSpeed: config.zombieSpeed ?? zombieSpeedForWave(1), zombieSpeedMode: config.zombieSpeed == null ? 'auto' : 'manual',
@@ -118,10 +119,14 @@ export function grantResources(original, side, amount) {
   return state;
 }
 
-export function beginPlanning(original) {
+export function beginPlanning(original, firstSideOverride) {
   assert(original.phase === 'resources', 'La planificación de esta ronda ya comenzó.');
+  if (firstSideOverride !== undefined) {
+    validSide(firstSideOverride);
+    assert(!humanSide(original) || firstSideOverride === humanSide(original), 'En cooperativo comienza el equipo del salón.');
+  }
   const state = copy(original);
-  state.phase = 'planning'; state.activeSide = firstSide(state);
+  state.phase = 'planning'; state.activeSide = firstSideOverride ?? firstSide(state);
   state.publicResources = copy(state.resources);
   return state;
 }
@@ -133,9 +138,14 @@ function checkOrder(state, side, typeId, row, col) {
   assert(unit.side === side, 'Esta unidad pertenece al otro equipo.');
   assert(Number.isInteger(row) && row >= 0 && row < BOARD_ROWS && Number.isInteger(col), 'Selecciona una casilla válida del tablero.');
   assert(side === 'plants' ? col >= 1 && col <= 6 : col === 7, side === 'plants' ? 'Las plantas se colocan en las columnas 1 a 6.' : 'Los zombis entran por la columna 7.');
+  if (typeId === 'cherry-bomb') {
+    const remaining = Math.max(0, (state.purchaseReadyAt?.[typeId] || 0) - state.elapsed);
+    assert(remaining < 1e-8, `Cereza en recarga: ${Math.ceil(remaining)} s de combate.`);
+  }
   assert(state.resources[side] >= unit.cost, 'No hay suficientes recursos para comprar esta unidad.');
   if (side === 'plants') {
-    assert(!state.units.some(item => isCombatUnit(item) && item.row === row && item.col === col) && !state.plans.plants.some(item => item.row === row && item.col === col), 'Esta casilla ya está ocupada.');
+    assert(!state.units.some(item => item.side === 'plants' && item.hp > 0 && item.row === row && item.col === col)
+      && !state.plans.plants.some(item => item.row === row && item.col === col), 'Esta casilla está ocupada por una planta.');
   } else {
     assert(state.units.filter(item => item.side === 'zombies').length + state.plans.zombies.length < MAX_ZOMBIES, `Límite de seguridad: ${MAX_ZOMBIES} zombis simultáneos en el tablero o preparados para entrar.`);
   }
@@ -145,6 +155,11 @@ function checkOrder(state, side, typeId, row, col) {
 function purchase(state, side, typeId, row, col) {
   const unit = checkOrder(state, side, typeId, row, col);
   const order = { id: nextId(state, 'order'), typeId, side, row, col };
+  if (typeId === 'cherry-bomb') {
+    order.cooldownBefore = state.purchaseReadyAt?.[typeId] || 0;
+    state.purchaseReadyAt ??= {};
+    state.purchaseReadyAt[typeId] = state.elapsed + CHERRY_SHOP_COOLDOWN_SECONDS;
+  }
   state.plans[side].push(order);
   state.resources[side] -= unit.cost;
   state.stats.resourcesSpent[side] += unit.cost;
@@ -153,7 +168,11 @@ function purchase(state, side, typeId, row, col) {
 
 export function addOrder(original, side, typeId, row, col) {
   const state = copy(original);
-  purchase(state, side, typeId, row, col);
+  const order = purchase(state, side, typeId, row, col);
+  if (side === 'plants') {
+    order.paidCost = definition(typeId, state).cost;
+    order.purchasedBy = 'plants';
+  }
   return state;
 }
 
@@ -164,6 +183,7 @@ export function removeOrder(original, side, orderId) {
   assert(index >= 0, 'Esta compra no está en el plan del equipo activo.');
   const state = copy(original);
   const [order] = state.plans[side].splice(index, 1);
+  if (order.typeId === 'cherry-bomb') state.purchaseReadyAt['cherry-bomb'] = order.cooldownBefore || 0;
   const amount = definition(order.typeId, state).cost;
   addResource(state, side, amount);
   state.stats.resourcesSpent[side] -= amount;
@@ -204,7 +224,8 @@ function cpuPlan(state, side) {
       const typeId = hasShooter ? 'wallnut' : 'peashooter';
       if (definition(typeId, state).cost > budget - spent) continue;
       const positions = hasShooter ? [5, 4, 3] : [2, 1, 3];
-      const col = positions.find(column => !state.units.some(unit => isCombatUnit(unit) && unit.row === row && unit.col === column) && !state.plans.plants.some(order => order.row === row && order.col === column));
+      const col = positions.find(column => !state.units.some(unit => unit.side === 'plants' && unit.hp > 0 && unit.row === row && unit.col === column)
+        && !state.plans.plants.some(order => order.row === row && order.col === column));
       if (col == null) continue;
       purchase(state, side, typeId, row, col);
       spent += definition(typeId, state).cost;
@@ -245,21 +266,38 @@ function hurt(state, unit, amount, events, sourceId) {
   if (!unit || !isCombatUnit(unit) || retired(state, unit)) return;
   const actual = Math.min(unit.hp, amount);
   unit.hp -= amount;
+  if (unit.side === 'plants' && actual > 0) unit.everDamaged = true;
   if (retired(state, unit)) unit.hp = 0;
   event(events, 'damage', { unitId: unit.id, side: unit.side, row: unit.row, col: unit.col, amount: actual, sourceId });
 }
 function removeDead(state, events) {
   for (const unit of state.units.filter(item => retired(state, item))) {
     state.stats.unitsDefeated[unit.side] += 1;
-    event(events, 'defeat', { unitId: unit.id, typeId: unit.typeId, side: unit.side, row: unit.row, col: unit.col });
+    event(events, 'defeat', { unitId: unit.id, typeId: unit.typeId, side: unit.side, row: unit.row, col: unit.col,
+      ...(unit.defeatReason ? { reason: unit.defeatReason } : {}) });
   }
   state.units = state.units.filter(item => !retired(state, item));
 }
-const floorPlant = unit => ['potato-mine', 'spikeweed'].includes(unit.typeId);
+const floorPlant = unit => ['potato-mine', 'spikeweed', 'cherry-bomb'].includes(unit.typeId);
 const flying = unit => ['balloon', 'dragon'].includes(unit.typeId);
 
+function explodeCherries(state, events) {
+  for (const cherry of state.units.filter(unit => unit.typeId === 'cherry-bomb' && unit.hp > 0
+    && state.units.some(zombie => zombie.side === 'zombies' && isCombatUnit(zombie) && zombie.hp > 0
+      && zombie.row === unit.row && zombie.col === unit.col))) {
+    event(events, 'cherry-explosion', { sourceId: cherry.id, row: cherry.row, col: cherry.col, radius: 1 });
+    for (const zombie of state.units.filter(unit => unit.side === 'zombies' && isCombatUnit(unit) && unit.hp > 0
+      && Math.abs(unit.row - cherry.row) <= 1 && Math.abs(unit.col - cherry.col) <= 1)) {
+      if (zombie.hp <= CHERRY_BLAST_DAMAGE) zombie.defeatReason = 'ash';
+      hurt(state, zombie, CHERRY_BLAST_DAMAGE, events, cherry.id);
+    }
+    hurt(state, cherry, cherry.hp, events, cherry.id);
+  }
+  removeDead(state, events);
+}
+
 function fireShot(state, plant, target, row, events) {
-  event(events, 'shot', { sourceId: plant.id, targetId: target.id, row, fromCol: plant.col, toCol: target.col,
+  event(events, 'shot', { sourceId: plant.id, targetId: target.id, row, fromRow: plant.row, fromCol: plant.col, toCol: target.col,
     lob: plant.typeId === 'corn-pult', typeId: plant.typeId, ice: plant.typeId === 'snow-pea' });
   hurt(state, target, Math.max(1, plant.damage), events, plant.id);
   if (plant.typeId === 'snow-pea' && target.hp > 0) {
@@ -277,7 +315,7 @@ function shootClassic(state, events) {
     const rows = plant.typeId === 'threepeater' ? [plant.row - 1, plant.row, plant.row + 1].filter(row => row >= 0 && row < BOARD_ROWS) : [plant.row];
     let ready = Math.max(start, plant.shotReadyAt ?? plant.placedAt ?? start);
     while (ready < state.elapsed - 1e-8) {
-      for (const row of rows) pulses.push({ plant, row, at: ready });
+      pulses.push({ plant, rows, at: ready });
       ready += duration;
     }
     plant.shotReadyAt = ready;
@@ -285,11 +323,19 @@ function shootClassic(state, events) {
   // Each five-second tactical stage represents multiple real firing pulses.
   // Resolve them chronologically so a defeated front zombie cannot absorb
   // another shooter's later projectiles on behalf of the zombie behind it.
-  pulses.sort((a, b) => a.at - b.at || a.plant.id.localeCompare(b.plant.id) || a.row - b.row);
-  for (const { plant, row } of pulses) {
-    const target = state.units.filter(unit => unit.side === 'zombies' && isCombatUnit(unit) && unit.hp > 0 && unit.row === row && unit.col >= plant.col)
-      .sort((a, b) => a.col - b.col || a.id.localeCompare(b.id))[0];
-    if (target) fireShot(state, plant, target, row, events);
+  pulses.sort((a, b) => a.at - b.at || a.plant.id.localeCompare(b.plant.id));
+  for (const { plant, rows } of pulses) {
+    const lanes = rows.map(row => ({ row, target: state.units.filter(unit => unit.side === 'zombies' && isCombatUnit(unit)
+      && unit.hp > 0 && unit.row === row && unit.col >= plant.col)
+      .sort((a, b) => a.col - b.col || a.id.localeCompare(b.id))[0] }));
+    // Tripitidora launches three visible peas per volley whenever any of its
+    // lanes has a target; empty lanes still show a harmless travelling pea.
+    if (!lanes.some(lane => lane.target)) continue;
+    for (const { row, target } of lanes) {
+      if (target) fireShot(state, plant, target, row, events);
+      else if (plant.typeId === 'threepeater') event(events, 'shot', { sourceId: plant.id, targetId: null,
+        row, fromRow: plant.row, fromCol: plant.col, toCol: 7.4, typeId: plant.typeId });
+    }
   }
   removeDead(state, events);
 }
@@ -299,17 +345,23 @@ function shoot(state, events) {
   const shots = [];
   for (const plant of state.units.filter(unit => unit.side === 'plants')) {
     if (!['peashooter', 'snow-pea', 'repeater', 'threepeater', 'corn-pult'].includes(plant.typeId)) continue;
-    const rows = plant.typeId === 'threepeater' ? [plant.row - 1, plant.row, plant.row + 1] : [plant.row];
+    const rows = (plant.typeId === 'threepeater' ? [plant.row - 1, plant.row, plant.row + 1] : [plant.row])
+      .filter(row => row >= 0 && row < BOARD_ROWS);
+    const lanes = [];
     for (const row of rows) {
       const target = state.units.filter(unit => unit.side === 'zombies' && isCombatUnit(unit) && unit.row === row && unit.col >= plant.col).sort((a, b) => a.col - b.col || a.id.localeCompare(b.id))[0];
-      if (!target) continue;
-      shots.push({ plant, target, damage: Math.max(1, plant.damage) });
+      lanes.push({ row, target });
     }
+    if (!lanes.some(lane => lane.target)) continue;
+    for (const { row, target } of lanes) if (target || plant.typeId === 'threepeater')
+      shots.push({ plant, row, target, damage: Math.max(1, plant.damage) });
   }
   for (const shot of shots) {
-    event(events, 'shot', { sourceId: shot.plant.id, targetId: shot.target.id, row: shot.target.row, fromCol: shot.plant.col, toCol: shot.target.col, lob: shot.plant.typeId === 'corn-pult', typeId: shot.plant.typeId, ice: shot.plant.typeId === 'snow-pea' });
-    hurt(state, shot.target, shot.damage, events, shot.plant.id);
-    if (shot.plant.typeId === 'snow-pea' && shot.target.hp > 0) {
+    event(events, 'shot', { sourceId: shot.plant.id, targetId: shot.target?.id ?? null, row: shot.row,
+      fromRow: shot.plant.row, fromCol: shot.plant.col, toCol: shot.target?.col ?? 7.4,
+      lob: shot.plant.typeId === 'corn-pult', typeId: shot.plant.typeId, ice: shot.plant.typeId === 'snow-pea' });
+    if (shot.target) hurt(state, shot.target, shot.damage, events, shot.plant.id);
+    if (shot.plant.typeId === 'snow-pea' && shot.target?.hp > 0) {
       shot.target.freezeUntil = state.elapsed + 4;
       event(events, 'freeze', { sourceId: shot.plant.id, targetId: shot.target.id, unitId: shot.target.id,
         row: shot.target.row, col: shot.target.col, until: shot.target.freezeUntil });
@@ -319,7 +371,10 @@ function shoot(state, events) {
 }
 
 function groundContact(state, zombie, events) {
-  if (!isCombatUnit(zombie) || flying(zombie) || zombie.hp <= 0) return;
+  if (!isCombatUnit(zombie) || zombie.hp <= 0) return;
+  // Check each crossed tile, so a fast zombie cannot skip over the trap.
+  explodeCherries(state, events);
+  if (flying(zombie) || zombie.hp <= 0) return;
   for (const plant of state.units.filter(unit => unit.side === 'plants' && unit.hp > 0 && unit.row === zombie.row && unit.col === zombie.col)) {
     const mineArmed = classic(state) ? state.elapsed - (plant.placedAt ?? Math.max(0, (plant.placedStep || 0) * ROUND_COMBAT_SECONDS)) >= rules(state).mineArmSeconds
       : combatClock(state) > (plant.placedStep ?? plant.placedRound);
@@ -402,14 +457,24 @@ function bites(state, events) {
       && (unit.col === zombie.col || unit.col === zombie.col - 1)).sort((a, b) => b.col - a.col)[0];
     if (!plant) continue;
     event(events, 'bite', { sourceId: zombie.id, targetId: plant.id, row: zombie.row, col: plant.col });
-    // Classic biting is 4 damage every .04 s (100/s), so one tactical
-    // five-second contact applies up to 500 damage, capped by that plant's
-    // remaining life. Unused damage never jumps to an unreachable plant.
+    // In Classic each 40 ms pulse is 4 damage to a walnut. Other plants get
+    // an integer 2,2,2,2,3 cycle: 55 HP/s with no fractional hit points.
     const pulseSeconds = classic(state) ? rules(state).biteSeconds : ROUND_COMBAT_SECONDS;
     const contactSeconds = ROUND_COMBAT_SECONDS + (zombie.biteCreditSeconds || 0);
     const pulses = Math.floor((contactSeconds + 1e-8) / pulseSeconds);
-    if (classic(state)) zombie.biteCreditSeconds = Math.max(0, contactSeconds - pulses * pulseSeconds);
-    hurt(state, plant, Math.max(1, zombie.damage) * pulses, events, zombie.id);
+    let biteDamage = Math.max(1, zombie.damage) * pulses;
+    if (classic(state)) {
+      zombie.biteCreditSeconds = Math.max(0, contactSeconds - pulses * pulseSeconds);
+      if (zombie.biteTargetId !== plant.id) zombie.bitePulseCount = 0;
+      zombie.biteTargetId = plant.id;
+      if (plant.typeId !== 'wallnut') {
+        const pulseCount = zombie.bitePulseCount || 0;
+        const scaled = count => Math.floor(count * Math.max(1, zombie.damage) * .55 + 1e-8);
+        biteDamage = scaled(pulseCount + pulses) - scaled(pulseCount);
+      }
+      zombie.bitePulseCount = (zombie.bitePulseCount || 0) + pulses;
+    }
+    hurt(state, plant, biteDamage, events, zombie.id);
   }
   removeDead(state, events);
 }
@@ -446,8 +511,8 @@ function battleStages(state, deploy) {
       if (!isWaitingZombie(unit)) event(list, 'deploy', { unitId: unit.id, typeId: unit.typeId, side, row: unit.row, col: unit.col, free: !!order.free });
     }
   });
-  stage('shots', list => shoot(state, list));
-  stage('advance', list => advance(state, list));
+  stage('shots', list => { explodeCherries(state, list); shoot(state, list); });
+  stage('advance', list => { advance(state, list); explodeCherries(state, list); });
   stage('bites', list => bites(state, list));
   stage('mowers', list => {
     mow(state, list);
@@ -537,8 +602,10 @@ export function availableUnits(state, side) {
   return catalog(state).filter(unit => unit.side === side).map(unit => {
     let disabledReason = null;
     if (side === 'zombies' && state.units.filter(item => item.side === 'zombies').length + count >= MAX_ZOMBIES) disabledReason = `Límite de seguridad: ${MAX_ZOMBIES} zombis simultáneos.`;
+    else if (unit.id === 'cherry-bomb' && (state.purchaseReadyAt?.[unit.id] || 0) > state.elapsed + 1e-8) disabledReason = `Cereza en recarga: ${Math.ceil(state.purchaseReadyAt[unit.id] - state.elapsed)} s de combate.`;
     else if (state.resources[side] < unit.cost) disabledReason = 'Recursos insuficientes.';
-    return { ...copy(unit), affordable: !disabledReason, disabledReason };
+    const cooldownRemaining = unit.id === 'cherry-bomb' ? Math.max(0, (state.purchaseReadyAt?.[unit.id] || 0) - state.elapsed) : 0;
+    return { ...copy(unit), affordable: !disabledReason, disabledReason, cooldownRemaining };
   });
 }
 

@@ -95,6 +95,33 @@ test('planning previews show one entrance zombie per lane and count later orders
   assert.deepEqual(entranceView(existing, [orders[2]]).queued, [2, 0, 0, 0, 0]);
 });
 
+test('cherry explosion draws a visible blast and defeated zombies crumble into ash', () => {
+  const { renderer, calls } = board();
+  renderer.setLiveView(snapshot());
+  calls.length = 0;
+  renderer.showLiveEvents([
+    { type: 'cherry-explosion', sourceId: 'cherry', row: 2, col: 4, radius: 1 },
+    { type: 'defeat', unitId: 'burned', typeId: 'common', side: 'zombies', row: 2, col: 4, reason: 'ash' },
+  ]);
+  advanceClock(350);
+  renderer.draw(clock);
+  assert(calls.some(call => call.operation === 'arc' && call.fillStyle === '#ffcf54'));
+  assert(calls.some(call => call.operation === 'fillRect' && call.fillStyle === '#393b3a'));
+  renderer.destroy();
+});
+
+test('Tripitidora projectile travels visibly from its centre lane toward the adjacent lane', () => {
+  const { renderer, calls } = board();
+  calls.length = 0;
+  renderer.drawEffects([{ type: 'shot', sourceId: 'three', typeId: 'threepeater',
+    row: 1, fromRow: 2, fromCol: 2, toCol: 6 }], .5);
+  const pea = calls.find(call => call.operation === 'ellipse' && call.fillStyle === '#a6f15e');
+  assert(pea);
+  assert(Math.abs(pea.args[0] - 606) < 1);
+  assert(Math.abs(pea.args[1] - 209) < 1);
+  renderer.destroy();
+});
+
 test('a released zombie becomes visible without restarting the live renderer, even after pausing', () => {
   const { renderer } = board({ reduced: true });
   const first = { id: 'first', side: 'zombies', typeId: 'common', row: 0, col: 7, hp: 270 };

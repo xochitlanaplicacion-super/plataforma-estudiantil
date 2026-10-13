@@ -54,14 +54,14 @@ for (const balanceProfile of ['aula', 'classic']) {
       assert.equal(played.state.units[0].sunReadyAt, 24);
     });
 
-    test(`${balanceProfile}/${mode}: sunflower production freezes throughout coin, both shops and ready`, () => {
+    test(`${balanceProfile}/${mode}: sunflower production freezes throughout teacher briefing, coin, both shops and ready`, () => {
       let state = quiet(createLiveMatch({ mode, balanceProfile, waves: 3, waveSeconds: 30 }));
       state.units = [producer(state)];
       state = advance(state, 29.75).state;
       const money = state.resources.plants;
       const boundary = stepLive(state, 0.25);
       state = boundary.state;
-      assert.equal(state.tacticalPhase, 'coin');
+      assert.equal(state.tacticalPhase, 'briefing');
       assert.equal(state.elapsed, 30);
       assert.equal(state.resources.plants, money + 25 + (mode === 'coop-zombies' ? 100 : 0));
       assert.equal(boundary.events.filter(event => event.type === 'sun').length, 0);
@@ -72,12 +72,18 @@ for (const balanceProfile of ['aula', 'classic']) {
       state = awardLiveResources(state, rewardedSide, 100);
       assert.equal(state.stats.resourcesAwarded[rewardedSide], 100);
       assert.equal(state.stats.resourcesIncome.plants, flowerIncome);
+      state = beginLiveInitialCoin(state);
+      assert.equal(state.tacticalPhase, 'coin');
+      assert.throws(() => awardLiveResources(state, rewardedSide, 25), /antes de lanzar la moneda/);
+      state = frozen(state);
       state = beginLiveTacticalShopping(state);
+      assert.throws(() => awardLiveResources(state, rewardedSide, 25), /antes de lanzar la moneda/);
       state = frozen(state);
       state = confirmLiveTacticalTurn(state, state.activeSide);
       state = frozen(state);
       state = confirmLiveTacticalTurn(state, state.activeSide);
       assert.equal(state.tacticalPhase, 'ready');
+      assert.throws(() => awardLiveResources(state, rewardedSide, 25), /antes de lanzar la moneda/);
       state = frozen(state);
       assert.equal(state.units.find(unit => unit.typeId === 'sunflower').sunReadyAt, due);
       assert.equal(state.stats.resourcesIncome.plants, flowerIncome);

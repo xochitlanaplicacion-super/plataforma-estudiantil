@@ -56,7 +56,7 @@ test('repeated compaction includes new damage exactly once and does not mutate e
 });
 
 test('death, redeployment and wave transitions separate damage and bites from different visual spans', () => {
-  for (const barrier of ['defeat', 'death', 'deployment', 'deploy', 'wave', 'wave-start', 'wave-ending', 'tactical', 'closing', 'finished', 'mower', 'invasion']) {
+  for (const barrier of ['defeat', 'death', 'deployment', 'deploy', 'wave', 'wave-start', 'wave-ending', 'tactical', 'closing', 'finished', 'mower', 'invasion', 'cherry-explosion']) {
     const marker = { type: barrier, unitId: 'nut', row: 0 };
     const events = [
       { type: 'bite', targetId: 'nut', sourceId: 'a', row: 0 },

@@ -17,12 +17,12 @@ export class WavePresentation {
     node.append(heading, detail); this.root.append(node); this.node = node;
     return new Promise(resolve => { this.cancel = resolve; this.timer = setTimeout(() => { this.cancel = null; this.clear(); resolve(true); }, 1900); });
   }
-  showTacticalCoin({ side, wave = 1, onComplete }) {
+  showTacticalCoin({ side, wave = 1, label, onComplete }) {
     this.clear();
     const node = document.createElement('section'); node.className = `quest-coin-overlay winner-${side}`;
     node.setAttribute('role', 'status'); node.setAttribute('aria-label', `Moneda de turno: comienza ${side === 'plants' ? 'Plantas' : 'Zombis'}`);
     const heading = document.createElement('strong'); heading.className = 'quest-coin-heading';
-    heading.textContent = `Pausa táctica · próxima oleada ${wave}`;
+    heading.textContent = label || `Pausa táctica · próxima oleada ${wave}`;
     const scene = document.createElement('div'); scene.className = 'quest-coin-scene';
     const shadow = document.createElement('div'); shadow.className = 'quest-coin-shadow';
     const toss = document.createElement('div'); toss.className = 'quest-coin-toss';

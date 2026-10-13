@@ -1,4 +1,4 @@
-const IMPORTANT = new Set(['mower', 'wave', 'wave-start', 'wave-ending', 'tactical', 'closing', 'finished', 'sun']);
+const IMPORTANT = new Set(['mower', 'wave', 'wave-start', 'wave-ending', 'tactical', 'closing', 'finished', 'sun', 'cherry-explosion']);
 const LIFECYCLE = new Set(['defeat', 'death', 'deployment', 'deploy', 'invasion']);
 
 function aggregatePulseEvents(events) {

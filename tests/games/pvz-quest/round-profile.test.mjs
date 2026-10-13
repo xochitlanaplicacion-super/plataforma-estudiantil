@@ -119,10 +119,92 @@ test('Classic bites accumulate 500 damage in five seconds, while the walnut surv
 
 test('Classic bites cap actual damage at the targeted plant life rather than emitting impossible overkill', () => {
   const state = ready();
-  state.units = [unit('sunflower', 0, 2), unit('common', 0, 3)];
+  state.units = [unit('sunflower', 0, 2, 'classic', { hp: 250 }), unit('common', 0, 3)];
   const result = resolveRound(state);
-  assert.equal(result.events.find(item => item.type === 'damage' && item.unitId === 'sunflower-0-2').amount, 300);
+  assert.equal(result.events.find(item => item.type === 'damage' && item.unitId === 'sunflower-0-2').amount, 250);
   assert.equal(result.state.units.some(item => item.typeId === 'sunflower'), false);
+});
+
+test('tactical Classic bites ordinary plants for 275 damage per five-second stage', () => {
+  const state = ready();
+  state.units = [unit('sunflower', 0, 2), unit('common', 0, 3, 'classic', { move: 0 })];
+  const first = resolveRound(state);
+  assert.equal(first.state.units.find(item => item.typeId === 'sunflower').hp, 25);
+  assert.equal(first.state.units.find(item => item.typeId === 'sunflower').everDamaged, true);
+  assert.equal(first.events.find(item => item.type === 'damage' && item.side === 'plants').amount, 275);
+  assert.equal(nextRound(first.state).units.some(item => item.typeId === 'sunflower'), false);
+});
+
+test('tactical cherry blast damages 3×3, chars defeated zombies and leaves the sturdy dragon alive', () => {
+  const state = ready();
+  state.units = [
+    unit('cherry-bomb', 2, 4),
+    unit('common', 1, 3, 'classic', { id: 'near-1', move: 0 }),
+    unit('cone', 2, 4, 'classic', { id: 'near-2', move: 0 }),
+    unit('football', 3, 5, 'classic', { id: 'near-3', move: 0 }),
+    unit('dragon', 2, 4, 'classic', { id: 'dragon', move: 0 }),
+    unit('common', 0, 4, 'classic', { id: 'far-row', move: 0 }),
+    unit('common', 2, 6, 'classic', { id: 'far-col', move: 0 }),
+  ];
+  const result = resolveRound(state);
+  assert.equal(result.events.filter(item => item.type === 'cherry-explosion').length, 1);
+  assert.deepEqual(result.events.filter(item => item.type === 'defeat' && item.reason === 'ash')
+    .map(item => item.unitId).sort(), ['near-1', 'near-2', 'near-3']);
+  assert.equal(result.state.units.find(item => item.id === 'dragon').hp, 200);
+  assert.equal(result.state.units.find(item => item.id === 'far-row').hp, 270);
+  assert.equal(result.state.units.find(item => item.id === 'far-col').hp, 270);
+});
+
+test('tactical cherry remains armed without contact, then catches a fast zombie on the crossed tile', () => {
+  const state = ready();
+  state.zombieSpeed = 1.7;
+  state.units = [unit('cherry-bomb', 2, 4), unit('common', 2, 5)];
+  const result = resolveRound(state);
+  assert.equal(result.events.filter(item => item.type === 'cherry-explosion').length, 1);
+  assert.equal(result.events.find(item => item.type === 'defeat' && item.typeId === 'common').reason, 'ash');
+  const waiting = ready();
+  waiting.units = [unit('cherry-bomb', 2, 4), unit('common', 0, 7, 'classic', { move: 0 })];
+  const quiet = resolveRound(waiting);
+  assert.equal(quiet.events.some(item => item.type === 'cherry-explosion'), false);
+  assert(quiet.state.units.some(item => item.typeId === 'cherry-bomb'));
+});
+
+test('tactical cherry shop blocks repeat purchase until six five-second combat steps, undo restores purchase', () => {
+  const initial = createMatch({ balanceProfile: 'classic', rounds: 20 });
+  initial.resources.plants = 1000;
+  const planning = beginPlanning(initial);
+  const first = addOrder(planning, 'plants', 'cherry-bomb', 2, 4);
+  assert.equal(availableUnits(first, 'plants').find(item => item.id === 'cherry-bomb').cooldownRemaining, 30);
+  assert.throws(() => addOrder(first, 'plants', 'cherry-bomb', 1, 4), /recarga: 30 s/);
+  const undone = removeOrder(first, 'plants', first.plans.plants[0].id);
+  assert.equal(availableUnits(undone, 'plants').find(item => item.id === 'cherry-bomb').cooldownRemaining, 0);
+  let state = commitPlan(first); state = continuePlanning(state); state = commitPlan(state); state = resolveRound(state).state;
+  assert.equal(availableUnits(state, 'plants').find(item => item.id === 'cherry-bomb').cooldownRemaining, 25);
+  for (let index = 0; index < 5; index += 1) state = nextRound(state);
+  assert.equal(state.elapsed, 30);
+  assert.equal(availableUnits(state, 'plants').find(item => item.id === 'cherry-bomb').cooldownRemaining, 0);
+});
+
+for (const profile of ['classic', 'aula']) {
+  test(`${profile} tactical Tripitidora launches one pea in each adjacent lane when only centre has a target`, () => {
+    const state = ready(profile);
+    state.units = [unit('threepeater', 2, 2, profile), unit('dragon', 2, 7, profile, { move: 0 })];
+    const result = resolveRound(state);
+    const shots = result.events.filter(item => item.type === 'shot');
+    assert.deepEqual([...new Set(shots.map(item => item.row))], [1, 2, 3]);
+    assert(shots.every(item => item.fromRow === 2));
+    assert.equal(shots.filter(item => item.targetId).length, profile === 'classic' ? 4 : 1);
+  });
+}
+
+test('tactical placement permits a zombie on a tile but not a second plant', () => {
+  const state = createMatch({ balanceProfile: 'classic' });
+  state.units = [unit('common', 2, 4, 'classic', { move: 0 })];
+  const planning = beginPlanning(state);
+  const planted = addOrder(planning, 'plants', 'peashooter', 2, 4);
+  assert.equal(planted.plans.plants[0].paidCost, 100);
+  assert.equal(planted.plans.plants[0].purchasedBy, 'plants');
+  assert.throws(() => addOrder(planted, 'plants', 'sunflower', 2, 4), /ocupada por una planta/);
 });
 
 test('Classic mines take fifteen battle seconds to arm and spikes apply five contact pulses without hitting flyers', () => {

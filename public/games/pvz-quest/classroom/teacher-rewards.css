@@ -1,0 +1,259 @@
+/* Teacher-led question phase. Keep the arena visible below this panel. */
+.game[data-tactical='briefing'] .control-panel {
+  max-height: min(43dvh, 360px) !important;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.game[data-phase='resources'] .control-panel {
+  max-height: min(43dvh, 360px) !important;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.game .shovel-card svg { display: block; margin: 0 auto 2px; }
+.game .shovel-card[aria-pressed='true'] { box-shadow: 0 0 0 2px #ffd956, inset 0 0 0 1px #faffd7; }
+.game .card-cooldown {
+  position: absolute;
+  inset: 2px 2px auto auto;
+  z-index: 1;
+  max-width: calc(100% - 4px);
+  padding: 1px 3px;
+  border-radius: 4px;
+  background: #53231c;
+  color: #fff6d8;
+  font-size: .55rem;
+  font-weight: 900;
+  line-height: 1.1;
+  white-space: nowrap;
+}
+
+.game[data-tactical='briefing'] #controls:has(.teacher-briefing) {
+  display: block;
+  min-width: 0;
+}
+
+.teacher-briefing {
+  display: grid;
+  gap: clamp(7px, 1vw, 12px);
+  min-width: 0;
+  padding: clamp(9px, 1.5vw, 17px);
+  border: 3px ridge #ad813a;
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 4% 6%, #cfed8780, transparent 30%),
+    linear-gradient(160deg, #527b31, #1c4428 70%);
+  box-shadow: inset 0 0 0 2px #19371b, 0 4px 0 #523a1a;
+  color: #fff6d5;
+}
+
+.teacher-briefing-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  min-width: 0;
+}
+
+.teacher-briefing-header h2,
+.teacher-briefing-header strong {
+  margin: 0;
+  color: #ffec9d;
+  font: 800 clamp(1.1rem, 2.3vw, 1.7rem)/1.1 Impact, 'Arial Black', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: .025em;
+  text-shadow: 2px 3px #17301a;
+}
+
+.teacher-briefing-header p,
+.teacher-briefing-header span,
+.teacher-briefing-footer p,
+.teacher-briefing-footer span {
+  margin: 0;
+  color: #fff6d5;
+  font-size: clamp(.72rem, 1.15vw, .88rem);
+  line-height: 1.35;
+}
+
+.teacher-reward-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(7px, 1vw, 12px);
+  min-width: 0;
+}
+
+.teacher-reward-team {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+  min-width: 0;
+  padding: clamp(8px, 1vw, 12px);
+  border: 2px solid #d8bd6d;
+  border-radius: 9px;
+  background: linear-gradient(#fff5cc, #e5cf86);
+  box-shadow: inset 0 1px #fff9de, 0 3px #233718;
+  color: #46310f;
+}
+
+.teacher-reward-team.zombies,
+.teacher-reward-team[data-side='zombies'] {
+  border-color: #bda2c5;
+  background: linear-gradient(#f4e9d7, #d6c1d4);
+  color: #3a2c3b;
+}
+
+.teacher-reward-team > strong,
+.teacher-reward-team > h3 {
+  margin: 0;
+  color: inherit;
+  font: 800 clamp(.9rem, 1.6vw, 1.2rem)/1.15 Impact, 'Arial Black', sans-serif;
+  letter-spacing: .02em;
+}
+
+.teacher-reward-team .button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+}
+
+.game .teacher-reward-team button,
+.teacher-rewards-drawer .teacher-reward-team button {
+  min-width: 54px;
+  min-height: 42px;
+  padding: 6px 11px;
+  border: 2px solid #7c531e;
+  border-radius: 8px;
+  background: linear-gradient(#fffadc, #efda8d);
+  box-shadow: 0 3px #4c3816;
+  color: #3f2e10;
+  font-size: clamp(.85rem, 1.45vw, 1.05rem);
+  font-weight: 900;
+  touch-action: manipulation;
+}
+
+.game .teacher-reward-team button:hover:not(:disabled),
+.teacher-rewards-drawer .teacher-reward-team button:hover:not(:disabled) {
+  background: linear-gradient(#fffce9, #f8e7a4);
+}
+
+.game .teacher-reward-team button:active:not(:disabled),
+.teacher-rewards-drawer .teacher-reward-team button:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px #4c3816;
+}
+
+.teacher-briefing-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 14px;
+  padding-top: 7px;
+  border-top: 1px solid #d9dfaf88;
+}
+
+.game .teacher-briefing-footer .primary {
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 2px solid #b68a38;
+  border-radius: 8px;
+  background: linear-gradient(#85b34a, #3b741c);
+  box-shadow: 0 3px #183619;
+  color: #fffce6;
+  font-size: clamp(.82rem, 1.45vw, 1rem);
+  font-weight: 900;
+}
+
+.game .teacher-briefing-footer .primary:disabled,
+.game .teacher-reward-team button:disabled,
+.teacher-rewards-drawer .teacher-reward-team button:disabled {
+  opacity: .55;
+  box-shadow: none;
+}
+
+/* Teacher tools are a modal, separate from the students' purchase strip. */
+.teacher-rewards-drawer {
+  width: min(760px, calc(100vw - 24px));
+  max-width: calc(100vw - 24px);
+  min-width: 0;
+  max-height: min(90dvh, 760px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: clamp(12px, 2.5vw, 23px);
+  border: 4px ridge #ad813a;
+  border-radius: 14px;
+  background: linear-gradient(#fff5cc, #e8d494);
+  box-shadow: 0 10px 0 #342717, 0 24px 70px #071b10bb;
+  color: #493414;
+}
+
+.teacher-rewards-drawer::backdrop {
+  background: #081c12cc;
+  backdrop-filter: blur(3px);
+}
+
+.teacher-rewards-drawer > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 9px;
+  border-bottom: 2px solid #ba9b56;
+}
+
+.teacher-rewards-drawer > header h2 {
+  margin: 0;
+  color: #493414;
+  font: 800 clamp(1.25rem, 3vw, 1.8rem)/1.1 Impact, 'Arial Black', sans-serif;
+  text-transform: uppercase;
+}
+
+.teacher-rewards-drawer > header button,
+.teacher-rewards-drawer > footer button {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 7px 12px;
+  flex: 0 0 auto;
+}
+
+.teacher-rewards-drawer > p {
+  margin: 11px 0;
+  font-size: .9rem;
+  line-height: 1.4;
+}
+
+.teacher-rewards-drawer .teacher-reward-grid { margin: 12px 0; }
+.teacher-rewards-drawer .teacher-reward-team button { min-height: 44px; }
+
+.teacher-rewards-drawer > footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 2px solid #ba9b56;
+}
+
+@media (max-width: 620px) {
+  .game[data-tactical='briefing'] .control-panel { max-height: min(47dvh, 350px) !important; }
+  .teacher-reward-grid { grid-template-columns: minmax(0, 1fr); }
+  .teacher-reward-team { gap: 4px; }
+  .teacher-reward-team .button-row { gap: 5px; }
+  .game .teacher-reward-team button { min-height: 40px; }
+  .teacher-briefing-footer .primary { width: 100%; }
+  .teacher-rewards-drawer > header { align-items: flex-start; }
+  .teacher-rewards-drawer > header button { padding: 7px; }
+}
+
+@media (max-height: 440px) and (orientation: landscape) {
+  .game[data-tactical='briefing'] .control-panel { max-height: 39dvh !important; }
+  .teacher-briefing { padding: 7px; gap: 5px; }
+  .teacher-reward-team { padding: 6px; gap: 4px; }
+  .game .teacher-reward-team button { min-height: 32px; padding: 3px 7px; }
+  .teacher-briefing-footer { padding-top: 4px; }
+  .game .teacher-briefing-footer .primary { min-height: 34px; padding: 3px 9px; }
+}

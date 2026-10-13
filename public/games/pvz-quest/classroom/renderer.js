@@ -164,7 +164,7 @@ function tintedFrame(image, sprite, crop, frame, width, height, colour) {
 
 function drawSprite(context, image, definition, x, y, maxWidth, maxHeight, clock, phase = 0, options = {}) {
   if (!image) {
-    context.fillStyle = options.tint || definition.id === 'snow-pea' ? '#5dbfff' : definition.side === 'plants' ? '#396e25' : '#6d536b';
+    context.fillStyle = options.tint || (definition.id === 'snow-pea' ? '#5dbfff' : definition.side === 'plants' ? '#396e25' : '#6d536b');
     context.beginPath(); context.arc(x, y, Math.min(maxWidth, maxHeight) * 0.3, 0, Math.PI * 2); context.fill();
     context.fillStyle = '#fff'; context.font = 'bold 12px sans-serif'; context.textAlign = 'center';
     context.fillText(definition.name.slice(0, 10), x, y + 4);
@@ -351,7 +351,7 @@ export class BoardRenderer {
     const clock = now();
     this.liveEffects = this.liveEffects.filter(effect => clock < effect.started + effect.duration);
     this.expireLiveMowers(clock);
-    const drawable = new Set(['shot', 'freeze', 'damage', 'defeat', 'death', 'mine', 'chomp', 'bite', 'mower', 'invasion', 'sun']);
+    const drawable = new Set(['shot', 'freeze', 'damage', 'defeat', 'death', 'mine', 'chomp', 'bite', 'mower', 'invasion', 'sun', 'cherry-explosion']);
     for (const event of events) {
       if (!event || !drawable.has(event.type) || !Number.isFinite(event.row) || event.row < 0 || event.row >= GRID.rows) continue;
       if (event.type === 'sun' && (this.view.paused || this.view.initialStaging || this.view.tacticalPhase || this.view.phase === 'finished')) continue;
@@ -368,7 +368,8 @@ export class BoardRenderer {
         || (definition && Number.isFinite(event.col) ? { id: event.unitId, typeId: event.typeId, row: event.row, col: event.col, side: definition.side, hp: 0, maxHp: definition.hp } : null);
       this.liveEffects.push({
         event: { ...event }, started: clock,
-        duration: this.reducedMotion ? 400 : event.type === 'sun' ? SUN_EFFECT_MS : event.type === 'shot' ? 650 : 550,
+        duration: this.reducedMotion ? 400 : event.type === 'sun' ? SUN_EFFECT_MS
+          : event.type === 'cherry-explosion' || event.reason === 'ash' ? 900 : event.type === 'shot' ? 650 : 550,
         unit: former ? { ...former } : null,
       });
     }
@@ -463,11 +464,11 @@ export class BoardRenderer {
     }
     for (const event of events.filter(event => ['defeat', 'death'].includes(event.type))) {
       const lost = this.stage.previous.find(unit => unit.id === event.unitId);
-      if (lost) this.drawUnit(lost, clock, lost.col, 0, 1 - progress, true);
+      if (lost) this.drawUnit(lost, clock, lost.col, 0, 1 - progress, true, event.reason === 'ash');
     }
     for (const effect of this.liveEffects.filter(effect => ['defeat', 'death'].includes(effect.event.type))) {
       const local = clamp((clock - effect.started) / effect.duration, 0, 1);
-      if (effect.unit) this.drawUnit(effect.unit, clock, effect.unit.col, 0, 1 - local, true);
+      if (effect.unit) this.drawUnit(effect.unit, clock, effect.unit.col, 0, 1 - local, true, effect.event.reason === 'ash');
     }
     this.drawMowers(events, mowerProgress, clock);
     this.drawEffects(events, progress);
@@ -520,7 +521,7 @@ export class BoardRenderer {
     }
   }
 
-  drawUnit(unit, clock, col = unit.col, stack = 0, alpha = 1, defeated = false) {
+  drawUnit(unit, clock, col = unit.col, stack = 0, alpha = 1, defeated = false, ash = false) {
     if (isWaitingZombie(unit)) return;
     const definition = getUnit(unit.typeId, this.view.config?.balanceProfile ?? 'aula');
     if (!definition || !Number.isFinite(unit.row) || !Number.isFinite(col)) return;
@@ -547,7 +548,7 @@ export class BoardRenderer {
     context.fillStyle = 'rgba(15,35,14,.25)'; context.beginPath();
     context.ellipse(point.x, centre(unit.row, col).y + CELL_H * 0.32, CELL_W * 0.25, 6, 0, 0, Math.PI * 2); context.fill();
     const spriteClock = visual.cooldownSeconds > 0 && (!tactical || this.view.paused) ? (this.view.elapsed ?? 0) * 1000 : clock;
-    const options = { range: visual.range, ...(visual.frozen ? { tint: 'rgba(89,181,255,.68)' } : {}) };
+    const options = { range: visual.range, ...(ash ? { tint: '#332c2b' } : visual.frozen ? { tint: 'rgba(89,181,255,.68)' } : {}) };
     if (!this.reducedMotion && visual.frame) options.frame = visual.frame;
     drawSprite(context, this.images.get(definition.sprite.src), definition, point.x, point.y, CELL_W * 0.84, height,
       this.reducedMotion ? 0 : spriteClock, visual.cooldownSeconds > 0 || this.reducedMotion ? 0 : hash(unit.id || unit.typeId) % 16, options);
@@ -633,12 +634,45 @@ export class BoardRenderer {
     context.save();
     context.beginPath(); context.rect(GRID.x, GRID.y, GRID.width, GRID.height); context.clip();
     for (const event of events) {
+      if (event.type === 'cherry-explosion') {
+        const point = centre(event.row, event.col);
+        const local = ease(clamp(progress, 0, 1));
+        const radius = (this.reducedMotion ? 45 : 24) + local * (this.reducedMotion ? 30 : CELL_W * 1.35);
+        context.globalAlpha = (1 - local) * .8;
+        context.fillStyle = '#ffcf54';
+        context.beginPath(); context.arc(point.x, point.y, radius * .75, 0, Math.PI * 2); context.fill();
+        context.strokeStyle = '#ec5930'; context.lineWidth = this.reducedMotion ? 5 : 12 * (1 - local) + 2;
+        context.beginPath(); context.arc(point.x, point.y, radius, 0, Math.PI * 2); context.stroke();
+        if (!this.reducedMotion) {
+          context.fillStyle = '#403737';
+          for (let particle = 0; particle < 14; particle += 1) {
+            const angle = particle * Math.PI * 2 / 14;
+            const drift = radius * (.45 + particle % 3 * .14);
+            context.beginPath(); context.arc(point.x + Math.cos(angle) * drift,
+              point.y + Math.sin(angle) * drift - local * 18, 3 + particle % 4, 0, Math.PI * 2); context.fill();
+          }
+        }
+        continue;
+      }
+      if (event.type === 'defeat' && event.reason === 'ash') {
+        const point = centre(event.row, event.col);
+        context.globalAlpha = 1 - progress;
+        context.fillStyle = '#393b3a';
+        const seed = hash(event.unitId || event.sourceId || `${event.row}:${event.col}`);
+        for (let particle = 0; particle < (this.reducedMotion ? 6 : 18); particle += 1) {
+          const angle = particle * 2.39996 + seed % 17;
+          const distance = progress * (9 + particle % 5 * 9);
+          context.fillRect(point.x + Math.cos(angle) * distance,
+            point.y + Math.sin(angle) * distance - progress * (12 + particle % 4 * 5), 2 + particle % 4, 2 + particle % 3);
+        }
+        continue;
+      }
       if (event.type === 'shot') {
         if (!Number.isFinite(event.fromCol) || !Number.isFinite(event.toCol)) continue;
-        const from = centre(event.row, event.fromCol), to = centre(event.row, event.toCol);
+        const from = centre(event.fromRow ?? event.row, event.fromCol), to = centre(event.row, event.toCol);
         const travel = clamp(progress / 0.75, 0, 1);
         const x = from.x + (to.x - from.x) * travel;
-        const y = from.y - (event.lob ? Math.sin(travel * Math.PI) * 70 : 0);
+        const y = from.y + (to.y - from.y) * travel - (event.lob ? Math.sin(travel * Math.PI) * 70 : 0);
         context.globalAlpha = progress > 0.78 ? Math.max(0, (1 - progress) / 0.22) : 1;
         const ice = event.ice || event.typeId === 'snow-pea';
         context.fillStyle = ice ? '#86ddff' : event.lob ? '#f8db4f' : '#a6f15e'; context.strokeStyle = ice ? '#e5faff' : event.lob ? '#a26d22' : '#3c731f';
