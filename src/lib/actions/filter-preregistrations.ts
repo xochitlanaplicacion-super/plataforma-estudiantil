@@ -369,6 +369,19 @@ export async function listFilterPreRegistrations(): Promise<{ success: boolean; 
   }
 }
 
+export async function getFilterPendingOrderCount(): Promise<{ success: boolean; count: number; error?: string }> {
+  try {
+    const context = await requireFilterAccess();
+    const { count, error } = await context.admin.from('filter_preregistrations')
+      .select('id', { count: 'exact', head: true })
+      .eq('tenant_id', context.tenantId).eq('status', 'pending');
+    if (error) throw error;
+    return { success: true, count: count ?? 0 };
+  } catch (error) {
+    return { success: false, count: 0, error: errorText(error, 'No se pudieron contar las órdenes pendientes.') };
+  }
+}
+
 export async function getFilterPreRegistration(id: string): Promise<{ success: boolean; order?: FilterPreRegistrationOrder; error?: string }> {
   try {
     if (!UUID.test(id)) throw new Error('La orden solicitada no es válida.');

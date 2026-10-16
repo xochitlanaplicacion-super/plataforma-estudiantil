@@ -69,6 +69,7 @@ import { verificarMensajesClasePendientes } from '@/lib/actions/mensajes_clases'
 import { ServiceTimeRemaining } from '@/components/shared/ServiceTimeRemaining';
 import type { PlatformServiceSummary } from '@/lib/service-countdown';
 import { getActiveDashboardNavHref } from '@/lib/dashboard-navigation';
+import { FilterPendingOrdersReminderController } from '@/components/filter/FilterPendingOrdersReminderController';
 
 interface DashboardLayoutProps {
   children: React.ReactNode;
@@ -296,6 +297,9 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
   const activeMenus = filterEnabled && (userRole === 'superuser' || userRole === 'admin')
     ? [...baseMenus, filterMenu]
     : baseMenus;
+  const showFilterPendingReminder = filterEnabled && pathname !== '/dashboard/filtro'
+    && (userRole === 'encargado_filtro'
+      || ((userRole === 'admin' || userRole === 'superuser') && pathname.startsWith('/dashboard/filtro/')));
 
   return (
     <SidebarProvider>
@@ -354,6 +358,7 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
           </main>
         </div>
       </SidebarInset>
+      {showFilterPendingReminder && <FilterPendingOrdersReminderController key={pathname} />}
       {userRole !== 'encargado_filtro' && <GlobalChatNotification userId={userId} userRole={userRole} />}
     </SidebarProvider>
   );

@@ -179,7 +179,7 @@ export async function updateSession(request: NextRequest) {
       return NextResponse.redirect(url);
     }
     if (!pathname.startsWith('/dashboard/filtro')) {
-      const url = request.nextUrl.clone(); url.pathname = '/dashboard/filtro/retardos';
+      const url = request.nextUrl.clone(); url.pathname = '/dashboard/filtro';
       return NextResponse.redirect(url);
     }
   } else if (pathname.startsWith('/dashboard/filtro')) {

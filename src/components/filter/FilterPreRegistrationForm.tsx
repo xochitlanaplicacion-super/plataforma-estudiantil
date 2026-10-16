@@ -114,6 +114,7 @@ export function FilterPreRegistrationForm({ initialData }: { initialData: Filter
       const result = await createFilterPreregistration(form);
       if (!result.success) throw new Error(result.error || 'No se pudo guardar la orden.');
       setSavedKind(kind);
+      window.dispatchEvent(new Event('filter-pending-orders-changed'));
       requestId.current = null;
       setKind(null);
       setQuery('');

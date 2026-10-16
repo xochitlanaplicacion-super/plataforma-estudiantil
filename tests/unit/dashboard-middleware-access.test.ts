@@ -109,4 +109,13 @@ describe('dashboard middleware access during faster navigation', () => {
     expect(response.status).toBe(307);
     expect(response.headers.get('location')).toContain('reason=feature');
   });
+
+  it('opens pending orders when a filter user visits another dashboard route', async () => {
+    installClient({
+      profile: { tenant_id: 'school-1', rol: 'encargado_filtro', estatus: 'activo', fecha_expiracion: null },
+    });
+    const response = await updateSession(request('/dashboard'));
+    expect(response.status).toBe(307);
+    expect(response.headers.get('location')).toBe('https://school.example/dashboard/filtro');
+  });
 });

@@ -9,6 +9,7 @@ vi.mock('next/cache', () => ({ revalidatePath: mocks.revalidatePath }));
 import {
   completeFilterPreRegistration,
   createFilterPreregistration,
+  getFilterPendingOrderCount,
   getFilterPreRegistration,
   getFilterPreregistrationFormData,
   listFilterPreRegistrations,
@@ -66,9 +67,10 @@ function setup(role: 'profesor' | 'encargado_filtro' = 'encargado_filtro') {
     let action: 'read' | 'insert' | 'update' = 'read';
     let payload: any;
     let range: [number, number] | null = null;
+    let countOnly = false;
     const rows = () => (tables[table] || []).filter((row) => predicates.every((predicate) => predicate(row)));
     const query: any = {
-      select: () => query,
+      select: (_columns?: string, options?: { count?: string; head?: boolean }) => { countOnly = options?.head === true; return query; },
       eq: (key: string, value: unknown) => { predicates.push((row) => row[key] === value); return query; },
       in: (key: string, values: unknown[]) => { predicates.push((row) => values.includes(row[key])); return query; },
       order: () => query,
@@ -87,7 +89,7 @@ function setup(role: 'profesor' | 'encargado_filtro' = 'encargado_filtro') {
           return Promise.resolve({ data: rows(), error: null }).then(resolve, reject);
         }
         const selected = rows();
-        return Promise.resolve({ data: range ? selected.slice(range[0], range[1] + 1) : selected, error: null }).then(resolve, reject);
+        return Promise.resolve({ data: countOnly ? null : range ? selected.slice(range[0], range[1] + 1) : selected, count: countOnly ? selected.length : null, error: null }).then(resolve, reject);
       },
     };
     return query;
@@ -198,6 +200,18 @@ describe('preregistros cooperativos de Control de Filtro', () => {
     expect(completed.success).toBe(true);
     expect(db.tables.filter_preregistrations[0].status).toBe('completed');
     expect((await listFilterPreRegistrations()).orders).toHaveLength(0);
+  });
+
+  it('cuenta sólo las órdenes pendientes del tenant y no expone el conteo al docente', async () => {
+    const db = setup();
+    db.tables.filter_preregistrations.push(
+      { tenant_id: tenantId, id: requestId, status: 'pending' },
+      { tenant_id: tenantId, id: '00000000-0000-4000-8000-000000000001', status: 'completed' },
+      { tenant_id: 'other-tenant', id: '00000000-0000-4000-8000-000000000002', status: 'pending' },
+    );
+    expect(await getFilterPendingOrderCount()).toEqual({ success: true, count: 1 });
+    setup('profesor');
+    expect((await getFilterPendingOrderCount()).success).toBe(false);
   });
 
   it('no considera completo un grupo si se repite un alumno y falta otro', async () => {
