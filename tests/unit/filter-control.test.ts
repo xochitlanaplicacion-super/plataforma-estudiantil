@@ -35,11 +35,27 @@ describe('Control de Filtro multitenant', () => {
     expect(sql).toContain('private.has_filter_access(tenant_id)');
   });
 
+  it('sólo hace opcional la credencial del retiro y conserva obligatoria la foto de la persona', () => {
+    const sql = readFileSync('supabase/migrations/20261015100000_filter_optional_pickup_identification.sql', 'utf8');
+    const early = readFileSync('supabase/migrations/20260903044227_filter_early_departures.sql', 'utf8');
+    const extraordinary = readFileSync('supabase/migrations/20260903054043_extraordinary_handoffs_and_signatures.sql', 'utf8');
+    expect(sql).toContain('alter column identification_evidence_path drop not null');
+    expect(sql).toContain('alter column identification_type drop not null');
+    expect(sql).toContain('alter column identification_front_path drop not null');
+    expect(sql).toContain('filter_extraordinary_optional_identification_check');
+    expect(sql).toContain("identification_front_path is null and identity_status = 'no_verificable'");
+    expect(sql).toContain('final_handover_photo_path is not null');
+    expect(sql).not.toContain('alter column pickup_person_photo_path drop not null');
+    expect(early).toContain('pickup_person_photo_path text not null');
+    expect(extraordinary).toContain('pickup_person_photo_path text not null');
+  });
+
   it('el asistente preserva textos y fotos localmente y sólo limpia tras confirmación', () => {
     const component = readFileSync('src/components/filter/FilterEarlyDepartureWizard.tsx', 'utf8');
     const storage = readFileSync('src/lib/filter-early-departure-draft.ts', 'utf8');
     expect(component).toContain("status: 'queued'");
-    expect(component).toContain('Confirmo que se verificó la identidad');
+    expect(component).toContain('Identificación presentada (opcional)');
+    expect(component).toContain('Foto de la persona que retira');
     expect(component).toContain('await clearEarlyDepartureDraft(draftScope)');
     expect(storage).toContain('identificationEvidence: PersistedFile | null');
     expect(storage).toContain('pickupPersonPhoto: PersistedFile | null');
@@ -112,7 +128,8 @@ describe('Control de Filtro multitenant', () => {
     expect(mobile).toContain("canvas.toBlob(resolve, 'image/jpeg'");
     expect(mobile).toContain("'heic', 'heif'");
     expect(report).toContain('institution.logo_url');
-    expect(report).toContain("const x=i===0?12:107");
+    expect(report).toContain('const evidenceColumns = photos.length === 3 ? 3 : 2');
+    expect(report).toContain('Foto de identificación no adjuntada (opcional).');
     expect(report).toContain('Firma de la persona que recibe al alumno');
   });
 

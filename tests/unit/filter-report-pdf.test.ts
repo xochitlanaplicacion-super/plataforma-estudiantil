@@ -62,4 +62,26 @@ describe('PDF de expedientes grupales', () => {
     expect(doc.getNumberOfPages()).toBe(1);
     expect(printedText(doc)).toContain('Firma de la persona que recibe al alumno');
   });
+
+  it.each(['early', 'extraordinary'] as const)('muestra una ID genérica sin credencial en %s y conserva la foto de la persona', async (type) => {
+    const row = { ...reportRow(1), _type: type };
+    const event = groupFilterReportRows([row])[0];
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    await drawEvent(doc, event, {}, {});
+
+    expect(doc.getNumberOfPages()).toBe(1);
+    expect(commands(doc)).toContain('Foto de identificación no adjuntada');
+    expect(printedText(doc)).toContain('Persona que retira');
+    expect(printedText(doc)).toContain('Entrega final');
+  });
+
+  it('indica que existe una identificación PDF en vez de declararla ausente', async () => {
+    const row = { ...reportRow(1), identification_front_path: 'expediente/identificacion-frente.pdf' };
+    const event = groupFilterReportRows([row])[0];
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    await drawEvent(doc, event, {}, {});
+
+    expect(commands(doc)).toContain('Identificación PDF en expediente digital.');
+    expect(printedText(doc)).not.toContain('Foto de identificación no adjuntada');
+  });
 });

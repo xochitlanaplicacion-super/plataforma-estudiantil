@@ -254,9 +254,20 @@ function reportFields(row: FilterReportRow): Array<[string, unknown]> {
   return fields;
 }
 
-type Evidence = { label: string; path: string | null };
+type Evidence = { label: string; path: string | null; kind: 'identification' | 'photo' };
 function evidenceItems(event: ReportEvent): Evidence[] {
   const items: Evidence[] = [];
+  const identificationField = event.type === 'early' ? 'identification_evidence_path' : 'identification_front_path';
+  const identificationPaths = new Map<string, number[]>();
+  event.students.forEach((student, index) => {
+    const path = String(student[identificationField] || '');
+    identificationPaths.set(path, [...(identificationPaths.get(path) || []), index + 1]);
+  });
+  for (const [path, numbers] of identificationPaths) items.push({
+    label: identificationPaths.size === 1 ? 'Identificación presentada' : `Identificación · alumno(s) ${numbers.join(', ')}`,
+    path: path || null,
+    kind: 'identification',
+  });
   for (const [field, label] of [
     ['pickup_person_photo_path', 'Persona que retira'],
     ['final_handover_photo_path', 'Entrega final'],
@@ -267,13 +278,40 @@ function evidenceItems(event: ReportEvent): Evidence[] {
       const path = String(student[field] || '');
       if (path) byPath.set(path, [...(byPath.get(path) || []), index + 1]);
     });
-    if (!byPath.size) items.push({ label, path: null });
+    if (!byPath.size) items.push({ label, path: null, kind: 'photo' });
     else for (const [path, numbers] of byPath) items.push({
       label: byPath.size === 1 ? label : `${label} · alumno(s) ${numbers.join(', ')}`,
       path,
+      kind: 'photo',
     });
   }
   return items;
+}
+
+function drawIdentificationCard(doc: jsPDF, x: number, y: number, width: number, message: string) {
+  const inset = 5;
+  const cardX = x + inset;
+  const cardY = y + 10;
+  const cardWidth = width - inset * 2;
+  doc.setFillColor(233, 240, 246);
+  doc.setDrawColor(166, 181, 196);
+  doc.roundedRect(cardX, cardY, cardWidth, 29, 1.5, 1.5, 'FD');
+  doc.setFillColor(205, 219, 230);
+  doc.circle(cardX + 11, cardY + 12, 4.2, 'F');
+  doc.roundedRect(cardX + 4, cardY + 18, 14, 6, 2, 2, 'F');
+  doc.setDrawColor(157, 177, 195);
+  doc.setLineWidth(.6);
+  for (let line = 0; line < 3; line++) {
+    const right = cardX + cardWidth - 5;
+    const start = cardX + 23;
+    if (right > start) doc.line(start, cardY + 10 + line * 5, right, cardY + 10 + line * 5);
+  }
+  doc.setLineWidth(.2);
+  doc.setTextColor(91, 110, 129);
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(5.4);
+  const lines = doc.splitTextToSize(message, width - 8) as string[];
+  doc.text(lines, x + width / 2, y + 43, { align: 'center', lineHeightFactor: 1.05 });
 }
 
 export async function drawEvent(doc: jsPDF, event: ReportEvent, institution: Institution, urls: Record<string, string>) {
@@ -364,7 +402,8 @@ export async function drawEvent(doc: jsPDF, event: ReportEvent, institution: Ins
   const photos = evidenceItems(event);
   const isUndelivered = event.type === 'extraordinary' && event.students[0].status !== 'entregado';
   const signaturePaths = isUndelivered ? [] : [...new Set(event.students.map((student) => String(student.pickup_signature_path || '')).filter(Boolean))];
-  const minimumEvidenceHeight = 8 + Math.ceil(photos.length / 2) * 59 + (isUndelivered ? 19 : signaturePaths.length ? 59 : 19);
+  const evidenceColumns = photos.length === 3 ? 3 : 2;
+  const minimumEvidenceHeight = 8 + Math.ceil(photos.length / evidenceColumns) * 59 + (isUndelivered ? 19 : signaturePaths.length ? 59 : 19);
   if (event.students.length > 1 || y + minimumEvidenceHeight > 276) nextPage();
 
   ensureSpace(8);
@@ -373,25 +412,33 @@ export async function drawEvent(doc: jsPDF, event: ReportEvent, institution: Ins
   doc.setFontSize(9);
   doc.text('Evidencias fotográficas', 12, y + 5);
   y += 8;
-  for (let index = 0; index < photos.length; index += 2) {
+  for (let index = 0; index < photos.length; index += evidenceColumns) {
     ensureSpace(59);
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < evidenceColumns; i++) {
       const photo = photos[index + i];
       if (!photo) continue;
-      const x=i===0?12:107;
+      const width = evidenceColumns === 3 ? 60 : 91;
+      const x = evidenceColumns === 3 ? 12 + i * 63 : i === 0 ? 12 : 107;
       doc.setFillColor(247, 249, 252);
       doc.setDrawColor(220, 226, 234);
-      doc.roundedRect(x, y, 91, 58, 2, 2, 'FD');
+      doc.roundedRect(x, y, width, 58, 2, 2, 'FD');
       doc.setTextColor(60, 70, 85);
       doc.setFont('helvetica', 'bold');
-      doc.setFontSize(7);
-      doc.text(photo.label, x + 4, y + 6);
-      const image = photo.path && urls[photo.path] ? await dataUrl(urls[photo.path]) : null;
-      if (image) addContainedImage(doc, image, x + 4, y + 9, 83, 45);
+      const labelLines = (doc.splitTextToSize(photo.label, width - 8) as string[]).slice(0, 2);
+      doc.setFontSize(labelLines.length > 1 ? 6.2 : 7);
+      doc.text(labelLines, x + 4, y + 5.8, { lineHeightFactor: 1.1 });
+      const isPdf = photo.kind === 'identification' && photo.path && /\.pdf$/i.test(photo.path);
+      const image = !isPdf && photo.path && urls[photo.path] ? await dataUrl(urls[photo.path]) : null;
+      if (image) addContainedImage(doc, image, x + 4, y + 9, width - 8, 45);
+      else if (photo.kind === 'identification') {
+        drawIdentificationCard(doc, x, y, width, !photo.path
+          ? 'Foto de identificación no adjuntada (opcional).'
+          : isPdf ? 'Identificación PDF en expediente digital.' : 'Vista previa de identificación no disponible.');
+      }
       else {
         doc.setTextColor(150, 158, 170);
         doc.setFont('helvetica', 'normal');
-        doc.text('Sin imagen disponible', x + 45.5, y + 34, { align: 'center' });
+        doc.text('Sin imagen disponible', x + width / 2, y + 34, { align: 'center' });
       }
     }
     y += 59;

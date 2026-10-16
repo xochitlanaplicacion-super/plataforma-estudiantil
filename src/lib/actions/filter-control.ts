@@ -498,6 +498,12 @@ function validatedUpload(formData: FormData, key: string, label: string, allowed
   return value;
 }
 
+function optionalValidatedUpload(formData: FormData, key: string, label: string, allowedTypes: string[]) {
+  const value = formData.get(key);
+  if (value === null || value === '' || (value instanceof File && !value.name && value.size === 0)) return null;
+  return validatedUpload(formData, key, label, allowedTypes);
+}
+
 function extensionForFile(file: File) {
   return ({ 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf' } as Record<string, string>)[file.type];
 }
@@ -539,16 +545,20 @@ export async function createEarlyDeparture(formData: FormData) {
     const notifiedStaffName = requiredFormText(formData, 'notifiedStaffName', 'El nombre del personal notificado', 220);
     const deliveringTeacherName = requiredFormText(formData, 'deliveringTeacherName', 'El docente que entrega', 220);
 
-    const identificationFile = validatedUpload(formData, 'identificationEvidence', 'La identificación presentada', EVIDENCE_MIME_TYPES);
+    const identificationFile = optionalValidatedUpload(formData, 'identificationEvidence', 'La identificación presentada', EVIDENCE_MIME_TYPES);
     const pickupPhoto = validatedUpload(formData, 'pickupPersonPhoto', 'La foto de la persona que retira', IMAGE_MIME_TYPES);
     const handoverPhoto = validatedUpload(formData, 'finalHandoverPhoto', 'La foto final del adulto y el alumno', IMAGE_MIME_TYPES);
     const pickupSignature = validatedUpload(formData, 'pickupSignature', 'La firma de la persona que retira', ['image/png']);
     const basePath = `${context.tenantId}/salidas/${clientRequestId}/${randomUUID()}`;
+    const identificationPath = identificationFile ? `${basePath}/identificacion.${extensionForFile(identificationFile)}` : null;
+    const pickupPhotoPath = `${basePath}/persona.${extensionForFile(pickupPhoto)}`;
+    const handoverPhotoPath = `${basePath}/entrega.${extensionForFile(handoverPhoto)}`;
+    const signaturePath = `${basePath}/firma.png`;
     const uploads = [
-      { file: identificationFile, path: `${basePath}/identificacion.${extensionForFile(identificationFile)}` },
-      { file: pickupPhoto, path: `${basePath}/persona.${extensionForFile(pickupPhoto)}` },
-      { file: handoverPhoto, path: `${basePath}/entrega.${extensionForFile(handoverPhoto)}` },
-      { file: pickupSignature, path: `${basePath}/firma.png` },
+      ...(identificationFile && identificationPath ? [{ file: identificationFile, path: identificationPath }] : []),
+      { file: pickupPhoto, path: pickupPhotoPath },
+      { file: handoverPhoto, path: handoverPhotoPath },
+      { file: pickupSignature, path: signaturePath },
     ];
     const uploadedPaths: string[] = [];
     for (const upload of uploads) {
@@ -566,8 +576,8 @@ export async function createEarlyDeparture(formData: FormData) {
       pickup_person_name: pickupPersonName,
       relationship,
       relationship_other: relationshipOther,
-      identification_evidence_path: uploads[0].path,
-      pickup_person_photo_path: uploads[1].path,
+      identification_evidence_path: identificationPath,
+      pickup_person_photo_path: pickupPhotoPath,
       notified_party: notifiedParty,
       notified_staff_name: notifiedStaffName,
       notification_method: notificationMethod,
@@ -578,8 +588,8 @@ export async function createEarlyDeparture(formData: FormData) {
       delivering_teacher_name: deliveringTeacherName,
       registered_by_user_id: context.user.id,
       reporter_name: reporterName,
-      final_handover_photo_path: uploads[2].path,
-      pickup_signature_path: uploads[3].path,
+      final_handover_photo_path: handoverPhotoPath,
+      pickup_signature_path: signaturePath,
       identity_and_notification_confirmed: true,
     };
     const entries = students.map(({ student, group, level }) => ({
@@ -707,12 +717,11 @@ export async function createExtraordinaryHandoff(formData: FormData) {
 
     const deliveryContext = String(formData.get('deliveryContext') || '') as typeof EXTRAORDINARY_CONTEXTS[number];
     const pickupRelationship = String(formData.get('pickupRelationship') || '') as typeof EXTRAORDINARY_RELATIONSHIPS[number];
-    const identificationType = String(formData.get('identificationType') || '') as typeof EXTRAORDINARY_ID_TYPES[number];
+    const identificationTypeInput = String(formData.get('identificationType') || '') as typeof EXTRAORDINARY_ID_TYPES[number];
     const authorizationMethod = String(formData.get('authorizationMethod') || '') as typeof EXTRAORDINARY_AUTH_METHODS[number];
     const status = String(formData.get('status') || '') as typeof EXTRAORDINARY_STATUSES[number];
     if (!EXTRAORDINARY_CONTEXTS.includes(deliveryContext)) throw new Error('El contexto de entrega no es válido.');
     if (!EXTRAORDINARY_RELATIONSHIPS.includes(pickupRelationship)) throw new Error('La relación de quien retira no es válida.');
-    if (!EXTRAORDINARY_ID_TYPES.includes(identificationType)) throw new Error('El tipo de identificación no es válido.');
     if (!EXTRAORDINARY_AUTH_METHODS.includes(authorizationMethod)) throw new Error('El método de autorización no es válido.');
     if (!EXTRAORDINARY_STATUSES.includes(status)) throw new Error('La resolución no es válida.');
 
@@ -724,17 +733,15 @@ export async function createExtraordinaryHandoff(formData: FormData) {
 
     const deliveryContextOther = deliveryContext === 'otro' ? requiredFormText(formData, 'deliveryContextOther', 'El contexto', 120) : null;
     const pickupRelationshipOther = pickupRelationship === 'otro' ? requiredFormText(formData, 'pickupRelationshipOther', 'La relación', 120) : null;
-    const identificationTypeOther = identificationType === 'otro' ? requiredFormText(formData, 'identificationTypeOther', 'El tipo de identificación', 120) : null;
     const delivered = status === 'entregado';
     const adultConfirmed = String(formData.get('adultConfirmed')) === 'true';
     const identityMatches = String(formData.get('identityMatches')) === 'true';
     const noVisibleImpairment = String(formData.get('noVisibleImpairment')) === 'true';
     const institutionApproved = String(formData.get('institutionApproved')) === 'true';
     const protocolConfirmed = String(formData.get('protocolConfirmed')) === 'true';
-    const identityStatus = identityMatches ? 'coincide' : 'no_verificable';
     const consentStatus = String(formData.get('consentStatus') || '');
     if (!['confirmado', 'rechazado', 'sin_respuesta'].includes(consentStatus)) throw new Error('Selecciona el resultado del consentimiento.');
-    if (delivered && (!adultConfirmed || !identityMatches || !noVisibleImpairment || !institutionApproved || !protocolConfirmed || identityStatus !== 'coincide' || consentStatus !== 'confirmado')) {
+    if (delivered && (!adultConfirmed || !identityMatches || !noVisibleImpairment || !institutionApproved || !protocolConfirmed || consentStatus !== 'confirmado')) {
       throw new Error('No se puede entregar: faltan validaciones obligatorias de identidad, consentimiento o aprobación.');
     }
 
@@ -756,17 +763,20 @@ export async function createExtraordinaryHandoff(formData: FormData) {
     const resolutionReason = delivered ? null : requiredFormText(formData, 'resolutionReason', 'El motivo de la resolución', 1000);
     const deliveringTeacherName = delivered ? requiredFormText(formData, 'deliveringTeacherName', 'El docente que entrega', 220) : null;
 
-    const identificationFront = validatedUpload(formData, 'identificationFront', 'El frente de la identificación', EVIDENCE_MIME_TYPES);
-    const identificationBackValue = formData.get('identificationBack');
-    const identificationBack = identificationBackValue instanceof File && identificationBackValue.size > 0
-      ? validatedUpload(formData, 'identificationBack', 'El reverso de la identificación', EVIDENCE_MIME_TYPES) : null;
+    const identificationFront = optionalValidatedUpload(formData, 'identificationFront', 'El frente de la identificación', EVIDENCE_MIME_TYPES);
+    const identificationBack = optionalValidatedUpload(formData, 'identificationBack', 'El reverso de la identificación', EVIDENCE_MIME_TYPES);
+    if (identificationBack && !identificationFront) throw new Error('Adjunta primero el frente de la identificación o retira la foto del reverso.');
+    if (identificationFront && !EXTRAORDINARY_ID_TYPES.includes(identificationTypeInput)) throw new Error('Selecciona el tipo de identificación presentada.');
+    const identificationType = identificationFront ? identificationTypeInput : null;
+    const identificationTypeOther = identificationType === 'otro' ? requiredFormText(formData, 'identificationTypeOther', 'El tipo de identificación', 120) : null;
+    const identityStatus = identificationFront && identityMatches ? 'coincide' : 'no_verificable';
     const personPhoto = validatedUpload(formData, 'pickupPersonPhoto', 'La fotografía de la persona', IMAGE_MIME_TYPES);
     const authorizationEvidence = validatedUpload(formData, 'authorizationEvidence', 'La evidencia de autorización', EVIDENCE_MIME_TYPES);
     const finalPhoto = delivered ? validatedUpload(formData, 'finalHandoverPhoto', 'La fotografía final de entrega', IMAGE_MIME_TYPES) : null;
     const signature = delivered ? validatedUpload(formData, 'pickupSignature', 'La firma de quien recibe', ['image/png']) : null;
     const basePath = `${context.tenantId}/entregas-extraordinarias/${clientRequestId}/${randomUUID()}`;
     const uploads = [
-      { key: 'identificationFront', file: identificationFront, path: `${basePath}/identificacion-frente.${extensionForFile(identificationFront)}` },
+      ...(identificationFront ? [{ key: 'identificationFront', file: identificationFront, path: `${basePath}/identificacion-frente.${extensionForFile(identificationFront)}` }] : []),
       ...(identificationBack ? [{ key: 'identificationBack', file: identificationBack, path: `${basePath}/identificacion-reverso.${extensionForFile(identificationBack)}` }] : []),
       { key: 'pickupPersonPhoto', file: personPhoto, path: `${basePath}/persona.${extensionForFile(personPhoto)}` },
       { key: 'authorizationEvidence', file: authorizationEvidence, path: `${basePath}/autorizacion.${extensionForFile(authorizationEvidence)}` },
@@ -790,7 +800,7 @@ export async function createExtraordinaryHandoff(formData: FormData) {
       pickup_relationship: pickupRelationship, pickup_relationship_other: pickupRelationshipOther,
       adult_confirmed: adultConfirmed, identification_type: identificationType, identification_type_other: identificationTypeOther,
       identification_reference: null,
-      identification_front_path: paths.get('identificationFront'), identification_back_path: paths.get('identificationBack') || null,
+      identification_front_path: paths.get('identificationFront') || null, identification_back_path: paths.get('identificationBack') || null,
       pickup_person_photo_path: paths.get('pickupPersonPhoto'), vehicle_description: null,
       vehicle_photo_path: null, identity_matches: identityMatches, no_visible_impairment: noVisibleImpairment,
       authorization_method: authorizationMethod, authorized_at: authorizedAt, authorization_expires_at: authorizationExpiresAt,
