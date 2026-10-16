@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { requireTenantSession } from '@/lib/tenant/context';
 import { FILTER_REASONS, normalizeFilterName } from '@/lib/filter-control';
+import { completeFilterPreRegistration } from '@/lib/actions/filter-preregistrations';
 
 const FILTER_ROLES = ['superuser', 'admin', 'encargado_filtro'] as const;
 const EARLY_RELATIONSHIPS = ['madre', 'padre', 'tutor', 'abuelo', 'hermano', 'familiar_autorizado', 'otro'] as const;
@@ -101,6 +102,39 @@ async function existingFilterBatch(context: Awaited<ReturnType<typeof requireTen
     throw new Error('Este borrador ya se guardó con otra selección de alumnos. Inicia uno nuevo.');
   }
   return { rows, groupColumnAvailable: true };
+}
+
+async function linkedPreRegistration(
+  context: Awaited<ReturnType<typeof requireTenantSession>>,
+  formData: FormData,
+  kind: 'early' | 'extraordinary',
+  clientRequestId: string,
+  studentIds: string[],
+) {
+  const explicitId = String(formData.get('preRegistrationId') || '');
+  if (explicitId && (!FILTER_UUID.test(explicitId) || explicitId !== clientRequestId)) {
+    throw new Error('La orden no coincide con el identificador del expediente.');
+  }
+  const { data: order, error } = await context.admin.from('filter_preregistrations')
+    .select('id,kind,student_ids,status,evidence_path')
+    .eq('tenant_id', context.tenantId).eq('id', clientRequestId).maybeSingle();
+  if (error) throw error;
+  if (!order) {
+    if (explicitId) throw new Error('La orden pendiente no existe. Vuelve a abrirla desde Control de Filtro.');
+    return null;
+  }
+  if (!explicitId || order.kind !== kind || !['pending', 'completed'].includes(order.status)
+    || order.student_ids.length !== studentIds.length
+    || order.student_ids.some((id: string) => !studentIds.includes(id))) {
+    throw new Error('La orden no corresponde con el tipo o los alumnos del expediente. Vuelve a abrirla desde Control de Filtro.');
+  }
+  return order;
+}
+
+async function closeLinkedPreRegistration(id: string | null, kind: 'early' | 'extraordinary', studentIds: string[]) {
+  if (!id) return;
+  const result = await completeFilterPreRegistration(id, kind, studentIds);
+  if (!result.success) throw new Error(`${result.error || 'No se pudo cerrar la orden.'} El expediente quedó guardado; vuelve a pulsar Guardar para reconciliar la orden sin duplicarlo.`);
 }
 
 async function auditFilterBatch(context: Awaited<ReturnType<typeof requireTenantSession>>, action: string, entityType: string, rows: Array<{ id: string; student_id: string }>, groupEventId: string, details: Record<string, unknown> = {}) {
@@ -516,8 +550,10 @@ export async function createEarlyDeparture(formData: FormData) {
       throw new Error('El identificador del borrador no es válido. Reinicia el proceso.');
     }
     const studentIds = batchStudentIds(formData);
+    const preRegistration = await linkedPreRegistration(context, formData, 'early', clientRequestId, studentIds);
     const previous = await existingFilterBatch(context, 'filter_early_departures', clientRequestId, studentIds);
     if (previous.rows.length) {
+      await closeLinkedPreRegistration(preRegistration?.id || null, 'early', studentIds);
       await auditFilterBatch(context, 'early_departure.created', 'early_departure', previous.rows, clientRequestId, { recoveredFromIdempotentRetry: true });
       return { success: true, duplicate: true, id: previous.rows[0].id, groupEventId: clientRequestId, count: previous.rows.length };
     }
@@ -610,6 +646,7 @@ export async function createEarlyDeparture(formData: FormData) {
         }
         if (duplicate.rows.length) {
           await context.admin.storage.from('filtro-evidencias').remove(uploads.map((upload) => upload.path));
+          await closeLinkedPreRegistration(preRegistration?.id || null, 'early', studentIds);
           await auditFilterBatch(context, 'early_departure.created', 'early_departure', duplicate.rows, clientRequestId, { recoveredFromIdempotentRetry: true });
           return { success: true, duplicate: true, id: duplicate.rows[0].id, groupEventId: clientRequestId, count: duplicate.rows.length };
         }
@@ -618,6 +655,7 @@ export async function createEarlyDeparture(formData: FormData) {
       throw error;
     }
     if (!inserted || inserted.length !== studentIds.length) throw new Error('No se pudo confirmar la salida de todos los alumnos.');
+    await closeLinkedPreRegistration(preRegistration?.id || null, 'early', studentIds);
     await context.admin.from('filter_reporters').upsert({
       tenant_id: context.tenantId, name: reporterName, normalized_name: normalizeFilterName(reporterName),
       last_used_at: new Date().toISOString(), created_by: context.user.id,
@@ -646,8 +684,10 @@ export async function createExtraordinaryHandoff(formData: FormData) {
     const clientRequestId = String(formData.get('clientRequestId') || '');
     if (!FILTER_UUID.test(clientRequestId)) throw new Error('El identificador del borrador no es válido.');
     const studentIds = batchStudentIds(formData);
+    const preRegistration = await linkedPreRegistration(context, formData, 'extraordinary', clientRequestId, studentIds);
     const previous = await existingFilterBatch(context, 'filter_extraordinary_handoffs', clientRequestId, studentIds);
     if (previous.rows.length) {
+      await closeLinkedPreRegistration(preRegistration?.id || null, 'extraordinary', studentIds);
       await auditFilterBatch(context, 'extraordinary_handoff.created', 'extraordinary_handoff', previous.rows, clientRequestId, { recoveredFromIdempotentRetry: true });
       return { success: true, duplicate: true, id: previous.rows[0].id, groupEventId: clientRequestId, count: previous.rows.length };
     }
@@ -771,7 +811,7 @@ export async function createExtraordinaryHandoff(formData: FormData) {
     const identificationTypeOther = identificationType === 'otro' ? requiredFormText(formData, 'identificationTypeOther', 'El tipo de identificación', 120) : null;
     const identityStatus = identificationFront && identityMatches ? 'coincide' : 'no_verificable';
     const personPhoto = validatedUpload(formData, 'pickupPersonPhoto', 'La fotografía de la persona', IMAGE_MIME_TYPES);
-    const authorizationEvidence = validatedUpload(formData, 'authorizationEvidence', 'La evidencia de autorización', EVIDENCE_MIME_TYPES);
+    const authorizationEvidence = validatedUpload(formData, 'authorizationEvidence', 'La evidencia de autorización verificada', EVIDENCE_MIME_TYPES);
     const finalPhoto = delivered ? validatedUpload(formData, 'finalHandoverPhoto', 'La fotografía final de entrega', IMAGE_MIME_TYPES) : null;
     const signature = delivered ? validatedUpload(formData, 'pickupSignature', 'La firma de quien recibe', ['image/png']) : null;
     const basePath = `${context.tenantId}/entregas-extraordinarias/${clientRequestId}/${randomUUID()}`;
@@ -789,6 +829,7 @@ export async function createExtraordinaryHandoff(formData: FormData) {
       if (error) { if (paths.size) await context.admin.storage.from('filtro-evidencias').remove([...paths.values()]); throw new Error(`No se pudo guardar ${upload.file.name}: ${error.message}`); }
       paths.set(upload.key, upload.path);
     }
+    const uploadedPaths = [...paths.values()];
 
     const sharedPayload: Record<string, unknown> = {
       tenant_id: context.tenantId,
@@ -838,18 +879,20 @@ export async function createExtraordinaryHandoff(formData: FormData) {
         let duplicate: Awaited<ReturnType<typeof existingFilterBatch>>;
         try { duplicate = await existingFilterBatch(context, 'filter_extraordinary_handoffs', clientRequestId, studentIds); }
         catch (duplicateError) {
-          await context.admin.storage.from('filtro-evidencias').remove([...paths.values()]);
+          await context.admin.storage.from('filtro-evidencias').remove(uploadedPaths);
           throw duplicateError;
         }
         if (duplicate.rows.length) {
-          await context.admin.storage.from('filtro-evidencias').remove([...paths.values()]);
+          await context.admin.storage.from('filtro-evidencias').remove(uploadedPaths);
+          await closeLinkedPreRegistration(preRegistration?.id || null, 'extraordinary', studentIds);
           await auditFilterBatch(context, 'extraordinary_handoff.created', 'extraordinary_handoff', duplicate.rows, clientRequestId, { recoveredFromIdempotentRetry: true });
           return { success: true, duplicate: true, id: duplicate.rows[0].id, groupEventId: clientRequestId, count: duplicate.rows.length };
         }
       }
-      await context.admin.storage.from('filtro-evidencias').remove([...paths.values()]); throw error;
+      await context.admin.storage.from('filtro-evidencias').remove(uploadedPaths); throw error;
     }
     if (!inserted || inserted.length !== studentIds.length) throw new Error('No se pudo confirmar la entrega de todos los alumnos.');
+    await closeLinkedPreRegistration(preRegistration?.id || null, 'extraordinary', studentIds);
     await context.admin.from('filter_reporters').upsert({ tenant_id: context.tenantId, name: reporterName, normalized_name: normalizeFilterName(reporterName), last_used_at: new Date().toISOString(), created_by: context.user.id }, { onConflict: 'tenant_id,normalized_name' });
     await auditFilterBatch(context, 'extraordinary_handoff.created', 'extraordinary_handoff', inserted, clientRequestId,
       { requireVerifiedGuardianContact, status, deliveryContext, guardianContactIds });
@@ -874,13 +917,21 @@ export async function getFilterReportPackets(selection: Array<{ type: 'early' | 
       completeFilterReportGroups(context, 'filter_early_departures', early || []),
       completeFilterReportGroups(context, 'filter_extraordinary_handoffs', extraordinary || []),
     ]);
-    const pathKeys = ['identification_evidence_path','pickup_person_photo_path','final_handover_photo_path','pickup_signature_path','identification_front_path','identification_back_path','vehicle_photo_path','authorization_evidence_path'];
-    const paths = [...new Set([...completeEarly, ...completeExtraordinary].flatMap((row: any) => pathKeys.map((key) => row[key]).filter(Boolean)))];
+    const groupIds = [...new Set([...completeEarly, ...completeExtraordinary].map((row: any) => row.group_event_id).filter(Boolean))];
+    const { data: preliminaryOrders, error: preliminaryError } = groupIds.length
+      ? await context.admin.from('filter_preregistrations').select('id,kind,evidence_path').eq('tenant_id', context.tenantId).in('id', groupIds)
+      : { data: [], error: null };
+    if (preliminaryError) throw preliminaryError;
+    const preliminaryByEvent = new Map((preliminaryOrders || []).map((row) => [`${row.kind}:${row.id}`, row.evidence_path]));
+    const earlyWithAnnex = completeEarly.map((row: any) => ({ ...row, pre_registration_evidence_path: preliminaryByEvent.get(`early:${row.group_event_id}`) || null }));
+    const extraordinaryWithAnnex = completeExtraordinary.map((row: any) => ({ ...row, pre_registration_evidence_path: preliminaryByEvent.get(`extraordinary:${row.group_event_id}`) || null }));
+    const pathKeys = ['identification_evidence_path','pickup_person_photo_path','final_handover_photo_path','pickup_signature_path','identification_front_path','identification_back_path','vehicle_photo_path','authorization_evidence_path','pre_registration_evidence_path'];
+    const paths = [...new Set([...earlyWithAnnex, ...extraordinaryWithAnnex].flatMap((row: any) => pathKeys.map((key) => row[key]).filter(Boolean)))];
     const signed = paths.length ? await context.admin.storage.from('filtro-evidencias').createSignedUrls(paths, 600) : { data: [], error: null };
     if (signed.error) throw signed.error;
     const urls = Object.fromEntries((signed.data || []).map((item: any) => [item.path, item.signedUrl]));
     await audit(context, 'filter_reports.exported', 'filter_report', undefined, { count: safe.length, ids: safe });
-    return { success: true, early: completeEarly, extraordinary: completeExtraordinary, institution: institution || {}, urls };
+    return { success: true, early: earlyWithAnnex, extraordinary: extraordinaryWithAnnex, institution: institution || {}, urls };
   } catch (error) { return { success: false, error: error instanceof Error ? error.message : 'No se pudieron preparar los reportes.' }; }
 }
 

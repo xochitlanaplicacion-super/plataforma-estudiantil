@@ -31,7 +31,7 @@ export default async function Layout({ children }: { children: React.ReactNode }
   const userName = `${profile.nombre} ${profile.apellidos}`.trim() || user.email || 'Usuario';
   const assistantRole = profile.rol === 'alumno' || profile.rol === 'profesor';
   const needsServiceState = ['alumno', 'profesor', 'encargado_filtro'].includes(profile.rol);
-  const needsFilterFeature = ['superuser', 'admin', 'encargado_filtro'].includes(profile.rol);
+  const needsFilterFeature = ['superuser', 'admin', 'encargado_filtro', 'profesor'].includes(profile.rol);
   const [rawServiceState, filterFeatureResult, tenantResult] = await Promise.all([
     needsServiceState ? getTenantServiceState(profile.tenant_id) : Promise.resolve(null),
     needsFilterFeature

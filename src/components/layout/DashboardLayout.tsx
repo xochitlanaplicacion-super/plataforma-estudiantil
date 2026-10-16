@@ -151,7 +151,7 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
   useEffect(() => {
     if (!filterEnabled || !['encargado_filtro', 'superuser', 'admin'].includes(userRole)) return;
     [
-      '/dashboard/filtro/retardos', '/dashboard/filtro/salidas', '/dashboard/filtro/entregas-extraordinarias',
+      '/dashboard/filtro', '/dashboard/filtro/preregistros', '/dashboard/filtro/retardos', '/dashboard/filtro/salidas', '/dashboard/filtro/entregas-extraordinarias',
       '/dashboard/filtro/familias', '/dashboard/filtro/reportes', '/dashboard/filtro/alumnos', '/dashboard/filtro/alertas',
     ].forEach((href) => router.prefetch(href));
   }, [filterEnabled, userRole, router]);
@@ -244,6 +244,7 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
         { icon: BarChart3, label: 'Participación diaria', href: '/dashboard/profesor/participaciones' },
         { icon: LibraryBig, label: 'Banco de actividades', href: '/dashboard/profesor/banco-actividades' },
         { icon: Gamepad2, label: 'Actividades en clase', href: '/dashboard/profesor/actividades-clase' },
+        ...(filterEnabled ? [{ icon: ClipboardList, label: 'Preregistros de Filtro', href: '/dashboard/profesor/preregistros-filtro' }] : []),
         { icon: FileSpreadsheet, label: 'Reportes académicos', href: '/dashboard/profesor/reportes-academicos' },
         { icon: Scale, label: 'Mis criterios de evaluación', href: '/dashboard/profesor/criterios-evaluacion' },
         { icon: ClipboardList, label: 'Entregas de Actividades', href: '/dashboard/profesor/entregas' },
@@ -267,6 +268,8 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
     ],
     encargado_filtro: [
       { group: "Control de Filtro", items: [
+        { icon: LayoutDashboard, label: 'Órdenes pendientes', href: '/dashboard/filtro' },
+        { icon: ClipboardList, label: 'Crear preregistro', href: '/dashboard/filtro/preregistros' },
         { icon: TimerReset, label: 'Bitácora de retardos', href: '/dashboard/filtro/retardos' },
         { icon: DoorOpen, label: 'Salidas anticipadas', href: '/dashboard/filtro/salidas' },
         { icon: ShieldCheck, label: 'Entregas extraordinarias', href: '/dashboard/filtro/entregas-extraordinarias' },
@@ -279,6 +282,8 @@ export function DashboardLayout({ children, userRole, userName, userId, userAvat
   };
 
   const filterMenu = { group: "Control de Filtro", items: [
+    { icon: LayoutDashboard, label: 'Órdenes pendientes', href: '/dashboard/filtro' },
+    { icon: ClipboardList, label: 'Crear preregistro', href: '/dashboard/filtro/preregistros' },
     { icon: TimerReset, label: 'Bitácora de retardos', href: '/dashboard/filtro/retardos' },
     { icon: DoorOpen, label: 'Salidas anticipadas', href: '/dashboard/filtro/salidas' },
     { icon: ShieldCheck, label: 'Entregas extraordinarias', href: '/dashboard/filtro/entregas-extraordinarias' },
