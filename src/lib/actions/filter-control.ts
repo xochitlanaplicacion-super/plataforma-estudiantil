@@ -131,6 +131,20 @@ async function linkedPreRegistration(
   return order;
 }
 
+function requestedPreRegistrationEvidence(
+  context: Awaited<ReturnType<typeof requireTenantSession>>,
+  formData: FormData,
+  order: { id: string; evidence_path: string } | null,
+) {
+  if (String(formData.get('reusePreRegistrationEvidence') || '') !== 'true') return null;
+  if (!order?.evidence_path) throw new Error('La evidencia del aviso inicial no está disponible en esta orden.');
+  const path = order.evidence_path;
+  if (!path.startsWith(`${context.tenantId}/preregistros/${order.id}/`) || !/\/aviso\.(?:jpg|png|webp|pdf)$/i.test(path)) {
+    throw new Error('La evidencia del aviso inicial no corresponde a esta institución u orden.');
+  }
+  return path;
+}
+
 async function closeLinkedPreRegistration(id: string | null, kind: 'early' | 'extraordinary', studentIds: string[]) {
   if (!id) return;
   const result = await completeFilterPreRegistration(id, kind, studentIds);
@@ -582,16 +596,22 @@ export async function createEarlyDeparture(formData: FormData) {
     const deliveringTeacherName = requiredFormText(formData, 'deliveringTeacherName', 'El docente que entrega', 220);
 
     const identificationFile = optionalValidatedUpload(formData, 'identificationEvidence', 'La identificación presentada', EVIDENCE_MIME_TYPES);
+    const notificationEvidence = optionalValidatedUpload(formData, 'notificationEvidence', 'La evidencia del aviso de salida', EVIDENCE_MIME_TYPES);
+    const reusedNotificationEvidencePath = requestedPreRegistrationEvidence(context, formData, preRegistration);
     const pickupPhoto = validatedUpload(formData, 'pickupPersonPhoto', 'La foto de la persona que retira', IMAGE_MIME_TYPES);
     const handoverPhoto = validatedUpload(formData, 'finalHandoverPhoto', 'La foto final del adulto y el alumno', IMAGE_MIME_TYPES);
     const pickupSignature = validatedUpload(formData, 'pickupSignature', 'La firma de la persona que retira', ['image/png']);
     const basePath = `${context.tenantId}/salidas/${clientRequestId}/${randomUUID()}`;
     const identificationPath = identificationFile ? `${basePath}/identificacion.${extensionForFile(identificationFile)}` : null;
+    const notificationEvidencePath = notificationEvidence
+      ? `${basePath}/aviso.${extensionForFile(notificationEvidence)}`
+      : reusedNotificationEvidencePath;
     const pickupPhotoPath = `${basePath}/persona.${extensionForFile(pickupPhoto)}`;
     const handoverPhotoPath = `${basePath}/entrega.${extensionForFile(handoverPhoto)}`;
     const signaturePath = `${basePath}/firma.png`;
     const uploads = [
       ...(identificationFile && identificationPath ? [{ file: identificationFile, path: identificationPath }] : []),
+      ...(notificationEvidence && notificationEvidencePath ? [{ file: notificationEvidence, path: notificationEvidencePath }] : []),
       { file: pickupPhoto, path: pickupPhotoPath },
       { file: handoverPhoto, path: handoverPhotoPath },
       { file: pickupSignature, path: signaturePath },
@@ -613,6 +633,7 @@ export async function createEarlyDeparture(formData: FormData) {
       relationship,
       relationship_other: relationshipOther,
       identification_evidence_path: identificationPath,
+      notification_evidence_path: notificationEvidencePath,
       pickup_person_photo_path: pickupPhotoPath,
       notified_party: notifiedParty,
       notified_staff_name: notifiedStaffName,
@@ -811,7 +832,11 @@ export async function createExtraordinaryHandoff(formData: FormData) {
     const identificationTypeOther = identificationType === 'otro' ? requiredFormText(formData, 'identificationTypeOther', 'El tipo de identificación', 120) : null;
     const identityStatus = identificationFront && identityMatches ? 'coincide' : 'no_verificable';
     const personPhoto = validatedUpload(formData, 'pickupPersonPhoto', 'La fotografía de la persona', IMAGE_MIME_TYPES);
-    const authorizationEvidence = validatedUpload(formData, 'authorizationEvidence', 'La evidencia de autorización verificada', EVIDENCE_MIME_TYPES);
+    const authorizationEvidence = optionalValidatedUpload(formData, 'authorizationEvidence', 'La evidencia de autorización verificada', EVIDENCE_MIME_TYPES);
+    const reusedAuthorizationEvidencePath = requestedPreRegistrationEvidence(context, formData, preRegistration);
+    if (!authorizationEvidence && !reusedAuthorizationEvidencePath) {
+      throw new Error('La evidencia de autorización verificada es obligatoria. Adjunta un archivo o confirma el aviso inicial de la orden.');
+    }
     const finalPhoto = delivered ? validatedUpload(formData, 'finalHandoverPhoto', 'La fotografía final de entrega', IMAGE_MIME_TYPES) : null;
     const signature = delivered ? validatedUpload(formData, 'pickupSignature', 'La firma de quien recibe', ['image/png']) : null;
     const basePath = `${context.tenantId}/entregas-extraordinarias/${clientRequestId}/${randomUUID()}`;
@@ -819,7 +844,7 @@ export async function createExtraordinaryHandoff(formData: FormData) {
       ...(identificationFront ? [{ key: 'identificationFront', file: identificationFront, path: `${basePath}/identificacion-frente.${extensionForFile(identificationFront)}` }] : []),
       ...(identificationBack ? [{ key: 'identificationBack', file: identificationBack, path: `${basePath}/identificacion-reverso.${extensionForFile(identificationBack)}` }] : []),
       { key: 'pickupPersonPhoto', file: personPhoto, path: `${basePath}/persona.${extensionForFile(personPhoto)}` },
-      { key: 'authorizationEvidence', file: authorizationEvidence, path: `${basePath}/autorizacion.${extensionForFile(authorizationEvidence)}` },
+      ...(authorizationEvidence ? [{ key: 'authorizationEvidence', file: authorizationEvidence, path: `${basePath}/autorizacion.${extensionForFile(authorizationEvidence)}` }] : []),
       ...(finalPhoto ? [{ key: 'finalHandoverPhoto', file: finalPhoto, path: `${basePath}/entrega.${extensionForFile(finalPhoto)}` }] : []),
       ...(signature ? [{ key: 'pickupSignature', file: signature, path: `${basePath}/firma.png` }] : []),
     ];
@@ -846,7 +871,7 @@ export async function createExtraordinaryHandoff(formData: FormData) {
       vehicle_photo_path: null, identity_matches: identityMatches, no_visible_impairment: noVisibleImpairment,
       authorization_method: authorizationMethod, authorized_at: authorizedAt, authorization_expires_at: authorizationExpiresAt,
       authorization_statement: null,
-      authorization_evidence_path: paths.get('authorizationEvidence'), authorization_verifier_name: authorizationVerifierName,
+      authorization_evidence_path: paths.get('authorizationEvidence') || reusedAuthorizationEvidencePath, authorization_verifier_name: authorizationVerifierName,
       one_time_code: null,
       identity_status: identityStatus, consent_status: consentStatus, validator_name: actorName,
       witness_name: null,
@@ -925,7 +950,7 @@ export async function getFilterReportPackets(selection: Array<{ type: 'early' | 
     const preliminaryByEvent = new Map((preliminaryOrders || []).map((row) => [`${row.kind}:${row.id}`, row.evidence_path]));
     const earlyWithAnnex = completeEarly.map((row: any) => ({ ...row, pre_registration_evidence_path: preliminaryByEvent.get(`early:${row.group_event_id}`) || null }));
     const extraordinaryWithAnnex = completeExtraordinary.map((row: any) => ({ ...row, pre_registration_evidence_path: preliminaryByEvent.get(`extraordinary:${row.group_event_id}`) || null }));
-    const pathKeys = ['identification_evidence_path','pickup_person_photo_path','final_handover_photo_path','pickup_signature_path','identification_front_path','identification_back_path','vehicle_photo_path','authorization_evidence_path','pre_registration_evidence_path'];
+    const pathKeys = ['identification_evidence_path','notification_evidence_path','pickup_person_photo_path','final_handover_photo_path','pickup_signature_path','identification_front_path','identification_back_path','vehicle_photo_path','authorization_evidence_path','pre_registration_evidence_path'];
     const paths = [...new Set([...earlyWithAnnex, ...extraordinaryWithAnnex].flatMap((row: any) => pathKeys.map((key) => row[key]).filter(Boolean)))];
     const signed = paths.length ? await context.admin.storage.from('filtro-evidencias').createSignedUrls(paths, 600) : { data: [], error: null };
     if (signed.error) throw signed.error;

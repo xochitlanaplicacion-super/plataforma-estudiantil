@@ -84,4 +84,23 @@ describe('PDF de expedientes grupales', () => {
     expect(commands(doc)).toContain('Identificación PDF en expediente digital.');
     expect(printedText(doc)).not.toContain('Foto de identificación no adjuntada');
   });
+
+  it('incluye el aviso opcional de la salida anticipada en el expediente', async () => {
+    const row = { ...reportRow(1), _type: 'early' as const, notification_evidence_path: 'aviso/salida.pdf' };
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    await drawEvent(doc, groupFilterReportRows([row])[0], {}, {});
+
+    expect(printedText(doc)).toContain('Aviso de salida');
+    expect(commands(doc)).toContain('Documento PDF conservado en expediente digital.');
+  });
+
+  it('presenta una sola vez la autorización final si reutiliza la foto del preregistro', async () => {
+    const path = 'avisos/autorizacion.jpg';
+    const row = { ...reportRow(1), authorization_evidence_path: path, pre_registration_evidence_path: path };
+    const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+    await drawEvent(doc, groupFilterReportRows([row])[0], {}, {});
+
+    expect(printedText(doc)).toContain('Autorización verificada');
+    expect(printedText(doc)).not.toContain('Aviso inicial');
+  });
 });

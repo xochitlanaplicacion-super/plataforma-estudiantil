@@ -23,6 +23,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { FilterEvidenceCapture } from './FilterEvidenceCapture';
 import { FilterIdentityEvidenceNotice } from './FilterIdentityEvidenceNotice';
+import { FilterNoticeEvidencePreview } from './FilterNoticeEvidencePreview';
 import { FilterSignaturePad } from './FilterSignaturePad';
 
 const STEPS = ['Alumnos y horario', 'Persona que retira', 'Aviso y motivo', 'Entrega de alumnos', 'Confirmación'];
@@ -47,9 +48,9 @@ const EMPTY_VALUES: Record<string, string | boolean> = {
   notifiedParty: '', notifiedStaffName: '', notificationMethod: '', notificationMethodOther: '', departureReason: '',
   departureReasonOther: '', description: '', deliveringTeacherName: '', reporterName: '', confirmed: false,
 };
-type EarlyFileKey = 'identificationEvidence' | 'pickupPersonPhoto' | 'finalHandoverPhoto' | 'pickupSignature';
-const EARLY_FILE_LABELS: Record<EarlyFileKey, string> = { identificationEvidence: 'identificación', pickupPersonPhoto: 'foto de la persona', finalHandoverPhoto: 'foto final', pickupSignature: 'firma' };
-type PreRegistrationSeed = { id: string; kind: 'early' | 'extraordinary'; studentIds: string[]; preliminary: Record<string, string>; evidenceUrl?: string | null };
+type EarlyFileKey = 'notificationEvidence' | 'identificationEvidence' | 'pickupPersonPhoto' | 'finalHandoverPhoto' | 'pickupSignature';
+const EARLY_FILE_LABELS: Record<EarlyFileKey, string> = { notificationEvidence: 'aviso de salida', identificationEvidence: 'identificación', pickupPersonPhoto: 'foto de la persona', finalHandoverPhoto: 'foto final', pickupSignature: 'firma' };
+type PreRegistrationSeed = { id: string; kind: 'early' | 'extraordinary'; studentIds: string[]; preliminary: Record<string, string>; evidencePath?: string | null; evidenceUrl?: string | null };
 
 export function FilterEarlyDepartureWizard({ initialData, initialClock, preRegistration }: { initialData: any; initialClock: any; preRegistration?: PreRegistrationSeed | null }) {
   const router = useRouter(); const { toast } = useToast();
@@ -59,6 +60,8 @@ export function FilterEarlyDepartureWizard({ initialData, initialClock, preRegis
   const [values, setValues] = useState<Record<string, string | boolean>>(seedValues);
   const [students, setStudents] = useState<any[]>([]); const student = students[0] || null; const [studentResults, setStudentResults] = useState<any[]>([]);
   const [step, setStep] = useState(0); const [requestId, setRequestId] = useState('');
+  const [notificationEvidence, setNotificationEvidence] = useState<File | null>(null);
+  const [notificationEvidenceUrl, setNotificationEvidenceUrl] = useState<string | null>(null);
   const [identificationEvidence, setIdentificationEvidence] = useState<File | null>(null);
   const [pickupPersonPhoto, setPickupPersonPhoto] = useState<File | null>(null);
   const [finalHandoverPhoto, setFinalHandoverPhoto] = useState<File | null>(null);
@@ -71,7 +74,7 @@ export function FilterEarlyDepartureWizard({ initialData, initialClock, preRegis
   const [addOpen, setAddOpen] = useState(false); const [newName, setNewName] = useState(''); const [newGroup, setNewGroup] = useState(initialData.groups[0]?.id || '');
   const [resetOpen, setResetOpen] = useState(false); const [resetProgress, setResetProgress] = useState(0);
   const syncRunning = useRef(false); const persistTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const latestDraftState = useRef<{ requestId: string; step: number; status: 'draft' | 'queued'; values: Record<string, string | boolean>; students: any[]; identificationEvidence: File | null; pickupPersonPhoto: File | null; finalHandoverPhoto: File | null; pickupSignature: File | null } | null>(null);
+  const latestDraftState = useRef<{ requestId: string; step: number; status: 'draft' | 'queued'; values: Record<string, string | boolean>; students: any[]; notificationEvidence: File | null; identificationEvidence: File | null; pickupPersonPhoto: File | null; finalHandoverPhoto: File | null; pickupSignature: File | null } | null>(null);
   const preservedUnrestoredFiles = useRef<Partial<Record<EarlyFileKey, PersistedFile>>>({});
 
   const setValue = (key: string, value: string | boolean) => setValues((current) => ({ ...current, [key]: value }));
@@ -79,12 +82,20 @@ export function FilterEarlyDepartureWizard({ initialData, initialClock, preRegis
 
   const makeDraft = useCallback((status = draftStatus): EarlyDepartureDraft => ({
     version: 1, clientRequestId: requestId, step, status, updatedAt: new Date().toISOString(), values, student, students,
+    notificationEvidence: notificationEvidence ? persistFile(notificationEvidence) : preservedUnrestoredFiles.current.notificationEvidence || null,
     identificationEvidence: identificationEvidence ? persistFile(identificationEvidence) : preservedUnrestoredFiles.current.identificationEvidence || null,
     pickupPersonPhoto: pickupPersonPhoto ? persistFile(pickupPersonPhoto) : preservedUnrestoredFiles.current.pickupPersonPhoto || null,
     finalHandoverPhoto: finalHandoverPhoto ? persistFile(finalHandoverPhoto) : preservedUnrestoredFiles.current.finalHandoverPhoto || null,
     pickupSignature: pickupSignature ? persistFile(pickupSignature) : preservedUnrestoredFiles.current.pickupSignature || null,
-  }), [draftStatus, finalHandoverPhoto, identificationEvidence, pickupPersonPhoto, pickupSignature, requestId, step, student, students, values]);
-  latestDraftState.current = hydrated && requestId ? { requestId, step, status: draftStatus, values, students, identificationEvidence, pickupPersonPhoto, finalHandoverPhoto, pickupSignature } : null;
+  }), [draftStatus, finalHandoverPhoto, identificationEvidence, notificationEvidence, pickupPersonPhoto, pickupSignature, requestId, step, student, students, values]);
+  latestDraftState.current = hydrated && requestId ? { requestId, step, status: draftStatus, values, students, notificationEvidence, identificationEvidence, pickupPersonPhoto, finalHandoverPhoto, pickupSignature } : null;
+
+  useEffect(() => {
+    if (!notificationEvidence || typeof URL.createObjectURL !== 'function') { setNotificationEvidenceUrl(null); return; }
+    const url = URL.createObjectURL(notificationEvidence);
+    setNotificationEvidenceUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [notificationEvidence]);
 
   useEffect(() => {
     setOnline(navigator.onLine);
@@ -102,18 +113,18 @@ export function FilterEarlyDepartureWizard({ initialData, initialClock, preRegis
         const recoveredQuery = String(draft.values.studentQuery || '');
         setRequestId(draft.clientRequestId); setStep(Math.min(Math.max(draft.step, 0), 4)); setDraftStatus(draft.status);
         setValues({ ...EMPTY_VALUES, reporterName: initialData.isGeneral ? '' : initialData.actorName, ...draft.values, studentQuery: recoveredStudents.some((item) => item.full_name === recoveredQuery) ? '' : recoveredQuery }); setStudents(recoveredStudents);
-        const [identificationEvidence, pickupPersonPhoto, finalHandoverPhoto, pickupSignature] = await Promise.all([
-          restoreFileForUpload(draft.identificationEvidence), restoreFileForUpload(draft.pickupPersonPhoto),
-          restoreFileForUpload(draft.finalHandoverPhoto), restoreFileForUpload(draft.pickupSignature || null),
+        const [notificationEvidence, identificationEvidence, pickupPersonPhoto, finalHandoverPhoto, pickupSignature] = await Promise.all([
+          restoreFileForUpload(draft.notificationEvidence || null), restoreFileForUpload(draft.identificationEvidence),
+          restoreFileForUpload(draft.pickupPersonPhoto), restoreFileForUpload(draft.finalHandoverPhoto), restoreFileForUpload(draft.pickupSignature || null),
         ]);
-        const restored = { identificationEvidence, pickupPersonPhoto, finalHandoverPhoto, pickupSignature };
-        const persisted: Partial<Record<EarlyFileKey, PersistedFile | null>> = { identificationEvidence: draft.identificationEvidence, pickupPersonPhoto: draft.pickupPersonPhoto, finalHandoverPhoto: draft.finalHandoverPhoto, pickupSignature: draft.pickupSignature || null };
+        const restored = { notificationEvidence, identificationEvidence, pickupPersonPhoto, finalHandoverPhoto, pickupSignature };
+        const persisted: Partial<Record<EarlyFileKey, PersistedFile | null>> = { notificationEvidence: draft.notificationEvidence || null, identificationEvidence: draft.identificationEvidence, pickupPersonPhoto: draft.pickupPersonPhoto, finalHandoverPhoto: draft.finalHandoverPhoto, pickupSignature: draft.pickupSignature || null };
         const damaged = (Object.keys(restored) as EarlyFileKey[]).filter((key) => persisted[key] && !restored[key]);
         preservedUnrestoredFiles.current = Object.fromEntries(damaged.map((key) => [key, persisted[key]]));
-        setIdentificationEvidence(restored.identificationEvidence); setPickupPersonPhoto(restored.pickupPersonPhoto); setFinalHandoverPhoto(restored.finalHandoverPhoto); setPickupSignature(restored.pickupSignature);
+        setNotificationEvidence(restored.notificationEvidence); setIdentificationEvidence(restored.identificationEvidence); setPickupPersonPhoto(restored.pickupPersonPhoto); setFinalHandoverPhoto(restored.finalHandoverPhoto); setPickupSignature(restored.pickupSignature);
         setRecoveryFileIssues(damaged);
         toast(damaged.length
-          ? { variant: 'destructive', title: 'Borrador recuperado parcialmente', description: `Revisa: ${damaged.map((key) => EARLY_FILE_LABELS[key]).join(', ')}. Puedes omitir la identificación opcional en el paso de la persona.` }
+          ? { variant: 'destructive', title: 'Borrador recuperado parcialmente', description: `Revisa: ${damaged.map((key) => EARLY_FILE_LABELS[key]).join(', ')}. Puedes omitir los archivos opcionales en sus respectivos pasos.` }
           : { title: draft.status === 'queued' ? 'Registro pendiente recuperado' : 'Borrador recuperado', description: 'Los datos y fotografías se reconstruyeron y están listos para revisión.' });
       } else {
         setRequestId(preRegistration?.id || crypto.randomUUID());
@@ -135,9 +146,10 @@ export function FilterEarlyDepartureWizard({ initialData, initialClock, preRegis
       const draft: EarlyDepartureDraft = {
         version: 1, clientRequestId: current.requestId, step: current.step, status: current.status,
         updatedAt: new Date().toISOString(), values: current.values, student: current.students[0] || null, students: current.students,
-        identificationEvidence: persistFile(current.identificationEvidence), pickupPersonPhoto: persistFile(current.pickupPersonPhoto),
+        notificationEvidence: persistFile(current.notificationEvidence), identificationEvidence: persistFile(current.identificationEvidence), pickupPersonPhoto: persistFile(current.pickupPersonPhoto),
         finalHandoverPhoto: persistFile(current.finalHandoverPhoto), pickupSignature: persistFile(current.pickupSignature),
       };
+      if (!draft.notificationEvidence) draft.notificationEvidence = preservedUnrestoredFiles.current.notificationEvidence || null;
       if (!draft.identificationEvidence) draft.identificationEvidence = preservedUnrestoredFiles.current.identificationEvidence || null;
       if (!draft.pickupPersonPhoto) draft.pickupPersonPhoto = preservedUnrestoredFiles.current.pickupPersonPhoto || null;
       if (!draft.finalHandoverPhoto) draft.finalHandoverPhoto = preservedUnrestoredFiles.current.finalHandoverPhoto || null;
@@ -176,7 +188,7 @@ export function FilterEarlyDepartureWizard({ initialData, initialClock, preRegis
     if (targetStep === 3 && String(values.deliveringTeacherName).trim().length < 2) return 'Escribe el nombre del docente que entrega al alumno.';
     if (targetStep === 3 && !finalHandoverPhoto) return 'Toma la foto final de la persona que retira junto con el alumno.';
     if (targetStep === 3 && !pickupSignature) return 'Solicita la firma de la persona que retira al alumno.';
-    if (targetStep === 4 && recoveryFileIssues.length) return `Revisa los archivos no recuperados: ${recoveryFileIssues.map((key) => EARLY_FILE_LABELS[key]).join(', ')}. La identificación opcional puede omitirse en el paso de la persona.`;
+    if (targetStep === 4 && recoveryFileIssues.length) return `Revisa los archivos no recuperados: ${recoveryFileIssues.map((key) => EARLY_FILE_LABELS[key]).join(', ')}. Puedes omitir los archivos opcionales en sus respectivos pasos.`;
     if (targetStep === 4 && values.confirmed !== true) return 'Marca la confirmación obligatoria para finalizar.';
     return null;
   };
@@ -185,6 +197,7 @@ export function FilterEarlyDepartureWizard({ initialData, initialClock, preRegis
   const replaceFile = (key: EarlyFileKey, file: File | null) => {
     delete preservedUnrestoredFiles.current[key];
     setRecoveryFileIssues((current) => current.filter((item) => item !== key));
+    if (key === 'notificationEvidence') setNotificationEvidence(file);
     if (key === 'identificationEvidence') setIdentificationEvidence(file);
     if (key === 'pickupPersonPhoto') setPickupPersonPhoto(file);
     if (key === 'finalHandoverPhoto') setFinalHandoverPhoto(file);
@@ -202,7 +215,10 @@ export function FilterEarlyDepartureWizard({ initialData, initialClock, preRegis
     const data = new FormData(); data.set('clientRequestId', draft.clientRequestId); data.set('studentId', ids[0] || ''); data.set('studentIds', JSON.stringify(ids));
     if (preRegistration) data.set('preRegistrationId', preRegistration.id);
     Object.entries(draft.values).forEach(([key, value]) => data.set(key, String(value)));
-    const [identification, pickup, handover, signature] = await Promise.all([restoreFileForUpload(draft.identificationEvidence), restoreFileForUpload(draft.pickupPersonPhoto), restoreFileForUpload(draft.finalHandoverPhoto), restoreFileForUpload(draft.pickupSignature || null)]);
+    const [notice, identification, pickup, handover, signature] = await Promise.all([restoreFileForUpload(draft.notificationEvidence || null), restoreFileForUpload(draft.identificationEvidence), restoreFileForUpload(draft.pickupPersonPhoto), restoreFileForUpload(draft.finalHandoverPhoto), restoreFileForUpload(draft.pickupSignature || null)]);
+    if (draft.notificationEvidence && !notice) throw new Error('La evidencia del aviso no pudo recuperarse del borrador. Revisa o quita el archivo antes de guardar.');
+    if (notice) data.set('notificationEvidence', notice);
+    else if (preRegistration?.evidencePath) data.set('reusePreRegistrationEvidence', 'true');
     if (identification) data.set('identificationEvidence', identification); if (pickup) data.set('pickupPersonPhoto', pickup); if (handover) data.set('finalHandoverPhoto', handover); if (signature) data.set('pickupSignature', signature);
     return data;
   }, [preRegistration]);
@@ -210,7 +226,7 @@ export function FilterEarlyDepartureWizard({ initialData, initialClock, preRegis
     if (persistTimer.current) clearTimeout(persistTimer.current); latestDraftState.current = null; preservedUnrestoredFiles.current = {};
     setRequestId(preRegistration?.id || crypto.randomUUID()); setStep(0); setDraftStatus('draft');
     setValues(seedValues()); setStudents(seedStudents());
-    setIdentificationEvidence(null); setPickupPersonPhoto(null); setFinalHandoverPhoto(null); setPickupSignature(null); setRecoveryFileIssues([]); setResetProgress(0); setResetOpen(false);
+    setNotificationEvidence(null); setIdentificationEvidence(null); setPickupPersonPhoto(null); setFinalHandoverPhoto(null); setPickupSignature(null); setRecoveryFileIssues([]); setResetProgress(0); setResetOpen(false);
   }, [preRegistration, seedStudents, seedValues]);
   const resetForm = useCallback(async () => {
     if (persistTimer.current) clearTimeout(persistTimer.current);
@@ -269,17 +285,26 @@ export function FilterEarlyDepartureWizard({ initialData, initialClock, preRegis
 
   return <div className={`space-y-6 ${saving ? 'pointer-events-none' : ''}`} aria-busy={saving}>
     <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start"><div><h1 className="flex items-center gap-2 text-2xl font-bold text-primary sm:text-3xl"><DoorOpen />Bitácora de salidas anticipadas</h1><p className="text-muted-foreground">Entrega segura, guiada y auditable dentro de esta institución.</p></div><Button variant="outline" disabled={saving} onClick={() => setResetOpen(true)}><RefreshCcw className="mr-2 h-4 w-4" />{preRegistration ? 'Limpiar captura local' : 'Reiniciar proceso'}</Button></div>
-    {preRegistration && <Alert className="border-amber-400/50 bg-amber-50"><FileText className="h-4 w-4" /><AlertTitle>Orden pendiente iniciada previamente</AlertTitle><AlertDescription>Los datos conocidos ya están cargados. {preRegistration.evidenceUrl && <a className="font-semibold underline" href={preRegistration.evidenceUrl} target="_blank" rel="noopener noreferrer">Revisar evidencia del aviso</a>} Completa las verificaciones y la entrega habituales. Esta orden permanece pendiente hasta que guardes el expediente; limpiar esta captura solo borra datos locales.</AlertDescription></Alert>}
-    <Alert variant={!storageSafe || recoveryFileIssues.length ? 'destructive' : 'default'}>{online ? <Signal className="h-4 w-4" /> : <SignalZero className="h-4 w-4" />}<AlertTitle>{recoveryFileIssues.length ? 'Revisa los archivos recuperados' : !storageSafe ? 'El almacenamiento local no está disponible' : draftStatus === 'queued' ? 'Guardado pendiente y protegido' : online ? 'Borrador protegido' : 'Modo sin conexión'}</AlertTitle><AlertDescription>{recoveryFileIssues.length ? `Los demás datos sí se recuperaron. Revisa: ${recoveryFileIssues.map((key) => EARLY_FILE_LABELS[key]).join(', ')}. Puedes omitir la identificación opcional en el paso de la persona.` : !storageSafe ? 'No cierres ni recargues esta página hasta guardar. Revisa que el navegador permita almacenamiento del sitio.' : draftStatus === 'queued' ? 'Se recuperaron los datos y las fotos. Nada se enviará hasta que pulses Guardar.' : `Textos y fotos se conservan en este dispositivo${savedAt ? ` · última copia ${new Date(savedAt).toLocaleTimeString('es-MX')}` : ''}.`}</AlertDescription></Alert>
+    {preRegistration && <Alert className="border-amber-400/50 bg-amber-50"><FileText className="h-4 w-4" /><AlertTitle>Orden pendiente iniciada previamente</AlertTitle><AlertDescription>Los datos conocidos ya están cargados. {preRegistration.evidencePath ? 'El aviso adjuntado se muestra en «Aviso y motivo»; no necesitas cargarlo otra vez. ' : ''}Completa las verificaciones y la entrega habituales. Esta orden permanece pendiente hasta que guardes el expediente; limpiar esta captura solo borra datos locales.</AlertDescription></Alert>}
+    <Alert variant={!storageSafe || recoveryFileIssues.length ? 'destructive' : 'default'}>{online ? <Signal className="h-4 w-4" /> : <SignalZero className="h-4 w-4" />}<AlertTitle>{recoveryFileIssues.length ? 'Revisa los archivos recuperados' : !storageSafe ? 'El almacenamiento local no está disponible' : draftStatus === 'queued' ? 'Guardado pendiente y protegido' : online ? 'Borrador protegido' : 'Modo sin conexión'}</AlertTitle><AlertDescription>{recoveryFileIssues.length ? `Los demás datos sí se recuperaron. Revisa: ${recoveryFileIssues.map((key) => EARLY_FILE_LABELS[key]).join(', ')}. Puedes omitir los archivos opcionales en sus respectivos pasos.` : !storageSafe ? 'No cierres ni recargues esta página hasta guardar. Revisa que el navegador permita almacenamiento del sitio.' : draftStatus === 'queued' ? 'Se recuperaron los datos y las fotos. Nada se enviará hasta que pulses Guardar.' : `Textos y fotos se conservan en este dispositivo${savedAt ? ` · última copia ${new Date(savedAt).toLocaleTimeString('es-MX')}` : ''}.`}</AlertDescription></Alert>
     <Card><CardHeader><div className="flex items-center justify-between gap-3"><div><CardTitle>Paso {step + 1} de {STEPS.length}: {STEPS[step]}</CardTitle><CardDescription>Completa los datos señalados para habilitar el siguiente paso.</CardDescription></div><Badge variant="outline">{Math.round(((step + 1) / STEPS.length) * 100)}%</Badge></div><Progress value={((step + 1) / STEPS.length) * 100} /><div className="hidden grid-cols-5 gap-2 pt-2 md:grid">{STEPS.map((title, index) => <div key={title} className={`text-center text-xs ${index <= step ? 'font-semibold text-primary' : 'text-muted-foreground'}`}>{index + 1}. {title}</div>)}</div></CardHeader>
       <CardContent className="space-y-6">
         <Alert className="border-primary/30 bg-primary/5"><BadgeCheck className="h-4 w-4" /><AlertTitle>Guía activa</AlertTitle><AlertDescription>{[
           'Selecciona de uno a cinco alumnos. Verifica el nivel, grado y grupo de cada uno.',
           'Registra a quien retira. Su foto es obligatoria; la identificación puede omitirse si no la presenta.',
-          'Documenta a quién y cómo se avisó, además del motivo de la salida.',
+          'Documenta a quién y cómo se avisó, además del motivo de la salida. La evidencia del aviso es opcional.',
           'Captura quién entrega y una fotografía conjunta con todos los alumnos antes de permitir la salida.',
           'Revisa el resumen y confirma el protocolo. La hora automática se fijará exactamente al pulsar Guardar.',
         ][step]}</AlertDescription></Alert>
+
+        {step === 2 && <section className="space-y-3 rounded-xl border border-sky-200 bg-sky-50/40 p-4" aria-label="Evidencia del aviso de salida">
+          <div><h3 className="font-semibold">Evidencia del aviso (opcional)</h3><p className="text-sm text-muted-foreground">Puedes guardar una foto o PDF del mensaje recibido. Si no existe, continúa sin adjuntar nada.</p></div>
+          {preRegistration?.evidenceUrl && !notificationEvidence && <FilterNoticeEvidencePreview url={preRegistration.evidenceUrl} orderId={preRegistration.id} title="Aviso adjuntado en el preregistro" />}
+          {preRegistration?.evidencePath && !preRegistration.evidenceUrl && !notificationEvidence && <Alert><AlertCircle className="h-4 w-4" /><AlertTitle>No se pudo cargar la vista previa</AlertTitle><AlertDescription>El aviso sigue guardado en la orden. Recarga esta página para volver a visualizarlo; no necesitas adjuntarlo otra vez.</AlertDescription></Alert>}
+          {notificationEvidenceUrl && <FilterNoticeEvidencePreview url={notificationEvidenceUrl} mimeType={notificationEvidence?.type} title={preRegistration?.evidencePath ? 'Nuevo aviso para este expediente' : 'Aviso adjuntado'} />}
+          <FilterEvidenceCapture label={preRegistration?.evidencePath ? 'Adjuntar un aviso distinto (opcional)' : 'Adjuntar evidencia del aviso (opcional)'} help={preRegistration?.evidencePath ? 'El aviso del preregistro ya está disponible arriba; adjunta otro archivo solo si necesitas sustituirlo para el expediente final.' : 'Se aceptan fotografías y PDF. Este archivo no sustituye la verificación de identidad y entrega.'} file={notificationEvidence} onChange={(file) => replaceFile('notificationEvidence', file)} allowPdf required={false} />
+          {recoveryFileIssues.includes('notificationEvidence') && <Button type="button" variant="outline" onClick={() => replaceFile('notificationEvidence', null)}>Omitir archivo local no recuperado</Button>}
+        </section>}
 
         {step === 0 && <StepStudent values={values} setValue={setValue} students={students} studentResults={studentResults} chooseStudent={chooseStudent} removeStudent={(id: string) => setStudents((current) => removeStudentFromFilterGroup(current, id))} setAddOpen={setAddOpen} groups={initialData.groups} levels={initialData.levels} clock={clock} initialClock={initialClock} locked={Boolean(preRegistration)} />}
         {step === 1 && <div className="space-y-5"><div className="grid gap-4 md:grid-cols-2"><div><Label>Nombre completo de la persona que retira *</Label><Input value={String(values.pickupPersonName)} onChange={(e) => setValue('pickupPersonName', e.target.value)} autoComplete="name" /></div><div><Label>Parentesco *</Label><Select value={String(values.relationship)} onValueChange={(value) => setValue('relationship', value)}><SelectTrigger><SelectValue placeholder="Selecciona parentesco" /></SelectTrigger><SelectContent>{RELATIONSHIPS.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent></Select></div></div>{values.relationship === 'otro' && <div><Label>Especifica el parentesco *</Label><Input value={String(values.relationshipOther)} onChange={(e) => setValue('relationshipOther', e.target.value)} /></div>}<FilterIdentityEvidenceNotice identificationAttached={Boolean(identificationEvidence)} personPhotoAttached={Boolean(pickupPersonPhoto)} onOmitDamagedIdentification={recoveryFileIssues.includes('identificationEvidence') ? () => replaceFile('identificationEvidence', null) : undefined} /><FilterEvidenceCapture label="Identificación presentada (opcional)" help="Si la presenta, adjunta una fotografía legible o PDF. La cámara trasera se abre por defecto." file={identificationEvidence} onChange={(file) => replaceFile('identificationEvidence', file)} allowPdf required={false} /><FilterEvidenceCapture label="Foto de la persona que retira" help="Obligatoria aunque no presente identificación. Centra el rostro y cuerpo dentro de la silueta; puedes cambiar a cámara frontal." file={pickupPersonPhoto} onChange={(file) => replaceFile('pickupPersonPhoto', file)} guide="adult" /></div>}

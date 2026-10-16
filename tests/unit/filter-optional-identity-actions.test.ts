@@ -125,9 +125,31 @@ describe('Evidencia de identificación opcional en Control de Filtro', () => {
     expect(result.success).toBe(true);
     const row = db.inserted.find((item) => item.table === 'filter_early_departures')?.rows[0];
     expect(row.identification_evidence_path).toBeNull();
+    expect(row.notification_evidence_path).toBeNull();
     expect(row.pickup_person_photo_path).toContain('/persona.jpg');
     expect(db.uploads).toHaveLength(3);
     expect(db.uploads.map((item) => item.file.name)).not.toContain('identificacion.jpg');
+  });
+
+  it('guarda una imagen opcional del aviso en la salida anticipada manual', async () => {
+    const db = mockFilterDatabase();
+    const form = earlyForm();
+    form.set('notificationEvidence', image('aviso.jpg'));
+    const result = await createEarlyDeparture(form);
+    expect(result.success).toBe(true);
+    const row = db.inserted.find((item) => item.table === 'filter_early_departures')?.rows[0];
+    expect(row.notification_evidence_path).toContain('/aviso.jpg');
+    expect(db.uploads.map((item) => item.file.name)).toContain('aviso.jpg');
+  });
+
+  it('no permite declarar reutilización de evidencia sin una orden pendiente', async () => {
+    const db = mockFilterDatabase();
+    const form = earlyForm();
+    form.set('reusePreRegistrationEvidence', 'true');
+    const result = await createEarlyDeparture(form);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('no está disponible en esta orden');
+    expect(db.uploads).toHaveLength(0);
   });
 
   it('rechaza la salida anticipada si falta la fotografía de la persona', async () => {

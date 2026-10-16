@@ -285,8 +285,14 @@ function evidenceItems(event: ReportEvent): Evidence[] {
       kind: 'photo',
     });
   }
+  const finalEvidencePath = String(event.students[0][event.type === 'early' ? 'notification_evidence_path' : 'authorization_evidence_path'] || '');
+  if (finalEvidencePath) items.push({
+    label: event.type === 'early' ? 'Aviso de salida' : 'Autorización verificada',
+    path: finalEvidencePath,
+    kind: 'notice',
+  });
   const preliminaryPath = String(event.students[0].pre_registration_evidence_path || '');
-  if (preliminaryPath) items.push({ label: 'Aviso inicial (anexo)', path: preliminaryPath, kind: 'notice' });
+  if (preliminaryPath && preliminaryPath !== finalEvidencePath) items.push({ label: 'Aviso inicial (anexo)', path: preliminaryPath, kind: 'notice' });
   return items;
 }
 
@@ -412,7 +418,7 @@ export async function drawEvent(doc: jsPDF, event: ReportEvent, institution: Ins
   doc.setTextColor(20, 30, 45);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
-  doc.text(photos.some((photo) => photo.kind === 'notice') ? 'Evidencias y aviso inicial' : 'Evidencias fotográficas', 12, y + 5);
+  doc.text(photos.some((photo) => photo.kind === 'notice') ? 'Evidencias y avisos' : 'Evidencias fotográficas', 12, y + 5);
   y += 8;
   for (let index = 0; index < photos.length; index += evidenceColumns) {
     ensureSpace(59);
@@ -434,7 +440,7 @@ export async function drawEvent(doc: jsPDF, event: ReportEvent, institution: Ins
       if (image) addContainedImage(doc, image, x + 4, y + 9, width - 8, 45);
       else if (photo.kind === 'identification' || photo.kind === 'notice') {
         drawIdentificationCard(doc, x, y, width, photo.kind === 'notice'
-          ? isPdf ? 'Aviso inicial PDF conservado en expediente digital.' : 'Vista previa del aviso inicial no disponible.'
+          ? isPdf ? 'Documento PDF conservado en expediente digital.' : 'Vista previa del documento no disponible.'
           : !photo.path ? 'Foto de identificación no adjuntada (opcional).'
             : isPdf ? 'Identificación PDF en expediente digital.' : 'Vista previa de identificación no disponible.');
       }

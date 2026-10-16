@@ -25,6 +25,7 @@ vi.mock('@/lib/filter-early-departure-draft', () => ({
   restoreFileForUpload: vi.fn().mockImplementation(async (persisted) => persisted ? new File(['foto'], 'persona.jpg', { type: 'image/jpeg' }) : null),
 }));
 vi.mock('@/components/filter/FilterEvidenceCapture', () => ({ FilterEvidenceCapture: ({ label }: { label: string }) => <div>{label}</div> }));
+vi.mock('@/components/filter/FilterNoticeEvidencePreview', () => ({ FilterNoticeEvidencePreview: () => null }));
 vi.mock('@/components/filter/FilterSignaturePad', () => ({ FilterSignaturePad: () => null }));
 
 import { FilterEarlyDepartureWizard } from '@/components/filter/FilterEarlyDepartureWizard';

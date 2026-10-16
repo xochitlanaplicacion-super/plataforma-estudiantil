@@ -51,8 +51,10 @@ function setup(kind: Kind, studentIds = [studentA]) {
     filter_reporters: [],
   };
   const uploads: string[] = [];
+  const removals: string[][] = [];
   const events: string[] = [];
   let beforeFinalInsert: (() => Promise<void>) | null = null;
+  let failUploadMatching: string | null = null;
 
   const from = (table: string) => {
     const predicates: Array<(row: Row) => boolean> = [];
@@ -103,12 +105,19 @@ function setup(kind: Kind, studentIds = [studentA]) {
     admin: {
       from,
       storage: { from: () => ({
-        upload: async (path: string) => { uploads.push(path); return { error: null }; },
-        remove: async () => ({ error: null }),
+        upload: async (path: string) => {
+          uploads.push(path);
+          return { error: failUploadMatching && path.includes(failUploadMatching) ? { message: 'Falló la carga de prueba' } : null };
+        },
+        remove: async (paths: string[]) => { removals.push(paths); return { error: null }; },
       }) },
     },
   }));
-  return { tables, uploads, events, waitBeforeFinalInsert: (wait: () => Promise<void>) => { beforeFinalInsert = wait; } };
+  return {
+    tables, uploads, removals, events,
+    waitBeforeFinalInsert: (wait: () => Promise<void>) => { beforeFinalInsert = wait; },
+    failUploadWhenPathIncludes: (text: string) => { failUploadMatching = text; },
+  };
 }
 
 function image(name: string) { return new File(['imagen'], name, { type: 'image/jpeg' }); }
@@ -190,6 +199,30 @@ describe('captura final vinculada a un preregistro de Filtro', () => {
     expect(db.events.indexOf('filter_early_departures.insert')).toBeLessThan(db.events.indexOf('filter_preregistrations.update'));
   });
 
+  it('vincula el aviso ya cargado al registro final anticipado sin volver a subirlo', async () => {
+    const db = setup('early');
+    const form = earlyForm();
+    form.set('reusePreRegistrationEvidence', 'true');
+    const result = await createEarlyDeparture(form);
+    expect(result).toMatchObject({ success: true, duplicate: false });
+    expect(db.tables.filter_early_departures[0].notification_evidence_path).toBe(preliminaryEvidencePath);
+    expect(db.uploads).toHaveLength(3);
+    expect(db.removals).toHaveLength(0);
+  });
+
+  it('rechaza reutilizar un aviso cuya ruta no pertenece al preregistro validado', async () => {
+    const db = setup('early');
+    db.tables.filter_preregistrations[0].evidence_path = 'otro-tenant/preregistros/otro/aviso.jpg';
+    const form = earlyForm();
+    form.set('reusePreRegistrationEvidence', 'true');
+    const result = await createEarlyDeparture(form);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('no corresponde a esta institución u orden');
+    expect(db.tables.filter_early_departures).toHaveLength(0);
+    expect(db.uploads).toHaveLength(0);
+    expect(db.removals).toHaveLength(0);
+  });
+
   it.each([
     { label: 'tipo', kind: 'extraordinary' as const, studentIds: [studentA] },
     { label: 'alumno', kind: 'early' as const, studentIds: [studentB] },
@@ -203,7 +236,7 @@ describe('captura final vinculada a un preregistro de Filtro', () => {
     expect(db.uploads).toHaveLength(0);
   });
 
-  it('exige evidencia final de autorización además del aviso adjunto al preregistro extraordinario', async () => {
+  it('exige archivo final si no se elige reutilizar el aviso del preregistro extraordinario', async () => {
     const db = setup('extraordinary');
     const form = extraordinaryForm();
     const missingEvidence = await createExtraordinaryHandoff(form);
@@ -221,6 +254,46 @@ describe('captura final vinculada a un preregistro de Filtro', () => {
     expect(db.tables.filter_preregistrations[0].status).toBe('completed');
   });
 
+  it('admite el aviso del preregistro extraordinario como evidencia final tras las verificaciones', async () => {
+    const db = setup('extraordinary');
+    const form = extraordinaryForm();
+    form.set('reusePreRegistrationEvidence', 'true');
+    const result = await createExtraordinaryHandoff(form);
+    expect(result).toMatchObject({ success: true, duplicate: false });
+    const final = db.tables.filter_extraordinary_handoffs[0];
+    expect(final.authorization_evidence_path).toBe(preliminaryEvidencePath);
+    expect(final.authorization_verifier_name).toBe('Personal de guardia');
+    expect(final.consent_status).toBe('confirmado');
+    expect(db.uploads).toHaveLength(3);
+    expect(db.removals).toHaveLength(0);
+    expect(db.tables.filter_preregistrations[0].status).toBe('completed');
+  });
+
+  it('no sustituye el consentimiento final por una foto del preregistro', async () => {
+    const db = setup('extraordinary');
+    const form = extraordinaryForm();
+    form.set('reusePreRegistrationEvidence', 'true');
+    form.set('consentStatus', 'sin_respuesta');
+    const result = await createExtraordinaryHandoff(form);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('faltan validaciones obligatorias');
+    expect(db.tables.filter_extraordinary_handoffs).toHaveLength(0);
+    expect(db.uploads).toHaveLength(0);
+  });
+
+  it('ante un error de carga conserva intacto el archivo preexistente del preregistro', async () => {
+    const db = setup('extraordinary');
+    db.failUploadWhenPathIncludes('/entrega.');
+    const form = extraordinaryForm();
+    form.set('reusePreRegistrationEvidence', 'true');
+    const result = await createExtraordinaryHandoff(form);
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('Falló la carga de prueba');
+    expect(db.removals.flat()).not.toContain(preliminaryEvidencePath);
+    expect(db.removals.flat()).toEqual(expect.arrayContaining([expect.stringContaining('/persona.jpg')]));
+    expect(db.tables.filter_preregistrations[0].status).toBe('pending');
+  });
+
   it('reconcilia un reintento sin duplicar la salida final ya guardada', async () => {
     const db = setup('early');
     db.tables.filter_early_departures.push({
@@ -232,5 +305,6 @@ describe('captura final vinculada a un preregistro de Filtro', () => {
     expect(db.tables.filter_early_departures).toHaveLength(1);
     expect(db.tables.filter_preregistrations[0].status).toBe('completed');
     expect(db.uploads).toHaveLength(0);
+    expect(db.removals).toHaveLength(0);
   });
 });

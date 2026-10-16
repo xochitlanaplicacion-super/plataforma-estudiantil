@@ -15,6 +15,7 @@ export type EarlyDepartureDraft = {
   values: Record<string, string | boolean>;
   student: Record<string, unknown> | null;
   students?: Array<Record<string, unknown>>;
+  notificationEvidence?: PersistedFile | null;
   identificationEvidence: PersistedFile | null;
   pickupPersonPhoto: PersistedFile | null;
   finalHandoverPhoto: PersistedFile | null;
