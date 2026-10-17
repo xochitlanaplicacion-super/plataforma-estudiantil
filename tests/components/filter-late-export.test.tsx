@@ -16,7 +16,8 @@ vi.mock('@/lib/filter-early-departure-draft', () => ({
   getLateEntryDraft: mocks.draft, saveLateEntryDraft: mocks.saveDraft,
   clearLateEntryDraft: vi.fn().mockResolvedValue(undefined),
 }));
-vi.mock('file-saver', () => ({ saveAs: mocks.saveAs }));
+// FileSaver is CommonJS: dynamic import exposes the function as `default`, not a named `saveAs`.
+vi.mock('file-saver', () => ({ default: mocks.saveAs }));
 
 import ExcelJS from 'exceljs';
 import { FilterLateLog } from '@/components/filter/FilterLateLog';

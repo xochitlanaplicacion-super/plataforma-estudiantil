@@ -106,7 +106,7 @@ export function FilterLateLog({ initialData, initialClock }: { initialData: any;
       const rows = [...result.rows].filter((row) => row.totalLateEntries > 0).sort((a, b) => b.totalLateEntries - a.totalLateEntries || a.studentName.localeCompare(b.studentName, 'es'));
       if (!rows.length) return toast({ title: 'No hay retardos registrados', description: 'El historial todavía no contiene alumnos con retardos.' });
 
-      const [{ default: ExcelJS }, { saveAs }] = await Promise.all([import('exceljs'), import('file-saver')]);
+      const [{ default: ExcelJS }, { default: saveAs }] = await Promise.all([import('exceljs'), import('file-saver')]);
       const workbook = new ExcelJS.Workbook();
       workbook.creator = 'Control de Filtro';
       workbook.created = new Date(result.generatedAt);
