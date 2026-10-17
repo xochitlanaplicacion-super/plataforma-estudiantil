@@ -4,6 +4,11 @@ import { revalidatePath } from 'next/cache';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { requireTenantSession } from '@/lib/tenant/context';
 import { FILTER_REASONS, normalizeFilterName } from '@/lib/filter-control';
+import {
+  buildFilterLateHistoryRows,
+  collectFilterLateHistoryPages,
+  type FilterLateHistorySourceEntry,
+} from '@/lib/filter-late-export';
 import { completeFilterPreRegistration } from '@/lib/actions/filter-preregistrations';
 
 const FILTER_ROLES = ['superuser', 'admin', 'encargado_filtro'] as const;
@@ -230,6 +235,104 @@ export async function getFilterDashboardData() {
     context.admin.from('filter_guardian_contacts').select('id,student_id,full_name,relationship,phone,email,verification_status,active').eq('tenant_id', context.tenantId).eq('active', true).order('full_name'),
   ]);
   return { levels: levels || [], groups: groups || [], students, settings, contacts: contacts || [], tenantId: context.tenantId, actorUserId: context.user.id, clock: filterClock(context.filterTimezone), canManageGuardians: ['superuser','admin'].includes(String(context.profile.rol)), isGeneral: Boolean(staff?.is_general), actorName: `${context.profile.nombre} ${context.profile.apellidos}`.trim(), recent: recent || [] };
+}
+
+/** Complete, tenant-scoped history for the late-arrival Excel report. */
+export async function exportFilterLateArrivalsHistory() {
+  try {
+    const context = await requireFilterAccess();
+    const generatedAt = new Date().toISOString();
+    const pageSize = 500;
+    const lateEntries = await collectFilterLateHistoryPages(async (afterId) => {
+      let query = context.admin.from('filter_late_entries')
+        .select('id,student_id,arrived_at,reason_code,reason_detail,evidence_path,reporter_name,registered_by_user_id,created_at,client_request_id,group_event_id,filter_students(id,full_name,active,group_id)')
+        .eq('tenant_id', context.tenantId)
+        .lte('created_at', generatedAt)
+        .order('id', { ascending: true })
+        .limit(pageSize);
+      if (afterId) query = query.gt('id', afterId);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
+    }, pageSize);
+
+    const source: FilterLateHistorySourceEntry[] = lateEntries.map((entry) => {
+      const relation = entry.filter_students as unknown;
+      if (Array.isArray(relation) && relation.length !== 1) {
+        throw new Error('La relación de un alumno del historial es ambigua.');
+      }
+      const student = (Array.isArray(relation) ? relation[0] : relation) as {
+        id: string; full_name: string; active: boolean; group_id: string;
+      } | null;
+      if (!student || student.id !== entry.student_id) {
+        throw new Error('No se encontró un alumno del historial de retardos.');
+      }
+      return {
+        id: entry.id,
+        studentId: entry.student_id,
+        studentName: student.full_name,
+        studentActive: student.active,
+        groupId: student.group_id,
+        arrivedAt: entry.arrived_at,
+        reasonCode: entry.reason_code,
+        reasonDetail: entry.reason_detail,
+        evidenceAttached: Boolean(entry.evidence_path),
+        reporterName: entry.reporter_name,
+        registeredByUserId: entry.registered_by_user_id,
+        createdAt: entry.created_at,
+        clientRequestId: entry.client_request_id,
+        groupEventId: entry.group_event_id,
+      };
+    });
+
+    const groupIds = [...new Set(source.map((entry) => entry.groupId))];
+    const groups: Array<{ id: string; level_id: string; grade_name: string; group_name: string }> = [];
+    for (let offset = 0; offset < groupIds.length; offset += 100) {
+      const { data, error } = await context.admin.from('filter_groups')
+        .select('id,level_id,grade_name,group_name')
+        .eq('tenant_id', context.tenantId)
+        .in('id', groupIds.slice(offset, offset + 100));
+      if (error) throw error;
+      groups.push(...(data || []));
+    }
+    const levelIds = [...new Set(groups.map((group) => group.level_id))];
+    const levels: Array<{ id: string; name: string }> = [];
+    for (let offset = 0; offset < levelIds.length; offset += 100) {
+      const { data, error } = await context.admin.from('filter_levels')
+        .select('id,name')
+        .eq('tenant_id', context.tenantId)
+        .in('id', levelIds.slice(offset, offset + 100));
+      if (error) throw error;
+      levels.push(...(data || []));
+    }
+    const rows = buildFilterLateHistoryRows(
+      source,
+      groups.map((group) => ({ id: group.id, levelId: group.level_id, gradeName: group.grade_name, groupName: group.group_name })),
+      levels,
+    );
+
+    const { data: institution, error: institutionError } = await context.admin.from('configuracion_sistema')
+      .select('nombre_completo,nombre_corto,color_primario')
+      .eq('tenant_id', context.tenantId)
+      .maybeSingle();
+    if (institutionError) throw institutionError;
+    const configuredColor = institution?.color_primario || '';
+    await audit(context, 'late_entry.exported', 'late_entry_export', undefined, {
+      studentCount: rows.length,
+      lateEntryCount: lateEntries.length,
+      generatedAt,
+    });
+    return {
+      success: true as const,
+      generatedAt,
+      institutionName: institution?.nombre_completo || institution?.nombre_corto || context.tenant.nombre,
+      institutionColor: /^#[0-9a-f]{6}$/i.test(configuredColor) ? configuredColor : '#0f766e',
+      timezone: context.filterTimezone,
+      rows,
+    };
+  } catch (error) {
+    return { success: false as const, error: error instanceof Error ? error.message : 'No se pudo exportar el historial de retardos.' };
+  }
 }
 
 export async function getEarlyDepartureDashboardData() {

@@ -2,8 +2,8 @@
 
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, CheckCircle2, Clock3, CloudOff, Plus, RefreshCcw, Search, TimerReset, Trash2, UserRoundPlus } from 'lucide-react';
-import { addFilterStudents, createLateEntry, getStudentLateAlert, searchFilterReporters, searchFilterStudents } from '@/lib/actions/filter-control';
+import { AlertTriangle, CheckCircle2, Clock3, CloudOff, FileSpreadsheet, Plus, RefreshCcw, Search, TimerReset, Trash2, UserRoundPlus } from 'lucide-react';
+import { addFilterStudents, createLateEntry, exportFilterLateArrivalsHistory, getStudentLateAlert, searchFilterReporters, searchFilterStudents } from '@/lib/actions/filter-control';
 import { FILTER_REASONS } from '@/lib/filter-control';
 import { clearLateEntryDraft, getLateEntryDraft, LateEntryDraft, saveLateEntryDraft } from '@/lib/filter-early-departure-draft';
 import { addStudentToFilterGroup, getDraftFilterStudents, MAX_FILTER_GROUP_STUDENTS, removeStudentFromFilterGroup } from '@/lib/filter-batch';
@@ -30,7 +30,7 @@ export function FilterLateLog({ initialData, initialClock }: { initialData: any;
   const [addOpen, setAddOpen] = useState(false); const [newName, setNewName] = useState(''); const [newGroup, setNewGroup] = useState(initialData.groups[0]?.id || '');
   const [clockNow, setClockNow] = useState(() => initialClock.iso ? new Date(initialClock.iso) : new Date());
   const [requestId, setRequestId] = useState(''); const [hydrated, setHydrated] = useState(false); const [draftReadFailed, setDraftReadFailed] = useState(false); const [draftReadAttempt, setDraftReadAttempt] = useState(0); const [storageSafe, setStorageSafe] = useState(true); const [draftStatus, setDraftStatus] = useState<'draft'|'queued'>('draft'); const [savedAt, setSavedAt] = useState(''); const [online, setOnline] = useState(true); const [sending, setSending] = useState(false);
-  const [resetOpen, setResetOpen] = useState(false); const [resetProgress, setResetProgress] = useState(0);
+  const [resetOpen, setResetOpen] = useState(false); const [resetProgress, setResetProgress] = useState(0); const [exporting, setExporting] = useState(false);
   const sendLock = useRef(false);
   const latestDraftState = useRef<{ requestId: string; status: 'draft' | 'queued'; students: any[]; studentQuery: string; reason: string; reasonDetail: string; automaticTime: boolean; arrivedAt: string; reporter: string } | null>(null);
 
@@ -96,11 +96,70 @@ export function FilterLateLog({ initialData, initialClock }: { initialData: any;
   const submit = (event: FormEvent<HTMLFormElement>) => { event.preventDefault(); void send(); };
   const addStudent = () => startTransition(async () => { const result = await addFilterStudents({ groupId: newGroup, names: [newName] }); if (!result.success) toast({ variant: 'destructive', title: 'No se agregó', description: result.error }); else { toast({ title: 'Alumno agregado' }); setAddOpen(false); setNewName(''); router.refresh(); } });
   const groupLabel = (group: any) => { const level = initialData.levels.find((item: any) => item.id === group.level_id); return `${level?.name || 'Nivel'} · ${group.grade_name} · ${group.group_name}`; };
+  const exportLateHistory = async () => {
+    if (exporting) return;
+    if (!navigator.onLine) return toast({ variant: 'destructive', title: 'Se necesita conexión', description: 'Conéctate para descargar el historial completo del plantel.' });
+    setExporting(true);
+    try {
+      const result = await exportFilterLateArrivalsHistory();
+      if (!result.success) throw new Error(result.error);
+      const rows = [...result.rows].filter((row) => row.totalLateEntries > 0).sort((a, b) => b.totalLateEntries - a.totalLateEntries || a.studentName.localeCompare(b.studentName, 'es'));
+      if (!rows.length) return toast({ title: 'No hay retardos registrados', description: 'El historial todavía no contiene alumnos con retardos.' });
+
+      const [{ default: ExcelJS }, { saveAs }] = await Promise.all([import('exceljs'), import('file-saver')]);
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'Control de Filtro';
+      workbook.created = new Date(result.generatedAt);
+      const institution = result.institutionName || 'Institución';
+      const brandColor = /^#[0-9a-f]{6}$/i.test(result.institutionColor || '') ? result.institutionColor.slice(1).toUpperCase() : '007F6B';
+      const red = Number.parseInt(brandColor.slice(0, 2), 16); const green = Number.parseInt(brandColor.slice(2, 4), 16); const blue = Number.parseInt(brandColor.slice(4, 6), 16);
+      const titleColor = (red * 299 + green * 587 + blue * 114) / 1000 > 160 ? 'FF10202A' : 'FFFFFFFF';
+      const dateFormat = new Intl.DateTimeFormat('es-MX', { timeZone: result.timezone || 'America/Mexico_City', dateStyle: 'medium', timeStyle: 'short' });
+      const showDate = (value: string) => value && !Number.isNaN(Date.parse(value)) ? dateFormat.format(new Date(value)) : value || '';
+      const totalEntries = rows.reduce((total, row) => total + row.totalLateEntries, 0);
+      const summary = workbook.addWorksheet('Resumen', { views: [{ state: 'frozen', ySplit: 5 }] });
+      const history = workbook.addWorksheet('Historial', { views: [{ state: 'frozen', ySplit: 5 }] });
+
+      const decorate = (sheet: typeof summary, title: string, headers: string[], widths: number[]) => {
+        sheet.columns = widths.map((width) => ({ width }));
+        sheet.mergeCells(1, 1, 1, headers.length);
+        sheet.getCell(1, 1).value = title;
+        sheet.getCell(1, 1).font = { bold: true, size: 17, color: { argb: 'FF10202A' } };
+        sheet.mergeCells(2, 1, 2, headers.length);
+        sheet.getCell(2, 1).value = institution;
+        sheet.getCell(2, 1).font = { bold: true, size: 12, color: { argb: `FF${brandColor}` } };
+        sheet.mergeCells(3, 1, 3, headers.length);
+        sheet.getCell(3, 1).value = `${rows.length} alumno(s) con retardos · ${totalEntries} retardo(s) · Exportado ${showDate(result.generatedAt)}`;
+        sheet.getCell(3, 1).font = { size: 10, color: { argb: 'FF526372' } };
+        sheet.getRow(5).values = headers;
+        sheet.getRow(5).height = 28;
+        sheet.getRow(5).eachCell((cell) => { cell.font = { bold: true, color: { argb: titleColor } }; cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: `FF${brandColor}` } }; cell.alignment = { vertical: 'middle', wrapText: true }; });
+        sheet.autoFilter = { from: { row: 5, column: 1 }, to: { row: 5, column: headers.length } };
+      };
+
+      decorate(summary, 'Bitácora de retardos · Resumen por alumno', ['N.º', 'Alumno', 'Nivel actual', 'Grado actual', 'Grupo actual', 'Estado actual', 'Total de retardos', 'ID del alumno', 'ID del grupo actual'], [8, 42, 20, 16, 15, 19, 19, 40, 40]);
+      decorate(history, 'Bitácora de retardos · Historial completo', ['N.º alumno', 'Alumno', 'Nivel actual', 'Grado actual', 'Grupo actual', 'Estado actual', 'Fecha y hora de llegada', 'Motivo', 'Código del motivo', 'Detalle del motivo', 'Evidencia adjunta', 'Personal que registró', 'Fecha de registro', 'ID del retardo', 'ID del alumno', 'ID del grupo actual', 'ID del usuario', 'ID de solicitud', 'ID del grupo de registro'], [13, 42, 20, 16, 15, 19, 25, 22, 19, 48, 20, 32, 25, 40, 40, 40, 40, 40, 40]);
+      rows.forEach((row, index) => {
+        const shared = [index + 1, row.studentName, row.levelName || '', row.gradeName || '', row.groupName || '', row.studentActive ? 'Activo' : 'Inactivo'];
+        summary.addRow([...shared, row.totalLateEntries, row.studentId, row.groupId]);
+        [...row.entries].sort((a, b) => b.arrivedAt.localeCompare(a.arrivedAt)).forEach((entry) => {
+          history.addRow([...shared, showDate(entry.arrivedAt), entry.reasonLabel || FILTER_REASONS.find((reason) => reason.value === entry.reasonCode)?.label || entry.reasonCode, entry.reasonCode, entry.reasonDetail || '', entry.evidenceAttached ? 'Sí' : 'No', entry.reporterName || '', showDate(entry.createdAt), entry.id, row.studentId, row.groupId, entry.registeredByUserId || '', entry.clientRequestId || '', entry.groupEventId || '']);
+        });
+      });
+      summary.getColumn(7).numFmt = '0';
+      const buffer = await workbook.xlsx.writeBuffer();
+      const safeInstitution = institution.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 45) || 'institucion';
+      saveAs(new Blob([buffer as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), `retardos-${safeInstitution}-${result.generatedAt.slice(0, 10)}.xlsx`);
+      toast({ title: 'Excel descargado', description: `${rows.length} alumno(s) y ${totalEntries} retardo(s) incluidos.` });
+    } catch (error) {
+      toast({ variant: 'destructive', title: 'No se pudo exportar', description: error instanceof Error ? error.message : 'Inténtalo de nuevo.' });
+    } finally { setExporting(false); }
+  };
 
   if (!hydrated) return <Card><CardContent className="flex min-h-64 items-center justify-center">Recuperando el registro guardado en este dispositivo…</CardContent></Card>;
   if (draftReadFailed) return <Card className="mx-auto max-w-2xl"><CardHeader><CardTitle>No fue posible leer la copia local</CardTitle><CardDescription>Por seguridad no se inició ni sobrescribió ningún registro. Tus datos anteriores permanecen intactos en este dispositivo.</CardDescription></CardHeader><CardContent className="space-y-4"><Alert variant="destructive"><AlertTriangle className="h-4 w-4" /><AlertTitle>Recuperación detenida</AlertTitle><AlertDescription>Verifica que el navegador permita almacenamiento para este sitio. En Safari evita la navegación privada y vuelve a intentarlo.</AlertDescription></Alert><Button onClick={() => { setStorageSafe(true); setDraftReadAttempt((current) => current + 1); }}>Reintentar recuperación</Button></CardContent></Card>;
   return <div className={`space-y-6 ${sending ? 'pointer-events-none' : ''}`} aria-busy={sending}>
-    <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start"><div><h1 className="flex items-center gap-2 text-3xl font-bold text-primary"><TimerReset />Bitácora de retardos</h1><p className="text-muted-foreground">Registro móvil y de escritorio, atribuido y aislado para esta institución.</p></div><Button type="button" variant="outline" disabled={sending} onClick={() => setResetOpen(true)}><RefreshCcw className="mr-2 h-4 w-4" />Reiniciar proceso</Button></div>
+    <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start"><div><h1 className="flex items-center gap-2 text-3xl font-bold text-primary"><TimerReset />Bitácora de retardos</h1><p className="text-muted-foreground">Registro móvil y de escritorio, atribuido y aislado para esta institución.</p></div><div className="flex flex-wrap gap-2 sm:justify-end"><Button type="button" className="bg-primary text-primary-foreground shadow-md shadow-primary/25 hover:bg-primary/90" disabled={sending || exporting} onClick={() => void exportLateHistory()}><FileSpreadsheet className="mr-2 h-4 w-4" />{exporting ? 'Preparando Excel…' : 'Descargar historial en Excel'}</Button><Button type="button" variant="outline" disabled={sending} onClick={() => setResetOpen(true)}><RefreshCcw className="mr-2 h-4 w-4" />Reiniciar proceso</Button></div></div>
     <Alert variant={!storageSafe ? 'destructive' : 'default'}>{!online ? <CloudOff className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}<AlertTitle>{!storageSafe ? 'El navegador bloqueó el almacenamiento local' : draftStatus === 'queued' ? 'Guardado pendiente y protegido' : 'Borrador protegido en este dispositivo'}</AlertTitle><AlertDescription>{!storageSafe ? 'No cierres esta pestaña hasta guardar. En Safari, evita la navegación privada y permite almacenamiento del sitio.' : draftStatus === 'queued' ? 'Se recuperaron los datos y la evidencia. Nada se enviará hasta que pulses Guardar.' : !online ? 'Puedes continuar y conservar el borrador; el sistema esperará a que tú decidas enviarlo.' : savedAt ? `Guardado localmente ${new Date(savedAt).toLocaleTimeString('es-MX')}. Puedes recargar, bloquear o cerrar y volver a esta pantalla.` : 'Los datos y la evidencia se conservan automáticamente.'}</AlertDescription></Alert>
     <div className="grid gap-6 xl:grid-cols-3">
       <Card className="xl:col-span-2"><CardHeader><CardTitle>Nuevo registro</CardTitle><CardDescription>Selecciona de uno a cinco alumnos que llegaron juntos.</CardDescription></CardHeader><CardContent><form onSubmit={submit} className="space-y-5">
